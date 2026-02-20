@@ -176,3 +176,13 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 ## CP views
 
 - `Agents` section appears in Craft CP for quick inspection.
+
+## Roadmap
+
+Planned improvements include:
+
+- Expanded filtering and pagination controls for existing read-only endpoints.
+- Additional diagnostics for operational readiness and integration health.
+- Broader OpenAPI coverage and schema detail improvements.
+- Optional export/report formats for automation workflows.
+- Continued hardening of auth, rate limiting, and observability.
