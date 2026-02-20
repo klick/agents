@@ -1,0 +1,26 @@
+{
+  "name": "klick/agents",
+  "description": "Agents plugin for Craft Commerce diagnostics and agent-ready workflows.",
+  "type": "craft-plugin",
+  "version": "0.1.1",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "Marcus Scheller"
+    }
+  ],
+  "require": {
+    "php": "^8.2",
+    "craftcms/cms": "^5.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "agentreadiness\\": "src/"
+    }
+  },
+  "extra": {
+    "name": "Agents",
+    "handle": "agents",
+    "class": "agentreadiness\\Plugin"
+  }
+}
