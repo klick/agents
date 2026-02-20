@@ -22,14 +22,22 @@ Requirements:
 - PHP `^8.2`
 - Craft CMS `^5.0`
 
-Install via Composer:
+After Plugin Store publication:
 
 ```bash
 composer require klick/agents:^0.1.1
 php craft plugin/install agents
 ```
 
-For local development in this monorepo, the package is also available as a path repository at `plugins/agents`.
+Before publication (or for development), install from source:
+
+```bash
+composer config repositories.klick-agents vcs https://github.com/klick/agents
+composer require klick/agents:dev-main
+php craft plugin/install agents
+```
+
+For monorepo development, the package can also be installed via path repository at `plugins/agents`.
 
 ## Configuration
 
@@ -168,9 +176,3 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 ## CP views
 
 - `Agents` section appears in Craft CP for quick inspection.
-
-## Roadmap / next milestones
-
-This implementation is the initial operational skeleton. For planned growth (OpenAPI export, quote simulation, filters, hygiene checks, readiness reports, etc.), see:
-
-- `_box/_plugin_readiness/agents-spec.md`
