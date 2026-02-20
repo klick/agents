@@ -1,6 +1,6 @@
 # Agents Plugin
 
-Machine-readable readiness and diagnostics API for this Craft Commerce shop.
+Machine-readable readiness and diagnostics API Craft CMS and Commerce.
 
 Current plugin version: **0.1.1**
 
