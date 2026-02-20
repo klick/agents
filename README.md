@@ -17,19 +17,19 @@ It is intentionally scoped to **read-only, operational visibility** in this stag
 
 ## Installation
 
-The plugin is included via Composer path in this repo:
+Requirements:
 
-- `composer.json` (project): `klick/agents: 0.1.1`
-- local package source: `plugins/agents`
-- plugin handle: `agents`
+- PHP `^8.2`
+- Craft CMS `^5.0`
 
-Enable/disable with:
+Install via Composer:
 
 ```bash
-PLUGIN_AGENTS_ENABLED=true
+composer require klick/agents:^0.1.1
+php craft plugin/install agents
 ```
 
-Configured in `config/plugins.php`.
+For local development in this monorepo, the package is also available as a path repository at `plugins/agents`.
 
 ## Configuration
 
@@ -41,6 +41,12 @@ Environment variables:
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
 
 These are documented in `.env.example`.
+
+## Support
+
+- Docs: https://github.com/klick/agents/blob/main/README.md
+- Issues: https://github.com/klick/agents/issues
+- Source: https://github.com/klick/agents
 
 ## API Access
 
