@@ -23,6 +23,7 @@ class AgentsController extends Controller
     public string $slug = '';
     public string $section = '';
     public string $type = '';
+    public string $target = 'all';
 
     public function init(): void
     {
@@ -41,6 +42,7 @@ class AgentsController extends Controller
             'entry-list' => array_merge($options, ['section', 'type', 'status', 'search', 'limit', 'json']),
             'entry-show' => array_merge($options, ['resourceId', 'slug', 'section', 'json']),
             'section-list' => array_merge($options, ['json']),
+            'discovery-prewarm' => array_merge($options, ['target', 'json']),
             default => $options,
         };
     }
@@ -260,6 +262,30 @@ class AgentsController extends Controller
                 (string)($section['handle'] ?? ''),
                 (string)($section['name'] ?? ''),
                 (string)($section['type'] ?? '')
+            ));
+        }
+
+        return ExitCode::OK;
+    }
+
+    public function actionDiscoveryPrewarm(): int
+    {
+        $payload = Plugin::getInstance()->getDiscoveryTxtService()->prewarm($this->target);
+
+        if ($this->json) {
+            return $this->emitJson($payload);
+        }
+
+        $this->stdout(sprintf("Target: %s\n", (string)($payload['target'] ?? 'all')));
+        $this->stdout(sprintf("Generated: %s\n", (string)($payload['generatedAt'] ?? '')));
+        foreach (($payload['documents'] ?? []) as $name => $document) {
+            $this->stdout(sprintf(
+                "- %s enabled=%s bytes=%d etag=%s lastModified=%s\n",
+                (string)$name,
+                !empty($document['enabled']) ? 'true' : 'false',
+                (int)($document['bytes'] ?? 0),
+                (string)($document['etag'] ?? ''),
+                (string)($document['lastModified'] ?? '')
             ));
         }
 

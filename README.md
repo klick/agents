@@ -15,6 +15,11 @@ This plugin gives external/internal agents a stable interface for:
 
 It is intentionally scoped to **read-only, operational visibility** in this stage.
 
+It also exposes proposal-oriented discovery files at root-level endpoints:
+
+- `GET /llms.txt`
+- `GET /commerce.txt`
+
 ## Installation
 
 Requirements:
@@ -79,6 +84,11 @@ Base URL (this project): `/agents/v1`
 - `GET /capabilities`
 - `GET /openapi.json`
 
+Root-level discovery files:
+
+- `GET /llms.txt` (public when enabled)
+- `GET /commerce.txt` (public when enabled)
+
 ## CLI Commands
 
 Craft-native command routes:
@@ -89,6 +99,7 @@ Craft-native command routes:
 - `craft agents/entry-list`
 - `craft agents/entry-show`
 - `craft agents/section-list`
+- `craft agents/discovery-prewarm`
 
 Examples:
 
@@ -116,6 +127,10 @@ php craft agents/entry-show --resource-id=123
 
 # Sections
 php craft agents/section-list
+
+# Prewarm llms.txt + commerce.txt cache
+php craft agents/discovery-prewarm
+php craft agents/discovery-prewarm --target=llms --json=1
 ```
 
 CLI output defaults to human-readable text. Add `--json=1` for machine consumption.
@@ -148,6 +163,12 @@ Identifier notes for show commands:
 - `/capabilities`: machine-readable list of supported endpoints + CLI commands.
 - `/openapi.json`: OpenAPI 3.1 descriptor for this API surface.
 
+Discovery file behavior:
+
+- `llms.txt` / `commerce.txt` are generated dynamically as plain text.
+- They include `ETag` + `Last-Modified` headers and support `304 Not Modified`.
+- Output is cached and invalidated on relevant content/product updates.
+
 Example:
 
 ```bash
@@ -172,6 +193,46 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Exceeded limits return HTTP `429` with `RATE_LIMIT_EXCEEDED`.
 - Missing/invalid credentials return HTTP `401`.
 - Endpoint is not meant for frontend/public user flows; token is the intended control plane.
+
+Note: `llms.txt` and `commerce.txt` are public discovery surfaces and are not guarded by the API token.
+
+## Discovery Text Config (`config/agents.php`)
+
+These values can be overridden from your project via `config/agents.php`:
+
+```php
+<?php
+
+return [
+    'enableLlmsTxt' => true,
+    'enableCommerceTxt' => true,
+    'llmsTxtCacheTtl' => 86400,
+    'commerceTxtCacheTtl' => 3600,
+    'llmsSiteSummary' => 'Product and policy discovery for assistants.',
+    'llmsIncludeAgentsLinks' => true,
+    'llmsIncludeSitemapLink' => true,
+    'llmsLinks' => [
+        ['label' => 'Support', 'url' => '/support'],
+        ['label' => 'Contact', 'url' => '/contact'],
+    ],
+    'commerceSummary' => 'Commerce metadata for discovery workflows.',
+    'commerceCatalogUrl' => '/agents/v1/products?status=live&limit=200',
+    'commercePolicyUrls' => [
+        'shipping' => '/shipping-information',
+        'returns' => '/returns',
+        'payment' => '/payment-options',
+    ],
+    'commerceSupport' => [
+        'email' => 'support@example.com',
+        'phone' => '+1-555-0100',
+        'url' => '/contact',
+    ],
+    'commerceAttributes' => [
+        'currency' => 'USD',
+        'region' => 'US',
+    ],
+];
+```
 
 ## CP views
 
