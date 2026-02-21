@@ -7,6 +7,7 @@ use agentreadiness\Plugin;
 use craft\web\Controller;
 use craft\helpers\App;
 use yii\caching\CacheInterface;
+use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 class ApiController extends Controller
@@ -14,13 +15,34 @@ class ApiController extends Controller
     public function init(): void
     {
         parent::init();
-        if (!Craft::$app->request->getIsGet()) {
+        $request = Craft::$app->request;
+        if (!$request->getIsGet() && !$request->getIsHead()) {
             $this->requireAcceptsJson();
         }
     }
 
     protected array|int|bool $allowAnonymous = true;
     protected array|bool|int $supportsCsrfValidation = false;
+
+    public function actionLlmsTxt(): Response
+    {
+        $document = Plugin::getInstance()->getDiscoveryTxtService()->getLlmsTxtDocument();
+        if ($document === null) {
+            throw new NotFoundHttpException('Not found.');
+        }
+
+        return $this->respondWithDiscoveryDocument($document);
+    }
+
+    public function actionCommerceTxt(): Response
+    {
+        $document = Plugin::getInstance()->getDiscoveryTxtService()->getCommerceTxtDocument();
+        if ($document === null) {
+            throw new NotFoundHttpException('Not found.');
+        }
+
+        return $this->respondWithDiscoveryDocument($document);
+    }
 
     public function actionHealth(): Response
     {
@@ -162,6 +184,8 @@ class ApiController extends Controller
                 ['method' => 'GET', 'path' => '/sections'],
                 ['method' => 'GET', 'path' => '/capabilities'],
                 ['method' => 'GET', 'path' => '/openapi.json'],
+                ['method' => 'GET', 'path' => '/llms.txt', 'public' => true],
+                ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
             ],
             'commands' => [
                 'agents/product-list',
@@ -170,6 +194,7 @@ class ApiController extends Controller
                 'agents/entry-list',
                 'agents/entry-show',
                 'agents/section-list',
+                'agents/discovery-prewarm',
             ],
         ]);
     }
@@ -188,7 +213,8 @@ class ApiController extends Controller
                 'description' => 'Read-only agent discovery API for products, orders, entries, and sections.',
             ],
             'servers' => [
-                ['url' => '/agents/v1', 'description' => 'Primary'],
+                ['url' => '/agents/v1', 'description' => 'Primary API'],
+                ['url' => '/', 'description' => 'Site root discovery files'],
             ],
             'paths' => [
                 '/health' => ['get' => ['summary' => 'Health summary', 'responses' => ['200' => ['description' => 'OK']]]],
@@ -245,6 +271,8 @@ class ApiController extends Controller
                 '/sections' => ['get' => ['summary' => 'Section list', 'responses' => ['200' => ['description' => 'OK']]]],
                 '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => ['200' => ['description' => 'OK']]]],
                 '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => ['200' => ['description' => 'OK']]]],
+                '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled']]]],
+                '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled']]]],
             ],
             'components' => [
                 'securitySchemes' => [
@@ -389,5 +417,57 @@ class ApiController extends Controller
         }
 
         return $this->asJson($payload);
+    }
+
+    private function respondWithDiscoveryDocument(array $document): Response
+    {
+        $etagHash = (string)($document['etag'] ?? '');
+        if ($etagHash === '') {
+            $etagHash = sha1((string)($document['body'] ?? ''));
+        }
+        $etag = '"' . $etagHash . '"';
+        $lastModified = (int)($document['lastModified'] ?? time());
+        $maxAge = max(0, (int)($document['maxAge'] ?? 0));
+
+        $response = $this->response;
+        $response->format = Response::FORMAT_RAW;
+        $response->headers->set('Content-Type', 'text/plain; charset=utf-8');
+        $response->headers->set('ETag', $etag);
+        $response->headers->set('Last-Modified', gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
+        $response->headers->set('Cache-Control', 'public, max-age=' . $maxAge);
+
+        if ($this->isNotModified($etag, $lastModified)) {
+            $response->setStatusCode(304);
+            $response->content = '';
+            return $response;
+        }
+
+        $response->setStatusCode(200);
+        $response->content = (string)($document['body'] ?? '');
+        return $response;
+    }
+
+    private function isNotModified(string $etag, int $lastModified): bool
+    {
+        $request = Craft::$app->getRequest();
+        $ifNoneMatch = trim((string)$request->getHeaders()->get('If-None-Match', ''));
+        if ($ifNoneMatch !== '') {
+            foreach (explode(',', $ifNoneMatch) as $candidate) {
+                $candidate = trim($candidate);
+                if ($candidate === '*' || $candidate === $etag || $candidate === 'W/' . $etag) {
+                    return true;
+                }
+            }
+        }
+
+        $ifModifiedSince = trim((string)$request->getHeaders()->get('If-Modified-Since', ''));
+        if ($ifModifiedSince !== '') {
+            $ifModifiedSinceTs = strtotime($ifModifiedSince);
+            if ($ifModifiedSinceTs !== false && $ifModifiedSinceTs >= $lastModified) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
