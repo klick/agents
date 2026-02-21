@@ -1,6 +1,6 @@
 <?php
 
-namespace agentreadiness;
+namespace Klick\Agents;
 
 use Craft;
 use craft\base\Plugin as BasePlugin;
@@ -11,9 +11,9 @@ use craft\events\RegisterUrlRulesEvent;
 use craft\elements\Entry;
 use craft\web\UrlManager;
 use yii\base\Event;
-use agentreadiness\models\Settings;
-use agentreadiness\services\DiscoveryTxtService;
-use agentreadiness\services\ReadinessService;
+use Klick\Agents\models\Settings;
+use Klick\Agents\services\DiscoveryTxtService;
+use Klick\Agents\services\ReadinessService;
 
 class Plugin extends BasePlugin
 {
@@ -35,8 +35,8 @@ class Plugin extends BasePlugin
         $this->logSecurityConfigurationWarnings();
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
-            $this->controllerNamespace = 'agentreadiness\\console\\controllers';
-            Craft::$app->controllerMap['agents'] = 'agentreadiness\\console\\controllers\\AgentsController';
+            $this->controllerNamespace = 'Klick\\Agents\\console\\controllers';
+            Craft::$app->controllerMap['agents'] = 'Klick\\Agents\\console\\controllers\\AgentsController';
             return;
         }
 

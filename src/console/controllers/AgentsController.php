@@ -1,8 +1,8 @@
 <?php
 
-namespace agentreadiness\console\controllers;
+namespace Klick\Agents\console\controllers;
 
-use agentreadiness\Plugin;
+use Klick\Agents\Plugin;
 use craft\console\Controller;
 use craft\helpers\Json;
 use yii\console\Exception;

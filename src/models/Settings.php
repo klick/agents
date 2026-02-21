@@ -1,6 +1,6 @@
 <?php
 
-namespace agentreadiness\models;
+namespace Klick\Agents\models;
 
 use craft\base\Model;
 

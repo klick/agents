@@ -64,7 +64,7 @@ These are documented in `.env.example`.
 
 ## Support
 
-- Docs: https://github.com/klick/agents/blob/main/README.md
+- Docs: https://github.com/klick/agents
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
 
@@ -269,6 +269,11 @@ return [
 ## CP views
 
 - `Agents` section appears in Craft CP for quick inspection.
+
+## Namespace migration
+
+- PHP namespace root is now `Klick\\Agents` (for example `Klick\\Agents\\Plugin`).
+- Plugin handle stays `agents` (CP nav, routes, and CLI command prefixes remain unchanged).
 
 ## Security Rollout Checklist
 
