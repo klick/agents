@@ -50,7 +50,9 @@ Environment variables:
 
 - `PLUGIN_AGENTS_ENABLED` (`true`/`false`)
 - `PLUGIN_AGENTS_API_TOKEN` (required when token enforcement is enabled)
+- `PLUGIN_AGENTS_API_CREDENTIALS` (JSON credential set with optional per-credential scopes)
 - `PLUGIN_AGENTS_REQUIRE_TOKEN` (default: `true`)
+- `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD` (default: `false`, keep false)
 - `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN` (default: `false`)
 - `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD` (default: `true`)
 - `PLUGIN_AGENTS_TOKEN_SCOPES` (comma/space list, default scoped read set)
@@ -70,12 +72,27 @@ These are documented in `.env.example`.
 
 By default, v1 routes require token-based access (`PLUGIN_AGENTS_REQUIRE_TOKEN=true`).
 Fail-closed behavior in production is enabled by default (`PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD=true`).
+If `PLUGIN_AGENTS_REQUIRE_TOKEN=false` is set in production, the plugin will still enforce token auth unless `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=true` is explicitly enabled.
+
+Credential sources:
+
+- `PLUGIN_AGENTS_API_CREDENTIALS` (JSON array/object, supports per-credential scopes)
+- `PLUGIN_AGENTS_API_TOKEN` (legacy single-token fallback)
 
 Supported token transports:
 
 - `Authorization: Bearer <token>` (default)
 - `X-Agents-Token: <token>` (default)
 - `?apiToken=<token>` only when `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=true`
+
+Example credential JSON:
+
+```json
+[
+  {"id":"integration-a","token":"token-a","scopes":["health:read","readiness:read","products:read"]},
+  {"id":"integration-b","token":"token-b","scopes":"orders:read orders:read_sensitive"}
+]
+```
 
 ### Endpoints
 
@@ -202,6 +219,7 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Exceeded limits return HTTP `429` with `RATE_LIMIT_EXCEEDED`.
 - Missing/invalid credentials return HTTP `401`.
 - Missing required scope returns HTTP `403` with `FORBIDDEN`.
+- Non-`GET`/`HEAD` requests are rejected (`405 METHOD_NOT_ALLOWED`, or `400` when CSRF validation fails first).
 - Misconfigured production token setup returns HTTP `503` with `SERVER_MISCONFIGURED`.
 - Query-token auth is disabled by default to reduce token leakage risk.
 - Sensitive order fields are scope-gated; email is redacted by default unless `orders:read_sensitive` is granted.
@@ -255,13 +273,15 @@ return [
 ## Security Rollout Checklist
 
 1. Set `PLUGIN_AGENTS_API_TOKEN` to a strong secret and keep `PLUGIN_AGENTS_REQUIRE_TOKEN=true`.
-2. Keep `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD=true`.
-3. Keep `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=false` unless legacy clients require it temporarily.
-4. Start with default scopes; only add elevated scopes when required:
+2. Prefer `PLUGIN_AGENTS_API_CREDENTIALS` for per-integration token/scope separation.
+3. Keep `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD=true`.
+4. Keep `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=false`.
+5. Keep `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=false` unless legacy clients require it temporarily.
+6. Start with default scopes; only add elevated scopes when required:
    - `orders:read_sensitive`
    - `entries:read_all_statuses`
-5. Verify `capabilities`/`openapi.json` outputs reflect active auth transport settings.
-6. Run `scripts/security-regression-check.sh` against your environment before promotion.
+7. Verify `capabilities`/`openapi.json` outputs reflect active auth transport/settings.
+8. Run `scripts/security-regression-check.sh` against your environment before promotion.
 
 ## Scope Migration Notes
 

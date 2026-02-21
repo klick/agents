@@ -37,10 +37,14 @@ class ApiController extends Controller
     }
 
     protected array|int|bool $allowAnonymous = true;
-    protected array|bool|int $supportsCsrfValidation = false;
+    protected array|bool|int $supportsCsrfValidation = true;
 
     public function actionLlmsTxt(): Response
     {
+        if (($methodResponse = $this->enforceReadRequest()) !== null) {
+            return $methodResponse;
+        }
+
         $document = Plugin::getInstance()->getDiscoveryTxtService()->getLlmsTxtDocument();
         if ($document === null) {
             throw new NotFoundHttpException('Not found.');
@@ -51,6 +55,10 @@ class ApiController extends Controller
 
     public function actionCommerceTxt(): Response
     {
+        if (($methodResponse = $this->enforceReadRequest()) !== null) {
+            return $methodResponse;
+        }
+
         $document = Plugin::getInstance()->getDiscoveryTxtService()->getCommerceTxtDocument();
         if ($document === null) {
             throw new NotFoundHttpException('Not found.');
@@ -324,6 +332,10 @@ class ApiController extends Controller
 
     private function guardRequest(string $requiredScope = ''): ?Response
     {
+        if (($methodResponse = $this->enforceReadRequest()) !== null) {
+            return $methodResponse;
+        }
+
         $config = $this->getSecurityConfig();
 
         $preAuthIdentity = $this->buildPreAuthIdentity();
@@ -362,9 +374,9 @@ class ApiController extends Controller
             ];
         }
 
-        $expectedToken = $config['apiToken'];
-        if ($expectedToken === '') {
-            $message = 'API token is required but not configured.';
+        $credentials = $config['credentials'];
+        if (empty($credentials)) {
+            $message = 'API credentials are required but not configured.';
             if ($config['isProduction'] && $config['failOnMissingTokenInProd']) {
                 $message .= ' Refusing to serve guarded endpoints in production.';
             }
@@ -375,17 +387,47 @@ class ApiController extends Controller
         }
 
         $providedToken = $this->resolveProvidedToken($config['allowQueryToken']);
-        if ($providedToken['value'] === '' || !hash_equals($expectedToken, $providedToken['value'])) {
+        if ($providedToken['value'] === '') {
+            return [
+                'errorResponse' => $this->unauthorizedResponse('Missing or invalid token.'),
+            ];
+        }
+
+        $matchedCredential = $this->matchCredential($providedToken['value'], $credentials);
+        if ($matchedCredential === null) {
             return [
                 'errorResponse' => $this->unauthorizedResponse('Missing or invalid token.'),
             ];
         }
 
         return [
-            'principalFingerprint' => sha1($providedToken['value']),
-            'scopes' => $config['tokenScopes'],
+            'principalFingerprint' => $matchedCredential['principalFingerprint'],
+            'credentialId' => $matchedCredential['id'],
+            'scopes' => $matchedCredential['scopes'],
             'authMethod' => $providedToken['source'],
         ];
+    }
+
+    private function matchCredential(string $providedToken, array $credentials): ?array
+    {
+        foreach ($credentials as $credential) {
+            $token = (string)($credential['token'] ?? '');
+            if ($token === '') {
+                continue;
+            }
+
+            if (!hash_equals($token, $providedToken)) {
+                continue;
+            }
+
+            return [
+                'id' => (string)($credential['id'] ?? 'default'),
+                'scopes' => (array)($credential['scopes'] ?? self::DEFAULT_TOKEN_SCOPES),
+                'principalFingerprint' => sha1($token),
+            ];
+        }
+
+        return null;
     }
 
     private function resolveProvidedToken(bool $allowQueryToken): array
@@ -441,7 +483,7 @@ class ApiController extends Controller
         $identityFingerprint = sha1($identity);
         $cacheKey = sprintf('agents:rl:%s:%d:%s:%s', $stage, $bucketStart, $routeFingerprint, $identityFingerprint);
 
-        $current = $this->incrementRateCounter($cache, $cacheKey, $windowSeconds + 1);
+        $current = $this->incrementRateCounter($cache, $cacheKey, $windowSeconds + 1, $limit);
         $resetAt = $bucketStart + $windowSeconds;
 
         $remaining = max(0, $limit - $current);
@@ -465,7 +507,7 @@ class ApiController extends Controller
         return null;
     }
 
-    private function incrementRateCounter(CacheInterface $cache, string $cacheKey, int $ttl): int
+    private function incrementRateCounter(CacheInterface $cache, string $cacheKey, int $ttl, int $limit): int
     {
         if (method_exists($cache, 'increment') && method_exists($cache, 'add')) {
             $incremented = $cache->increment($cacheKey, 1);
@@ -496,10 +538,24 @@ class ApiController extends Controller
             }
         }
 
-        $current = (int)($cache->get($cacheKey) ?: 0);
-        $current++;
-        $cache->set($cacheKey, $current, $ttl);
-        return $current;
+        Craft::warning('Agents rate-limit lock unavailable; failing closed for this request.', __METHOD__);
+        return $limit + 1;
+    }
+
+    private function enforceReadRequest(): ?Response
+    {
+        $request = Craft::$app->getRequest();
+        if ($request->getIsGet() || $request->getIsHead()) {
+            return null;
+        }
+
+        $response = $this->asJson([
+            'error' => 'METHOD_NOT_ALLOWED',
+            'message' => 'Only GET and HEAD requests are supported.',
+        ]);
+        $response->setStatusCode(405);
+        $response->headers->set('Allow', 'GET, HEAD');
+        return $response;
     }
 
     private function buildPreAuthIdentity(): string
@@ -587,6 +643,11 @@ class ApiController extends Controller
             $requireToken = true;
         }
 
+        $allowInsecureNoTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD');
+        if ($allowInsecureNoTokenInProd === null) {
+            $allowInsecureNoTokenInProd = false;
+        }
+
         $allowQueryToken = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_QUERY_TOKEN');
         if ($allowQueryToken === null) {
             $allowQueryToken = false;
@@ -607,6 +668,25 @@ class ApiController extends Controller
             $tokenScopes = self::DEFAULT_TOKEN_SCOPES;
         }
 
+        $tokenRequirementForcedInProd = false;
+        if (!$requireToken && $isProduction && !$allowInsecureNoTokenInProd) {
+            $requireToken = true;
+            $tokenRequirementForcedInProd = true;
+        }
+
+        $credentials = $this->parseCredentials((string)App::env('PLUGIN_AGENTS_API_CREDENTIALS'), $tokenScopes);
+
+        $primaryApiToken = trim((string)App::env('PLUGIN_AGENTS_API_TOKEN'));
+        if ($primaryApiToken !== '') {
+            $credentials[] = [
+                'id' => 'default',
+                'token' => $primaryApiToken,
+                'scopes' => $tokenScopes,
+            ];
+        }
+
+        $credentials = $this->deduplicateCredentials($credentials, $tokenScopes);
+
         $rateLimitPerMinute = (int)App::env('PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE');
         if ($rateLimitPerMinute <= 0) {
             $rateLimitPerMinute = 60;
@@ -621,9 +701,12 @@ class ApiController extends Controller
             'environment' => $environment,
             'isProduction' => $isProduction,
             'requireToken' => $requireToken,
+            'allowInsecureNoTokenInProd' => $allowInsecureNoTokenInProd,
+            'tokenRequirementForcedInProd' => $tokenRequirementForcedInProd,
             'allowQueryToken' => $allowQueryToken,
             'failOnMissingTokenInProd' => $failOnMissingTokenInProd,
-            'apiToken' => trim((string)App::env('PLUGIN_AGENTS_API_TOKEN')),
+            'credentials' => $credentials,
+            'primaryApiTokenConfigured' => $primaryApiToken !== '',
             'tokenScopes' => $tokenScopes,
             'rateLimitPerMinute' => $rateLimitPerMinute,
             'rateLimitWindowSeconds' => $rateLimitWindowSeconds,
@@ -660,13 +743,123 @@ class ApiController extends Controller
         return $scopes;
     }
 
+    private function parseCredentials(string $raw, array $defaultScopes): array
+    {
+        if (trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            Craft::warning('Unable to parse `PLUGIN_AGENTS_API_CREDENTIALS`; expected JSON array/object.', __METHOD__);
+            return [];
+        }
+
+        $credentials = [];
+        $index = 0;
+        foreach ($decoded as $key => $value) {
+            $index++;
+            $id = is_string($key) ? trim($key) : '';
+            $token = '';
+            $rawScopes = null;
+
+            if (is_array($value)) {
+                $token = trim((string)($value['token'] ?? $value['value'] ?? ''));
+                $rawScopes = $value['scopes'] ?? null;
+                if ($id === '') {
+                    $id = trim((string)($value['id'] ?? $value['name'] ?? ''));
+                }
+            } else {
+                $token = trim((string)$value);
+            }
+
+            if ($token === '') {
+                continue;
+            }
+
+            if ($id === '') {
+                $id = 'credential-' . $index;
+            }
+
+            $id = strtolower((string)(preg_replace('/[^a-z0-9:_-]+/i', '-', $id) ?: 'credential-' . $index));
+            $id = trim($id, '-');
+            if ($id === '') {
+                $id = 'credential-' . $index;
+            }
+
+            $scopes = $this->normalizeScopes($rawScopes, $defaultScopes);
+
+            $credentials[] = [
+                'id' => $id,
+                'token' => $token,
+                'scopes' => $scopes,
+            ];
+        }
+
+        return $credentials;
+    }
+
+    private function normalizeScopes(mixed $rawScopes, array $defaultScopes): array
+    {
+        if (is_array($rawScopes)) {
+            $parts = [];
+            foreach ($rawScopes as $scope) {
+                if (!is_string($scope) && !is_numeric($scope)) {
+                    continue;
+                }
+                $parts[] = (string)$scope;
+            }
+
+            $parsed = $this->parseScopes(implode(' ', $parts));
+            if (!empty($parsed)) {
+                return $parsed;
+            }
+        } elseif (is_string($rawScopes)) {
+            $parsed = $this->parseScopes($rawScopes);
+            if (!empty($parsed)) {
+                return $parsed;
+            }
+        }
+
+        return $defaultScopes;
+    }
+
+    private function deduplicateCredentials(array $credentials, array $defaultScopes): array
+    {
+        $deduped = [];
+        $seen = [];
+        foreach ($credentials as $credential) {
+            $token = (string)($credential['token'] ?? '');
+            if ($token === '') {
+                continue;
+            }
+
+            $tokenHash = sha1($token);
+            if (isset($seen[$tokenHash])) {
+                continue;
+            }
+            $seen[$tokenHash] = true;
+
+            $deduped[] = [
+                'id' => (string)($credential['id'] ?? 'default'),
+                'token' => $token,
+                'scopes' => $this->normalizeScopes($credential['scopes'] ?? null, $defaultScopes),
+            ];
+        }
+
+        return $deduped;
+    }
+
     private function buildCapabilitiesAuthentication(array $config): array
     {
         $auth = [
             'required' => (bool)$config['requireToken'],
             'allowQueryToken' => (bool)$config['allowQueryToken'],
+            'allowInsecureNoTokenInProd' => (bool)$config['allowInsecureNoTokenInProd'],
+            'tokenRequirementForcedInProd' => (bool)$config['tokenRequirementForcedInProd'],
             'failOnMissingTokenInProd' => (bool)$config['failOnMissingTokenInProd'],
-            'tokenConfigured' => $config['apiToken'] !== '',
+            'tokenConfigured' => !empty($config['credentials']),
+            'credentialCount' => count($config['credentials']),
             'methods' => [],
         ];
 
