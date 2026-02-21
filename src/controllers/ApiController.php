@@ -1,9 +1,9 @@
 <?php
 
-namespace agentreadiness\controllers;
+namespace Klick\Agents\controllers;
 
 use Craft;
-use agentreadiness\Plugin;
+use Klick\Agents\Plugin;
 use craft\helpers\App;
 use craft\web\Controller;
 use yii\caching\CacheInterface;

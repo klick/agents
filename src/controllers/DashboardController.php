@@ -1,8 +1,8 @@
 <?php
 
-namespace agentreadiness\controllers;
+namespace Klick\Agents\controllers;
 
-use agentreadiness\Plugin;
+use Klick\Agents\Plugin;
 use craft\web\Controller;
 use yii\web\Response;
 

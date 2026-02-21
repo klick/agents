@@ -16,11 +16,12 @@
   ],
   "authors": [
     {
-      "name": "Marcus Scheller"
+      "name": "Marcus Scheller",
+      "homepage": "https://marcusscheller.com"
     }
   ],
   "support": {
-    "docs": "https://github.com/klick/agents/blob/main/README.md",
+    "docs": "https://github.com/klick/agents",
     "issues": "https://github.com/klick/agents/issues",
     "source": "https://github.com/klick/agents"
   },
@@ -30,12 +31,13 @@
   },
   "autoload": {
     "psr-4": {
-      "agentreadiness\\": "src/"
+      "Klick\\Agents\\": "src/"
     }
   },
   "extra": {
     "name": "Agents",
     "handle": "agents",
-    "class": "agentreadiness\\Plugin"
+    "class": "Klick\\Agents\\Plugin",
+    "developerUrl": "https://marcusscheller.com"
   }
 }

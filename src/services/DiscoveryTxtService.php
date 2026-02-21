@@ -1,10 +1,10 @@
 <?php
 
-namespace agentreadiness\services;
+namespace Klick\Agents\services;
 
 use Craft;
-use agentreadiness\models\Settings;
-use agentreadiness\Plugin;
+use Klick\Agents\models\Settings;
+use Klick\Agents\Plugin;
 use craft\base\Component;
 use craft\helpers\UrlHelper;
 

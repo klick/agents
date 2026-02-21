@@ -1,6 +1,6 @@
 <?php
 
-namespace agentreadiness\services;
+namespace Klick\Agents\services;
 
 use Craft;
 use craft\base\Component;
