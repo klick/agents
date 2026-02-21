@@ -197,6 +197,8 @@ class ReadinessService extends Component
         $status = $this->normalizeOrderStatus((string)($params['status'] ?? 'all'));
         $lastDays = $this->normalizeLastDays((int)($params['lastDays'] ?? 30));
         $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $includeSensitive = (bool)($params['includeSensitive'] ?? true);
+        $redactEmail = (bool)($params['redactEmail'] ?? false);
 
         if (!class_exists(Order::class)) {
             return [
@@ -227,7 +229,7 @@ class ReadinessService extends Component
             if (!$order instanceof Order) {
                 continue;
             }
-            $data[] = $this->mapOrder($order, false);
+            $data[] = $this->mapOrder($order, false, $includeSensitive, $redactEmail);
         }
 
         return [
@@ -238,6 +240,8 @@ class ReadinessService extends Component
                     'status' => $status,
                     'lastDays' => $lastDays,
                     'limit' => $limit,
+                    'includeSensitive' => $includeSensitive,
+                    'redactEmail' => $redactEmail,
                 ],
                 'errors' => [],
             ],
@@ -248,6 +252,8 @@ class ReadinessService extends Component
     {
         $id = (int)($params['id'] ?? 0);
         $number = trim((string)($params['number'] ?? ''));
+        $includeSensitive = (bool)($params['includeSensitive'] ?? true);
+        $redactEmail = (bool)($params['redactEmail'] ?? false);
         $hasId = $id > 0;
         $hasNumber = $number !== '';
 
@@ -290,7 +296,7 @@ class ReadinessService extends Component
         }
 
         return [
-            'data' => $this->mapOrder($order, true),
+            'data' => $this->mapOrder($order, true, $includeSensitive, $redactEmail),
             'meta' => [
                 'count' => 1,
                 'errors' => [],
@@ -354,6 +360,7 @@ class ReadinessService extends Component
         $id = (int)($params['id'] ?? 0);
         $slug = trim((string)($params['slug'] ?? ''));
         $section = trim((string)($params['section'] ?? ''));
+        $includeAllStatuses = (bool)($params['includeAllStatuses'] ?? false);
         $hasId = $id > 0;
         $hasSlug = $slug !== '';
 
@@ -367,7 +374,12 @@ class ReadinessService extends Component
             ];
         }
 
-        $queryBuilder = Entry::find()->status(null)->limit(1);
+        $queryBuilder = Entry::find()->limit(1);
+        if ($includeAllStatuses) {
+            $queryBuilder->status(null);
+        } else {
+            $queryBuilder->status('live');
+        }
         if ($hasId) {
             $queryBuilder->id($id);
         } else {
@@ -565,14 +577,20 @@ class ReadinessService extends Component
         ];
     }
 
-    private function mapOrder(Order $order, bool $detailed): array
+    private function mapOrder(Order $order, bool $detailed, bool $includeSensitive, bool $redactEmail): array
     {
         $orderStatus = $order->getOrderStatus();
+        $email = $order->email ? (string)$order->email : null;
+        if ($redactEmail) {
+            $email = null;
+        }
+
         $data = [
             'id' => (int)$order->id,
             'number' => (string)($order->number ?? ''),
             'reference' => (string)($order->reference ?? ''),
-            'email' => $order->email ? (string)$order->email : null,
+            'email' => $email,
+            'emailRedacted' => $redactEmail,
             'status' => $orderStatus?->handle,
             'statusName' => $orderStatus?->name,
             'isCompleted' => (bool)$order->isCompleted,
@@ -592,15 +610,20 @@ class ReadinessService extends Component
 
         $data['lineItems'] = [];
         foreach ($order->getLineItems() as $lineItem) {
-            $data['lineItems'][] = [
+            $lineItemData = [
                 'id' => (int)$lineItem->id,
                 'description' => (string)$lineItem->description,
                 'sku' => (string)$lineItem->sku,
                 'qty' => (float)$lineItem->qty,
-                'salePrice' => $lineItem->salePrice === null ? null : (float)$lineItem->salePrice,
-                'subtotal' => $lineItem->subtotal === null ? null : (float)$lineItem->subtotal,
-                'total' => $lineItem->total === null ? null : (float)$lineItem->total,
             ];
+
+            if ($includeSensitive) {
+                $lineItemData['salePrice'] = $lineItem->salePrice === null ? null : (float)$lineItem->salePrice;
+                $lineItemData['subtotal'] = $lineItem->subtotal === null ? null : (float)$lineItem->subtotal;
+                $lineItemData['total'] = $lineItem->total === null ? null : (float)$lineItem->total;
+            }
+
+            $data['lineItems'][] = $lineItemData;
         }
 
         return $data;

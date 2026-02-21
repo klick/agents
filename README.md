@@ -49,7 +49,12 @@ For monorepo development, the package can also be installed via path repository 
 Environment variables:
 
 - `PLUGIN_AGENTS_ENABLED` (`true`/`false`)
-- `PLUGIN_AGENTS_API_TOKEN` (required in prod for access control)
+- `PLUGIN_AGENTS_API_TOKEN` (required when token enforcement is enabled)
+- `PLUGIN_AGENTS_REQUIRE_TOKEN` (default: `true`)
+- `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN` (default: `false`)
+- `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD` (default: `true`)
+- `PLUGIN_AGENTS_TOKEN_SCOPES` (comma/space list, default scoped read set)
+- `PLUGIN_AGENTS_REDACT_EMAIL` (default: `true`, applied when sensitive scope is missing)
 - `PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE` (default: `60`)
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
 
@@ -63,11 +68,14 @@ These are documented in `.env.example`.
 
 ## API Access
 
-All v1 routes require token-based access unless `PLUGIN_AGENTS_API_TOKEN` is empty.
+By default, v1 routes require token-based access (`PLUGIN_AGENTS_REQUIRE_TOKEN=true`).
+Fail-closed behavior in production is enabled by default (`PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD=true`).
 
-- `Authorization: Bearer <token>`
-- `X-Agents-Token: <token>`
-- `?apiToken=<token>` (query fallback)
+Supported token transports:
+
+- `Authorization: Bearer <token>` (default)
+- `X-Agents-Token: <token>` (default)
+- `?apiToken=<token>` only when `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=true`
 
 ### Endpoints
 
@@ -186,12 +194,18 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 
 ## Security and reliability
 
-- Rate limiting headers are returned on each request:
-  - `X-Ratelimit-Limit`
-  - `X-Ratelimit-Remaining`
-  - `X-Ratelimit-Reset`
+- Rate limiting headers are returned on each guarded request:
+  - `X-RateLimit-Limit`
+  - `X-RateLimit-Remaining`
+  - `X-RateLimit-Reset`
+- Rate limiting is applied before and after auth checks to throttle invalid-token attempts.
 - Exceeded limits return HTTP `429` with `RATE_LIMIT_EXCEEDED`.
 - Missing/invalid credentials return HTTP `401`.
+- Missing required scope returns HTTP `403` with `FORBIDDEN`.
+- Misconfigured production token setup returns HTTP `503` with `SERVER_MISCONFIGURED`.
+- Query-token auth is disabled by default to reduce token leakage risk.
+- Sensitive order fields are scope-gated; email is redacted by default unless `orders:read_sensitive` is granted.
+- Entry access to non-live statuses is scope-gated by `entries:read_all_statuses`.
 - Endpoint is not meant for frontend/public user flows; token is the intended control plane.
 
 Note: `llms.txt` and `commerce.txt` are public discovery surfaces and are not guarded by the API token.
@@ -237,6 +251,45 @@ return [
 ## CP views
 
 - `Agents` section appears in Craft CP for quick inspection.
+
+## Security Rollout Checklist
+
+1. Set `PLUGIN_AGENTS_API_TOKEN` to a strong secret and keep `PLUGIN_AGENTS_REQUIRE_TOKEN=true`.
+2. Keep `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD=true`.
+3. Keep `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=false` unless legacy clients require it temporarily.
+4. Start with default scopes; only add elevated scopes when required:
+   - `orders:read_sensitive`
+   - `entries:read_all_statuses`
+5. Verify `capabilities`/`openapi.json` outputs reflect active auth transport settings.
+6. Run `scripts/security-regression-check.sh` against your environment before promotion.
+
+## Scope Migration Notes
+
+- Prior behavior effectively granted broad read access to any valid token.
+- New default scopes intentionally exclude elevated permissions.
+- To preserve legacy broad reads temporarily, set:
+  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses sections:read capabilities:read openapi:read\"`
+
+## Secure Deployment Verification
+
+```bash
+# 1) Missing token should fail
+curl -i "https://example.com/agents/v1/health"
+
+# 2) Query token should fail by default
+curl -i "https://example.com/agents/v1/health?apiToken=$PLUGIN_AGENTS_API_TOKEN"
+
+# 3) Header token should pass
+curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
+  "https://example.com/agents/v1/health"
+
+# 4) Non-live entries should require elevated scope
+curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
+  "https://example.com/agents/v1/entries?status=all&limit=1"
+
+# 5) Run local regression script
+./scripts/security-regression-check.sh https://example.com "$PLUGIN_AGENTS_API_TOKEN"
+```
 
 ## Roadmap
 
