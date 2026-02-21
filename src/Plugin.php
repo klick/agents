@@ -6,6 +6,7 @@ use Craft;
 use craft\base\Plugin as BasePlugin;
 use craft\base\Element;
 use craft\base\Model;
+use craft\helpers\App;
 use craft\events\RegisterUrlRulesEvent;
 use craft\elements\Entry;
 use craft\web\UrlManager;
@@ -31,6 +32,7 @@ class Plugin extends BasePlugin
             'discoveryTxtService' => DiscoveryTxtService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
+        $this->logSecurityConfigurationWarnings();
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
             $this->controllerNamespace = 'agentreadiness\\console\\controllers';
@@ -138,5 +140,45 @@ class Plugin extends BasePlugin
         Event::on($className, Element::EVENT_AFTER_DELETE, function(): void {
             $this->getDiscoveryTxtService()->invalidateAllCaches();
         });
+    }
+
+    private function logSecurityConfigurationWarnings(): void
+    {
+        $requireToken = App::parseBooleanEnv('$PLUGIN_AGENTS_REQUIRE_TOKEN');
+        if ($requireToken === null) {
+            $requireToken = true;
+        }
+
+        $allowQueryToken = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_QUERY_TOKEN');
+        if ($allowQueryToken === null) {
+            $allowQueryToken = false;
+        }
+
+        $failOnMissingTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD');
+        if ($failOnMissingTokenInProd === null) {
+            $failOnMissingTokenInProd = true;
+        }
+
+        $apiToken = trim((string)App::env('PLUGIN_AGENTS_API_TOKEN'));
+        $environment = strtolower((string)(App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT') ?: 'production'));
+        $isProduction = in_array($environment, ['prod', 'production'], true);
+
+        if (!$requireToken) {
+            Craft::warning('Agents API token enforcement is disabled (`PLUGIN_AGENTS_REQUIRE_TOKEN=false`).', __METHOD__);
+        }
+
+        if ($allowQueryToken) {
+            Craft::warning('Agents API query token transport is enabled (`PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=true`).', __METHOD__);
+        }
+
+        if ($requireToken && $apiToken === '') {
+            $message = 'Agents API token is required but `PLUGIN_AGENTS_API_TOKEN` is empty.';
+            if ($isProduction && $failOnMissingTokenInProd) {
+                Craft::error($message . ' Requests will fail-closed in production.', __METHOD__);
+                return;
+            }
+
+            Craft::warning($message . ' Set `PLUGIN_AGENTS_REQUIRE_TOKEN=false` for explicit local-only bypass.', __METHOD__);
+        }
     }
 }
