@@ -149,6 +149,11 @@ class Plugin extends BasePlugin
             $requireToken = true;
         }
 
+        $allowInsecureNoTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD');
+        if ($allowInsecureNoTokenInProd === null) {
+            $allowInsecureNoTokenInProd = false;
+        }
+
         $allowQueryToken = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_QUERY_TOKEN');
         if ($allowQueryToken === null) {
             $allowQueryToken = false;
@@ -160,19 +165,38 @@ class Plugin extends BasePlugin
         }
 
         $apiToken = trim((string)App::env('PLUGIN_AGENTS_API_TOKEN'));
+        $rawCredentials = trim((string)App::env('PLUGIN_AGENTS_API_CREDENTIALS'));
+        $credentialsConfigured = $apiToken !== '';
+        if ($rawCredentials !== '') {
+            $decodedCredentials = json_decode($rawCredentials, true);
+            if (is_array($decodedCredentials) && !empty($decodedCredentials)) {
+                $credentialsConfigured = true;
+            } else {
+                Craft::warning('Agents credential set (`PLUGIN_AGENTS_API_CREDENTIALS`) is present but could not be parsed as a non-empty JSON array/object.', __METHOD__);
+            }
+        }
+
         $environment = strtolower((string)(App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT') ?: 'production'));
         $isProduction = in_array($environment, ['prod', 'production'], true);
 
         if (!$requireToken) {
-            Craft::warning('Agents API token enforcement is disabled (`PLUGIN_AGENTS_REQUIRE_TOKEN=false`).', __METHOD__);
+            if ($isProduction && !$allowInsecureNoTokenInProd) {
+                Craft::error('Agents API token enforcement is set to false in production, but this is blocked unless `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=true`.', __METHOD__);
+            } else {
+                Craft::warning('Agents API token enforcement is disabled (`PLUGIN_AGENTS_REQUIRE_TOKEN=false`).', __METHOD__);
+            }
         }
 
         if ($allowQueryToken) {
             Craft::warning('Agents API query token transport is enabled (`PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=true`).', __METHOD__);
         }
 
-        if ($requireToken && $apiToken === '') {
-            $message = 'Agents API token is required but `PLUGIN_AGENTS_API_TOKEN` is empty.';
+        if ($isProduction && !$requireToken && $allowInsecureNoTokenInProd) {
+            Craft::warning('Agents API token enforcement is explicitly disabled in production via `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=true`.', __METHOD__);
+        }
+
+        if ($requireToken && !$credentialsConfigured) {
+            $message = 'Agents API credentials are required but no usable `PLUGIN_AGENTS_API_TOKEN`/`PLUGIN_AGENTS_API_CREDENTIALS` were found.';
             if ($isProduction && $failOnMissingTokenInProd) {
                 Craft::error($message . ' Requests will fail-closed in production.', __METHOD__);
                 return;

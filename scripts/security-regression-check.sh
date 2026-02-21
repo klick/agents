@@ -46,6 +46,22 @@ if [[ "$status" != "200" ]]; then
 fi
 pass "Bearer token accepted"
 
+status="$(request_status "$TMP_DIR/capabilities.json" -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/capabilities")"
+if [[ "$status" != "200" ]]; then
+  fail "Expected 200 from capabilities endpoint, got $status"
+fi
+if grep -q '"tokenConfigured":[[:space:]]*true' "$TMP_DIR/capabilities.json"; then
+  pass "Capabilities reports token/credential configuration"
+else
+  echo "WARN: Could not confirm tokenConfigured=true from capabilities response."
+fi
+
+status="$(request_status "$TMP_DIR/post-health.json" -X POST -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/health")"
+if [[ "$status" != "405" && "$status" != "400" ]]; then
+  fail "Expected 405/400 for non-read request to read-only endpoint, got $status"
+fi
+pass "Non-read requests rejected ($status)"
+
 status="$(request_status "$TMP_DIR/non-live-entries.json" -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/entries?status=all&limit=1")"
 if [[ "$status" != "403" ]]; then
   fail "Expected 403 for non-live entries without elevated scope, got $status"
