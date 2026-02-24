@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file.
 - Added request correlation IDs on API responses via `X-Request-Id`.
 - Standardized error response schema with stable error codes and per-response `requestId`/`status`.
 - Added capabilities/OpenAPI error taxonomy metadata for integration clients.
+- Added `INCREMENTAL_SYNC_CONTRACT.md` defining `cursor`/`updatedSince`, ordering, replay, and tombstone semantics for `v0.2.0`.
 
 ## 0.1.2 - 2026-02-24
 

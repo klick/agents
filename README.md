@@ -352,3 +352,13 @@ Planned improvements include:
 - Broader OpenAPI coverage and schema detail improvements.
 - Optional export/report formats for automation workflows.
 - Continued hardening of auth, rate limiting, and observability.
+
+### Incremental Sync Contract (v0.2.0)
+
+The formal contract for checkpoint-based sync is documented in [`INCREMENTAL_SYNC_CONTRACT.md`](INCREMENTAL_SYNC_CONTRACT.md).
+
+Highlights:
+
+- `cursor`-first continuation semantics with `updatedSince` bootstrap support.
+- Deterministic ordering (`updatedAt`, then `id`) and at-least-once replay model.
+- Tombstone/delete signaling through planned `GET /agents/v1/changes`.
