@@ -108,6 +108,7 @@ class ApiController extends Controller
             'sort' => $request->getQueryParam('sort', 'updatedAt'),
             'limit' => (int)$request->getQueryParam('limit', 50),
             'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
         ]);
 
         return $this->jsonResponse($payload);
@@ -120,13 +121,19 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $cursor = (string)$request->getQueryParam('cursor', '');
+        $updatedSince = (string)$request->getQueryParam('updatedSince', '');
+        $isIncremental = ($cursor !== '' || $updatedSince !== '');
+        $lastDaysDefault = $isIncremental ? 0 : 30;
         $includeSensitive = $this->hasScope('orders:read_sensitive');
         $payload = Plugin::getInstance()->getReadinessService()->getOrdersList([
             'status' => $request->getQueryParam('status', 'all'),
-            'lastDays' => (int)$request->getQueryParam('lastDays', 30),
+            'lastDays' => (int)$request->getQueryParam('lastDays', $lastDaysDefault),
             'limit' => (int)$request->getQueryParam('limit', 50),
             'includeSensitive' => $includeSensitive,
             'redactEmail' => !$includeSensitive && $this->shouldRedactEmail(),
+            'cursor' => $cursor,
+            'updatedSince' => $updatedSince,
         ]);
 
         return $this->respondWithPayload($payload);
@@ -170,6 +177,8 @@ class ApiController extends Controller
             'status' => $allowAllStatuses ? $requestedStatus : 'live',
             'search' => $request->getQueryParam('search', $request->getQueryParam('q', '')),
             'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
         ]);
 
         return $this->respondWithPayload($payload);
@@ -279,6 +288,7 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'sort', 'schema' => ['type' => 'string', 'enum' => ['updatedAt', 'createdAt', 'title']]],
                         ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
                         ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ],
                     'responses' => ['200' => ['description' => 'OK']],
                     'x-required-scopes' => ['products:read'],
@@ -289,6 +299,8 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'lastDays', 'schema' => ['type' => 'integer', 'minimum' => 0]],
                         ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                        ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ],
                     'responses' => ['200' => ['description' => 'OK']],
                     'x-required-scopes' => ['orders:read'],
@@ -313,6 +325,8 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'search', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                        ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ],
                     'responses' => ['200' => ['description' => 'OK'], '403' => ['description' => 'Missing scope for non-live status access']],
                     'x-required-scopes' => ['entries:read'],

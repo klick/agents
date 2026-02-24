@@ -171,17 +171,27 @@ Identifier notes for show commands:
 - `status` (`live|pending|disabled|expired|all`, default `live`)
 - `sort` (`updatedAt|createdAt|title`, default `updatedAt`)
 - `limit` (1..200, default 50)
-- `cursor` (opaque pagination cursor)
+- `cursor` (opaque cursor; legacy pagination + incremental continuation)
+- `updatedSince` (RFC3339 timestamp bootstrap for incremental mode, for example `2026-02-24T12:00:00Z`)
 
 ### Orders endpoint parameters
 
 - `/orders`: `status` (handle or `all`), `lastDays` (default 30), `limit` (1..200)
+- `/orders` incremental: `cursor` (opaque), `updatedSince` (RFC3339). When incremental params are used and `lastDays` is omitted, the default window is `0` (no date-created cutoff).
 - `/orders/show`: exactly one of `id` or `number`
 
 ### Entries endpoint parameters
 
 - `/entries`: `section`, `type`, `status`, `search` (or `q`), `limit` (1..200)
+- `/entries` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
 - `/entries/show`: exactly one of `id` or `slug`; optional `section` when using `slug`
+
+### Incremental sync rules
+
+- `cursor` takes precedence over `updatedSince` when both are provided.
+- Incremental mode uses deterministic ordering: `updatedAt`, then `id`.
+- Incremental responses include `page.syncMode=incremental`, `page.hasMore`, `page.nextCursor`, and snapshot window metadata.
+- Cursor tokens are opaque and may expire; restart from a recent `updatedSince` checkpoint if needed.
 
 ### Discoverability endpoints
 

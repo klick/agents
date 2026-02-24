@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file.
 - Standardized error response schema with stable error codes and per-response `requestId`/`status`.
 - Added capabilities/OpenAPI error taxonomy metadata for integration clients.
 - Added `INCREMENTAL_SYNC_CONTRACT.md` defining `cursor`/`updatedSince`, ordering, replay, and tombstone semantics for `v0.2.0`.
+- Added incremental sync filters to `/products`, `/orders`, and `/entries` with cursor precedence, deterministic ordering, and snapshot-window continuation metadata.
 
 ## 0.1.2 - 2026-02-24
 
