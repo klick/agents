@@ -59,6 +59,10 @@ Environment variables:
 - `PLUGIN_AGENTS_REDACT_EMAIL` (default: `true`, applied when sensitive scope is missing)
 - `PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE` (default: `60`)
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
+- `PLUGIN_AGENTS_WEBHOOK_URL` (optional HTTPS endpoint for change notifications)
+- `PLUGIN_AGENTS_WEBHOOK_SECRET` (required when webhook URL is set; used for HMAC signature)
+- `PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS` (default: `5`)
+- `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default: `3`, max queue retry attempts)
 
 These are documented in `.env.example`.
 
@@ -204,6 +208,33 @@ Identifier notes for show commands:
 - Incremental responses include `page.syncMode=incremental`, `page.hasMore`, `page.nextCursor`, and snapshot window metadata.
 - Cursor tokens are opaque and may expire; restart from a recent `updatedSince` checkpoint if needed.
 - `/changes` cursor continuity also preserves the selected `types` filter.
+
+### Webhook Delivery
+
+Webhook notifications are optional and are enabled only when both `PLUGIN_AGENTS_WEBHOOK_URL` and `PLUGIN_AGENTS_WEBHOOK_SECRET` are configured.
+
+Behavior:
+
+- Events are queued asynchronously on `product|order|entry` create/update/delete changes.
+- Event payload mirrors `/changes` items: `resourceType`, `resourceId`, `action`, `updatedAt`, `snapshot`.
+- Retry behavior uses queue retries up to `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS`.
+- Variant changes are emitted as `product` `updated` events.
+
+Request headers:
+
+- `X-Agents-Webhook-Id`: unique event id
+- `X-Agents-Webhook-Timestamp`: unix timestamp
+- `X-Agents-Webhook-Signature`: `sha256=<hex hmac>`
+
+Signature verification:
+
+- signed string: `<timestamp>.<raw-request-body>`
+- algorithm: `HMAC-SHA256`
+- secret: `PLUGIN_AGENTS_WEBHOOK_SECRET`
+
+Queue note:
+
+- Webhooks are delivered by Craft queue workers; ensure `php craft queue/run` or `php craft queue/listen` is active in environments where webhook delivery is required.
 
 ### Discoverability endpoints
 

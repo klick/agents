@@ -8,12 +8,14 @@ use craft\base\Element;
 use craft\base\Model;
 use craft\helpers\App;
 use craft\events\RegisterUrlRulesEvent;
+use craft\events\ModelEvent;
 use craft\elements\Entry;
 use craft\web\UrlManager;
 use yii\base\Event;
 use Klick\Agents\models\Settings;
 use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ReadinessService;
+use Klick\Agents\services\WebhookService;
 
 class Plugin extends BasePlugin
 {
@@ -30,8 +32,10 @@ class Plugin extends BasePlugin
         $this->setComponents([
             'readinessService' => ReadinessService::class,
             'discoveryTxtService' => DiscoveryTxtService::class,
+            'webhookService' => WebhookService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
+        $this->registerWebhookEventHooks();
         $this->logSecurityConfigurationWarnings();
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
@@ -112,6 +116,13 @@ class Plugin extends BasePlugin
         return $service;
     }
 
+    public function getWebhookService(): WebhookService
+    {
+        /** @var WebhookService $service */
+        $service = $this->get('webhookService');
+        return $service;
+    }
+
     protected function createSettingsModel(): ?Model
     {
         return new Settings();
@@ -140,6 +151,43 @@ class Plugin extends BasePlugin
 
         Event::on($className, Element::EVENT_AFTER_DELETE, function(): void {
             $this->getDiscoveryTxtService()->invalidateAllCaches();
+        });
+    }
+
+    private function registerWebhookEventHooks(): void
+    {
+        foreach ([
+            Entry::class,
+            'craft\\commerce\\elements\\Product',
+            'craft\\commerce\\elements\\Variant',
+            'craft\\commerce\\elements\\Order',
+        ] as $className) {
+            if (!class_exists($className)) {
+                continue;
+            }
+
+            $this->attachWebhookHandlers($className);
+        }
+    }
+
+    private function attachWebhookHandlers(string $className): void
+    {
+        Event::on($className, Element::EVENT_AFTER_SAVE, function(ModelEvent $event): void {
+            $element = $event->sender;
+            if (!$element instanceof Element) {
+                return;
+            }
+
+            $this->getWebhookService()->queueElementChange($element, 'saved', (bool)$event->isNew);
+        });
+
+        Event::on($className, Element::EVENT_AFTER_DELETE, function(Event $event): void {
+            $element = $event->sender;
+            if (!$element instanceof Element) {
+                return;
+            }
+
+            $this->getWebhookService()->queueElementChange($element, 'deleted', false);
         });
     }
 
@@ -204,6 +252,16 @@ class Plugin extends BasePlugin
             }
 
             Craft::warning($message . ' Set `PLUGIN_AGENTS_REQUIRE_TOKEN=false` for explicit local-only bypass.', __METHOD__);
+        }
+
+        $webhookUrl = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_URL'));
+        $webhookSecret = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_SECRET'));
+        if ($webhookUrl !== '' && $webhookSecret === '') {
+            Craft::warning('Agents webhook URL is configured but `PLUGIN_AGENTS_WEBHOOK_SECRET` is missing. Webhook delivery is disabled until both are set.', __METHOD__);
+        }
+
+        if ($webhookUrl === '' && $webhookSecret !== '') {
+            Craft::warning('Agents webhook secret is configured but `PLUGIN_AGENTS_WEBHOOK_URL` is missing. Webhook delivery is disabled until both are set.', __METHOD__);
         }
     }
 }
