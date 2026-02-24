@@ -4,7 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
-- No unreleased changes yet.
+- Added request correlation IDs on API responses via `X-Request-Id`.
+- Standardized error response schema with stable error codes and per-response `requestId`/`status`.
+- Added capabilities/OpenAPI error taxonomy metadata for integration clients.
 
 ## 0.1.2 - 2026-02-24
 

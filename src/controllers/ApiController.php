@@ -23,13 +23,23 @@ class ApiController extends Controller
         'capabilities:read',
         'openapi:read',
     ];
+    private const ERROR_INVALID_REQUEST = 'INVALID_REQUEST';
+    private const ERROR_UNAUTHORIZED = 'UNAUTHORIZED';
+    private const ERROR_FORBIDDEN = 'FORBIDDEN';
+    private const ERROR_NOT_FOUND = 'NOT_FOUND';
+    private const ERROR_METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED';
+    private const ERROR_RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED';
+    private const ERROR_SERVER_MISCONFIGURED = 'SERVER_MISCONFIGURED';
 
     private ?array $authContext = null;
     private ?array $securityConfig = null;
+    private ?string $requestId = null;
 
     public function init(): void
     {
         parent::init();
+        $this->requestId = $this->resolveRequestId();
+        $this->response->headers->set('X-Request-Id', $this->getRequestId());
         $request = Craft::$app->request;
         if (!$request->getIsGet() && !$request->getIsHead()) {
             $this->requireAcceptsJson();
@@ -73,7 +83,7 @@ class ApiController extends Controller
             return $guard;
         }
 
-        return $this->asJson(Plugin::getInstance()->getReadinessService()->getHealthSummary());
+        return $this->jsonResponse(Plugin::getInstance()->getReadinessService()->getHealthSummary());
     }
 
     public function actionReadiness(): Response
@@ -82,7 +92,7 @@ class ApiController extends Controller
             return $guard;
         }
 
-        return $this->asJson(Plugin::getInstance()->getReadinessService()->getReadinessSummary());
+        return $this->jsonResponse(Plugin::getInstance()->getReadinessService()->getReadinessSummary());
     }
 
     public function actionProducts(): Response
@@ -100,7 +110,7 @@ class ApiController extends Controller
             'cursor' => $request->getQueryParam('cursor'),
         ]);
 
-        return $this->asJson($payload);
+        return $this->jsonResponse($payload);
     }
 
     public function actionOrders(): Response
@@ -201,16 +211,18 @@ class ApiController extends Controller
 
         $config = $this->getSecurityConfig();
 
-        return $this->asJson([
+        return $this->jsonResponse([
             'service' => 'agents',
-            'version' => '0.1.1',
+            'version' => '0.1.2',
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             'basePath' => '/agents/v1',
+            'requestIdHeader' => 'X-Request-Id',
             'authentication' => $this->buildCapabilitiesAuthentication($config),
             'authorization' => [
                 'grantedScopes' => $this->getGrantedScopes(),
                 'availableScopes' => $this->availableScopes(),
             ],
+            'errorCodes' => $this->errorTaxonomy(),
             'endpoints' => [
                 ['method' => 'GET', 'path' => '/health', 'requiredScopes' => ['health:read']],
                 ['method' => 'GET', 'path' => '/readiness', 'requiredScopes' => ['readiness:read']],
@@ -245,11 +257,11 @@ class ApiController extends Controller
 
         $config = $this->getSecurityConfig();
 
-        return $this->asJson([
+        return $this->jsonResponse([
             'openapi' => '3.1.0',
             'info' => [
                 'title' => 'Agents API',
-                'version' => '0.1.1',
+                'version' => '0.1.2',
                 'description' => 'Read-only agent discovery API for products, orders, entries, and sections.',
             ],
             'servers' => [
@@ -325,6 +337,7 @@ class ApiController extends Controller
             ],
             'components' => [
                 'securitySchemes' => $this->buildOpenApiSecuritySchemes($config),
+                'x-error-codes' => $this->errorTaxonomy(),
             ],
             'security' => $this->buildOpenApiSecurity($config),
         ]);
@@ -492,12 +505,9 @@ class ApiController extends Controller
         $this->response->headers->set('X-RateLimit-Reset', (string)$resetAt);
 
         if ($current > $limit) {
-            $response = $this->asJson([
-                'error' => 'RATE_LIMIT_EXCEEDED',
-                'message' => 'Too many requests.',
+            $response = $this->errorResponse(429, self::ERROR_RATE_LIMIT_EXCEEDED, 'Too many requests.', [
                 'retryAfter' => $resetAt,
             ]);
-            $response->setStatusCode(429);
             $response->headers->set('X-RateLimit-Limit', (string)$limit);
             $response->headers->set('X-RateLimit-Remaining', '0');
             $response->headers->set('X-RateLimit-Reset', (string)$resetAt);
@@ -549,11 +559,7 @@ class ApiController extends Controller
             return null;
         }
 
-        $response = $this->asJson([
-            'error' => 'METHOD_NOT_ALLOWED',
-            'message' => 'Only GET and HEAD requests are supported.',
-        ]);
-        $response->setStatusCode(405);
+        $response = $this->errorResponse(405, self::ERROR_METHOD_NOT_ALLOWED, 'Only GET and HEAD requests are supported.');
         $response->headers->set('Allow', 'GET, HEAD');
         return $response;
     }
@@ -626,6 +632,19 @@ class ApiController extends Controller
             'sections:read' => 'Read section list endpoint.',
             'capabilities:read' => 'Read capabilities descriptor endpoint.',
             'openapi:read' => 'Read OpenAPI descriptor endpoint.',
+        ];
+    }
+
+    private function errorTaxonomy(): array
+    {
+        return [
+            ['status' => 400, 'code' => self::ERROR_INVALID_REQUEST, 'description' => 'Request payload/query validation failed.'],
+            ['status' => 401, 'code' => self::ERROR_UNAUTHORIZED, 'description' => 'Missing or invalid API token.'],
+            ['status' => 403, 'code' => self::ERROR_FORBIDDEN, 'description' => 'Token is valid but does not include required scope.'],
+            ['status' => 404, 'code' => self::ERROR_NOT_FOUND, 'description' => 'Requested resource could not be found.'],
+            ['status' => 405, 'code' => self::ERROR_METHOD_NOT_ALLOWED, 'description' => 'Only GET/HEAD requests are supported for these endpoints.'],
+            ['status' => 429, 'code' => self::ERROR_RATE_LIMIT_EXCEEDED, 'description' => 'Rate limit bucket exhausted for the current window.'],
+            ['status' => 503, 'code' => self::ERROR_SERVER_MISCONFIGURED, 'description' => 'Server security configuration is incomplete or invalid.'],
         ];
     }
 
@@ -914,58 +933,35 @@ class ApiController extends Controller
 
     private function unauthorizedResponse(string $message): Response
     {
-        $response = $this->asJson([
-            'error' => 'UNAUTHORIZED',
-            'message' => $message,
-        ]);
-        $response->setStatusCode(401);
-        return $response;
+        return $this->errorResponse(401, self::ERROR_UNAUTHORIZED, $message);
     }
 
     private function misconfiguredResponse(string $message): Response
     {
-        $response = $this->asJson([
-            'error' => 'SERVER_MISCONFIGURED',
-            'message' => $message,
-        ]);
-        $response->setStatusCode(503);
-        return $response;
+        return $this->errorResponse(503, self::ERROR_SERVER_MISCONFIGURED, $message);
     }
 
     private function forbiddenResponse(string $requiredScope, string $message = 'Missing required scope.'): Response
     {
-        $response = $this->asJson([
-            'error' => 'FORBIDDEN',
-            'message' => $message,
+        return $this->errorResponse(403, self::ERROR_FORBIDDEN, $message, [
             'requiredScope' => $requiredScope,
         ]);
-        $response->setStatusCode(403);
-        return $response;
     }
 
     private function respondWithPayload(array $payload, bool $expectSingle = false, string $notFoundMessage = 'Resource not found.'): Response
     {
         $errors = $payload['meta']['errors'] ?? [];
         if (!empty($errors)) {
-            $response = $this->asJson([
-                'error' => 'INVALID_REQUEST',
-                'message' => (string)$errors[0],
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, (string)$errors[0], [
                 'details' => array_values($errors),
             ]);
-            $response->setStatusCode(400);
-            return $response;
         }
 
         if ($expectSingle && (($payload['data'] ?? null) === null)) {
-            $response = $this->asJson([
-                'error' => 'NOT_FOUND',
-                'message' => $notFoundMessage,
-            ]);
-            $response->setStatusCode(404);
-            return $response;
+            return $this->errorResponse(404, self::ERROR_NOT_FOUND, $notFoundMessage);
         }
 
-        return $this->asJson($payload);
+        return $this->jsonResponse($payload);
     }
 
     private function respondWithDiscoveryDocument(array $document): Response
@@ -988,12 +984,12 @@ class ApiController extends Controller
         if ($this->isNotModified($etag, $lastModified)) {
             $response->setStatusCode(304);
             $response->content = '';
-            return $response;
+            return $this->attachRequestId($response);
         }
 
         $response->setStatusCode(200);
         $response->content = (string)($document['body'] ?? '');
-        return $response;
+        return $this->attachRequestId($response);
     }
 
     private function isNotModified(string $etag, int $lastModified): bool
@@ -1018,5 +1014,54 @@ class ApiController extends Controller
         }
 
         return false;
+    }
+
+    private function jsonResponse(array $payload): Response
+    {
+        return $this->attachRequestId($this->asJson($payload));
+    }
+
+    private function errorResponse(int $statusCode, string $code, string $message, array $extra = []): Response
+    {
+        $payload = array_merge([
+            'error' => $code,
+            'message' => $message,
+            'status' => $statusCode,
+            'requestId' => $this->getRequestId(),
+        ], $extra);
+
+        $response = $this->asJson($payload);
+        $response->setStatusCode($statusCode);
+        return $this->attachRequestId($response);
+    }
+
+    private function attachRequestId(Response $response): Response
+    {
+        $response->headers->set('X-Request-Id', $this->getRequestId());
+        return $response;
+    }
+
+    private function getRequestId(): string
+    {
+        if ($this->requestId !== null && $this->requestId !== '') {
+            return $this->requestId;
+        }
+
+        $this->requestId = $this->resolveRequestId();
+        return $this->requestId;
+    }
+
+    private function resolveRequestId(): string
+    {
+        $incoming = trim((string)Craft::$app->getRequest()->getHeaders()->get('X-Request-Id', ''));
+        if ($incoming !== '' && preg_match('/^[A-Za-z0-9._:-]{8,128}$/', $incoming)) {
+            return $incoming;
+        }
+
+        try {
+            return 'agents-' . bin2hex(random_bytes(8));
+        } catch (\Throwable) {
+            return 'agents-' . str_replace('.', '', (string)microtime(true)) . '-' . substr(sha1(uniqid('', true)), 0, 8);
+        }
     }
 }

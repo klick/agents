@@ -204,10 +204,21 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 ## Response style
 
 - JSON only
+- All API responses include `X-Request-Id`.
 - Products response includes:
   - `data[]` with minimal product fields (`id`, `title`, `slug`, `status`, `updatedAt`, `url`, etc.)
   - `page` with `nextCursor`, `limit`, `count`
 - Health/readiness include plugin, environment, and readiness score fields.
+- Error responses use a stable schema:
+
+```json
+{
+  "error": "UNAUTHORIZED",
+  "message": "Missing or invalid token.",
+  "status": 401,
+  "requestId": "agents-9fd2b20abec4a65f"
+}
+```
 
 ## Security and reliability
 
@@ -221,12 +232,28 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Missing required scope returns HTTP `403` with `FORBIDDEN`.
 - Non-`GET`/`HEAD` requests are rejected (`405 METHOD_NOT_ALLOWED`, or `400` when CSRF validation fails first).
 - Misconfigured production token setup returns HTTP `503` with `SERVER_MISCONFIGURED`.
+- Invalid request payload/params return HTTP `400` with `INVALID_REQUEST`.
+- Missing resource lookups return HTTP `404` with `NOT_FOUND`.
 - Query-token auth is disabled by default to reduce token leakage risk.
 - Sensitive order fields are scope-gated; email is redacted by default unless `orders:read_sensitive` is granted.
 - Entry access to non-live statuses is scope-gated by `entries:read_all_statuses`.
 - Endpoint is not meant for frontend/public user flows; token is the intended control plane.
 
 Note: `llms.txt` and `commerce.txt` are public discovery surfaces and are not guarded by the API token.
+
+## Troubleshooting Flow
+
+1. Capture `X-Request-Id` from the failing response.
+2. Confirm the error `status` + `error` code pair.
+3. Match the code to the fix path:
+   - `UNAUTHORIZED` (`401`): token missing/invalid or wrong transport.
+   - `FORBIDDEN` (`403`): token missing required scope.
+   - `INVALID_REQUEST` (`400`): malformed query or invalid identifier combination.
+   - `NOT_FOUND` (`404`): requested resource does not exist.
+   - `METHOD_NOT_ALLOWED` (`405`): endpoint only supports `GET`/`HEAD`.
+   - `RATE_LIMIT_EXCEEDED` (`429`): respect `X-RateLimit-*` and retry after reset.
+   - `SERVER_MISCONFIGURED` (`503`): token/security env configuration invalid.
+4. Correlate by `X-Request-Id` in server logs for root-cause details.
 
 ## Discovery Text Config (`config/agents.php`)
 

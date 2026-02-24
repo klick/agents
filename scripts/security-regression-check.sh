@@ -28,11 +28,30 @@ request_status() {
   curl -sS -o "$body_file" -w "%{http_code}" "$@"
 }
 
-status="$(request_status "$TMP_DIR/no-token.json" "$BASE_URL/agents/v1/health")"
+request_status_with_headers() {
+  local headers_file="$1"
+  local body_file="$2"
+  shift 2
+  curl -sS -D "$headers_file" -o "$body_file" -w "%{http_code}" "$@"
+}
+
+status="$(request_status_with_headers "$TMP_DIR/no-token.headers" "$TMP_DIR/no-token.json" "$BASE_URL/agents/v1/health")"
 if [[ "$status" != "401" && "$status" != "503" ]]; then
   fail "Expected 401/503 without token, got $status"
 fi
 pass "Missing token rejected ($status)"
+if grep -qi '^X-Request-Id:' "$TMP_DIR/no-token.headers"; then
+  pass "Missing-token response contains X-Request-Id"
+else
+  fail "Missing-token response did not include X-Request-Id"
+fi
+if grep -Eq '"requestId"[[:space:]]*:[[:space:]]*"[^"]+"' "$TMP_DIR/no-token.json" \
+  && grep -Eq '"status"[[:space:]]*:[[:space:]]*(401|503)' "$TMP_DIR/no-token.json" \
+  && grep -Eq '"error"[[:space:]]*:[[:space:]]*"(UNAUTHORIZED|SERVER_MISCONFIGURED)"' "$TMP_DIR/no-token.json"; then
+  pass "Error body contains stable requestId/status/error fields"
+else
+  fail "Error body did not match expected requestId/status/error schema"
+fi
 
 status="$(request_status "$TMP_DIR/query-token.json" "$BASE_URL/agents/v1/health?apiToken=$TOKEN")"
 if [[ "$status" != "401" ]]; then
@@ -40,11 +59,16 @@ if [[ "$status" != "401" ]]; then
 fi
 pass "Query token rejected by default"
 
-status="$(request_status "$TMP_DIR/header-token.json" -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/readiness")"
+status="$(request_status_with_headers "$TMP_DIR/header-token.headers" "$TMP_DIR/header-token.json" -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/readiness")"
 if [[ "$status" != "200" ]]; then
   fail "Expected 200 with bearer token, got $status"
 fi
 pass "Bearer token accepted"
+if grep -qi '^X-Request-Id:' "$TMP_DIR/header-token.headers"; then
+  pass "Authorized response contains X-Request-Id"
+else
+  fail "Authorized response did not include X-Request-Id"
+fi
 
 status="$(request_status "$TMP_DIR/capabilities.json" -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/capabilities")"
 if [[ "$status" != "200" ]]; then
