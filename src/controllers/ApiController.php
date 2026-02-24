@@ -19,6 +19,7 @@ class ApiController extends Controller
         'products:read',
         'orders:read',
         'entries:read',
+        'changes:read',
         'sections:read',
         'capabilities:read',
         'openapi:read',
@@ -184,6 +185,32 @@ class ApiController extends Controller
         return $this->respondWithPayload($payload);
     }
 
+    public function actionChanges(): Response
+    {
+        if (($guard = $this->guardRequest('changes:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $payload = Plugin::getInstance()->getReadinessService()->getChangesFeed([
+            'types' => $request->getQueryParam('types', ''),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+            'cursor' => $request->getQueryParam('cursor'),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+        ]);
+
+        $errors = $payload['meta']['errors'] ?? [];
+        if (!empty($errors)) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, (string)$errors[0], [
+                'details' => array_values($errors),
+            ]);
+        }
+
+        unset($payload['meta']);
+
+        return $this->jsonResponse($payload);
+    }
+
     public function actionEntryShow(): Response
     {
         if (($guard = $this->guardRequest('entries:read')) !== null) {
@@ -240,6 +267,7 @@ class ApiController extends Controller
                 ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
                 ['method' => 'GET', 'path' => '/entries', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
                 ['method' => 'GET', 'path' => '/entries/show', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
+                ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
                 ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
                 ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
                 ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
@@ -271,7 +299,7 @@ class ApiController extends Controller
             'info' => [
                 'title' => 'Agents API',
                 'version' => '0.1.2',
-                'description' => 'Read-only agent discovery API for products, orders, entries, and sections.',
+                'description' => 'Read-only agent discovery API for products, orders, entries, changes, and sections.',
             ],
             'servers' => [
                 ['url' => '/agents/v1', 'description' => 'Primary API'],
@@ -331,6 +359,17 @@ class ApiController extends Controller
                     'responses' => ['200' => ['description' => 'OK'], '403' => ['description' => 'Missing scope for non-live status access']],
                     'x-required-scopes' => ['entries:read'],
                     'x-optional-scopes' => ['entries:read_all_statuses'],
+                ]],
+                '/changes' => ['get' => [
+                    'summary' => 'Unified incremental changes feed',
+                    'parameters' => [
+                        ['in' => 'query', 'name' => 'types', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated list: products,orders,entries'],
+                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                        ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ],
+                    'responses' => ['200' => ['description' => 'OK'], '400' => ['description' => 'Invalid request']],
+                    'x-required-scopes' => ['changes:read'],
                 ]],
                 '/entries/show' => ['get' => [
                     'summary' => 'Single entry by id or slug',
@@ -643,6 +682,7 @@ class ApiController extends Controller
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
             'entries:read' => 'Read live content entry endpoints.',
             'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
+            'changes:read' => 'Read unified cross-resource incremental changes feed.',
             'sections:read' => 'Read section list endpoint.',
             'capabilities:read' => 'Read capabilities descriptor endpoint.',
             'openapi:read' => 'Read OpenAPI descriptor endpoint.',

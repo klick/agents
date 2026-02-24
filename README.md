@@ -105,6 +105,7 @@ Base URL (this project): `/agents/v1`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
 - `GET /entries`
 - `GET /entries/show` (requires exactly one of `id` or `slug`)
+- `GET /changes`
 - `GET /sections`
 - `GET /capabilities`
 - `GET /openapi.json`
@@ -186,12 +187,23 @@ Identifier notes for show commands:
 - `/entries` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
 - `/entries/show`: exactly one of `id` or `slug`; optional `section` when using `slug`
 
+### Changes endpoint parameters
+
+- `/changes`: `types` (optional comma list: `products,orders,entries`), `updatedSince` (RFC3339 bootstrap), `cursor` (opaque continuation), `limit` (1..200)
+- `/changes` returns normalized `data[]` items with:
+  - `resourceType` (`product|order|entry`)
+  - `resourceId` (string)
+  - `action` (`created|updated|deleted`)
+  - `updatedAt` (RFC3339 UTC)
+  - `snapshot` (minimal object for `created|updated`, `null` for `deleted` tombstones)
+
 ### Incremental sync rules
 
 - `cursor` takes precedence over `updatedSince` when both are provided.
 - Incremental mode uses deterministic ordering: `updatedAt`, then `id`.
 - Incremental responses include `page.syncMode=incremental`, `page.hasMore`, `page.nextCursor`, and snapshot window metadata.
 - Cursor tokens are opaque and may expire; restart from a recent `updatedSince` checkpoint if needed.
+- `/changes` cursor continuity also preserves the selected `types` filter.
 
 ### Discoverability endpoints
 
@@ -218,6 +230,9 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Products response includes:
   - `data[]` with minimal product fields (`id`, `title`, `slug`, `status`, `updatedAt`, `url`, etc.)
   - `page` with `nextCursor`, `limit`, `count`
+- Changes response includes:
+  - `data[]` normalized change items (`resourceType`, `resourceId`, `action`, `updatedAt`, `snapshot`)
+  - `page` with `nextCursor`, `hasMore`, `limit`, `count`, `updatedSince`, `snapshotEnd`
 - Health/readiness include plugin, environment, and readiness score fields.
 - Error responses use a stable schema:
 
@@ -330,7 +345,7 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses sections:read capabilities:read openapi:read\"`
+  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
 
 ## Secure Deployment Verification
 
@@ -371,4 +386,4 @@ Highlights:
 
 - `cursor`-first continuation semantics with `updatedSince` bootstrap support.
 - Deterministic ordering (`updatedAt`, then `id`) and at-least-once replay model.
-- Tombstone/delete signaling through planned `GET /agents/v1/changes`.
+- Tombstone/delete signaling through `GET /agents/v1/changes`.

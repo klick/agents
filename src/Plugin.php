@@ -90,6 +90,7 @@ class Plugin extends BasePlugin
                 'agents/v1/orders/show' => 'agents/api/order-show',
                 'agents/v1/entries' => 'agents/api/entries',
                 'agents/v1/entries/show' => 'agents/api/entry-show',
+                'agents/v1/changes' => 'agents/api/changes',
                 'agents/v1/sections' => 'agents/api/sections',
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',

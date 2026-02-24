@@ -580,6 +580,137 @@ class ReadinessService extends Component
         return $payload;
     }
 
+    public function getChangesFeed(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $typesState = $this->normalizeChangeTypes($params['types'] ?? '');
+        if ($typesState['error'] !== null) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [$typesState['error']],
+                ],
+            ];
+        }
+
+        $types = $typesState['types'];
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        if ($cursor !== '') {
+            $cursorState = $this->parseIncrementalCursor($cursor, 'changes');
+            if (!empty($cursorState['errors'])) {
+                return [
+                    'data' => [],
+                    'meta' => [
+                        'count' => 0,
+                        'errors' => $cursorState['errors'],
+                    ],
+                ];
+            }
+
+            $offset = (int)$cursorState['offset'];
+            $updatedSince = $cursorState['updatedSince'];
+            $snapshotEnd = $cursorState['snapshotEnd'];
+
+            $cursorPayload = $this->decodeCursorPayload($cursor) ?? [];
+            $cursorTypesState = $this->normalizeChangeTypes($cursorPayload['types'] ?? []);
+            if ($cursorTypesState['error'] !== null) {
+                return [
+                    'data' => [],
+                    'meta' => [
+                        'count' => 0,
+                        'errors' => [$cursorTypesState['error']],
+                    ],
+                ];
+            }
+
+            // Cursor controls continuation state and takes precedence over query params.
+            $types = $cursorTypesState['types'];
+        } else {
+            $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+            if ($updatedSinceState['error'] !== null) {
+                return [
+                    'data' => [],
+                    'meta' => [
+                        'count' => 0,
+                        'errors' => [$updatedSinceState['error']],
+                    ],
+                ];
+            }
+
+            $updatedSince = $updatedSinceState['value'];
+            $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        }
+
+        $changes = [];
+        $errors = [];
+
+        foreach ($types as $type) {
+            if ($type === 'products') {
+                $error = $this->appendProductChanges($changes, $updatedSince, $snapshotEnd);
+                if ($error !== null) {
+                    $errors[] = $error;
+                }
+                continue;
+            }
+
+            if ($type === 'orders') {
+                $error = $this->appendOrderChanges($changes, $updatedSince, $snapshotEnd);
+                if ($error !== null) {
+                    $errors[] = $error;
+                }
+                continue;
+            }
+
+            if ($type === 'entries') {
+                $error = $this->appendEntryChanges($changes, $updatedSince, $snapshotEnd);
+                if ($error !== null) {
+                    $errors[] = $error;
+                }
+            }
+        }
+
+        if (!empty($errors)) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'errors' => array_values(array_unique($errors)),
+                ],
+            ];
+        }
+
+        usort($changes, fn(array $a, array $b): int => $this->compareChangeItems($a, $b));
+
+        $window = array_slice($changes, $offset, $limit + 1);
+        $data = array_slice($window, 0, $limit);
+        $hasMore = count($window) > $limit;
+        $nextOffset = $offset + count($data);
+
+        return [
+            'data' => $data,
+            'page' => [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'changes', $updatedSince, $snapshotEnd, ['types' => $types]) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+                'types' => $types,
+            ],
+            'meta' => [
+                'count' => count($data),
+                'errors' => [],
+            ],
+        ];
+    }
+
     public function getEntryByIdOrSlug(array $params): array
     {
         $id = (int)($params['id'] ?? 0);
@@ -741,6 +872,307 @@ class ReadinessService extends Component
         return ['elements.dateUpdated' => SORT_ASC, 'elements.id' => SORT_ASC];
     }
 
+    private function normalizeChangeTypes(mixed $rawTypes): array
+    {
+        $canonical = ['products', 'orders', 'entries'];
+        $aliases = [
+            'product' => 'products',
+            'products' => 'products',
+            'order' => 'orders',
+            'orders' => 'orders',
+            'entry' => 'entries',
+            'entries' => 'entries',
+        ];
+
+        $tokens = [];
+        if (is_array($rawTypes)) {
+            foreach ($rawTypes as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } else {
+            $raw = trim((string)$rawTypes);
+            if ($raw !== '') {
+                $tokens = preg_split('/[\s,]+/', $raw) ?: [];
+            }
+        }
+
+        if (empty($tokens)) {
+            return ['types' => $canonical, 'error' => null];
+        }
+
+        $resolved = [];
+        $invalid = [];
+        foreach ($tokens as $token) {
+            $normalized = strtolower(trim($token));
+            if ($normalized === '') {
+                continue;
+            }
+
+            $mapped = $aliases[$normalized] ?? null;
+            if ($mapped === null) {
+                $invalid[] = $token;
+                continue;
+            }
+
+            $resolved[$mapped] = true;
+        }
+
+        if (!empty($invalid)) {
+            return [
+                'types' => [],
+                'error' => sprintf(
+                    'Invalid `types` value(s): %s. Allowed values: products, orders, entries.',
+                    implode(', ', array_values(array_unique($invalid)))
+                ),
+            ];
+        }
+
+        $types = [];
+        foreach ($canonical as $type) {
+            if (isset($resolved[$type])) {
+                $types[] = $type;
+            }
+        }
+
+        if (empty($types)) {
+            $types = $canonical;
+        }
+
+        return ['types' => $types, 'error' => null];
+    }
+
+    private function appendProductChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Product::class)) {
+            return 'Commerce plugin is unavailable for product changes.';
+        }
+
+        $updatedQuery = Product::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $product) {
+            if (!$product instanceof Product) {
+                continue;
+            }
+
+            $typeHandle = $product->type?->handle ?? null;
+            $url = $product->getUrl();
+            if ($url === null && $product->uri) {
+                $url = UrlHelper::siteUrl($product->uri);
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'product',
+                (string)$product->id,
+                $this->resolveChangeAction($product->dateCreated, $product->dateUpdated),
+                $product->dateUpdated,
+                [
+                    'id' => (int)$product->id,
+                    'title' => (string)$product->title,
+                    'slug' => (string)$product->slug,
+                    'uri' => (string)$product->uri,
+                    'type' => $typeHandle,
+                    'status' => $product->getStatus() ?? null,
+                    'updatedAt' => $this->formatDate($product->dateUpdated),
+                    'url' => $url,
+                ]
+            );
+        }
+
+        $deletedQuery = Product::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $product) {
+            if (!$product instanceof Product) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'product',
+                (string)$product->id,
+                'deleted',
+                $product->dateDeleted ?? $product->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendOrderChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Order::class)) {
+            return 'Commerce plugin is unavailable for order changes.';
+        }
+
+        $updatedQuery = Order::find()
+            ->isCompleted(true)
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $order) {
+            if (!$order instanceof Order) {
+                continue;
+            }
+
+            $orderStatus = $order->getOrderStatus();
+
+            $this->appendChangeItem(
+                $changes,
+                'order',
+                (string)$order->id,
+                $this->resolveChangeAction($order->dateCreated, $order->dateUpdated),
+                $order->dateUpdated,
+                [
+                    'id' => (int)$order->id,
+                    'number' => (string)($order->number ?? ''),
+                    'reference' => (string)($order->reference ?? ''),
+                    'status' => $orderStatus?->handle,
+                    'statusName' => $orderStatus?->name,
+                    'isCompleted' => (bool)$order->isCompleted,
+                    'isPaid' => (bool)$order->isPaid,
+                    'totalPrice' => $order->totalPrice === null ? null : (float)$order->totalPrice,
+                    'dateUpdated' => $this->formatDate($order->dateUpdated),
+                ]
+            );
+        }
+
+        $deletedQuery = Order::find()
+            ->isCompleted(true)
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $order) {
+            if (!$order instanceof Order) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'order',
+                (string)$order->id,
+                'deleted',
+                $order->dateDeleted ?? $order->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendEntryChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = Entry::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $entry) {
+            if (!$entry instanceof Entry) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'entry',
+                (string)$entry->id,
+                $this->resolveChangeAction($entry->dateCreated, $entry->dateUpdated),
+                $entry->dateUpdated,
+                $this->mapEntry($entry, false)
+            );
+        }
+
+        $deletedQuery = Entry::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $entry) {
+            if (!$entry instanceof Entry) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'entry',
+                (string)$entry->id,
+                'deleted',
+                $entry->dateDeleted ?? $entry->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendChangeItem(
+        array &$changes,
+        string $resourceType,
+        string $resourceId,
+        string $action,
+        ?DateTimeInterface $updatedAt,
+        ?array $snapshot
+    ): void {
+        $timestamp = $this->formatDate($updatedAt);
+        if ($timestamp === null) {
+            return;
+        }
+
+        $changes[] = [
+            'resourceType' => $resourceType,
+            'resourceId' => $resourceId,
+            'action' => $action,
+            'updatedAt' => $timestamp,
+            'snapshot' => $snapshot,
+        ];
+    }
+
+    private function resolveChangeAction(?DateTimeInterface $createdAt, ?DateTimeInterface $updatedAt): string
+    {
+        if ($createdAt === null || $updatedAt === null) {
+            return 'updated';
+        }
+
+        return $createdAt->getTimestamp() === $updatedAt->getTimestamp() ? 'created' : 'updated';
+    }
+
+    private function compareChangeItems(array $a, array $b): int
+    {
+        $updatedAtComparison = strcmp((string)($a['updatedAt'] ?? ''), (string)($b['updatedAt'] ?? ''));
+        if ($updatedAtComparison !== 0) {
+            return $updatedAtComparison;
+        }
+
+        $typeComparison = strcmp((string)($a['resourceType'] ?? ''), (string)($b['resourceType'] ?? ''));
+        if ($typeComparison !== 0) {
+            return $typeComparison;
+        }
+
+        $resourceIdA = (string)($a['resourceId'] ?? '');
+        $resourceIdB = (string)($b['resourceId'] ?? '');
+        if (ctype_digit($resourceIdA) && ctype_digit($resourceIdB)) {
+            $idComparison = (int)$resourceIdA <=> (int)$resourceIdB;
+        } else {
+            $idComparison = strcmp($resourceIdA, $resourceIdB);
+        }
+        if ($idComparison !== 0) {
+            return $idComparison;
+        }
+
+        return strcmp((string)($a['action'] ?? ''), (string)($b['action'] ?? ''));
+    }
+
     private function parseUpdatedSince(string $value): array
     {
         $value = trim($value);
@@ -843,7 +1275,13 @@ class ReadinessService extends Component
         ];
     }
 
-    private function buildIncrementalCursor(int $offset, string $resource, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): string
+    private function buildIncrementalCursor(
+        int $offset,
+        string $resource,
+        ?DateTimeImmutable $updatedSince,
+        ?DateTimeImmutable $snapshotEnd,
+        array $extra = []
+    ): string
     {
         $snapshot = $snapshotEnd ?? new DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $payload = [
@@ -855,6 +1293,10 @@ class ReadinessService extends Component
             'snapshotEnd' => $this->formatDate($snapshot),
             'issuedAt' => gmdate('Y-m-d\TH:i:s\Z'),
         ];
+
+        foreach ($extra as $key => $value) {
+            $payload[$key] = $value;
+        }
 
         return base64_encode(json_encode($payload));
     }
@@ -876,6 +1318,25 @@ class ReadinessService extends Component
         }
 
         $queryBuilder->dateUpdated(array_merge(['and'], $clauses));
+    }
+
+    private function applyDateDeletedWindow(mixed $queryBuilder, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): void
+    {
+        if ($snapshotEnd === null) {
+            return;
+        }
+
+        $clauses = ['<= ' . $this->formatDbDate($snapshotEnd)];
+        if ($updatedSince !== null) {
+            $clauses[] = '>= ' . $this->formatDbDate($updatedSince);
+        }
+
+        if (count($clauses) === 1) {
+            $queryBuilder->dateDeleted($clauses[0]);
+            return;
+        }
+
+        $queryBuilder->dateDeleted(array_merge(['and'], $clauses));
     }
 
     private function formatDbDate(DateTimeImmutable $date): string
