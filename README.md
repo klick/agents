@@ -357,12 +357,42 @@ return [
 
 ## CP views
 
-- `Agents` section appears in Craft CP for quick inspection.
-- Dashboard includes:
+- `Agents` section now uses 4 deep-linkable cockpit tabs:
+  - `agents/overview`
+  - `agents/readiness`
+  - `agents/discovery`
+  - `agents/security`
+- Legacy CP paths remain valid:
+  - `agents` resolves to `overview`
+  - `agents/dashboard` resolves to `overview`
+  - `agents/health` resolves to `readiness`
+- Overview:
   - runtime enabled/disabled state and source (`env` vs CP setting)
-  - quick endpoint links
-  - high-level config ownership guidance (`CP` vs `config/agents.php`)
-- Health page shows live health/readiness snapshots in human + JSON form.
+  - env-lock aware runtime toggle
+  - quick endpoint links + discovery prewarm entrypoint
+  - ownership split guidance (`CP` vs `config/agents.php` vs `.env`)
+- Readiness:
+  - readiness score, criterion breakdown, component checks, warnings
+  - health/readiness diagnostic JSON snapshots
+- Discovery:
+  - read-only `llms.txt`/`commerce.txt` status, metadata, preview snippets
+  - operator actions: prewarm (`all|llms|commerce`) and clear cache
+- Security:
+  - read-only effective auth/rate-limit/redaction/webhook posture
+  - centralized warning output from shared security policy logic
+
+## CP rollout regression checklist
+
+1. Verify all four tabs load and subnav selection matches the active route.
+2. Verify legacy aliases `agents`, `agents/dashboard`, and `agents/health` still resolve.
+3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
+4. Verify discovery actions work:
+   - prewarm `all`
+   - prewarm `llms`
+   - prewarm `commerce`
+   - clear discovery cache
+5. Verify security tab shows posture without exposing token/secret values.
+6. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
 
 ## Namespace migration
 

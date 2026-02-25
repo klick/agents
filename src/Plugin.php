@@ -15,6 +15,7 @@ use yii\base\Event;
 use Klick\Agents\models\Settings;
 use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ReadinessService;
+use Klick\Agents\services\SecurityPolicyService;
 use Klick\Agents\services\WebhookService;
 
 class Plugin extends BasePlugin
@@ -32,6 +33,7 @@ class Plugin extends BasePlugin
         $this->setComponents([
             'readinessService' => ReadinessService::class,
             'discoveryTxtService' => DiscoveryTxtService::class,
+            'securityPolicyService' => SecurityPolicyService::class,
             'webhookService' => WebhookService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
@@ -57,13 +59,21 @@ class Plugin extends BasePlugin
         $item = parent::getCpNavItem();
         $item['label'] = 'Agents';
         $item['subnav'] = [
-            'dashboard' => [
-                'label' => 'Dashboard',
-                'url' => 'agents/dashboard',
+            'overview' => [
+                'label' => 'Overview',
+                'url' => 'agents/overview',
             ],
-            'health' => [
-                'label' => 'Health',
-                'url' => 'agents/health',
+            'readiness' => [
+                'label' => 'Readiness',
+                'url' => 'agents/readiness',
+            ],
+            'discovery' => [
+                'label' => 'Discovery',
+                'url' => 'agents/discovery',
+            ],
+            'security' => [
+                'label' => 'Security',
+                'url' => 'agents/security',
             ],
         ];
 
@@ -74,8 +84,13 @@ class Plugin extends BasePlugin
     {
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function(RegisterUrlRulesEvent $event): void {
             $event->rules = array_merge($event->rules, [
-                'agents' => 'agents/dashboard/index',
-                'agents/dashboard' => 'agents/dashboard/index',
+                'agents' => 'agents/dashboard/overview',
+                'agents/overview' => 'agents/dashboard/overview',
+                'agents/readiness' => 'agents/dashboard/readiness',
+                'agents/discovery' => 'agents/dashboard/discovery',
+                'agents/security' => 'agents/dashboard/security',
+                // Legacy aliases retained for backward-compatible deep links.
+                'agents/dashboard' => 'agents/dashboard/dashboard',
                 'agents/health' => 'agents/dashboard/health',
             ]);
         });
@@ -120,6 +135,13 @@ class Plugin extends BasePlugin
     {
         /** @var WebhookService $service */
         $service = $this->get('webhookService');
+        return $service;
+    }
+
+    public function getSecurityPolicyService(): SecurityPolicyService
+    {
+        /** @var SecurityPolicyService $service */
+        $service = $this->get('securityPolicyService');
         return $service;
     }
 
@@ -219,75 +241,19 @@ class Plugin extends BasePlugin
 
     private function logSecurityConfigurationWarnings(): void
     {
-        $requireToken = App::parseBooleanEnv('$PLUGIN_AGENTS_REQUIRE_TOKEN');
-        if ($requireToken === null) {
-            $requireToken = true;
-        }
-
-        $allowInsecureNoTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD');
-        if ($allowInsecureNoTokenInProd === null) {
-            $allowInsecureNoTokenInProd = false;
-        }
-
-        $allowQueryToken = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_QUERY_TOKEN');
-        if ($allowQueryToken === null) {
-            $allowQueryToken = false;
-        }
-
-        $failOnMissingTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD');
-        if ($failOnMissingTokenInProd === null) {
-            $failOnMissingTokenInProd = true;
-        }
-
-        $apiToken = trim((string)App::env('PLUGIN_AGENTS_API_TOKEN'));
-        $rawCredentials = trim((string)App::env('PLUGIN_AGENTS_API_CREDENTIALS'));
-        $credentialsConfigured = $apiToken !== '';
-        if ($rawCredentials !== '') {
-            $decodedCredentials = json_decode($rawCredentials, true);
-            if (is_array($decodedCredentials) && !empty($decodedCredentials)) {
-                $credentialsConfigured = true;
-            } else {
-                Craft::warning('Agents credential set (`PLUGIN_AGENTS_API_CREDENTIALS`) is present but could not be parsed as a non-empty JSON array/object.', __METHOD__);
-            }
-        }
-
-        $environment = strtolower((string)(App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT') ?: 'production'));
-        $isProduction = in_array($environment, ['prod', 'production'], true);
-
-        if (!$requireToken) {
-            if ($isProduction && !$allowInsecureNoTokenInProd) {
-                Craft::error('Agents API token enforcement is set to false in production, but this is blocked unless `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=true`.', __METHOD__);
-            } else {
-                Craft::warning('Agents API token enforcement is disabled (`PLUGIN_AGENTS_REQUIRE_TOKEN=false`).', __METHOD__);
-            }
-        }
-
-        if ($allowQueryToken) {
-            Craft::warning('Agents API query token transport is enabled (`PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=true`).', __METHOD__);
-        }
-
-        if ($isProduction && !$requireToken && $allowInsecureNoTokenInProd) {
-            Craft::warning('Agents API token enforcement is explicitly disabled in production via `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=true`.', __METHOD__);
-        }
-
-        if ($requireToken && !$credentialsConfigured) {
-            $message = 'Agents API credentials are required but no usable `PLUGIN_AGENTS_API_TOKEN`/`PLUGIN_AGENTS_API_CREDENTIALS` were found.';
-            if ($isProduction && $failOnMissingTokenInProd) {
-                Craft::error($message . ' Requests will fail-closed in production.', __METHOD__);
-                return;
+        foreach ($this->getSecurityPolicyService()->getWarnings() as $warning) {
+            $level = (string)($warning['level'] ?? 'warning');
+            $message = (string)($warning['message'] ?? '');
+            if ($message === '') {
+                continue;
             }
 
-            Craft::warning($message . ' Set `PLUGIN_AGENTS_REQUIRE_TOKEN=false` for explicit local-only bypass.', __METHOD__);
-        }
+            if ($level === 'error') {
+                Craft::error($message, __METHOD__);
+                continue;
+            }
 
-        $webhookUrl = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_URL'));
-        $webhookSecret = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_SECRET'));
-        if ($webhookUrl !== '' && $webhookSecret === '') {
-            Craft::warning('Agents webhook URL is configured but `PLUGIN_AGENTS_WEBHOOK_SECRET` is missing. Webhook delivery is disabled until both are set.', __METHOD__);
-        }
-
-        if ($webhookUrl === '' && $webhookSecret !== '') {
-            Craft::warning('Agents webhook secret is configured but `PLUGIN_AGENTS_WEBHOOK_URL` is missing. Webhook delivery is disabled until both are set.', __METHOD__);
+            Craft::warning($message, __METHOD__);
         }
     }
 }

@@ -3,9 +3,15 @@
   "subject": "[Agents] Add shared security policy service for effective config + warnings",
   "description": "Intent:\n- Centralize env-driven security posture computation for API, plugin warnings, and CP Security tab.\n\nAssumptions:\n- Existing ApiController security logic is source-of-truth behavior.\n\nDesign + invariants:\n- No behavior changes to auth/rate-limit enforcement.\n- Service emits safe redacted data for CP consumption.\n\nDiff plan:\n- src/services/SecurityPolicyService.php (new)\n- src/Plugin.php service registration\n- src/controllers/ApiController.php integration\n- src/Plugin.php warning integration\n\nVerification:\n- Effective values match previous runtime behavior for key env combinations.",
   "activeForm": "Security policy extraction",
-  "status": "pending",
-  "blocks": ["4", "7", "8"],
-  "blockedBy": ["1"],
+  "status": "completed",
+  "blocks": [
+    "4",
+    "7",
+    "8"
+  ],
+  "blockedBy": [
+    "1"
+  ],
   "metadata": {
     "project": "agents",
     "projectPath": "/Users/marcus/www/sites/agents-sandbox/plugins/agents",

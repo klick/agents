@@ -3,9 +3,14 @@
   "subject": "[Agents] Implement Overview tab with runtime control and safe operator actions",
   "description": "Intent:\n- Provide at-a-glance runtime state and low-risk actions (toggle + discovery prewarm).\n\nAssumptions:\n- Runtime toggle stays blocked when  env override is set.\n\nDesign + invariants:\n- No secret values shown.\n- Immediate-save toggle UX only in unlocked mode.\n\nDiff plan:\n- src/controllers/DashboardController.php\n- src/templates/agents/overview.twig (or canonical equivalent)\n\nVerification:\n- Toggle + prewarm actions work with correct flash states and lock behavior.",
   "activeForm": "Overview tab",
-  "status": "pending",
-  "blocks": ["9"],
-  "blockedBy": ["4", "3"],
+  "status": "completed",
+  "blocks": [
+    "9"
+  ],
+  "blockedBy": [
+    "4",
+    "3"
+  ],
   "metadata": {
     "project": "agents",
     "projectPath": "/Users/marcus/www/sites/agents-sandbox/plugins/agents",

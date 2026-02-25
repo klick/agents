@@ -3,9 +3,16 @@
   "subject": "[Agents] Expand CP subnav/routes/actions to Overview/Readiness/Discovery/Security",
   "description": "Intent:\n- Replace 2-view nav with 4-tab ops cockpit routes while keeping legacy aliases.\n\nAssumptions:\n- Subnav tabs are deep-linkable CP routes, not in-page tabs only.\n\nDesign + invariants:\n- Keep , ,  backward-compatible.\n- New tabs get dedicated actions and templates.\n\nDiff plan:\n- src/Plugin.php (getCpNavItem + registerCpRoutes)\n- src/controllers/DashboardController.php (new actions + shared view models)\n\nVerification:\n- All tab URLs resolve and selected subnav state is correct.",
   "activeForm": "CP IA routing",
-  "status": "pending",
-  "blocks": ["5", "6", "7"],
-  "blockedBy": ["2", "1"],
+  "status": "completed",
+  "blocks": [
+    "5",
+    "6",
+    "7"
+  ],
+  "blockedBy": [
+    "2",
+    "1"
+  ],
   "metadata": {
     "project": "agents",
     "projectPath": "/Users/marcus/www/sites/agents-sandbox/plugins/agents",
