@@ -6,6 +6,7 @@ use Craft;
 use Klick\Agents\Plugin;
 use Klick\Agents\models\Settings;
 use craft\web\Controller;
+use craft\web\View;
 use Throwable;
 use yii\web\Response;
 
@@ -29,7 +30,7 @@ class DashboardController extends Controller
         $readiness = $plugin->getReadinessService()->getReadinessDiagnostics();
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
 
-        return $this->renderTemplate('overview', [
+        return $this->renderCpTemplate('agents/overview', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
@@ -54,7 +55,7 @@ class DashboardController extends Controller
         $readiness = $plugin->getReadinessService()->getReadinessSummary();
         $diagnostics = $plugin->getReadinessService()->getReadinessDiagnostics();
 
-        return $this->renderTemplate('readiness', [
+        return $this->renderCpTemplate('agents/readiness', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'health' => $health,
@@ -73,7 +74,7 @@ class DashboardController extends Controller
         $settings = $this->getSettingsModel();
         $discoveryStatus = $plugin->getDiscoveryTxtService()->getDiscoveryStatus();
 
-        return $this->renderTemplate('discovery', [
+        return $this->renderCpTemplate('agents/discovery', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'discoveryStatus' => $discoveryStatus,
@@ -93,7 +94,7 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
 
-        return $this->renderTemplate('security', [
+        return $this->renderCpTemplate('agents/security', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'securityPosture' => $posture,
@@ -208,5 +209,10 @@ class DashboardController extends Controller
             return '{}';
         }
         return $encoded;
+    }
+
+    private function renderCpTemplate(string $template, array $variables): Response
+    {
+        return $this->renderTemplate($template, $variables, View::TEMPLATE_MODE_CP);
     }
 }
