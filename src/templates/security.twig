@@ -1,0 +1,83 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "Agents Security" %}
+{% set selectedSubnavItem = "security" %}
+
+{% block content %}
+  <h1>Security</h1>
+  <p class="text-sm text-muted">Read-only effective security posture derived from environment/config.</p>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Service State</h2>
+    <p>
+      <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+      <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+      <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+    </p>
+    <p>Environment: <strong>{{ securityPosture.environment|default('unknown') }}</strong></p>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Authentication</h2>
+    <ul>
+      <li>Token required: <strong>{{ securityPosture.authentication.required ? 'yes' : 'no' }}</strong></li>
+      <li>Requested token required: <strong>{{ securityPosture.authentication.requestedRequireToken ? 'yes' : 'no' }}</strong></li>
+      <li>Forced in production: <strong>{{ securityPosture.authentication.tokenRequirementForcedInProd ? 'yes' : 'no' }}</strong></li>
+      <li>Query token transport: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
+      <li>Fail on missing token in prod: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
+      <li>Configured credential count: <strong>{{ securityPosture.authentication.credentialCount }}</strong></li>
+      <li>Credential IDs: <strong>{{ securityPosture.authentication.credentialIds|join(', ') ?: 'none' }}</strong></li>
+    </ul>
+    <p><strong>Default token scopes</strong></p>
+    <ul>
+      {% for scope in securityPosture.authentication.tokenScopes %}
+        <li>{{ scope }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Rate Limit and Privacy</h2>
+    <ul>
+      <li>Rate limit: <strong>{{ securityPosture.rateLimit.perMinute }}</strong> requests / {{ securityPosture.rateLimit.windowSeconds }}s</li>
+      <li>Email redaction: <strong>{{ securityPosture.privacy.redactEmail ? 'enabled' : 'disabled' }}</strong></li>
+    </ul>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Webhook Posture</h2>
+    <ul>
+      <li>Webhook enabled: <strong>{{ securityPosture.webhook.enabled ? 'yes' : 'no' }}</strong></li>
+      <li>Webhook URL configured: <strong>{{ securityPosture.webhook.urlConfigured ? 'yes' : 'no' }}</strong></li>
+      <li>Webhook secret configured: <strong>{{ securityPosture.webhook.secretConfigured ? 'yes' : 'no' }}</strong></li>
+      <li>Destination host: <strong>{{ securityPosture.webhook.destinationHost ?: 'n/a' }}</strong></li>
+      <li>Timeout seconds: <strong>{{ securityPosture.webhook.timeoutSeconds }}</strong></li>
+      <li>Max attempts: <strong>{{ securityPosture.webhook.maxAttempts }}</strong></li>
+    </ul>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Warnings</h2>
+    <p>
+      Errors: <strong>{{ securityPosture.warningCounts.errors|default(0) }}</strong>,
+      warnings: <strong>{{ securityPosture.warningCounts.warnings|default(0) }}</strong>
+    </p>
+    {% if securityPosture.warnings|length %}
+      <ul>
+        {% for warning in securityPosture.warnings %}
+          <li>
+            <strong>[{{ warning.level|upper }}]</strong>
+            {{ warning.message }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No active security warnings.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3">
+    <h2 class="h4">Effective Security JSON</h2>
+    <pre class="border rounded p-3">{{ securityPostureJson }}</pre>
+  </div>
+{% endblock %}

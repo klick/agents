@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.1.3 - 2026-02-25
+
 - Added request correlation IDs on API responses via `X-Request-Id`.
 - Standardized error response schema with stable error codes and per-response `requestId`/`status`.
 - Added capabilities/OpenAPI error taxonomy metadata for integration clients.
@@ -11,6 +13,11 @@ All notable changes to this project are documented in this file.
 - Added incremental sync filters to `/products`, `/orders`, and `/entries` with cursor precedence, deterministic ordering, and snapshot-window continuation metadata.
 - Added `GET /agents/v1/changes` unified feed with normalized `created|updated|deleted` items, deterministic checkpoint continuation, and tombstones from soft-deleted records.
 - Added optional webhook delivery for `product|order|entry` change events with queued retries and `X-Agents-Webhook-Signature` HMAC verification headers.
+- Added CP cockpit IA v1 with 4 deep-linkable tabs: `overview`, `readiness`, `discovery`, and `security` (legacy `agents/dashboard` + `agents/health` aliases retained).
+- Added shared `SecurityPolicyService` for effective auth/rate-limit/redaction/webhook posture across API, CP security view, and plugin startup warnings.
+- Added discovery operator controls in CP (`prewarm all|llms|commerce`, clear cache) with read-only discovery metadata/previews.
+- Fixed CP template resolution using Craft plugin-handle template conventions (`agents/*` in CP mode).
+- Removed `.tasks` from the repository and added `/.tasks/` to `.gitignore`.
 
 ## 0.1.2 - 2026-02-24
 

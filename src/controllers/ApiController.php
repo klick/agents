@@ -4,7 +4,6 @@ namespace Klick\Agents\controllers;
 
 use Craft;
 use Klick\Agents\Plugin;
-use craft\helpers\App;
 use craft\web\Controller;
 use yii\caching\CacheInterface;
 use yii\mutex\Mutex;
@@ -30,6 +29,7 @@ class ApiController extends Controller
     private const ERROR_NOT_FOUND = 'NOT_FOUND';
     private const ERROR_METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED';
     private const ERROR_RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED';
+    private const ERROR_SERVICE_DISABLED = 'SERVICE_DISABLED';
     private const ERROR_SERVER_MISCONFIGURED = 'SERVER_MISCONFIGURED';
 
     private ?array $authContext = null;
@@ -56,6 +56,10 @@ class ApiController extends Controller
             return $methodResponse;
         }
 
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return $this->serviceDisabledResponse();
+        }
+
         $document = Plugin::getInstance()->getDiscoveryTxtService()->getLlmsTxtDocument();
         if ($document === null) {
             throw new NotFoundHttpException('Not found.');
@@ -68,6 +72,10 @@ class ApiController extends Controller
     {
         if (($methodResponse = $this->enforceReadRequest()) !== null) {
             return $methodResponse;
+        }
+
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return $this->serviceDisabledResponse();
         }
 
         $document = Plugin::getInstance()->getDiscoveryTxtService()->getCommerceTxtDocument();
@@ -402,6 +410,10 @@ class ApiController extends Controller
             return $methodResponse;
         }
 
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return $this->serviceDisabledResponse();
+        }
+
         $config = $this->getSecurityConfig();
 
         $preAuthIdentity = $this->buildPreAuthIdentity();
@@ -698,6 +710,7 @@ class ApiController extends Controller
             ['status' => 404, 'code' => self::ERROR_NOT_FOUND, 'description' => 'Requested resource could not be found.'],
             ['status' => 405, 'code' => self::ERROR_METHOD_NOT_ALLOWED, 'description' => 'Only GET/HEAD requests are supported for these endpoints.'],
             ['status' => 429, 'code' => self::ERROR_RATE_LIMIT_EXCEEDED, 'description' => 'Rate limit bucket exhausted for the current window.'],
+            ['status' => 503, 'code' => self::ERROR_SERVICE_DISABLED, 'description' => 'Agents service is disabled by configuration.'],
             ['status' => 503, 'code' => self::ERROR_SERVER_MISCONFIGURED, 'description' => 'Server security configuration is incomplete or invalid.'],
         ];
     }
@@ -708,219 +721,9 @@ class ApiController extends Controller
             return $this->securityConfig;
         }
 
-        $environment = strtolower((string)(App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT') ?: 'production'));
-        $isProduction = in_array($environment, ['prod', 'production'], true);
-
-        $requireToken = App::parseBooleanEnv('$PLUGIN_AGENTS_REQUIRE_TOKEN');
-        if ($requireToken === null) {
-            $requireToken = true;
-        }
-
-        $allowInsecureNoTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD');
-        if ($allowInsecureNoTokenInProd === null) {
-            $allowInsecureNoTokenInProd = false;
-        }
-
-        $allowQueryToken = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_QUERY_TOKEN');
-        if ($allowQueryToken === null) {
-            $allowQueryToken = false;
-        }
-
-        $failOnMissingTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD');
-        if ($failOnMissingTokenInProd === null) {
-            $failOnMissingTokenInProd = true;
-        }
-
-        $redactEmail = App::parseBooleanEnv('$PLUGIN_AGENTS_REDACT_EMAIL');
-        if ($redactEmail === null) {
-            $redactEmail = true;
-        }
-
-        $tokenScopes = $this->parseScopes((string)App::env('PLUGIN_AGENTS_TOKEN_SCOPES'));
-        if (empty($tokenScopes)) {
-            $tokenScopes = self::DEFAULT_TOKEN_SCOPES;
-        }
-
-        $tokenRequirementForcedInProd = false;
-        if (!$requireToken && $isProduction && !$allowInsecureNoTokenInProd) {
-            $requireToken = true;
-            $tokenRequirementForcedInProd = true;
-        }
-
-        $credentials = $this->parseCredentials((string)App::env('PLUGIN_AGENTS_API_CREDENTIALS'), $tokenScopes);
-
-        $primaryApiToken = trim((string)App::env('PLUGIN_AGENTS_API_TOKEN'));
-        if ($primaryApiToken !== '') {
-            $credentials[] = [
-                'id' => 'default',
-                'token' => $primaryApiToken,
-                'scopes' => $tokenScopes,
-            ];
-        }
-
-        $credentials = $this->deduplicateCredentials($credentials, $tokenScopes);
-
-        $rateLimitPerMinute = (int)App::env('PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE');
-        if ($rateLimitPerMinute <= 0) {
-            $rateLimitPerMinute = 60;
-        }
-
-        $rateLimitWindowSeconds = (int)App::env('PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS');
-        if ($rateLimitWindowSeconds <= 0) {
-            $rateLimitWindowSeconds = 60;
-        }
-
-        $this->securityConfig = [
-            'environment' => $environment,
-            'isProduction' => $isProduction,
-            'requireToken' => $requireToken,
-            'allowInsecureNoTokenInProd' => $allowInsecureNoTokenInProd,
-            'tokenRequirementForcedInProd' => $tokenRequirementForcedInProd,
-            'allowQueryToken' => $allowQueryToken,
-            'failOnMissingTokenInProd' => $failOnMissingTokenInProd,
-            'credentials' => $credentials,
-            'primaryApiTokenConfigured' => $primaryApiToken !== '',
-            'tokenScopes' => $tokenScopes,
-            'rateLimitPerMinute' => $rateLimitPerMinute,
-            'rateLimitWindowSeconds' => $rateLimitWindowSeconds,
-            'redactEmail' => $redactEmail,
-        ];
+        $this->securityConfig = Plugin::getInstance()->getSecurityPolicyService()->getRuntimeConfig();
 
         return $this->securityConfig;
-    }
-
-    private function parseScopes(string $raw): array
-    {
-        if ($raw === '') {
-            return [];
-        }
-
-        $parts = preg_split('/[\s,]+/', strtolower($raw)) ?: [];
-        $scopes = [];
-        foreach ($parts as $part) {
-            $scope = trim($part);
-            if ($scope === '') {
-                continue;
-            }
-
-            $scope = preg_replace('/[^a-z0-9:_*.-]/', '', $scope) ?: '';
-            if ($scope === '') {
-                continue;
-            }
-
-            $scopes[] = $scope;
-        }
-
-        $scopes = array_values(array_unique($scopes));
-        sort($scopes);
-        return $scopes;
-    }
-
-    private function parseCredentials(string $raw, array $defaultScopes): array
-    {
-        if (trim($raw) === '') {
-            return [];
-        }
-
-        $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
-            Craft::warning('Unable to parse `PLUGIN_AGENTS_API_CREDENTIALS`; expected JSON array/object.', __METHOD__);
-            return [];
-        }
-
-        $credentials = [];
-        $index = 0;
-        foreach ($decoded as $key => $value) {
-            $index++;
-            $id = is_string($key) ? trim($key) : '';
-            $token = '';
-            $rawScopes = null;
-
-            if (is_array($value)) {
-                $token = trim((string)($value['token'] ?? $value['value'] ?? ''));
-                $rawScopes = $value['scopes'] ?? null;
-                if ($id === '') {
-                    $id = trim((string)($value['id'] ?? $value['name'] ?? ''));
-                }
-            } else {
-                $token = trim((string)$value);
-            }
-
-            if ($token === '') {
-                continue;
-            }
-
-            if ($id === '') {
-                $id = 'credential-' . $index;
-            }
-
-            $id = strtolower((string)(preg_replace('/[^a-z0-9:_-]+/i', '-', $id) ?: 'credential-' . $index));
-            $id = trim($id, '-');
-            if ($id === '') {
-                $id = 'credential-' . $index;
-            }
-
-            $scopes = $this->normalizeScopes($rawScopes, $defaultScopes);
-
-            $credentials[] = [
-                'id' => $id,
-                'token' => $token,
-                'scopes' => $scopes,
-            ];
-        }
-
-        return $credentials;
-    }
-
-    private function normalizeScopes(mixed $rawScopes, array $defaultScopes): array
-    {
-        if (is_array($rawScopes)) {
-            $parts = [];
-            foreach ($rawScopes as $scope) {
-                if (!is_string($scope) && !is_numeric($scope)) {
-                    continue;
-                }
-                $parts[] = (string)$scope;
-            }
-
-            $parsed = $this->parseScopes(implode(' ', $parts));
-            if (!empty($parsed)) {
-                return $parsed;
-            }
-        } elseif (is_string($rawScopes)) {
-            $parsed = $this->parseScopes($rawScopes);
-            if (!empty($parsed)) {
-                return $parsed;
-            }
-        }
-
-        return $defaultScopes;
-    }
-
-    private function deduplicateCredentials(array $credentials, array $defaultScopes): array
-    {
-        $deduped = [];
-        $seen = [];
-        foreach ($credentials as $credential) {
-            $token = (string)($credential['token'] ?? '');
-            if ($token === '') {
-                continue;
-            }
-
-            $tokenHash = sha1($token);
-            if (isset($seen[$tokenHash])) {
-                continue;
-            }
-            $seen[$tokenHash] = true;
-
-            $deduped[] = [
-                'id' => (string)($credential['id'] ?? 'default'),
-                'token' => $token,
-                'scopes' => $this->normalizeScopes($credential['scopes'] ?? null, $defaultScopes),
-            ];
-        }
-
-        return $deduped;
     }
 
     private function buildCapabilitiesAuthentication(array $config): array
@@ -993,6 +796,11 @@ class ApiController extends Controller
     private function misconfiguredResponse(string $message): Response
     {
         return $this->errorResponse(503, self::ERROR_SERVER_MISCONFIGURED, $message);
+    }
+
+    private function serviceDisabledResponse(): Response
+    {
+        return $this->errorResponse(503, self::ERROR_SERVICE_DISABLED, 'Agents API is currently disabled by configuration.');
     }
 
     private function forbiddenResponse(string $requiredScope, string $message = 'Missing required scope.'): Response

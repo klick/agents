@@ -34,15 +34,14 @@ composer require klick/agents:^0.1.2
 php craft plugin/install agents
 ```
 
-Before publication (or for development), install from source:
-
-```bash
-composer config repositories.klick-agents vcs https://github.com/klick/agents
-composer require klick/agents:dev-main
-php craft plugin/install agents
-```
-
 For monorepo development, the package can also be installed via path repository at `plugins/agents`.
+
+Recommended local workflow:
+
+- develop in a dedicated Craft sandbox (not production-bound project roots)
+- link plugin via local Composer path repo only in that sandbox
+- use the scripted bootstrap/fixture/smoke/release steps in [DEVELOPMENT.md](DEVELOPMENT.md)
+- restore production-bound projects to store-backed versions after local debugging
 
 ## Configuration
 
@@ -65,6 +64,11 @@ Environment variables:
 - `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default: `3`, max queue retry attempts)
 
 These are documented in `.env.example`.
+
+Enablement precedence:
+
+- If `PLUGIN_AGENTS_ENABLED` is set, it overrides CP/plugin setting state.
+- If `PLUGIN_AGENTS_ENABLED` is not set, CP/plugin setting `enabled` controls runtime on/off.
 
 ## Support
 
@@ -288,6 +292,7 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Missing required scope returns HTTP `403` with `FORBIDDEN`.
 - Non-`GET`/`HEAD` requests are rejected (`405 METHOD_NOT_ALLOWED`, or `400` when CSRF validation fails first).
 - Misconfigured production token setup returns HTTP `503` with `SERVER_MISCONFIGURED`.
+- Disabled runtime state returns HTTP `503` with `SERVICE_DISABLED`.
 - Invalid request payload/params return HTTP `400` with `INVALID_REQUEST`.
 - Missing resource lookups return HTTP `404` with `NOT_FOUND`.
 - Query-token auth is disabled by default to reduce token leakage risk.
@@ -308,6 +313,7 @@ Note: `llms.txt` and `commerce.txt` are public discovery surfaces and are not gu
    - `NOT_FOUND` (`404`): requested resource does not exist.
    - `METHOD_NOT_ALLOWED` (`405`): endpoint only supports `GET`/`HEAD`.
    - `RATE_LIMIT_EXCEEDED` (`429`): respect `X-RateLimit-*` and retry after reset.
+   - `SERVICE_DISABLED` (`503`): plugin runtime disabled by env/CP setting.
    - `SERVER_MISCONFIGURED` (`503`): token/security env configuration invalid.
 4. Correlate by `X-Request-Id` in server logs for root-cause details.
 
@@ -351,7 +357,42 @@ return [
 
 ## CP views
 
-- `Agents` section appears in Craft CP for quick inspection.
+- `Agents` section now uses 4 deep-linkable cockpit tabs:
+  - `agents/overview`
+  - `agents/readiness`
+  - `agents/discovery`
+  - `agents/security`
+- Legacy CP paths remain valid:
+  - `agents` resolves to `overview`
+  - `agents/dashboard` resolves to `overview`
+  - `agents/health` resolves to `readiness`
+- Overview:
+  - runtime enabled/disabled state and source (`env` vs CP setting)
+  - env-lock aware runtime toggle
+  - quick endpoint links + discovery prewarm entrypoint
+  - ownership split guidance (`CP` vs `config/agents.php` vs `.env`)
+- Readiness:
+  - readiness score, criterion breakdown, component checks, warnings
+  - health/readiness diagnostic JSON snapshots
+- Discovery:
+  - read-only `llms.txt`/`commerce.txt` status, metadata, preview snippets
+  - operator actions: prewarm (`all|llms|commerce`) and clear cache
+- Security:
+  - read-only effective auth/rate-limit/redaction/webhook posture
+  - centralized warning output from shared security policy logic
+
+## CP rollout regression checklist
+
+1. Verify all four tabs load and subnav selection matches the active route.
+2. Verify legacy aliases `agents`, `agents/dashboard`, and `agents/health` still resolve.
+3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
+4. Verify discovery actions work:
+   - prewarm `all`
+   - prewarm `llms`
+   - prewarm `commerce`
+   - clear discovery cache
+5. Verify security tab shows posture without exposing token/secret values.
+6. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
 
 ## Namespace migration
 

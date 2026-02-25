@@ -16,6 +16,7 @@ class ReadinessService extends Component
 {
     private const INCREMENTAL_CURSOR_VERSION = 1;
     private const INCREMENTAL_CURSOR_TTL_SECONDS = 604800;
+    private const READINESS_READY_THRESHOLD = 50;
 
     public function getHealthSummary(): array
     {
@@ -45,12 +46,78 @@ class ReadinessService extends Component
         return $health;
     }
 
+    public function getReadinessBreakdown(): array
+    {
+        $isSiteRequest = (bool)Craft::$app->getRequest()->getIsSiteRequest();
+        $databaseAvailable = (bool)Craft::$app->getDb();
+        $commerceEnabled = (bool)Craft::$app->getPlugins()->getPlugin('commerce');
+
+        return [
+            [
+                'id' => 'site-request',
+                'label' => 'Site request context available',
+                'weight' => 20,
+                'passed' => $isSiteRequest,
+                'score' => $isSiteRequest ? 20 : 0,
+            ],
+            [
+                'id' => 'database',
+                'label' => 'Database connection available',
+                'weight' => 40,
+                'passed' => $databaseAvailable,
+                'score' => $databaseAvailable ? 40 : 0,
+            ],
+            [
+                'id' => 'commerce',
+                'label' => 'Commerce plugin available',
+                'weight' => 40,
+                'passed' => $commerceEnabled,
+                'score' => $commerceEnabled ? 40 : 0,
+            ],
+        ];
+    }
+
+    public function getReadinessDiagnostics(): array
+    {
+        $health = $this->getHealthSummary();
+        $breakdown = $this->getReadinessBreakdown();
+        $score = 0;
+        foreach ($breakdown as $criterion) {
+            $score += (int)($criterion['score'] ?? 0);
+        }
+
+        $status = $score >= self::READINESS_READY_THRESHOLD ? 'ready' : 'limited';
+        $warnings = [];
+        foreach ($breakdown as $criterion) {
+            if ((bool)($criterion['passed'] ?? false)) {
+                continue;
+            }
+            $warnings[] = sprintf('%s check is failing.', (string)($criterion['label'] ?? 'Readiness'));
+        }
+
+        return [
+            'status' => $status,
+            'readinessScore' => $score,
+            'thresholdReady' => self::READINESS_READY_THRESHOLD,
+            'breakdown' => $breakdown,
+            'componentChecks' => [
+                'systemComponents' => (array)($health['systemComponents'] ?? []),
+                'enabledPlugins' => (array)($health['enabledPlugins'] ?? []),
+            ],
+            'warnings' => $warnings,
+            'summary' => array_merge($health, [
+                'readinessScore' => $score,
+            ]),
+        ];
+    }
+
     public function getDashboardModel(): array
     {
+        $score = $this->calculateReadinessScore();
         return [
             'readinessVersion' => '0.1.1',
             'buildDate' => gmdate('Y-m-d\TH:i:s\Z'),
-            'status' => $this->calculateReadinessScore() >= 50 ? 'ready' : 'limited',
+            'status' => $score >= self::READINESS_READY_THRESHOLD ? 'ready' : 'limited',
             'summary' => $this->getReadinessSummary(),
         ];
     }
@@ -793,10 +860,9 @@ class ReadinessService extends Component
     private function calculateReadinessScore(): int
     {
         $score = 0;
-        $score += (bool)Craft::$app->getRequest()->getIsSiteRequest() ? 20 : 0;
-        $score += (bool)Craft::$app->getDb() ? 40 : 0;
-        $score += (bool)Craft::$app->getPlugins()->getPlugin('commerce') ? 40 : 0;
-
+        foreach ($this->getReadinessBreakdown() as $criterion) {
+            $score += (int)($criterion['score'] ?? 0);
+        }
         return $score;
     }
 

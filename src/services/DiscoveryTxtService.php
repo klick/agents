@@ -71,6 +71,24 @@ class DiscoveryTxtService extends Component
         ];
     }
 
+    public function getDiscoveryStatus(): array
+    {
+        $settings = $this->getSettings();
+        $llmsTtl = $this->normalizeTtl($settings->llmsTxtCacheTtl, 86400);
+        $commerceTtl = $this->normalizeTtl($settings->commerceTxtCacheTtl, 3600);
+
+        $llmsDocument = $settings->enableLlmsTxt ? $this->getLlmsTxtDocument() : null;
+        $commerceDocument = $settings->enableCommerceTxt ? $this->getCommerceTxtDocument() : null;
+
+        return [
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'documents' => [
+                'llms' => $this->buildDocumentStatus('llms.txt', '/llms.txt', $settings->enableLlmsTxt, $llmsTtl, $llmsDocument),
+                'commerce' => $this->buildDocumentStatus('commerce.txt', '/commerce.txt', $settings->enableCommerceTxt, $commerceTtl, $commerceDocument),
+            ],
+        ];
+    }
+
     private function describeDocument(?array $document): array
     {
         if ($document === null) {
@@ -88,6 +106,64 @@ class DiscoveryTxtService extends Component
             'lastModified' => gmdate('Y-m-d\TH:i:s\Z', (int)($document['lastModified'] ?? time())),
             'bytes' => strlen((string)($document['body'] ?? '')),
         ];
+    }
+
+    private function buildDocumentStatus(
+        string $name,
+        string $path,
+        bool $enabled,
+        int $cacheTtlSeconds,
+        ?array $document
+    ): array {
+        $body = (string)($document['body'] ?? '');
+        $lastModified = null;
+        if ($document !== null) {
+            $lastModified = gmdate('Y-m-d\TH:i:s\Z', (int)($document['lastModified'] ?? time()));
+        }
+
+        return [
+            'name' => $name,
+            'path' => $path,
+            'url' => $this->toAbsoluteUrl($path),
+            'enabled' => $enabled,
+            'cacheTtlSeconds' => $cacheTtlSeconds,
+            'etag' => $document !== null ? (string)($document['etag'] ?? '') : null,
+            'lastModified' => $lastModified,
+            'bytes' => strlen($body),
+            'lineCount' => $this->lineCount($body),
+            'preview' => $this->buildPreview($body),
+        ];
+    }
+
+    private function buildPreview(string $body, int $maxLines = 14, int $maxChars = 1800): string
+    {
+        $body = trim($body);
+        if ($body === '') {
+            return '';
+        }
+
+        $lines = preg_split('/\R/', $body) ?: [];
+        $previewLines = array_slice($lines, 0, max(1, $maxLines));
+        $preview = implode("\n", $previewLines);
+        if (strlen($preview) > $maxChars) {
+            $preview = substr($preview, 0, $maxChars);
+        }
+
+        if (count($lines) > $maxLines || strlen($body) > strlen($preview)) {
+            $preview = rtrim($preview) . "\n...";
+        }
+
+        return $preview;
+    }
+
+    private function lineCount(string $body): int
+    {
+        $body = trim($body);
+        if ($body === '') {
+            return 0;
+        }
+
+        return substr_count($body, "\n") + 1;
     }
 
     private function getCachedDocument(string $cacheKey, int $ttl, callable $renderer): array
