@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file.
 - Added incremental sync filters to `/products`, `/orders`, and `/entries` with cursor precedence, deterministic ordering, and snapshot-window continuation metadata.
 - Added `GET /agents/v1/changes` unified feed with normalized `created|updated|deleted` items, deterministic checkpoint continuation, and tombstones from soft-deleted records.
 - Added optional webhook delivery for `product|order|entry` change events with queued retries and `X-Agents-Webhook-Signature` HMAC verification headers.
+- Added CP quick-win controls and diagnostics: runtime enable/disable toggle (with env override), status cards, and improved health/readiness views.
 
 ## 0.1.2 - 2026-02-24
 

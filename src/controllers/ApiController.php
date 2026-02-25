@@ -30,6 +30,7 @@ class ApiController extends Controller
     private const ERROR_NOT_FOUND = 'NOT_FOUND';
     private const ERROR_METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED';
     private const ERROR_RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED';
+    private const ERROR_SERVICE_DISABLED = 'SERVICE_DISABLED';
     private const ERROR_SERVER_MISCONFIGURED = 'SERVER_MISCONFIGURED';
 
     private ?array $authContext = null;
@@ -56,6 +57,10 @@ class ApiController extends Controller
             return $methodResponse;
         }
 
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return $this->serviceDisabledResponse();
+        }
+
         $document = Plugin::getInstance()->getDiscoveryTxtService()->getLlmsTxtDocument();
         if ($document === null) {
             throw new NotFoundHttpException('Not found.');
@@ -68,6 +73,10 @@ class ApiController extends Controller
     {
         if (($methodResponse = $this->enforceReadRequest()) !== null) {
             return $methodResponse;
+        }
+
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return $this->serviceDisabledResponse();
         }
 
         $document = Plugin::getInstance()->getDiscoveryTxtService()->getCommerceTxtDocument();
@@ -402,6 +411,10 @@ class ApiController extends Controller
             return $methodResponse;
         }
 
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return $this->serviceDisabledResponse();
+        }
+
         $config = $this->getSecurityConfig();
 
         $preAuthIdentity = $this->buildPreAuthIdentity();
@@ -698,6 +711,7 @@ class ApiController extends Controller
             ['status' => 404, 'code' => self::ERROR_NOT_FOUND, 'description' => 'Requested resource could not be found.'],
             ['status' => 405, 'code' => self::ERROR_METHOD_NOT_ALLOWED, 'description' => 'Only GET/HEAD requests are supported for these endpoints.'],
             ['status' => 429, 'code' => self::ERROR_RATE_LIMIT_EXCEEDED, 'description' => 'Rate limit bucket exhausted for the current window.'],
+            ['status' => 503, 'code' => self::ERROR_SERVICE_DISABLED, 'description' => 'Agents service is disabled by configuration.'],
             ['status' => 503, 'code' => self::ERROR_SERVER_MISCONFIGURED, 'description' => 'Server security configuration is incomplete or invalid.'],
         ];
     }
@@ -993,6 +1007,11 @@ class ApiController extends Controller
     private function misconfiguredResponse(string $message): Response
     {
         return $this->errorResponse(503, self::ERROR_SERVER_MISCONFIGURED, $message);
+    }
+
+    private function serviceDisabledResponse(): Response
+    {
+        return $this->errorResponse(503, self::ERROR_SERVICE_DISABLED, 'Agents API is currently disabled by configuration.');
     }
 
     private function forbiddenResponse(string $requiredScope, string $message = 'Missing required scope.'): Response

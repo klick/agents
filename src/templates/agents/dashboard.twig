@@ -2,18 +2,145 @@
 
 {% set title = "Agents" %}
 {% set selectedSubnavItem = "dashboard" %}
+{% import "_includes/forms" as forms %}
 
 {% block content %}
-  <h1>Agents</h1>
-  <p class="text-sm text-muted">Initial production-ready shell with readiness/health endpoints and diagnostics.</p>
+  <h1>Agents Control Center</h1>
+  <p class="text-sm text-muted">Operational controls and quick diagnostics for the Agents plugin.</p>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Runtime State</h2>
+    <p>
+      <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+      <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+      <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+    </p>
+    <form id="agents-enabled-form" method="post" accept-charset="UTF-8">
+      {{ csrfInput() }}
+      {{ actionInput('agents/dashboard/toggle-enabled') }}
+      {{ redirectInput('agents/dashboard') }}
+
+      {{ forms.lightswitchField({
+        id: 'agents-enabled-switch',
+        name: 'enabled',
+        fieldLabel: 'Agents API',
+        instructions: agentsEnabledLocked
+          ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
+          : 'Toggle to enable or disable the Agents API.',
+        on: agentsEnabled,
+        onLabel: 'Enabled',
+        offLabel: 'Disabled',
+        disabled: agentsEnabledLocked,
+      }) }}
+
+      {% if agentsEnabledLocked %}
+        <p class="warning">State is locked by <code>PLUGIN_AGENTS_ENABLED</code>. Change that env var to override CP.</p>
+      {% else %}
+        <p class="text-sm text-muted">Saved immediately when toggled.</p>
+        <noscript>
+          <button class="btn submit" type="submit">Save</button>
+        </noscript>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Feature Status</h2>
+    <ul>
+      <li>Discovery: <strong>llms.txt {{ discoveryEnabled.llms ? 'enabled' : 'disabled' }}</strong></li>
+      <li>Discovery: <strong>commerce.txt {{ discoveryEnabled.commerce ? 'enabled' : 'disabled' }}</strong></li>
+      <li>Webhooks: <strong>{{ webhookEnabled ? 'enabled' : 'disabled' }}</strong></li>
+    </ul>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Quick Links</h2>
+    <p><strong>API endpoints</strong></p>
+    <ul>
+      {% for endpoint in apiEndpoints %}
+        <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
+      {% endfor %}
+    </ul>
+
+    <p><strong>Discovery endpoints</strong></p>
+    <ul>
+      {% for endpoint in discoveryEndpoints %}
+        <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Configuration Ownership</h2>
+    <p>Use CP for high-level runtime control. Keep content/structure settings in project config.</p>
+    <table class="data fullwidth">
+      <thead>
+      <tr>
+        <th>Area</th>
+        <th>Recommended Source</th>
+        <th>Reason</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Agents runtime on/off</td>
+        <td>CP setting (unless env override)</td>
+        <td>Operational toggle for admins without code deploy.</td>
+      </tr>
+      <tr>
+        <td>Hard production overrides</td>
+        <td>Environment variables</td>
+        <td>Safe, explicit deploy-time enforcement across environments.</td>
+      </tr>
+      <tr>
+        <td>Discovery content and links</td>
+        <td><code>config/agents.php</code></td>
+        <td>Project-owned content policy and stable, versioned defaults.</td>
+      </tr>
+      </tbody>
+    </table>
+    <p><a href="{{ url('settings/plugins/agents') }}">Open plugin settings</a></p>
+  </div>
+
   <div class="border rounded p-3">
+    <h2 class="h4">Readiness Snapshot</h2>
     <dl class="mb-0">
       <div class="mb-2"><dt class="font-semibold">Version</dt><dd>{{ readinessVersion }}</dd></div>
       <div class="mb-2"><dt class="font-semibold">Build</dt><dd>{{ buildDate }}</dd></div>
       <div><dt class="font-semibold">Status</dt><dd>{{ status }}</dd></div>
     </dl>
+    <pre class="border rounded p-3" style="margin-top: 12px;">{{ summaryJson }}</pre>
   </div>
 
-  <h2 class="h3 mt-4">Readiness Snapshot</h2>
-  <pre class="border rounded p-3">{{ summaryJson }}</pre>
+  {% if not agentsEnabledLocked %}
+    {% js %}
+      (() => {
+        const form = document.getElementById('agents-enabled-form');
+        if (!form) {
+          return;
+        }
+
+        const switchButton = form.querySelector('button.lightswitch');
+        const valueInput = form.querySelector('input[name="enabled"]');
+        if (!switchButton || !valueInput) {
+          return;
+        }
+
+        let previousValue = valueInput.value;
+        switchButton.addEventListener('click', () => {
+          window.requestAnimationFrame(() => {
+            if (valueInput.value === previousValue) {
+              return;
+            }
+            previousValue = valueInput.value;
+            if (typeof form.requestSubmit === 'function') {
+              form.requestSubmit();
+            } else {
+              form.submit();
+            }
+          });
+        });
+      })();
+    {% endjs %}
+  {% endif %}
 {% endblock %}

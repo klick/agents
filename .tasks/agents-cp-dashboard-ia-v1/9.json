@@ -1,0 +1,16 @@
+{
+  "id": "9",
+  "subject": "[Agents] QA, docs update, and regression verification for CP IA rollout",
+  "description": "Intent:\n- Validate behavior and document new CP IA + ownership model.\n\nAssumptions:\n- Implementation tasks 5-8 completed.\n\nDesign + invariants:\n- Endpoint/CLI behavior remains stable.\n- Legacy CP aliases continue to work.\n\nDiff plan:\n- README.md (CP section, ownership split, tab map)
+- optional DEVELOPMENT.md notes\n\nVerification:\n- Manual CP checks + relevant CLI/API smoke checks pass.\n- No secrets rendered in CP.",
+  "activeForm": "QA + docs",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": ["5", "6", "7", "8"],
+  "metadata": {
+    "project": "agents",
+    "projectPath": "/Users/marcus/www/sites/agents-sandbox/plugins/agents",
+    "planFile": "/Users/marcus/www/sites/agents-sandbox/plugins/agents/.plans/cp-dashboard-ia-v1-2026-02-26.md"
+  },
+  "owner": "assistant"
+}

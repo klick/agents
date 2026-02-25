@@ -123,6 +123,32 @@ class Plugin extends BasePlugin
         return $service;
     }
 
+    public function isAgentsEnabled(): bool
+    {
+        return (bool)$this->getAgentsEnabledState()['enabled'];
+    }
+
+    public function getAgentsEnabledState(): array
+    {
+        $envEnabled = App::parseBooleanEnv('$PLUGIN_AGENTS_ENABLED');
+        if ($envEnabled !== null) {
+            return [
+                'enabled' => (bool)$envEnabled,
+                'source' => 'env',
+                'locked' => true,
+            ];
+        }
+
+        $settings = $this->getSettings();
+        $settingsEnabled = $settings instanceof Settings ? (bool)$settings->enabled : true;
+
+        return [
+            'enabled' => $settingsEnabled,
+            'source' => 'settings',
+            'locked' => false,
+        ];
+    }
+
     protected function createSettingsModel(): ?Model
     {
         return new Settings();

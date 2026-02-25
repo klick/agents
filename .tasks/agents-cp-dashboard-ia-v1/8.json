@@ -1,0 +1,15 @@
+{
+  "id": "8",
+  "subject": "[Agents] Implement Security tab + unify plugin warning generation",
+  "description": "Intent:\n- Provide read-only effective security posture in CP and deduplicate warning logic.\n\nAssumptions:\n- SecurityPolicyService is the shared source for effective values and warnings.\n\nDesign + invariants:\n- Never expose raw token/secret values.\n- Keep auth/rate-limit behavior unchanged.\n\nDiff plan:\n- src/templates/agents/security.twig\n- src/controllers/DashboardController.php\n- src/Plugin.php (warning path uses shared service)\n\nVerification:\n- Security tab reflects env values accurately and warnings match runtime posture.",
+  "activeForm": "Security tab",
+  "status": "pending",
+  "blocks": ["9"],
+  "blockedBy": ["3", "4"],
+  "metadata": {
+    "project": "agents",
+    "projectPath": "/Users/marcus/www/sites/agents-sandbox/plugins/agents",
+    "planFile": "/Users/marcus/www/sites/agents-sandbox/plugins/agents/.plans/cp-dashboard-ia-v1-2026-02-26.md"
+  },
+  "owner": "assistant"
+}

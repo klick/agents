@@ -1,0 +1,15 @@
+{
+  "id": "2",
+  "subject": "[Agents] Canonicalize CP templates to remove duplicate-view drift",
+  "description": "Intent:\n- Remove duplicated template ambiguity ( vs ).\n\nAssumptions:\n- CP should render one canonical set of templates.\n\nDesign + invariants:\n- Routing continues to resolve without regressions.\n- Existing content is preserved while deduplicating sources of truth.\n\nDiff plan:\n- src/templates/agents/*.twig\n- src/templates/*.twig\n- (optional) controller/template resolution updates\n\nVerification:\n- Dashboard/Health render from canonical templates only.",
+  "activeForm": "Template canonicalization",
+  "status": "pending",
+  "blocks": ["4", "5", "6", "7"],
+  "blockedBy": ["1"],
+  "metadata": {
+    "project": "agents",
+    "projectPath": "/Users/marcus/www/sites/agents-sandbox/plugins/agents",
+    "planFile": "/Users/marcus/www/sites/agents-sandbox/plugins/agents/.plans/cp-dashboard-ia-v1-2026-02-26.md"
+  },
+  "owner": "assistant"
+}

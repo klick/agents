@@ -6,6 +6,7 @@ use craft\base\Model;
 
 class Settings extends Model
 {
+    public bool $enabled = true;
     public bool $enableLlmsTxt = true;
     public bool $enableCommerceTxt = true;
     public int $llmsTxtCacheTtl = 86400;
@@ -23,7 +24,7 @@ class Settings extends Model
     public function rules(): array
     {
         return [
-            [['enableLlmsTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
+            [['enabled', 'enableLlmsTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
             [['llmsTxtCacheTtl', 'commerceTxtCacheTtl'], 'integer', 'min' => 0, 'max' => 604800],
             [['llmsSiteSummary', 'commerceSummary', 'commerceCatalogUrl'], 'string'],
             [['llmsLinks', 'commercePolicyUrls', 'commerceSupport', 'commerceAttributes'], 'safe'],

@@ -1,0 +1,15 @@
+{
+  "id": "7",
+  "subject": "[Agents] Implement Discovery tab (status, previews, cache metadata, actions)",
+  "description": "Intent:\n- Report discovery surfaces (, ) and support cache ops without moving policy editing into CP.\n\nAssumptions:\n- Discovery content ownership remains in .\n\nDesign + invariants:\n- Show effective status + metadata; no CP editing for policy fields.\n\nDiff plan:\n- src/controllers/DashboardController.php\n- src/templates/agents/discovery.twig\n- src/services/DiscoveryTxtService.php (read-only metadata helper if needed)\n\nVerification:\n- Metadata updates after prewarm/clear and previews render safely.",
+  "activeForm": "Discovery tab",
+  "status": "pending",
+  "blocks": ["9"],
+  "blockedBy": ["4", "2"],
+  "metadata": {
+    "project": "agents",
+    "projectPath": "/Users/marcus/www/sites/agents-sandbox/plugins/agents",
+    "planFile": "/Users/marcus/www/sites/agents-sandbox/plugins/agents/.plans/cp-dashboard-ia-v1-2026-02-26.md"
+  },
+  "owner": "assistant"
+}

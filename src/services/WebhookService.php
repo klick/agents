@@ -9,6 +9,7 @@ use craft\elements\Entry;
 use craft\helpers\App;
 use craft\helpers\Queue;
 use DateTimeInterface;
+use Klick\Agents\Plugin;
 use Klick\Agents\queue\jobs\DeliverWebhookJob;
 
 class WebhookService extends Component
@@ -23,6 +24,10 @@ class WebhookService extends Component
 
     public function queueElementChange(Element $element, string $operation, bool $isNew = false): void
     {
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return;
+        }
+
         $config = $this->getWebhookConfig();
         if (!$config['enabled']) {
             return;
