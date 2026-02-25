@@ -29,7 +29,7 @@ class DashboardController extends Controller
         $readiness = $plugin->getReadinessService()->getReadinessDiagnostics();
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
 
-        return $this->renderTemplate('agents/overview', [
+        return $this->renderTemplate('overview', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
@@ -54,7 +54,7 @@ class DashboardController extends Controller
         $readiness = $plugin->getReadinessService()->getReadinessSummary();
         $diagnostics = $plugin->getReadinessService()->getReadinessDiagnostics();
 
-        return $this->renderTemplate('agents/readiness', [
+        return $this->renderTemplate('readiness', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'health' => $health,
@@ -73,7 +73,7 @@ class DashboardController extends Controller
         $settings = $this->getSettingsModel();
         $discoveryStatus = $plugin->getDiscoveryTxtService()->getDiscoveryStatus();
 
-        return $this->renderTemplate('agents/discovery', [
+        return $this->renderTemplate('discovery', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'discoveryStatus' => $discoveryStatus,
@@ -93,7 +93,7 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
 
-        return $this->renderTemplate('agents/security', [
+        return $this->renderTemplate('security', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'securityPosture' => $posture,
