@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.1.4 - 2026-02-26
+
 - Hardened incremental request validation on `/products` to return deterministic `400 INVALID_REQUEST` for malformed `cursor`/`updatedSince` inputs.
 - Tightened credential parsing in `SecurityPolicyService` to accept only credential-object shapes and ignore malformed scalar entries.
 - Added explicit `Cache-Control: no-store, private` headers for guarded JSON and API error responses.

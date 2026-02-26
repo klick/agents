@@ -1393,17 +1393,20 @@ class ReadinessService extends Component
             return;
         }
 
-        $clauses = ['<= ' . $this->formatDbDate($snapshotEnd)];
-        if ($updatedSince !== null) {
-            $clauses[] = '>= ' . $this->formatDbDate($updatedSince);
-        }
-
-        if (count($clauses) === 1) {
-            $queryBuilder->dateDeleted($clauses[0]);
+        if (!method_exists($queryBuilder, 'andWhere')) {
             return;
         }
 
-        $queryBuilder->dateDeleted(array_merge(['and'], $clauses));
+        $conditions = [
+            'and',
+            ['not', ['elements.dateDeleted' => null]],
+            ['<=', 'elements.dateDeleted', $this->formatDbDate($snapshotEnd)],
+        ];
+        if ($updatedSince !== null) {
+            $conditions[] = ['>=', 'elements.dateDeleted', $this->formatDbDate($updatedSince)];
+        }
+
+        $queryBuilder->andWhere($conditions);
     }
 
     private function formatDbDate(DateTimeImmutable $date): string
