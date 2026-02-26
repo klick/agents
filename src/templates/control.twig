@@ -1,0 +1,353 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = "Agents Control Plane" %}
+{% set selectedSubnavItem = "control" %}
+
+{% block content %}
+  <h1>Control Plane</h1>
+  <p class="text-sm text-muted">Policies, approvals, idempotent execution ledger, and immutable audit trail.</p>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Runtime State</h2>
+    <p>
+      <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+      <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+      <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+    </p>
+    <ul>
+      <li>Policies: <strong>{{ controlSummary.policies|default(0) }}</strong></li>
+      <li>Pending approvals: <strong>{{ controlSummary.approvalsPending|default(0) }}</strong></li>
+      <li>Blocked executions: <strong>{{ controlSummary.executionsBlocked|default(0) }}</strong></li>
+      <li>Succeeded executions: <strong>{{ controlSummary.executionsSucceeded|default(0) }}</strong></li>
+      <li>Audit events: <strong>{{ controlSummary.auditEvents|default(0) }}</strong></li>
+    </ul>
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Upsert Policy</h2>
+    {% if canManagePolicies %}
+      <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/upsert-control-policy') }}
+        {{ redirectInput('agents/control') }}
+
+        {{ forms.textField({
+          label: 'Policy Handle',
+          instructions: 'Stable identifier for this policy.',
+          name: 'handle',
+          required: true,
+          placeholder: 'returns-exception-high-risk',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Display Name',
+          name: 'displayName',
+          placeholder: 'Returns Exception High Risk',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Action Pattern',
+          instructions: 'Wildcard-supported action selector, e.g. returns.exception.*',
+          name: 'actionPattern',
+          required: true,
+          placeholder: 'returns.exception.*',
+        }) }}
+
+        {{ forms.selectField({
+          label: 'Risk Level',
+          name: 'riskLevel',
+          options: [
+            {label: 'low', value: 'low'},
+            {label: 'medium', value: 'medium'},
+            {label: 'high', value: 'high'},
+            {label: 'critical', value: 'critical'},
+          ],
+          value: 'medium',
+        }) }}
+
+        <div style="margin-bottom: 12px;">
+          <input type="hidden" name="requiresApproval" value="0">
+          <label><input type="checkbox" name="requiresApproval" value="1" checked> Requires approval</label>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <input type="hidden" name="enabled" value="0">
+          <label><input type="checkbox" name="enabled" value="1" checked> Enabled</label>
+        </div>
+
+        {{ forms.textareaField({
+          label: 'Config JSON',
+          instructions: 'Optional JSON payload, e.g. {"requiredScope":"control:actions:execute"}',
+          name: 'configJson',
+          rows: 4,
+          value: '{"requiredScope":"control:actions:execute"}',
+        }) }}
+
+        <button class="btn submit" type="submit">Save Policy</button>
+      </form>
+    {% else %}
+      <p class="warning">You do not have permission to manage policies.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Policies</h2>
+    {% if controlPolicies|length %}
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>Handle</th>
+          <th>Pattern</th>
+          <th>Approval</th>
+          <th>Risk</th>
+          <th>Enabled</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for policy in controlPolicies %}
+          <tr>
+            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName }}</span></td>
+            <td><code>{{ policy.actionPattern }}</code></td>
+            <td>{{ policy.requiresApproval ? 'required' : 'not required' }}</td>
+            <td>{{ policy.riskLevel }}</td>
+            <td>{{ policy.enabled ? 'yes' : 'no' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No policies configured yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Request Approval</h2>
+    {% if canManageApprovals %}
+      <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/request-control-approval') }}
+        {{ redirectInput('agents/control') }}
+
+        {{ forms.textField({
+          label: 'Action Type',
+          name: 'actionType',
+          required: true,
+          placeholder: 'returns.exception.refund',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Action Ref',
+          name: 'actionRef',
+          placeholder: 'order-12345:return-998',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Idempotency Key',
+          name: 'idempotencyKey',
+          placeholder: 'approval-returns-12345-v1',
+        }) }}
+
+        {{ forms.textareaField({
+          label: 'Reason',
+          name: 'reason',
+          rows: 2,
+          placeholder: 'High-value return exceeded policy threshold.',
+        }) }}
+
+        {{ forms.textareaField({
+          label: 'Payload JSON',
+          name: 'payloadJson',
+          rows: 4,
+          value: '{"orderId":"12345","returnId":"998"}',
+        }) }}
+
+        {{ forms.textareaField({
+          label: 'Metadata JSON',
+          name: 'metadataJson',
+          rows: 3,
+          value: '{"source":"cp"}',
+        }) }}
+
+        <button class="btn submit" type="submit">Request Approval</button>
+      </form>
+    {% else %}
+      <p class="warning">You do not have permission to request approvals.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Approval Queue</h2>
+    {% if controlApprovals|length %}
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>ID</th>
+          <th>Action</th>
+          <th>Status</th>
+          <th>Requested By</th>
+          <th>Decide</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for approval in controlApprovals %}
+          <tr>
+            <td>#{{ approval.id }}</td>
+            <td>
+              <code>{{ approval.actionType }}</code><br>
+              <span class="light">{{ approval.actionRef ?: 'n/a' }}</span>
+            </td>
+            <td>{{ approval.status }}</td>
+            <td>
+              <div>{{ approval.requestedBy }}</div>
+              <div class="light">{{ approval.dateCreated ?: 'n/a' }}</div>
+            </td>
+            <td>
+              {% if canManageApprovals and approval.status == 'pending' %}
+                <form method="post" accept-charset="UTF-8" style="margin-bottom: 6px;">
+                  {{ csrfInput() }}
+                  {{ actionInput('agents/dashboard/decide-control-approval') }}
+                  {{ redirectInput('agents/control') }}
+                  <input type="hidden" name="approvalId" value="{{ approval.id }}">
+                  <input type="hidden" name="decision" value="approved">
+                  <input type="text" name="decisionReason" placeholder="Decision reason" style="width: 100%; margin-bottom: 4px;">
+                  <button class="btn" type="submit">Approve</button>
+                </form>
+                <form method="post" accept-charset="UTF-8">
+                  {{ csrfInput() }}
+                  {{ actionInput('agents/dashboard/decide-control-approval') }}
+                  {{ redirectInput('agents/control') }}
+                  <input type="hidden" name="approvalId" value="{{ approval.id }}">
+                  <input type="hidden" name="decision" value="rejected">
+                  <input type="text" name="decisionReason" placeholder="Decision reason" style="width: 100%; margin-bottom: 4px;">
+                  <button class="btn" type="submit">Reject</button>
+                </form>
+              {% else %}
+                <span class="light">{{ approval.decidedBy ?: 'No action' }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No approval requests yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Execute Action</h2>
+    {% if canExecuteActions %}
+      <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/execute-control-action') }}
+        {{ redirectInput('agents/control') }}
+
+        {{ forms.textField({
+          label: 'Action Type',
+          name: 'actionType',
+          required: true,
+          placeholder: 'returns.exception.refund',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Action Ref',
+          name: 'actionRef',
+          placeholder: 'order-12345:return-998',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Approval ID',
+          name: 'approvalId',
+          placeholder: '123',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Idempotency Key',
+          name: 'idempotencyKey',
+          required: true,
+          placeholder: 'exec-returns-12345-v1',
+        }) }}
+
+        {{ forms.textareaField({
+          label: 'Payload JSON',
+          name: 'payloadJson',
+          rows: 4,
+          value: '{"mode":"record_only"}',
+        }) }}
+
+        <button class="btn submit" type="submit">Execute Action</button>
+      </form>
+    {% else %}
+      <p class="warning">You do not have permission to execute control actions.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Execution Ledger</h2>
+    {% if controlExecutions|length %}
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>ID</th>
+          <th>Action</th>
+          <th>Status</th>
+          <th>Idempotency</th>
+          <th>Approval</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for execution in controlExecutions %}
+          <tr>
+            <td>#{{ execution.id }}</td>
+            <td>
+              <code>{{ execution.actionType }}</code><br>
+              <span class="light">{{ execution.actionRef ?: 'n/a' }}</span>
+            </td>
+            <td>{{ execution.status }}</td>
+            <td><code>{{ execution.idempotencyKey }}</code></td>
+            <td>{{ execution.approvalId ?: 'n/a' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No executions recorded yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Audit Trail</h2>
+    {% if controlAuditEvents|length %}
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>Time</th>
+          <th>Category</th>
+          <th>Action</th>
+          <th>Actor</th>
+          <th>Summary</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for event in controlAuditEvents %}
+          <tr>
+            <td>{{ event.dateCreated ?: 'n/a' }}</td>
+            <td><code>{{ event.category }}</code></td>
+            <td>{{ event.action }} ({{ event.outcome }})</td>
+            <td>{{ event.actorType }} / {{ event.actorId ?: 'n/a' }}</td>
+            <td>{{ event.summary ?: 'n/a' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No audit events recorded yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3">
+    <h2 class="h4">Snapshot JSON</h2>
+    <pre class="border rounded p-3">{{ controlSnapshotJson }}</pre>
+  </div>
+{% endblock %}

@@ -16,6 +16,7 @@ use craft\web\UrlManager;
 use craft\web\View;
 use yii\base\Event;
 use Klick\Agents\models\Settings;
+use Klick\Agents\services\ControlPlaneService;
 use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ReadinessService;
@@ -29,10 +30,14 @@ class Plugin extends BasePlugin
     public const PERMISSION_CREDENTIALS_ROTATE = 'agents-rotateCredentials';
     public const PERMISSION_CREDENTIALS_REVOKE = 'agents-revokeCredentials';
     public const PERMISSION_CREDENTIALS_DELETE = 'agents-deleteCredentials';
+    public const PERMISSION_CONTROL_VIEW = 'agents-viewControlPlane';
+    public const PERMISSION_CONTROL_POLICIES_MANAGE = 'agents-manageControlPolicies';
+    public const PERMISSION_CONTROL_APPROVALS_MANAGE = 'agents-manageControlApprovals';
+    public const PERMISSION_CONTROL_ACTIONS_EXECUTE = 'agents-executeControlActions';
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.3.0';
+    public string $schemaVersion = '0.3.3';
 
     public static ?self $plugin = null;
 
@@ -47,6 +52,7 @@ class Plugin extends BasePlugin
             'securityPolicyService' => SecurityPolicyService::class,
             'webhookService' => WebhookService::class,
             'credentialService' => CredentialService::class,
+            'controlPlaneService' => ControlPlaneService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
@@ -88,6 +94,10 @@ class Plugin extends BasePlugin
                 'label' => 'Security',
                 'url' => 'agents/security',
             ],
+            'control' => [
+                'label' => 'Control Plane',
+                'url' => 'agents/control',
+            ],
             'settings' => [
                 'label' => 'Settings',
                 'url' => 'agents/settings',
@@ -110,6 +120,7 @@ class Plugin extends BasePlugin
                 'agents/readiness' => 'agents/dashboard/readiness',
                 'agents/discovery' => 'agents/dashboard/discovery',
                 'agents/security' => 'agents/dashboard/security',
+                'agents/control' => 'agents/dashboard/control',
                 'agents/settings' => 'agents/dashboard/settings',
                 'agents/credentials' => 'agents/dashboard/credentials',
                 // Legacy aliases retained for backward-compatible deep links.
@@ -136,6 +147,14 @@ class Plugin extends BasePlugin
                 'agents/v1/sections' => 'agents/api/sections',
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
+                'agents/v1/control/policies' => 'agents/api/control-policies',
+                'agents/v1/control/policies/upsert' => 'agents/api/control-policy-upsert',
+                'agents/v1/control/approvals' => 'agents/api/control-approvals',
+                'agents/v1/control/approvals/request' => 'agents/api/control-approval-request',
+                'agents/v1/control/approvals/decide' => 'agents/api/control-approval-decide',
+                'agents/v1/control/executions' => 'agents/api/control-executions',
+                'agents/v1/control/actions/execute' => 'agents/api/control-actions-execute',
+                'agents/v1/control/audit' => 'agents/api/control-audit',
             ]);
         });
     }
@@ -172,6 +191,13 @@ class Plugin extends BasePlugin
     {
         /** @var CredentialService $service */
         $service = $this->get('credentialService');
+        return $service;
+    }
+
+    public function getControlPlaneService(): ControlPlaneService
+    {
+        /** @var ControlPlaneService $service */
+        $service = $this->get('controlPlaneService');
         return $service;
     }
 
@@ -340,6 +366,24 @@ class Plugin extends BasePlugin
                         ],
                         self::PERMISSION_CREDENTIALS_DELETE => [
                             'label' => 'Delete managed credentials',
+                        ],
+                    ],
+                ];
+
+                $event->permissions[] = [
+                    'heading' => 'Agents Control Plane',
+                    'permissions' => [
+                        self::PERMISSION_CONTROL_VIEW => [
+                            'label' => 'View control plane tab',
+                        ],
+                        self::PERMISSION_CONTROL_POLICIES_MANAGE => [
+                            'label' => 'Create and edit control policies',
+                        ],
+                        self::PERMISSION_CONTROL_APPROVALS_MANAGE => [
+                            'label' => 'Request and decide approvals',
+                        ],
+                        self::PERMISSION_CONTROL_ACTIONS_EXECUTE => [
+                            'label' => 'Execute control actions',
                         ],
                     ],
                 ];

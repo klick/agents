@@ -22,6 +22,10 @@ class ApiController extends Controller
         'sections:read',
         'capabilities:read',
         'openapi:read',
+        'control:policies:read',
+        'control:approvals:read',
+        'control:executions:read',
+        'control:audit:read',
     ];
     private const ERROR_INVALID_REQUEST = 'INVALID_REQUEST';
     private const ERROR_UNAUTHORIZED = 'UNAUTHORIZED';
@@ -31,6 +35,7 @@ class ApiController extends Controller
     private const ERROR_RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED';
     private const ERROR_SERVICE_DISABLED = 'SERVICE_DISABLED';
     private const ERROR_SERVER_MISCONFIGURED = 'SERVER_MISCONFIGURED';
+    private const ERROR_INTERNAL = 'INTERNAL_ERROR';
 
     private ?array $authContext = null;
     private ?array $securityConfig = null;
@@ -45,6 +50,16 @@ class ApiController extends Controller
         if (!$request->getIsGet() && !$request->getIsHead()) {
             $this->requireAcceptsJson();
         }
+    }
+
+    public function beforeAction($action): bool
+    {
+        if (is_object($action) && str_starts_with((string)$action->id, 'control-')) {
+            // Token-authenticated machine endpoints do not use session-bound CSRF tokens.
+            $this->enableCsrfValidation = false;
+        }
+
+        return parent::beforeAction($action);
     }
 
     protected array|int|bool $allowAnonymous = true;
@@ -290,6 +305,14 @@ class ApiController extends Controller
                 ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
                 ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
                 ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
+                ['method' => 'GET', 'path' => '/control/policies', 'requiredScopes' => ['control:policies:read']],
+                ['method' => 'POST', 'path' => '/control/policies/upsert', 'requiredScopes' => ['control:policies:write']],
+                ['method' => 'GET', 'path' => '/control/approvals', 'requiredScopes' => ['control:approvals:read']],
+                ['method' => 'POST', 'path' => '/control/approvals/request', 'requiredScopes' => ['control:approvals:write']],
+                ['method' => 'POST', 'path' => '/control/approvals/decide', 'requiredScopes' => ['control:approvals:write']],
+                ['method' => 'GET', 'path' => '/control/executions', 'requiredScopes' => ['control:executions:read']],
+                ['method' => 'POST', 'path' => '/control/actions/execute', 'requiredScopes' => ['control:actions:execute'], 'optionalScopes' => ['policy.config.requiredScope']],
+                ['method' => 'GET', 'path' => '/control/audit', 'requiredScopes' => ['control:audit:read']],
                 ['method' => 'GET', 'path' => '/llms.txt', 'public' => true],
                 ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
             ],
@@ -318,7 +341,7 @@ class ApiController extends Controller
             'info' => [
                 'title' => 'Agents API',
                 'version' => $pluginVersion,
-                'description' => 'Read-only agent discovery API for products, orders, entries, changes, and sections.',
+                'description' => 'Agent discovery and control-plane API for read surfaces plus governed policy/approval/action workflows.',
             ],
             'servers' => [
                 ['url' => '/agents/v1', 'description' => 'Primary API'],
@@ -425,6 +448,76 @@ class ApiController extends Controller
                 '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
                 '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['capabilities:read']]],
                 '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['openapi:read']]],
+                '/control/policies' => ['get' => ['summary' => 'List control policies', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['control:policies:read']]],
+                '/control/policies/upsert' => ['post' => [
+                    'summary' => 'Create or update a control policy',
+                    'requestBody' => ['required' => true],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                    ]),
+                    'x-required-scopes' => ['control:policies:write'],
+                ]],
+                '/control/approvals' => ['get' => [
+                    'summary' => 'List approval requests',
+                    'parameters' => [
+                        ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'actionType', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ],
+                    'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                    'x-required-scopes' => ['control:approvals:read'],
+                ]],
+                '/control/approvals/request' => ['post' => [
+                    'summary' => 'Create approval request',
+                    'requestBody' => ['required' => true],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                    ]),
+                    'x-required-scopes' => ['control:approvals:write'],
+                ]],
+                '/control/approvals/decide' => ['post' => [
+                    'summary' => 'Approve or reject approval request',
+                    'requestBody' => ['required' => true],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                        '404' => ['description' => 'Not found'],
+                    ]),
+                    'x-required-scopes' => ['control:approvals:write'],
+                ]],
+                '/control/executions' => ['get' => [
+                    'summary' => 'List action execution ledger',
+                    'parameters' => [
+                        ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'actionType', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ],
+                    'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                    'x-required-scopes' => ['control:executions:read'],
+                ]],
+                '/control/actions/execute' => ['post' => [
+                    'summary' => 'Execute an idempotent control action',
+                    'requestBody' => ['required' => true],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                        '403' => ['description' => 'Missing required execution scope'],
+                    ]),
+                    'x-required-scopes' => ['control:actions:execute'],
+                    'x-optional-scopes' => ['policy.config.requiredScope'],
+                ]],
+                '/control/audit' => ['get' => [
+                    'summary' => 'List control-plane audit events',
+                    'parameters' => [
+                        ['in' => 'query', 'name' => 'category', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'actorId', 'schema' => ['type' => 'string']],
+                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ],
+                    'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                    'x-required-scopes' => ['control:audit:read'],
+                ]],
                 '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
                 '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
             ],
@@ -436,9 +529,228 @@ class ApiController extends Controller
         ]);
     }
 
-    private function guardRequest(string $requiredScope = ''): ?Response
+    public function actionControlPolicies(): Response
     {
-        if (($methodResponse = $this->enforceReadRequest()) !== null) {
+        if (($guard = $this->guardRequest('control:policies:read')) !== null) {
+            return $guard;
+        }
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $policies = $service->getPolicies();
+
+        return $this->jsonResponse([
+            'data' => $policies,
+            'meta' => [
+                'count' => count($policies),
+            ],
+        ]);
+    }
+
+    public function actionControlPolicyUpsert(): Response
+    {
+        if (($guard = $this->guardRequest('control:policies:write', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+
+        try {
+            $policy = $service->upsertPolicy([
+                'handle' => (string)$request->getBodyParam('handle', ''),
+                'displayName' => (string)$request->getBodyParam('displayName', ''),
+                'actionPattern' => (string)$request->getBodyParam('actionPattern', ''),
+                'requiresApproval' => $request->getBodyParam('requiresApproval', true),
+                'enabled' => $request->getBodyParam('enabled', true),
+                'riskLevel' => (string)$request->getBodyParam('riskLevel', 'medium'),
+                'config' => $this->resolveBodyArrayParam('config'),
+            ], $this->buildControlActorContext());
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\RuntimeException $e) {
+            return $this->misconfiguredResponse($e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Control policy upsert failed: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to upsert policy.');
+        }
+
+        return $this->jsonResponse(['data' => $policy]);
+    }
+
+    public function actionControlApprovals(): Response
+    {
+        if (($guard = $this->guardRequest('control:approvals:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $approvals = $service->getApprovals([
+            'status' => (string)$request->getQueryParam('status', ''),
+            'actionType' => (string)$request->getQueryParam('actionType', ''),
+        ], (int)$request->getQueryParam('limit', 50));
+
+        return $this->jsonResponse([
+            'data' => $approvals,
+            'meta' => [
+                'count' => count($approvals),
+            ],
+        ]);
+    }
+
+    public function actionControlApprovalRequest(): Response
+    {
+        if (($guard = $this->guardRequest('control:approvals:write', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+
+        try {
+            $approval = $service->requestApproval([
+                'actionType' => (string)$request->getBodyParam('actionType', ''),
+                'actionRef' => (string)$request->getBodyParam('actionRef', ''),
+                'reason' => (string)$request->getBodyParam('reason', ''),
+                'idempotencyKey' => $this->resolveIdempotencyKey(),
+                'payload' => $this->resolveBodyArrayParam('payload'),
+                'metadata' => $this->resolveBodyArrayParam('metadata'),
+            ], $this->buildControlActorContext());
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\RuntimeException $e) {
+            return $this->misconfiguredResponse($e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Control approval request failed: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to request approval.');
+        }
+
+        return $this->jsonResponse(['data' => $approval]);
+    }
+
+    public function actionControlApprovalDecide(): Response
+    {
+        if (($guard = $this->guardRequest('control:approvals:write', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $approvalId = (int)$request->getBodyParam('approvalId', 0);
+        if ($approvalId <= 0) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, 'approvalId is required.');
+        }
+
+        try {
+            $approval = $service->decideApproval(
+                $approvalId,
+                (string)$request->getBodyParam('decision', ''),
+                (string)$request->getBodyParam('decisionReason', ''),
+                $this->buildControlActorContext()
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Control approval decision failed: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to decide approval.');
+        }
+
+        if ($approval === null) {
+            return $this->errorResponse(404, self::ERROR_NOT_FOUND, 'Approval not found.');
+        }
+
+        return $this->jsonResponse(['data' => $approval]);
+    }
+
+    public function actionControlExecutions(): Response
+    {
+        if (($guard = $this->guardRequest('control:executions:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $executions = $service->getExecutions([
+            'status' => (string)$request->getQueryParam('status', ''),
+            'actionType' => (string)$request->getQueryParam('actionType', ''),
+        ], (int)$request->getQueryParam('limit', 50));
+
+        return $this->jsonResponse([
+            'data' => $executions,
+            'meta' => [
+                'count' => count($executions),
+            ],
+        ]);
+    }
+
+    public function actionControlActionsExecute(): Response
+    {
+        if (($guard = $this->guardRequest('control:actions:execute', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $actionType = (string)$request->getBodyParam('actionType', '');
+        if (trim($actionType) === '') {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, 'actionType is required.');
+        }
+
+        $policy = $service->resolvePolicyForAction($actionType);
+        $requiredScope = (string)($policy['requiredScope'] ?? 'control:actions:execute');
+        if ($requiredScope !== '' && !$this->hasScope($requiredScope)) {
+            return $this->forbiddenResponse($requiredScope, 'The matched action policy requires an additional scope.');
+        }
+
+        try {
+            $execution = $service->executeAction([
+                'actionType' => $actionType,
+                'actionRef' => (string)$request->getBodyParam('actionRef', ''),
+                'approvalId' => (int)$request->getBodyParam('approvalId', 0),
+                'idempotencyKey' => $this->resolveIdempotencyKey(),
+                'payload' => $this->resolveBodyArrayParam('payload'),
+            ], $this->buildControlActorContext());
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\RuntimeException $e) {
+            return $this->misconfiguredResponse($e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Control execution failed: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to execute action.');
+        }
+
+        return $this->jsonResponse([
+            'data' => $execution,
+            'meta' => [
+                'policy' => $policy,
+            ],
+        ]);
+    }
+
+    public function actionControlAudit(): Response
+    {
+        if (($guard = $this->guardRequest('control:audit:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $events = $service->getAuditEvents([
+            'category' => (string)$request->getQueryParam('category', ''),
+            'actorId' => (string)$request->getQueryParam('actorId', ''),
+        ], (int)$request->getQueryParam('limit', 100));
+
+        return $this->jsonResponse([
+            'data' => $events,
+            'meta' => [
+                'count' => count($events),
+            ],
+        ]);
+    }
+
+    private function guardRequest(string $requiredScope = '', array $allowedMethods = ['GET', 'HEAD']): ?Response
+    {
+        if (($methodResponse = $this->enforceRequestMethod($allowedMethods)) !== null) {
             return $methodResponse;
         }
 
@@ -684,13 +996,28 @@ class ApiController extends Controller
 
     private function enforceReadRequest(): ?Response
     {
+        return $this->enforceRequestMethod(['GET', 'HEAD']);
+    }
+
+    private function enforceRequestMethod(array $allowedMethods): ?Response
+    {
         $request = Craft::$app->getRequest();
-        if ($request->getIsGet() || $request->getIsHead()) {
+        $method = strtoupper((string)$request->getMethod());
+        $normalizedAllowed = [];
+        foreach ($allowedMethods as $allowedMethod) {
+            if (!is_string($allowedMethod) || trim($allowedMethod) === '') {
+                continue;
+            }
+            $normalizedAllowed[] = strtoupper(trim($allowedMethod));
+        }
+
+        if (in_array($method, $normalizedAllowed, true)) {
             return null;
         }
 
-        $response = $this->errorResponse(405, self::ERROR_METHOD_NOT_ALLOWED, 'Only GET and HEAD requests are supported.');
-        $response->headers->set('Allow', 'GET, HEAD');
+        $allowedHeader = implode(', ', $normalizedAllowed);
+        $response = $this->errorResponse(405, self::ERROR_METHOD_NOT_ALLOWED, sprintf('Only %s requests are supported.', $allowedHeader));
+        $response->headers->set('Allow', $allowedHeader);
         return $response;
     }
 
@@ -763,6 +1090,13 @@ class ApiController extends Controller
             'sections:read' => 'Read section list endpoint.',
             'capabilities:read' => 'Read capabilities descriptor endpoint.',
             'openapi:read' => 'Read OpenAPI descriptor endpoint.',
+            'control:policies:read' => 'Read control action policies.',
+            'control:policies:write' => 'Create and update control action policies.',
+            'control:approvals:read' => 'Read approval request queue.',
+            'control:approvals:write' => 'Request, approve, and reject control approvals.',
+            'control:executions:read' => 'Read control action execution ledger.',
+            'control:actions:execute' => 'Execute idempotent control actions.',
+            'control:audit:read' => 'Read immutable control-plane audit log.',
         ];
     }
 
@@ -777,6 +1111,7 @@ class ApiController extends Controller
             ['status' => 429, 'code' => self::ERROR_RATE_LIMIT_EXCEEDED, 'description' => 'Rate limit bucket exhausted for the current window.'],
             ['status' => 503, 'code' => self::ERROR_SERVICE_DISABLED, 'description' => 'Agents service is disabled by configuration.'],
             ['status' => 503, 'code' => self::ERROR_SERVER_MISCONFIGURED, 'description' => 'Server security configuration is incomplete or invalid.'],
+            ['status' => 500, 'code' => self::ERROR_INTERNAL, 'description' => 'Unexpected server error while processing request.'],
         ];
     }
 
@@ -863,6 +1198,47 @@ class ApiController extends Controller
         ];
 
         return array_merge($responses, $guardResponses);
+    }
+
+    private function resolveBodyArrayParam(string $param): array
+    {
+        $request = Craft::$app->getRequest();
+        $raw = $request->getBodyParam($param, []);
+        if (is_array($raw)) {
+            return $raw;
+        }
+
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        return $decoded;
+    }
+
+    private function resolveIdempotencyKey(): string
+    {
+        $request = Craft::$app->getRequest();
+        $headerKey = trim((string)$request->getHeaders()->get('X-Idempotency-Key', ''));
+        if ($headerKey !== '') {
+            return $headerKey;
+        }
+
+        return trim((string)$request->getBodyParam('idempotencyKey', ''));
+    }
+
+    private function buildControlActorContext(): array
+    {
+        return [
+            'actorType' => 'credential',
+            'actorId' => (string)($this->authContext['credentialId'] ?? 'unknown'),
+            'requestId' => $this->getRequestId(),
+            'ipAddress' => $this->getClientIp(),
+        ];
     }
 
     private function unauthorizedResponse(string $message): Response
@@ -996,7 +1372,7 @@ class ApiController extends Controller
             }
         }
 
-        return '0.3.0';
+        return '0.3.3';
     }
 
     private function getRequestId(): string

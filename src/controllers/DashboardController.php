@@ -104,6 +104,29 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function actionControl(): Response
+    {
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
+
+        $plugin = Plugin::getInstance();
+        $enabledState = $plugin->getAgentsEnabledState();
+        $snapshot = $plugin->getControlPlaneService()->getControlPlaneSnapshot(25);
+
+        return $this->renderCpTemplate('agents/control', [
+            'agentsEnabled' => (bool)$enabledState['enabled'],
+            'agentsEnabledSource' => (string)$enabledState['source'],
+            'controlSummary' => (array)($snapshot['summary'] ?? []),
+            'controlPolicies' => (array)($snapshot['policies'] ?? []),
+            'controlApprovals' => (array)($snapshot['approvals'] ?? []),
+            'controlExecutions' => (array)($snapshot['executions'] ?? []),
+            'controlAuditEvents' => (array)($snapshot['audit'] ?? []),
+            'controlSnapshotJson' => $this->prettyPrintJson($snapshot),
+            'canManagePolicies' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE),
+            'canManageApprovals' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
+            'canExecuteActions' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE),
+        ]);
+    }
+
     public function actionSettings(): Response
     {
         $this->requireAdmin();
@@ -392,6 +415,130 @@ class DashboardController extends Controller
         return $this->redirectToPostedUrl(null, 'agents/credentials');
     }
 
+    public function actionUpsertControlPolicy(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE);
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+
+        try {
+            $policy = $service->upsertPolicy([
+                'handle' => (string)$this->request->getBodyParam('handle', ''),
+                'displayName' => (string)$this->request->getBodyParam('displayName', ''),
+                'actionPattern' => (string)$this->request->getBodyParam('actionPattern', ''),
+                'requiresApproval' => $this->parseBooleanBodyParam('requiresApproval', true),
+                'enabled' => $this->parseBooleanBodyParam('enabled', true),
+                'riskLevel' => (string)$this->request->getBodyParam('riskLevel', 'medium'),
+                'config' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('configJson', '')),
+            ], $this->buildCpActorContext());
+
+            $this->setSuccessFlash(sprintf('Policy `%s` saved.', (string)($policy['handle'] ?? 'policy')));
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to save control policy: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/control');
+    }
+
+    public function actionRequestControlApproval(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $idempotencyKey = trim((string)$this->request->getBodyParam('idempotencyKey', ''));
+
+        try {
+            $approval = $service->requestApproval([
+                'actionType' => (string)$this->request->getBodyParam('actionType', ''),
+                'actionRef' => (string)$this->request->getBodyParam('actionRef', ''),
+                'reason' => (string)$this->request->getBodyParam('reason', ''),
+                'idempotencyKey' => $idempotencyKey,
+                'payload' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadJson', '')),
+                'metadata' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('metadataJson', '')),
+            ], $this->buildCpActorContext());
+
+            $status = (string)($approval['status'] ?? 'pending');
+            $this->setSuccessFlash(sprintf('Approval #%d requested (%s).', (int)($approval['id'] ?? 0), $status));
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to request control approval: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/control');
+    }
+
+    public function actionDecideControlApproval(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $approvalId = (int)$this->request->getBodyParam('approvalId', 0);
+        if ($approvalId <= 0) {
+            $this->setFailFlash('Missing approval id.');
+            return $this->redirectToPostedUrl(null, 'agents/control');
+        }
+
+        try {
+            $approval = $service->decideApproval(
+                $approvalId,
+                (string)$this->request->getBodyParam('decision', ''),
+                (string)$this->request->getBodyParam('decisionReason', ''),
+                $this->buildCpActorContext()
+            );
+
+            if (!is_array($approval)) {
+                $this->setFailFlash('Approval not found.');
+                return $this->redirectToPostedUrl(null, 'agents/control');
+            }
+
+            $this->setSuccessFlash(sprintf('Approval #%d is now `%s`.', $approvalId, (string)($approval['status'] ?? 'pending')));
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to decide approval: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/control');
+    }
+
+    public function actionExecuteControlAction(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $idempotencyKey = trim((string)$this->request->getBodyParam('idempotencyKey', ''));
+
+        try {
+            $execution = $service->executeAction([
+                'actionType' => (string)$this->request->getBodyParam('actionType', ''),
+                'actionRef' => (string)$this->request->getBodyParam('actionRef', ''),
+                'approvalId' => (int)$this->request->getBodyParam('approvalId', 0),
+                'idempotencyKey' => $idempotencyKey,
+                'payload' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadJson', '')),
+            ], $this->buildCpActorContext());
+
+            $status = (string)($execution['status'] ?? 'unknown');
+            if ($status === 'succeeded') {
+                $this->setSuccessFlash(sprintf('Control action executed successfully (%s).', $idempotencyKey !== '' ? $idempotencyKey : 'no idempotency key'));
+            } else {
+                $this->setFailFlash(sprintf('Control action recorded with `%s` status. %s', $status, (string)($execution['errorMessage'] ?? '')));
+            }
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to execute control action: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/control');
+    }
+
     private function getApiEndpoints(): array
     {
         $apiBasePath = '/agents/v1';
@@ -405,6 +552,11 @@ class DashboardController extends Controller
             $apiBasePath . '/sections',
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',
+            $apiBasePath . '/control/policies',
+            $apiBasePath . '/control/approvals',
+            $apiBasePath . '/control/executions',
+            $apiBasePath . '/control/actions/execute',
+            $apiBasePath . '/control/audit',
         ];
     }
 
@@ -489,6 +641,17 @@ class DashboardController extends Controller
         return in_array($value, ['1', 'true', 'on', 'yes'], true);
     }
 
+    private function parseJsonBodyParam(string $raw): array
+    {
+        $value = trim($raw);
+        if ($value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
     private function storeRevealedCredential(array $credential): void
     {
         Craft::$app->getSession()->set(self::SESSION_REVEALED_CREDENTIAL, $credential);
@@ -525,5 +688,55 @@ class DashboardController extends Controller
         }
 
         return $userComponent->checkPermission($permission);
+    }
+
+    private function requireControlPermission(string $permission): void
+    {
+        if ($this->canControlPermission($permission)) {
+            return;
+        }
+
+        $this->requirePermission($permission);
+    }
+
+    private function canControlPermission(string $permission): bool
+    {
+        $userComponent = Craft::$app->getUser();
+        $identity = $userComponent->getIdentity();
+        if ($identity === null) {
+            return false;
+        }
+
+        if ((bool)$identity->admin) {
+            return true;
+        }
+
+        if (!$userComponent->checkPermission(Plugin::PERMISSION_CONTROL_VIEW)) {
+            return false;
+        }
+
+        return $userComponent->checkPermission($permission);
+    }
+
+    private function buildCpActorContext(): array
+    {
+        $identity = Craft::$app->getUser()->getIdentity();
+        $actorId = 'cp-user';
+        if ($identity !== null) {
+            $username = trim((string)($identity->username ?? ''));
+            $id = (int)($identity->id ?? 0);
+            if ($username !== '') {
+                $actorId = 'cp:' . $username;
+            } elseif ($id > 0) {
+                $actorId = 'cp:user-' . $id;
+            }
+        }
+
+        return [
+            'actorType' => 'cp-user',
+            'actorId' => $actorId,
+            'requestId' => 'cp-' . substr(sha1(uniqid('', true)), 0, 12),
+            'ipAddress' => (string)(Craft::$app->getRequest()->getUserIP() ?: 'unknown'),
+        ];
     }
 }

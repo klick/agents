@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.3 - 2026-02-26
+
+- Added control-plane foundation with governed policies, approvals, idempotent action execution ledger, and immutable audit events.
+- Added new guarded control API endpoints under `/agents/v1/control/*` with explicit read/write scopes for policies, approvals, executions, and audit access.
+- Added Control Plane Control Panel tab with policy upsert, approval queue decisions, execution controls, and control-plane snapshot visibility.
+- Added plugin migration for control-plane persistence tables: policies, approvals, executions, and audit log.
+
 ## 0.3.1 - 2026-02-26
 
 - Hardened Commerce availability checks in discovery/readiness surfaces to use project config state instead of forcing Commerce plugin bootstrap.
