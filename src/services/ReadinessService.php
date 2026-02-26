@@ -11,15 +11,20 @@ use craft\commerce\elements\Product;
 use craft\elements\Entry;
 use DateTimeImmutable;
 use DateTimeInterface;
+use Klick\Agents\Plugin;
 
 class ReadinessService extends Component
 {
+    private const INCREMENTAL_CURSOR_VERSION = 1;
+    private const INCREMENTAL_CURSOR_TTL_SECONDS = 604800;
+    private const READINESS_READY_THRESHOLD = 50;
+
     public function getHealthSummary(): array
     {
         return [
             'status' => 'ok',
             'service' => 'agents',
-            'pluginVersion' => '0.1.1',
+            'pluginVersion' => $this->resolvePluginVersion(),
             'environment' => App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT'),
             'timezone' => date_default_timezone_get(),
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
@@ -42,12 +47,78 @@ class ReadinessService extends Component
         return $health;
     }
 
+    public function getReadinessBreakdown(): array
+    {
+        $isSiteRequest = (bool)Craft::$app->getRequest()->getIsSiteRequest();
+        $databaseAvailable = (bool)Craft::$app->getDb();
+        $commerceEnabled = (bool)Craft::$app->getPlugins()->getPlugin('commerce');
+
+        return [
+            [
+                'id' => 'site-request',
+                'label' => 'Site request context available',
+                'weight' => 20,
+                'passed' => $isSiteRequest,
+                'score' => $isSiteRequest ? 20 : 0,
+            ],
+            [
+                'id' => 'database',
+                'label' => 'Database connection available',
+                'weight' => 40,
+                'passed' => $databaseAvailable,
+                'score' => $databaseAvailable ? 40 : 0,
+            ],
+            [
+                'id' => 'commerce',
+                'label' => 'Commerce plugin available',
+                'weight' => 40,
+                'passed' => $commerceEnabled,
+                'score' => $commerceEnabled ? 40 : 0,
+            ],
+        ];
+    }
+
+    public function getReadinessDiagnostics(): array
+    {
+        $health = $this->getHealthSummary();
+        $breakdown = $this->getReadinessBreakdown();
+        $score = 0;
+        foreach ($breakdown as $criterion) {
+            $score += (int)($criterion['score'] ?? 0);
+        }
+
+        $status = $score >= self::READINESS_READY_THRESHOLD ? 'ready' : 'limited';
+        $warnings = [];
+        foreach ($breakdown as $criterion) {
+            if ((bool)($criterion['passed'] ?? false)) {
+                continue;
+            }
+            $warnings[] = sprintf('%s check is failing.', (string)($criterion['label'] ?? 'Readiness'));
+        }
+
+        return [
+            'status' => $status,
+            'readinessScore' => $score,
+            'thresholdReady' => self::READINESS_READY_THRESHOLD,
+            'breakdown' => $breakdown,
+            'componentChecks' => [
+                'systemComponents' => (array)($health['systemComponents'] ?? []),
+                'enabledPlugins' => (array)($health['enabledPlugins'] ?? []),
+            ],
+            'warnings' => $warnings,
+            'summary' => array_merge($health, [
+                'readinessScore' => $score,
+            ]),
+        ];
+    }
+
     public function getDashboardModel(): array
     {
+        $score = $this->calculateReadinessScore();
         return [
-            'readinessVersion' => '0.1.1',
+            'readinessVersion' => $this->resolvePluginVersion(),
             'buildDate' => gmdate('Y-m-d\TH:i:s\Z'),
-            'status' => $this->calculateReadinessScore() >= 50 ? 'ready' : 'limited',
+            'status' => $score >= self::READINESS_READY_THRESHOLD ? 'ready' : 'limited',
             'summary' => $this->getReadinessSummary(),
         ];
     }
@@ -56,10 +127,64 @@ class ReadinessService extends Component
     {
         $status = $this->normalizeStatus((string)($params['status'] ?? 'live'));
         $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
-        $cursor = (string)($params['cursor'] ?? '');
+        $cursor = trim((string)($params['cursor'] ?? ''));
         $query = trim((string)($params['q'] ?? ''));
-        $offset = $this->parseCursor($cursor);
         $sort = $this->normalizeSort((string)($params['sort'] ?? 'updatedAt'));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+
+        $decodedCursor = $this->decodeCursorPayload($cursor);
+        $hasIncrementalCursor = is_array($decodedCursor) && (($decodedCursor['mode'] ?? '') === 'incremental');
+        $isIncremental = ($updatedSinceRaw !== '' || $hasIncrementalCursor);
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'products');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'page' => [
+                            'nextCursor' => null,
+                            'limit' => $limit,
+                            'count' => 0,
+                            'hasMore' => false,
+                            'syncMode' => 'incremental',
+                            'updatedSince' => $updatedSinceRaw !== '' ? $updatedSinceRaw : null,
+                            'snapshotEnd' => null,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'page' => [
+                            'nextCursor' => null,
+                            'limit' => $limit,
+                            'count' => 0,
+                            'hasMore' => false,
+                            'syncMode' => 'incremental',
+                            'updatedSince' => $updatedSinceRaw !== '' ? $updatedSinceRaw : null,
+                            'snapshotEnd' => null,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+        } else {
+            $offset = $this->parseCursor($cursor);
+        }
 
         if (!class_exists(Product::class)) {
             return [
@@ -68,13 +193,16 @@ class ReadinessService extends Component
                     'nextCursor' => null,
                     'limit' => $limit,
                     'count' => 0,
+                    'hasMore' => false,
+                    'syncMode' => $isIncremental ? 'incremental' : 'full',
+                    'updatedSince' => $isIncremental ? $this->formatDate($updatedSince) : null,
+                    'snapshotEnd' => $isIncremental ? $this->formatDate($snapshotEnd) : null,
                     'errors' => ['Commerce plugin is unavailable.'],
                 ],
             ];
         }
 
         $queryBuilder = Product::find()
-            ->orderBy($this->buildSort($sort))
             ->offset($offset)
             ->limit($limit + 1);
 
@@ -86,9 +214,17 @@ class ReadinessService extends Component
             $queryBuilder->search($query);
         }
 
+        if ($isIncremental) {
+            $queryBuilder->orderBy($this->buildIncrementalSort());
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->orderBy($this->buildSort($sort));
+        }
+
         $products = $queryBuilder->all();
         $totalReturned = min(count($products), $limit);
         $nextOffset = $offset + $totalReturned;
+        $hasMore = count($products) > $limit;
 
         $data = [];
         foreach (array_slice($products, 0, $limit) as $product) {
@@ -110,9 +246,17 @@ class ReadinessService extends Component
         return [
             'data' => $data,
             'page' => [
-                'nextCursor' => count($products) > $limit ? $this->buildCursor($nextOffset) : null,
+                'nextCursor' => $hasMore
+                    ? ($isIncremental
+                        ? $this->buildIncrementalCursor($nextOffset, 'products', $updatedSince, $snapshotEnd)
+                        : $this->buildCursor($nextOffset))
+                    : null,
                 'limit' => $limit,
                 'count' => $totalReturned,
+                'hasMore' => $hasMore,
+                'syncMode' => $isIncremental ? 'incremental' : 'full',
+                'updatedSince' => $isIncremental ? $this->formatDate($updatedSince) : null,
+                'snapshotEnd' => $isIncremental ? $this->formatDate($snapshotEnd) : null,
             ],
         ];
     }
@@ -195,25 +339,75 @@ class ReadinessService extends Component
     public function getOrdersList(array $params): array
     {
         $status = $this->normalizeOrderStatus((string)($params['status'] ?? 'all'));
-        $lastDays = $this->normalizeLastDays((int)($params['lastDays'] ?? 30));
         $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
         $includeSensitive = (bool)($params['includeSensitive'] ?? true);
         $redactEmail = (bool)($params['redactEmail'] ?? false);
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $lastDays = $this->normalizeLastDays((int)($params['lastDays'] ?? ($isIncremental ? 0 : 30)));
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+        $filters = [
+            'status' => $status,
+            'lastDays' => $lastDays,
+            'limit' => $limit,
+            'includeSensitive' => $includeSensitive,
+            'redactEmail' => $redactEmail,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
 
         if (!class_exists(Order::class)) {
             return [
                 'data' => [],
                 'meta' => [
                     'count' => 0,
+                    'filters' => $filters,
                     'errors' => ['Commerce plugin is unavailable.'],
                 ],
             ];
         }
 
-        $queryBuilder = Order::find()
-            ->isCompleted(true)
-            ->orderBy(['elements.dateCreated' => SORT_DESC, 'elements.id' => SORT_DESC])
-            ->limit($limit);
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'orders');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Order::find()->isCompleted(true);
 
         if ($status !== 'all') {
             $queryBuilder->orderStatus($status);
@@ -224,28 +418,53 @@ class ReadinessService extends Component
             $queryBuilder->dateCreated('>= ' . $cutoff);
         }
 
+        if ($isIncremental) {
+            $queryBuilder
+                ->orderBy($this->buildIncrementalSort())
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder
+                ->orderBy(['elements.dateCreated' => SORT_DESC, 'elements.id' => SORT_DESC])
+                ->limit($limit);
+        }
+
+        $orders = $queryBuilder->all();
+        $returnedOrders = $isIncremental ? array_slice($orders, 0, $limit) : $orders;
+        $hasMore = $isIncremental && count($orders) > $limit;
+        $nextOffset = $offset + count($returnedOrders);
+
         $data = [];
-        foreach ($queryBuilder->all() as $order) {
+        foreach ($returnedOrders as $order) {
             if (!$order instanceof Order) {
                 continue;
             }
             $data[] = $this->mapOrder($order, false, $includeSensitive, $redactEmail);
         }
 
-        return [
+        $payload = [
             'data' => $data,
             'meta' => [
                 'count' => count($data),
-                'filters' => [
-                    'status' => $status,
-                    'lastDays' => $lastDays,
-                    'limit' => $limit,
-                    'includeSensitive' => $includeSensitive,
-                    'redactEmail' => $redactEmail,
-                ],
+                'filters' => $filters,
                 'errors' => [],
             ],
         ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'orders', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
     }
 
     public function getOrderByIdOrNumber(array $params): array
@@ -311,10 +530,62 @@ class ReadinessService extends Component
         $search = trim((string)($params['search'] ?? ''));
         $section = trim((string)($params['section'] ?? ''));
         $type = trim((string)($params['type'] ?? ''));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'status' => $status,
+            'search' => $search !== '' ? $search : null,
+            'section' => $section !== '' ? $section : null,
+            'type' => $type !== '' ? $type : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'entries');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
 
         $queryBuilder = Entry::find()
-            ->orderBy(['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC])
-            ->limit($limit);
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
 
         if ($status === 'all') {
             $queryBuilder->status(null);
@@ -331,25 +602,178 @@ class ReadinessService extends Component
             $queryBuilder->search($search);
         }
 
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $entries = $queryBuilder->all();
+        $returnedEntries = $isIncremental ? array_slice($entries, 0, $limit) : $entries;
+        $hasMore = $isIncremental && count($entries) > $limit;
+        $nextOffset = $offset + count($returnedEntries);
+
         $data = [];
-        foreach ($queryBuilder->all() as $entry) {
+        foreach ($returnedEntries as $entry) {
             if (!$entry instanceof Entry) {
                 continue;
             }
             $data[] = $this->mapEntry($entry, false);
         }
 
-        return [
+        $payload = [
             'data' => $data,
             'meta' => [
                 'count' => count($data),
-                'filters' => [
-                    'status' => $status,
-                    'search' => $search !== '' ? $search : null,
-                    'section' => $section !== '' ? $section : null,
-                    'type' => $type !== '' ? $type : null,
-                    'limit' => $limit,
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'entries', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getChangesFeed(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $typesState = $this->normalizeChangeTypes($params['types'] ?? '');
+        if ($typesState['error'] !== null) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [$typesState['error']],
                 ],
+            ];
+        }
+
+        $types = $typesState['types'];
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        if ($cursor !== '') {
+            $cursorState = $this->parseIncrementalCursor($cursor, 'changes');
+            if (!empty($cursorState['errors'])) {
+                return [
+                    'data' => [],
+                    'meta' => [
+                        'count' => 0,
+                        'errors' => $cursorState['errors'],
+                    ],
+                ];
+            }
+
+            $offset = (int)$cursorState['offset'];
+            $updatedSince = $cursorState['updatedSince'];
+            $snapshotEnd = $cursorState['snapshotEnd'];
+
+            $cursorPayload = $this->decodeCursorPayload($cursor) ?? [];
+            $cursorTypesState = $this->normalizeChangeTypes($cursorPayload['types'] ?? []);
+            if ($cursorTypesState['error'] !== null) {
+                return [
+                    'data' => [],
+                    'meta' => [
+                        'count' => 0,
+                        'errors' => [$cursorTypesState['error']],
+                    ],
+                ];
+            }
+
+            // Cursor controls continuation state and takes precedence over query params.
+            $types = $cursorTypesState['types'];
+        } else {
+            $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+            if ($updatedSinceState['error'] !== null) {
+                return [
+                    'data' => [],
+                    'meta' => [
+                        'count' => 0,
+                        'errors' => [$updatedSinceState['error']],
+                    ],
+                ];
+            }
+
+            $updatedSince = $updatedSinceState['value'];
+            $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        }
+
+        $changes = [];
+        $errors = [];
+
+        foreach ($types as $type) {
+            if ($type === 'products') {
+                $error = $this->appendProductChanges($changes, $updatedSince, $snapshotEnd);
+                if ($error !== null) {
+                    $errors[] = $error;
+                }
+                continue;
+            }
+
+            if ($type === 'orders') {
+                $error = $this->appendOrderChanges($changes, $updatedSince, $snapshotEnd);
+                if ($error !== null) {
+                    $errors[] = $error;
+                }
+                continue;
+            }
+
+            if ($type === 'entries') {
+                $error = $this->appendEntryChanges($changes, $updatedSince, $snapshotEnd);
+                if ($error !== null) {
+                    $errors[] = $error;
+                }
+            }
+        }
+
+        if (!empty($errors)) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'errors' => array_values(array_unique($errors)),
+                ],
+            ];
+        }
+
+        usort($changes, fn(array $a, array $b): int => $this->compareChangeItems($a, $b));
+
+        $window = array_slice($changes, $offset, $limit + 1);
+        $data = array_slice($window, 0, $limit);
+        $hasMore = count($window) > $limit;
+        $nextOffset = $offset + count($data);
+
+        return [
+            'data' => $data,
+            'page' => [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'changes', $updatedSince, $snapshotEnd, ['types' => $types]) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+                'types' => $types,
+            ],
+            'meta' => [
+                'count' => count($data),
                 'errors' => [],
             ],
         ];
@@ -437,10 +861,9 @@ class ReadinessService extends Component
     private function calculateReadinessScore(): int
     {
         $score = 0;
-        $score += (bool)Craft::$app->getRequest()->getIsSiteRequest() ? 20 : 0;
-        $score += (bool)Craft::$app->getDb() ? 40 : 0;
-        $score += (bool)Craft::$app->getPlugins()->getPlugin('commerce') ? 40 : 0;
-
+        foreach ($this->getReadinessBreakdown() as $criterion) {
+            $score += (int)($criterion['score'] ?? 0);
+        }
         return $score;
     }
 
@@ -511,18 +934,532 @@ class ReadinessService extends Component
         };
     }
 
-    private function parseCursor(string $cursor): int
+    private function buildIncrementalSort(): array
+    {
+        return ['elements.dateUpdated' => SORT_ASC, 'elements.id' => SORT_ASC];
+    }
+
+    private function normalizeChangeTypes(mixed $rawTypes): array
+    {
+        $canonical = ['products', 'orders', 'entries'];
+        $aliases = [
+            'product' => 'products',
+            'products' => 'products',
+            'order' => 'orders',
+            'orders' => 'orders',
+            'entry' => 'entries',
+            'entries' => 'entries',
+        ];
+
+        $tokens = [];
+        if (is_array($rawTypes)) {
+            foreach ($rawTypes as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } else {
+            $raw = trim((string)$rawTypes);
+            if ($raw !== '') {
+                $tokens = preg_split('/[\s,]+/', $raw) ?: [];
+            }
+        }
+
+        if (empty($tokens)) {
+            return ['types' => $canonical, 'error' => null];
+        }
+
+        $resolved = [];
+        $invalid = [];
+        foreach ($tokens as $token) {
+            $normalized = strtolower(trim($token));
+            if ($normalized === '') {
+                continue;
+            }
+
+            $mapped = $aliases[$normalized] ?? null;
+            if ($mapped === null) {
+                $invalid[] = $token;
+                continue;
+            }
+
+            $resolved[$mapped] = true;
+        }
+
+        if (!empty($invalid)) {
+            return [
+                'types' => [],
+                'error' => sprintf(
+                    'Invalid `types` value(s): %s. Allowed values: products, orders, entries.',
+                    implode(', ', array_values(array_unique($invalid)))
+                ),
+            ];
+        }
+
+        $types = [];
+        foreach ($canonical as $type) {
+            if (isset($resolved[$type])) {
+                $types[] = $type;
+            }
+        }
+
+        if (empty($types)) {
+            $types = $canonical;
+        }
+
+        return ['types' => $types, 'error' => null];
+    }
+
+    private function appendProductChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Product::class)) {
+            return 'Commerce plugin is unavailable for product changes.';
+        }
+
+        $updatedQuery = Product::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $product) {
+            if (!$product instanceof Product) {
+                continue;
+            }
+
+            $typeHandle = $product->type?->handle ?? null;
+            $url = $product->getUrl();
+            if ($url === null && $product->uri) {
+                $url = UrlHelper::siteUrl($product->uri);
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'product',
+                (string)$product->id,
+                $this->resolveChangeAction($product->dateCreated, $product->dateUpdated),
+                $product->dateUpdated,
+                [
+                    'id' => (int)$product->id,
+                    'title' => (string)$product->title,
+                    'slug' => (string)$product->slug,
+                    'uri' => (string)$product->uri,
+                    'type' => $typeHandle,
+                    'status' => $product->getStatus() ?? null,
+                    'updatedAt' => $this->formatDate($product->dateUpdated),
+                    'url' => $url,
+                ]
+            );
+        }
+
+        $deletedQuery = Product::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $product) {
+            if (!$product instanceof Product) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'product',
+                (string)$product->id,
+                'deleted',
+                $product->dateDeleted ?? $product->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendOrderChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Order::class)) {
+            return 'Commerce plugin is unavailable for order changes.';
+        }
+
+        $updatedQuery = Order::find()
+            ->isCompleted(true)
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $order) {
+            if (!$order instanceof Order) {
+                continue;
+            }
+
+            $orderStatus = $order->getOrderStatus();
+
+            $this->appendChangeItem(
+                $changes,
+                'order',
+                (string)$order->id,
+                $this->resolveChangeAction($order->dateCreated, $order->dateUpdated),
+                $order->dateUpdated,
+                [
+                    'id' => (int)$order->id,
+                    'number' => (string)($order->number ?? ''),
+                    'reference' => (string)($order->reference ?? ''),
+                    'status' => $orderStatus?->handle,
+                    'statusName' => $orderStatus?->name,
+                    'isCompleted' => (bool)$order->isCompleted,
+                    'isPaid' => (bool)$order->isPaid,
+                    'totalPrice' => $order->totalPrice === null ? null : (float)$order->totalPrice,
+                    'updatedAt' => $this->formatDate($order->dateUpdated),
+                ]
+            );
+        }
+
+        $deletedQuery = Order::find()
+            ->isCompleted(true)
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $order) {
+            if (!$order instanceof Order) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'order',
+                (string)$order->id,
+                'deleted',
+                $order->dateDeleted ?? $order->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendEntryChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = Entry::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $entry) {
+            if (!$entry instanceof Entry) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'entry',
+                (string)$entry->id,
+                $this->resolveChangeAction($entry->dateCreated, $entry->dateUpdated),
+                $entry->dateUpdated,
+                $this->mapEntry($entry, false)
+            );
+        }
+
+        $deletedQuery = Entry::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $entry) {
+            if (!$entry instanceof Entry) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'entry',
+                (string)$entry->id,
+                'deleted',
+                $entry->dateDeleted ?? $entry->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendChangeItem(
+        array &$changes,
+        string $resourceType,
+        string $resourceId,
+        string $action,
+        ?DateTimeInterface $updatedAt,
+        ?array $snapshot
+    ): void {
+        $timestamp = $this->formatDate($updatedAt);
+        if ($timestamp === null) {
+            return;
+        }
+
+        $changes[] = [
+            'resourceType' => $resourceType,
+            'resourceId' => $resourceId,
+            'action' => $action,
+            'updatedAt' => $timestamp,
+            'snapshot' => $snapshot,
+        ];
+    }
+
+    private function resolveChangeAction(?DateTimeInterface $createdAt, ?DateTimeInterface $updatedAt): string
+    {
+        if ($createdAt === null || $updatedAt === null) {
+            return 'updated';
+        }
+
+        return $createdAt->getTimestamp() === $updatedAt->getTimestamp() ? 'created' : 'updated';
+    }
+
+    private function compareChangeItems(array $a, array $b): int
+    {
+        $updatedAtComparison = strcmp((string)($a['updatedAt'] ?? ''), (string)($b['updatedAt'] ?? ''));
+        if ($updatedAtComparison !== 0) {
+            return $updatedAtComparison;
+        }
+
+        $typeComparison = strcmp((string)($a['resourceType'] ?? ''), (string)($b['resourceType'] ?? ''));
+        if ($typeComparison !== 0) {
+            return $typeComparison;
+        }
+
+        $resourceIdA = (string)($a['resourceId'] ?? '');
+        $resourceIdB = (string)($b['resourceId'] ?? '');
+        if (ctype_digit($resourceIdA) && ctype_digit($resourceIdB)) {
+            $idComparison = (int)$resourceIdA <=> (int)$resourceIdB;
+        } else {
+            $idComparison = strcmp($resourceIdA, $resourceIdB);
+        }
+        if ($idComparison !== 0) {
+            return $idComparison;
+        }
+
+        return strcmp((string)($a['action'] ?? ''), (string)($b['action'] ?? ''));
+    }
+
+    private function parseUpdatedSince(string $value): array
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return ['value' => null, 'error' => null];
+        }
+
+        $parsed = $this->parseRfc3339Timestamp($value);
+        if ($parsed === null) {
+            return ['value' => null, 'error' => 'Invalid `updatedSince`; expected RFC3339 timestamp.'];
+        }
+
+        return ['value' => $parsed, 'error' => null];
+    }
+
+    private function parseIncrementalCursor(string $cursor, string $resource): array
+    {
+        $payload = $this->decodeCursorPayload($cursor);
+        if ($payload === null) {
+            return [
+                'offset' => 0,
+                'updatedSince' => null,
+                'snapshotEnd' => null,
+                'errors' => ['Invalid cursor; expected opaque incremental checkpoint token.'],
+            ];
+        }
+
+        if (($payload['mode'] ?? '') !== 'incremental' || ($payload['resource'] ?? '') !== $resource) {
+            return [
+                'offset' => 0,
+                'updatedSince' => null,
+                'snapshotEnd' => null,
+                'errors' => ['Cursor does not match this endpoint or sync mode.'],
+            ];
+        }
+
+        $version = (int)($payload['version'] ?? self::INCREMENTAL_CURSOR_VERSION);
+        if ($version !== self::INCREMENTAL_CURSOR_VERSION) {
+            return [
+                'offset' => 0,
+                'updatedSince' => null,
+                'snapshotEnd' => null,
+                'errors' => ['Unsupported cursor version; restart sync with `updatedSince`.'],
+            ];
+        }
+
+        $offset = max(0, (int)($payload['offset'] ?? 0));
+        $updatedSince = null;
+        $updatedSinceRaw = trim((string)($payload['updatedSince'] ?? ''));
+        if ($updatedSinceRaw !== '') {
+            $updatedSince = $this->parseRfc3339Timestamp($updatedSinceRaw);
+            if ($updatedSince === null) {
+                return [
+                    'offset' => 0,
+                    'updatedSince' => null,
+                    'snapshotEnd' => null,
+                    'errors' => ['Cursor contains invalid `updatedSince` timestamp; restart sync.'],
+                ];
+            }
+        }
+
+        $snapshotEndRaw = trim((string)($payload['snapshotEnd'] ?? ''));
+        $snapshotEnd = $this->parseRfc3339Timestamp($snapshotEndRaw);
+        if ($snapshotEnd === null) {
+            return [
+                'offset' => 0,
+                'updatedSince' => null,
+                'snapshotEnd' => null,
+                'errors' => ['Cursor contains invalid `snapshotEnd`; restart sync.'],
+            ];
+        }
+
+        $issuedAtRaw = trim((string)($payload['issuedAt'] ?? ''));
+        $issuedAt = $this->parseRfc3339Timestamp($issuedAtRaw);
+        if ($issuedAt === null) {
+            return [
+                'offset' => 0,
+                'updatedSince' => null,
+                'snapshotEnd' => null,
+                'errors' => ['Cursor is missing `issuedAt`; restart sync.'],
+            ];
+        }
+
+        $expiresAt = $issuedAt->modify('+' . self::INCREMENTAL_CURSOR_TTL_SECONDS . ' seconds');
+        $now = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        if ($expiresAt < $now) {
+            return [
+                'offset' => 0,
+                'updatedSince' => null,
+                'snapshotEnd' => null,
+                'errors' => ['Cursor expired; restart sync from a recent `updatedSince` checkpoint.'],
+            ];
+        }
+
+        return [
+            'offset' => $offset,
+            'updatedSince' => $updatedSince,
+            'snapshotEnd' => $snapshotEnd,
+            'errors' => [],
+        ];
+    }
+
+    private function buildIncrementalCursor(
+        int $offset,
+        string $resource,
+        ?DateTimeImmutable $updatedSince,
+        ?DateTimeImmutable $snapshotEnd,
+        array $extra = []
+    ): string
+    {
+        $snapshot = $snapshotEnd ?? new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $payload = [
+            'version' => self::INCREMENTAL_CURSOR_VERSION,
+            'mode' => 'incremental',
+            'resource' => $resource,
+            'offset' => max(0, $offset),
+            'updatedSince' => $this->formatDate($updatedSince),
+            'snapshotEnd' => $this->formatDate($snapshot),
+            'issuedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+        ];
+
+        foreach ($extra as $key => $value) {
+            $payload[$key] = $value;
+        }
+
+        return base64_encode(json_encode($payload));
+    }
+
+    private function applyDateUpdatedWindow(mixed $queryBuilder, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): void
+    {
+        if ($snapshotEnd === null) {
+            return;
+        }
+
+        $clauses = ['<= ' . $this->formatDbDate($snapshotEnd)];
+        if ($updatedSince !== null) {
+            $clauses[] = '>= ' . $this->formatDbDate($updatedSince);
+        }
+
+        if (count($clauses) === 1) {
+            $queryBuilder->dateUpdated($clauses[0]);
+            return;
+        }
+
+        $queryBuilder->dateUpdated(array_merge(['and'], $clauses));
+    }
+
+    private function applyDateDeletedWindow(mixed $queryBuilder, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): void
+    {
+        if ($snapshotEnd === null) {
+            return;
+        }
+
+        if (!method_exists($queryBuilder, 'andWhere')) {
+            return;
+        }
+
+        $conditions = [
+            'and',
+            ['not', ['elements.dateDeleted' => null]],
+            ['<=', 'elements.dateDeleted', $this->formatDbDate($snapshotEnd)],
+        ];
+        if ($updatedSince !== null) {
+            $conditions[] = ['>=', 'elements.dateDeleted', $this->formatDbDate($updatedSince)];
+        }
+
+        $queryBuilder->andWhere($conditions);
+    }
+
+    private function formatDbDate(DateTimeImmutable $date): string
+    {
+        return $date->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    }
+
+    private function parseRfc3339Timestamp(string $value): ?DateTimeImmutable
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})$/', $value)) {
+            return null;
+        }
+
+        try {
+            $timestamp = new DateTimeImmutable($value);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $timestamp->setTimezone(new \DateTimeZone('UTC'));
+    }
+
+    private function decodeCursorPayload(string $cursor): ?array
     {
         if ($cursor === '') {
-            return 0;
+            return null;
         }
 
         $decoded = base64_decode($cursor, true);
-        if (!$decoded) {
-            return 0;
+        if ($decoded === false || $decoded === '') {
+            return null;
         }
 
         $payload = json_decode($decoded, true);
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        return $payload;
+    }
+
+    private function parseCursor(string $cursor): int
+    {
+        $payload = $this->decodeCursorPayload($cursor);
+        if (!is_array($payload)) {
+            return 0;
+        }
+
         $offset = (int)($payload['offset'] ?? 0);
         return max(0, $offset);
     }
@@ -601,7 +1538,7 @@ class ReadinessService extends Component
             'totalShippingCost' => $order->totalShippingCost === null ? null : (float)$order->totalShippingCost,
             'totalPrice' => $order->totalPrice === null ? null : (float)$order->totalPrice,
             'dateCreated' => $this->formatDate($order->dateCreated),
-            'dateUpdated' => $this->formatDate($order->dateUpdated),
+            'updatedAt' => $this->formatDate($order->dateUpdated),
         ];
 
         if (!$detailed) {
@@ -658,6 +1595,19 @@ class ReadinessService extends Component
         $data['enabled'] = (bool)$entry->enabled;
 
         return $data;
+    }
+
+    private function resolvePluginVersion(): string
+    {
+        $plugin = Plugin::getInstance();
+        if ($plugin !== null) {
+            $version = trim((string)$plugin->getVersion());
+            if ($version !== '') {
+                return $version;
+            }
+        }
+
+        return '0.1.2';
     }
 
     private function formatDate(?DateTimeInterface $date): ?string

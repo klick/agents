@@ -1,0 +1,15 @@
+{
+  "name": "agents-public-docs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev docs --host 0.0.0.0 --port 4173",
+    "build:index": "node scripts/build-docs-index.mjs",
+    "build": "npm run build:index && vitepress build docs",
+    "preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  }
+}

@@ -1,0 +1,27 @@
+# Agents Plugin Documentation
+> Public technical docs for the klick/agents Craft CMS plugin.
+
+site: https://example.com/docs/agents/
+summary: API, configuration, security, webhooks, CLI, and CP operations docs for integrators and LLM consumers.
+
+## Key docs
+- Home: /docs/agents/
+- Get Started: /docs/agents/get-started/
+- API Overview: /docs/agents/api/
+- API Endpoints: /docs/agents/api/endpoints
+- Auth and Scopes: /docs/agents/api/auth-and-scopes
+- Incremental Sync: /docs/agents/api/incremental-sync
+- Discovery Files: /docs/agents/discovery/
+- Control Panel Cockpit: /docs/agents/cp/
+- Security Overview: /docs/agents/security/
+- Deployment Checklist: /docs/agents/security/deployment-checklist
+- Webhooks: /docs/agents/webhooks/
+- CLI Commands: /docs/agents/cli/
+- Troubleshooting: /docs/agents/troubleshooting/
+- Changelog: /docs/agents/changelog/
+- Roadmap: /docs/agents/roadmap/
+
+## Machine-readable references
+- Docs index JSON: /docs/agents/docs-index.json
+- Sitemap: /docs/agents/sitemap.xml
+

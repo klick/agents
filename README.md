@@ -2,7 +2,7 @@
 
 Machine-readable readiness and diagnostics API Craft CMS and Commerce.
 
-Current plugin version: **0.1.1**
+Current plugin version: **0.1.4**
 
 ## Purpose
 
@@ -30,19 +30,18 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.1.1
-php craft plugin/install agents
-```
-
-Before publication (or for development), install from source:
-
-```bash
-composer config repositories.klick-agents vcs https://github.com/klick/agents
-composer require klick/agents:dev-main
+composer require klick/agents:^0.1.4
 php craft plugin/install agents
 ```
 
 For monorepo development, the package can also be installed via path repository at `plugins/agents`.
+
+Recommended local workflow:
+
+- develop in a dedicated Craft sandbox (not production-bound project roots)
+- link plugin via local Composer path repo only in that sandbox
+- use the scripted bootstrap/fixture/smoke/release steps in [DEVELOPMENT.md](DEVELOPMENT.md)
+- restore production-bound projects to store-backed versions after local debugging
 
 ## Configuration
 
@@ -59,8 +58,17 @@ Environment variables:
 - `PLUGIN_AGENTS_REDACT_EMAIL` (default: `true`, applied when sensitive scope is missing)
 - `PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE` (default: `60`)
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
+- `PLUGIN_AGENTS_WEBHOOK_URL` (optional HTTPS endpoint for change notifications)
+- `PLUGIN_AGENTS_WEBHOOK_SECRET` (required when webhook URL is set; used for HMAC signature)
+- `PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS` (default: `5`)
+- `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default: `3`, max queue retry attempts)
 
 These are documented in `.env.example`.
+
+Enablement precedence:
+
+- If `PLUGIN_AGENTS_ENABLED` is set, it overrides CP/plugin setting state.
+- If `PLUGIN_AGENTS_ENABLED` is not set, CP/plugin setting `enabled` controls runtime on/off.
 
 ## Support
 
@@ -76,7 +84,7 @@ If `PLUGIN_AGENTS_REQUIRE_TOKEN=false` is set in production, the plugin will sti
 
 Credential sources:
 
-- `PLUGIN_AGENTS_API_CREDENTIALS` (JSON array/object, supports per-credential scopes)
+- `PLUGIN_AGENTS_API_CREDENTIALS` (strict JSON credential objects with per-credential scopes)
 - `PLUGIN_AGENTS_API_TOKEN` (legacy single-token fallback)
 
 Supported token transports:
@@ -94,6 +102,20 @@ Example credential JSON:
 ]
 ```
 
+Object-map credential JSON is also supported:
+
+```json
+{
+  "integration-a": {"token":"token-a","scopes":["health:read","readiness:read"]},
+  "integration-b": {"token":"token-b","scopes":"orders:read orders:read_sensitive"}
+}
+```
+
+Validation notes:
+
+- Single-object shape is accepted when it includes `token` (or `value`) and optional `id`/`scopes`.
+- Scalar values in keyed-object mode are ignored to avoid accidental token expansion from malformed JSON.
+
 ### Endpoints
 
 Base URL (this project): `/agents/v1`
@@ -105,6 +127,7 @@ Base URL (this project): `/agents/v1`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
 - `GET /entries`
 - `GET /entries/show` (requires exactly one of `id` or `slug`)
+- `GET /changes`
 - `GET /sections`
 - `GET /capabilities`
 - `GET /openapi.json`
@@ -171,17 +194,66 @@ Identifier notes for show commands:
 - `status` (`live|pending|disabled|expired|all`, default `live`)
 - `sort` (`updatedAt|createdAt|title`, default `updatedAt`)
 - `limit` (1..200, default 50)
-- `cursor` (opaque pagination cursor)
+- `cursor` (opaque cursor; legacy pagination + incremental continuation)
+- `updatedSince` (RFC3339 timestamp bootstrap for incremental mode, for example `2026-02-24T12:00:00Z`)
 
 ### Orders endpoint parameters
 
 - `/orders`: `status` (handle or `all`), `lastDays` (default 30), `limit` (1..200)
+- `/orders` incremental: `cursor` (opaque), `updatedSince` (RFC3339). When incremental params are used and `lastDays` is omitted, the default window is `0` (no date-created cutoff).
 - `/orders/show`: exactly one of `id` or `number`
 
 ### Entries endpoint parameters
 
 - `/entries`: `section`, `type`, `status`, `search` (or `q`), `limit` (1..200)
+- `/entries` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
 - `/entries/show`: exactly one of `id` or `slug`; optional `section` when using `slug`
+
+### Changes endpoint parameters
+
+- `/changes`: `types` (optional comma list: `products,orders,entries`), `updatedSince` (RFC3339 bootstrap), `cursor` (opaque continuation), `limit` (1..200)
+- `/changes` returns normalized `data[]` items with:
+  - `resourceType` (`product|order|entry`)
+  - `resourceId` (string)
+  - `action` (`created|updated|deleted`)
+  - `updatedAt` (RFC3339 UTC)
+  - `snapshot` (minimal object for `created|updated`, `null` for `deleted` tombstones)
+
+### Incremental sync rules
+
+- `cursor` takes precedence over `updatedSince` when both are provided.
+- Incremental mode uses deterministic ordering: `updatedAt`, then `id`.
+- Incremental responses include `page.syncMode=incremental`, `page.hasMore`, `page.nextCursor`, and snapshot window metadata.
+- Cursor tokens are opaque and may expire; restart from a recent `updatedSince` checkpoint if needed.
+- `/changes` cursor continuity also preserves the selected `types` filter.
+- Invalid `updatedSince`/`cursor` inputs return `400 INVALID_REQUEST` with stable error payload fields.
+
+### Webhook Delivery
+
+Webhook notifications are optional and are enabled only when both `PLUGIN_AGENTS_WEBHOOK_URL` and `PLUGIN_AGENTS_WEBHOOK_SECRET` are configured.
+
+Behavior:
+
+- Events are queued asynchronously on `product|order|entry` create/update/delete changes.
+- Event payload mirrors `/changes` items: `resourceType`, `resourceId`, `action`, `updatedAt`, `snapshot`.
+- Retry behavior uses queue retries up to `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS`.
+- Variant changes are emitted as `product` `updated` events.
+
+Request headers:
+
+- `X-Agents-Webhook-Id`: unique event id
+- `X-Agents-Webhook-Timestamp`: unix timestamp
+- `X-Agents-Webhook-Signature`: `sha256=<hex hmac>`
+
+Signature verification:
+
+- signed string: `<timestamp>.<raw-request-body>`
+- algorithm: `HMAC-SHA256`
+- secret: `PLUGIN_AGENTS_WEBHOOK_SECRET`
+
+Queue note:
+
+- Webhooks are delivered by Craft queue workers; ensure `php craft queue/run` or `php craft queue/listen` is active in environments where webhook delivery is required.
 
 ### Discoverability endpoints
 
@@ -204,10 +276,25 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 ## Response style
 
 - JSON only
+- All API responses include `X-Request-Id`.
+- Guarded JSON/error responses set `Cache-Control: no-store, private`.
 - Products response includes:
   - `data[]` with minimal product fields (`id`, `title`, `slug`, `status`, `updatedAt`, `url`, etc.)
   - `page` with `nextCursor`, `limit`, `count`
+- Changes response includes:
+  - `data[]` normalized change items (`resourceType`, `resourceId`, `action`, `updatedAt`, `snapshot`)
+  - `page` with `nextCursor`, `hasMore`, `limit`, `count`, `updatedSince`, `snapshotEnd`
 - Health/readiness include plugin, environment, and readiness score fields.
+- Error responses use a stable schema:
+
+```json
+{
+  "error": "UNAUTHORIZED",
+  "message": "Missing or invalid token.",
+  "status": 401,
+  "requestId": "agents-9fd2b20abec4a65f"
+}
+```
 
 ## Security and reliability
 
@@ -221,12 +308,31 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Missing required scope returns HTTP `403` with `FORBIDDEN`.
 - Non-`GET`/`HEAD` requests are rejected (`405 METHOD_NOT_ALLOWED`, or `400` when CSRF validation fails first).
 - Misconfigured production token setup returns HTTP `503` with `SERVER_MISCONFIGURED`.
+- Disabled runtime state returns HTTP `503` with `SERVICE_DISABLED`.
+- Invalid request payload/params return HTTP `400` with `INVALID_REQUEST`.
+- Missing resource lookups return HTTP `404` with `NOT_FOUND`.
 - Query-token auth is disabled by default to reduce token leakage risk.
+- Credential parsing is strict for `PLUGIN_AGENTS_API_CREDENTIALS` (credential objects only) and ignores malformed scalar entries.
 - Sensitive order fields are scope-gated; email is redacted by default unless `orders:read_sensitive` is granted.
 - Entry access to non-live statuses is scope-gated by `entries:read_all_statuses`.
 - Endpoint is not meant for frontend/public user flows; token is the intended control plane.
 
 Note: `llms.txt` and `commerce.txt` are public discovery surfaces and are not guarded by the API token.
+
+## Troubleshooting Flow
+
+1. Capture `X-Request-Id` from the failing response.
+2. Confirm the error `status` + `error` code pair.
+3. Match the code to the fix path:
+   - `UNAUTHORIZED` (`401`): token missing/invalid or wrong transport.
+   - `FORBIDDEN` (`403`): token missing required scope.
+   - `INVALID_REQUEST` (`400`): malformed query or invalid identifier combination.
+   - `NOT_FOUND` (`404`): requested resource does not exist.
+   - `METHOD_NOT_ALLOWED` (`405`): endpoint only supports `GET`/`HEAD`.
+   - `RATE_LIMIT_EXCEEDED` (`429`): respect `X-RateLimit-*` and retry after reset.
+   - `SERVICE_DISABLED` (`503`): plugin runtime disabled by env/CP setting.
+   - `SERVER_MISCONFIGURED` (`503`): token/security env configuration invalid.
+4. Correlate by `X-Request-Id` in server logs for root-cause details.
 
 ## Discovery Text Config (`config/agents.php`)
 
@@ -268,7 +374,42 @@ return [
 
 ## CP views
 
-- `Agents` section appears in Craft CP for quick inspection.
+- `Agents` section now uses 4 deep-linkable cockpit tabs:
+  - `agents/overview`
+  - `agents/readiness`
+  - `agents/discovery`
+  - `agents/security`
+- Legacy CP paths remain valid:
+  - `agents` resolves to `overview`
+  - `agents/dashboard` resolves to `overview`
+  - `agents/health` resolves to `readiness`
+- Overview:
+  - runtime enabled/disabled state and source (`env` vs CP setting)
+  - env-lock aware runtime toggle
+  - quick endpoint links + discovery prewarm entrypoint
+  - ownership split guidance (`CP` vs `config/agents.php` vs `.env`)
+- Readiness:
+  - readiness score, criterion breakdown, component checks, warnings
+  - health/readiness diagnostic JSON snapshots
+- Discovery:
+  - read-only `llms.txt`/`commerce.txt` status, metadata, preview snippets
+  - operator actions: prewarm (`all|llms|commerce`) and clear cache
+- Security:
+  - read-only effective auth/rate-limit/redaction/webhook posture
+  - centralized warning output from shared security policy logic
+
+## CP rollout regression checklist
+
+1. Verify all four tabs load and subnav selection matches the active route.
+2. Verify legacy aliases `agents`, `agents/dashboard`, and `agents/health` still resolve.
+3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
+4. Verify discovery actions work:
+   - prewarm `all`
+   - prewarm `llms`
+   - prewarm `commerce`
+   - clear discovery cache
+5. Verify security tab shows posture without exposing token/secret values.
+6. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
 
 ## Namespace migration
 
@@ -293,7 +434,7 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses sections:read capabilities:read openapi:read\"`
+  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
 
 ## Secure Deployment Verification
 
@@ -325,3 +466,13 @@ Planned improvements include:
 - Broader OpenAPI coverage and schema detail improvements.
 - Optional export/report formats for automation workflows.
 - Continued hardening of auth, rate limiting, and observability.
+
+### Incremental Sync Contract (v0.2.0)
+
+The formal contract for checkpoint-based sync is documented in [`INCREMENTAL_SYNC_CONTRACT.md`](INCREMENTAL_SYNC_CONTRACT.md).
+
+Highlights:
+
+- `cursor`-first continuation semantics with `updatedSince` bootstrap support.
+- Deterministic ordering (`updatedAt`, then `id`) and at-least-once replay model.
+- Tombstone/delete signaling through `GET /agents/v1/changes`.
