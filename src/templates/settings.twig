@@ -1,0 +1,40 @@
+{% import '_includes/forms' as forms %}
+
+<p class="light">Configure runtime plugin settings available in Control Panel.</p>
+
+{{ forms.lightswitchField({
+  first: true,
+  label: 'Enable Agents API',
+  instructions: agentsEnabledLocked
+    ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
+    : 'Toggle the Agents API and related discovery endpoints.',
+  name: 'enabled',
+  on: settings.enabled ?? true,
+  onLabel: 'Enabled',
+  offLabel: 'Disabled',
+  disabled: agentsEnabledLocked,
+}) }}
+
+{{ forms.lightswitchField({
+  label: 'Enable llms.txt',
+  instructions: 'Controls whether /llms.txt is served.',
+  name: 'enableLlmsTxt',
+  on: settings.enableLlmsTxt ?? true,
+  onLabel: 'Enabled',
+  offLabel: 'Disabled',
+}) }}
+
+{{ forms.lightswitchField({
+  label: 'Enable commerce.txt',
+  instructions: 'Controls whether /commerce.txt is served.',
+  name: 'enableCommerceTxt',
+  on: settings.enableCommerceTxt ?? true,
+  onLabel: 'Enabled',
+  offLabel: 'Disabled',
+}) }}
+
+{% if agentsEnabledLocked %}
+  <p class="warning">`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
+{% endif %}
+
+<p><a href="{{ url('agents/overview') }}">Open Agents overview</a></p>

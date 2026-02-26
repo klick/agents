@@ -11,6 +11,7 @@ use craft\events\RegisterUrlRulesEvent;
 use craft\events\ModelEvent;
 use craft\elements\Entry;
 use craft\web\UrlManager;
+use craft\web\View;
 use yii\base\Event;
 use Klick\Agents\models\Settings;
 use Klick\Agents\services\DiscoveryTxtService;
@@ -21,6 +22,7 @@ use Klick\Agents\services\WebhookService;
 class Plugin extends BasePlugin
 {
     public bool $hasCpSection = true;
+    public bool $hasCpSettings = true;
     public string $schemaVersion = '0.1.1';
 
     public static ?self $plugin = null;
@@ -174,6 +176,19 @@ class Plugin extends BasePlugin
     protected function createSettingsModel(): ?Model
     {
         return new Settings();
+    }
+
+    protected function settingsHtml(): ?string
+    {
+        $settings = $this->getSettings();
+        $settingsModel = $settings instanceof Settings ? $settings : new Settings();
+        $enabledState = $this->getAgentsEnabledState();
+
+        return Craft::$app->getView()->renderTemplate('agents/settings', [
+            'settings' => $settingsModel,
+            'agentsEnabledLocked' => (bool)$enabledState['locked'],
+            'agentsEnabledSource' => (string)$enabledState['source'],
+        ], View::TEMPLATE_MODE_CP);
     }
 
     private function registerDiscoveryInvalidationHooks(): void
