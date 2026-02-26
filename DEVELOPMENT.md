@@ -81,6 +81,13 @@ Optional live check:
 BASE_URL="https://agents-sandbox.ddev.site" TOKEN="agents-local-token" ./scripts/qa/release-gate.sh
 ```
 
+Direct harnesses (optional while debugging):
+
+```bash
+./scripts/qa/webhook-regression-check.sh
+./scripts/qa/incremental-regression-check.sh https://agents-sandbox.ddev.site agents-local-token
+```
+
 ## 6) Restore a project back to plugin-store install
 
 If you temporarily linked a project to local plugin code, restore it to a released version:
