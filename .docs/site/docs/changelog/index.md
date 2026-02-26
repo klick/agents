@@ -6,6 +6,8 @@ title: Changelog
 
 ## Unreleased
 
+## 0.3.0 (2026-02-26)
+
 - Added CP credential lifecycle foundation (managed credential create/edit scopes/rotate/revoke/delete).
 - Added one-time token reveal UX and last-used metadata visibility in the CP.
 - Added permission-granular credential actions (`view`, `manage`, `rotate`, `revoke`, `delete`).

@@ -1,8 +1,8 @@
 # Agents Plugin Roadmap
 
 Date: 2026-02-26  
-Current release: `v0.2.0`  
-Next feature focus: Credential lifecycle in Control Panel (`v0.3.0`)
+Current release: `v0.3.0`  
+Next feature focus: Post-release stabilization + roadmap extension beyond credential lifecycle
 
 ## Objectives
 

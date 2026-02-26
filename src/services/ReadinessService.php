@@ -1607,7 +1607,7 @@ class ReadinessService extends Component
             }
         }
 
-        return '0.1.2';
+        return '0.3.0';
     }
 
     private function formatDate(?DateTimeInterface $date): ?string
