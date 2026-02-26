@@ -45,3 +45,14 @@ graph TD
 - All `G*` rows are resolved with code/docs changes in `T2`..`T8`.
 - `scripts/qa/release-gate.sh` runs v0.2 static checks successfully by default.
 - Optional live checks execute both security and incremental harnesses when `BASE_URL` + `TOKEN` are provided.
+
+## Resolution Summary
+
+- `G1` Resolved in `T4`: `/products` now returns `400 INVALID_REQUEST` for malformed incremental inputs.
+- `G2` Resolved in `T4`: `/changes` order snapshots now use `updatedAt` key.
+- `G3` Resolved in `T4`: credential parser only accepts credential-object shapes.
+- `G4` Resolved in `T4`: guarded JSON and error responses now include `Cache-Control: no-store, private`.
+- `G5` Resolved in `T2`: `scripts/qa/incremental-regression-check.sh` added.
+- `G6` Resolved in `T3`: `scripts/qa/webhook-regression-check.sh` added.
+- `G7` Resolved in `T5`: OpenAPI now includes guarded error outcomes across protected routes.
+- `G8` Resolved in `T6`: release gate now runs webhook static checks by default and incremental live checks when configured.
