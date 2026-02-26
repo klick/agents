@@ -81,18 +81,25 @@ Optional live check:
 BASE_URL="https://agents-sandbox.ddev.site" TOKEN="agents-local-token" ./scripts/qa/release-gate.sh
 ```
 
+Direct harnesses (optional while debugging):
+
+```bash
+./scripts/qa/webhook-regression-check.sh
+./scripts/qa/incremental-regression-check.sh https://agents-sandbox.ddev.site agents-local-token
+```
+
 ## 6) Restore a project back to plugin-store install
 
 If you temporarily linked a project to local plugin code, restore it to a released version:
 
 ```bash
-./scripts/dev/restore-store-install.sh ~/www/sites/coloursource ^0.1.2
+./scripts/dev/restore-store-install.sh ~/www/sites/coloursource ^0.1.4
 ```
 
 ## Production-bound projects (for example Coloursource)
 
 Recommended policy:
 
-- Keep `composer.json` pinned to released plugin versions (for example `^0.1.2`).
+- Keep `composer.json` pinned to released plugin versions (for example `^0.1.4`).
 - Do not keep a permanent path repository override in those projects.
 - If emergency local debugging is required, add a temporary path repository, test, then remove it immediately.

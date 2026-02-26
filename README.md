@@ -2,7 +2,7 @@
 
 Machine-readable readiness and diagnostics API Craft CMS and Commerce.
 
-Current plugin version: **0.1.2**
+Current plugin version: **0.1.4**
 
 ## Purpose
 
@@ -30,7 +30,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.1.2
+composer require klick/agents:^0.1.4
 php craft plugin/install agents
 ```
 
@@ -84,7 +84,7 @@ If `PLUGIN_AGENTS_REQUIRE_TOKEN=false` is set in production, the plugin will sti
 
 Credential sources:
 
-- `PLUGIN_AGENTS_API_CREDENTIALS` (JSON array/object, supports per-credential scopes)
+- `PLUGIN_AGENTS_API_CREDENTIALS` (strict JSON credential objects with per-credential scopes)
 - `PLUGIN_AGENTS_API_TOKEN` (legacy single-token fallback)
 
 Supported token transports:
@@ -101,6 +101,20 @@ Example credential JSON:
   {"id":"integration-b","token":"token-b","scopes":"orders:read orders:read_sensitive"}
 ]
 ```
+
+Object-map credential JSON is also supported:
+
+```json
+{
+  "integration-a": {"token":"token-a","scopes":["health:read","readiness:read"]},
+  "integration-b": {"token":"token-b","scopes":"orders:read orders:read_sensitive"}
+}
+```
+
+Validation notes:
+
+- Single-object shape is accepted when it includes `token` (or `value`) and optional `id`/`scopes`.
+- Scalar values in keyed-object mode are ignored to avoid accidental token expansion from malformed JSON.
 
 ### Endpoints
 
@@ -212,6 +226,7 @@ Identifier notes for show commands:
 - Incremental responses include `page.syncMode=incremental`, `page.hasMore`, `page.nextCursor`, and snapshot window metadata.
 - Cursor tokens are opaque and may expire; restart from a recent `updatedSince` checkpoint if needed.
 - `/changes` cursor continuity also preserves the selected `types` filter.
+- Invalid `updatedSince`/`cursor` inputs return `400 INVALID_REQUEST` with stable error payload fields.
 
 ### Webhook Delivery
 
@@ -262,6 +277,7 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 
 - JSON only
 - All API responses include `X-Request-Id`.
+- Guarded JSON/error responses set `Cache-Control: no-store, private`.
 - Products response includes:
   - `data[]` with minimal product fields (`id`, `title`, `slug`, `status`, `updatedAt`, `url`, etc.)
   - `page` with `nextCursor`, `limit`, `count`
@@ -296,6 +312,7 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Invalid request payload/params return HTTP `400` with `INVALID_REQUEST`.
 - Missing resource lookups return HTTP `404` with `NOT_FOUND`.
 - Query-token auth is disabled by default to reduce token leakage risk.
+- Credential parsing is strict for `PLUGIN_AGENTS_API_CREDENTIALS` (credential objects only) and ignores malformed scalar entries.
 - Sensitive order fields are scope-gated; email is redacted by default unless `orders:read_sensitive` is granted.
 - Entry access to non-live statuses is scope-gated by `entries:read_all_statuses`.
 - Endpoint is not meant for frontend/public user flows; token is the intended control plane.

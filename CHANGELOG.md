@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.1.4 - 2026-02-26
+
+- Hardened incremental request validation on `/products` to return deterministic `400 INVALID_REQUEST` for malformed `cursor`/`updatedSince` inputs.
+- Tightened credential parsing in `SecurityPolicyService` to accept only credential-object shapes and ignore malformed scalar entries.
+- Added explicit `Cache-Control: no-store, private` headers for guarded JSON and API error responses.
+- Normalized order change snapshots in `/changes` to use `updatedAt` consistently.
+- Expanded OpenAPI route response metadata to include guarded error outcomes (`401`/`403`/`429`/`503`) across protected endpoints.
+- Added `scripts/qa/incremental-regression-check.sh` and `scripts/qa/webhook-regression-check.sh` and integrated them into `scripts/qa/release-gate.sh`.
+- Added `VALIDATION_v0.2.0.md` and `RELEASE_CHECKLIST_v0.2.0.md` for release evidence and operator handoff.
+
 ## 0.1.3 - 2026-02-25
 
 - Added request correlation IDs on API responses via `X-Request-Id`.

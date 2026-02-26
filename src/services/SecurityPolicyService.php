@@ -301,45 +301,76 @@ class SecurityPolicyService extends Component
         }
 
         $credentials = [];
-        $index = 0;
-        foreach ($decoded as $key => $value) {
-            $index++;
-            $id = is_string($key) ? trim($key) : '';
-            $token = '';
-            $rawScopes = null;
 
-            if (is_array($value)) {
-                $token = trim((string)($value['token'] ?? $value['value'] ?? ''));
-                $rawScopes = $value['scopes'] ?? null;
-                if ($id === '') {
-                    $id = trim((string)($value['id'] ?? $value['name'] ?? ''));
+        if ($this->isSingleCredentialObject($decoded)) {
+            $credential = $this->normalizeCredentialEntry($decoded, '', 1, $defaultScopes, $parseError);
+            return $credential === null ? [] : [$credential];
+        }
+
+        $index = 0;
+        if (array_is_list($decoded)) {
+            foreach ($decoded as $value) {
+                $index++;
+                if (!is_array($value)) {
+                    $parseError = true;
+                    continue;
                 }
-            } else {
-                $token = trim((string)$value);
+
+                $credential = $this->normalizeCredentialEntry($value, '', $index, $defaultScopes, $parseError);
+                if ($credential !== null) {
+                    $credentials[] = $credential;
+                }
             }
 
-            if ($token === '') {
+            return $credentials;
+        }
+
+        foreach ($decoded as $key => $value) {
+            $index++;
+            if (!is_array($value)) {
+                $parseError = true;
                 continue;
             }
 
-            if ($id === '') {
-                $id = 'credential-' . $index;
+            $fallbackId = is_string($key) ? trim($key) : '';
+            $credential = $this->normalizeCredentialEntry($value, $fallbackId, $index, $defaultScopes, $parseError);
+            if ($credential !== null) {
+                $credentials[] = $credential;
             }
-
-            $id = strtolower((string)(preg_replace('/[^a-z0-9:_-]+/i', '-', $id) ?: 'credential-' . $index));
-            $id = trim($id, '-');
-            if ($id === '') {
-                $id = 'credential-' . $index;
-            }
-
-            $credentials[] = [
-                'id' => $id,
-                'token' => $token,
-                'scopes' => $this->normalizeScopes($rawScopes, $defaultScopes),
-            ];
         }
 
         return $credentials;
+    }
+
+    private function isSingleCredentialObject(array $decoded): bool
+    {
+        return array_key_exists('token', $decoded) || array_key_exists('value', $decoded);
+    }
+
+    private function normalizeCredentialEntry(array $value, string $fallbackId, int $index, array $defaultScopes, bool &$parseError): ?array
+    {
+        $token = trim((string)($value['token'] ?? $value['value'] ?? ''));
+        if ($token === '') {
+            $parseError = true;
+            return null;
+        }
+
+        $id = $fallbackId !== '' ? $fallbackId : trim((string)($value['id'] ?? $value['name'] ?? ''));
+        if ($id === '') {
+            $id = 'credential-' . $index;
+        }
+
+        $id = strtolower((string)(preg_replace('/[^a-z0-9:_-]+/i', '-', $id) ?: 'credential-' . $index));
+        $id = trim($id, '-');
+        if ($id === '') {
+            $id = 'credential-' . $index;
+        }
+
+        return [
+            'id' => $id,
+            'token' => $token,
+            'scopes' => $this->normalizeScopes($value['scopes'] ?? null, $defaultScopes),
+        ];
     }
 
     private function normalizeScopes(mixed $rawScopes, array $defaultScopes): array

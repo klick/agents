@@ -11,6 +11,7 @@ use craft\commerce\elements\Product;
 use craft\elements\Entry;
 use DateTimeImmutable;
 use DateTimeInterface;
+use Klick\Agents\Plugin;
 
 class ReadinessService extends Component
 {
@@ -23,7 +24,7 @@ class ReadinessService extends Component
         return [
             'status' => 'ok',
             'service' => 'agents',
-            'pluginVersion' => '0.1.1',
+            'pluginVersion' => $this->resolvePluginVersion(),
             'environment' => App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT'),
             'timezone' => date_default_timezone_get(),
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
@@ -115,7 +116,7 @@ class ReadinessService extends Component
     {
         $score = $this->calculateReadinessScore();
         return [
-            'readinessVersion' => '0.1.1',
+            'readinessVersion' => $this->resolvePluginVersion(),
             'buildDate' => gmdate('Y-m-d\TH:i:s\Z'),
             'status' => $score >= self::READINESS_READY_THRESHOLD ? 'ready' : 'limited',
             'summary' => $this->getReadinessSummary(),
@@ -1108,7 +1109,7 @@ class ReadinessService extends Component
                     'isCompleted' => (bool)$order->isCompleted,
                     'isPaid' => (bool)$order->isPaid,
                     'totalPrice' => $order->totalPrice === null ? null : (float)$order->totalPrice,
-                    'dateUpdated' => $this->formatDate($order->dateUpdated),
+                    'updatedAt' => $this->formatDate($order->dateUpdated),
                 ]
             );
         }
@@ -1392,17 +1393,20 @@ class ReadinessService extends Component
             return;
         }
 
-        $clauses = ['<= ' . $this->formatDbDate($snapshotEnd)];
-        if ($updatedSince !== null) {
-            $clauses[] = '>= ' . $this->formatDbDate($updatedSince);
-        }
-
-        if (count($clauses) === 1) {
-            $queryBuilder->dateDeleted($clauses[0]);
+        if (!method_exists($queryBuilder, 'andWhere')) {
             return;
         }
 
-        $queryBuilder->dateDeleted(array_merge(['and'], $clauses));
+        $conditions = [
+            'and',
+            ['not', ['elements.dateDeleted' => null]],
+            ['<=', 'elements.dateDeleted', $this->formatDbDate($snapshotEnd)],
+        ];
+        if ($updatedSince !== null) {
+            $conditions[] = ['>=', 'elements.dateDeleted', $this->formatDbDate($updatedSince)];
+        }
+
+        $queryBuilder->andWhere($conditions);
     }
 
     private function formatDbDate(DateTimeImmutable $date): string
@@ -1534,7 +1538,7 @@ class ReadinessService extends Component
             'totalShippingCost' => $order->totalShippingCost === null ? null : (float)$order->totalShippingCost,
             'totalPrice' => $order->totalPrice === null ? null : (float)$order->totalPrice,
             'dateCreated' => $this->formatDate($order->dateCreated),
-            'dateUpdated' => $this->formatDate($order->dateUpdated),
+            'updatedAt' => $this->formatDate($order->dateUpdated),
         ];
 
         if (!$detailed) {
@@ -1591,6 +1595,19 @@ class ReadinessService extends Component
         $data['enabled'] = (bool)$entry->enabled;
 
         return $data;
+    }
+
+    private function resolvePluginVersion(): string
+    {
+        $plugin = Plugin::getInstance();
+        if ($plugin !== null) {
+            $version = trim((string)$plugin->getVersion());
+            if ($version !== '') {
+                return $version;
+            }
+        }
+
+        return '0.1.2';
     }
 
     private function formatDate(?DateTimeInterface $date): ?string
