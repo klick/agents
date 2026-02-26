@@ -181,6 +181,54 @@ class CredentialService extends Component
         return $updated > 0;
     }
 
+    public function updateManagedCredential(int $id, string $displayName, array $scopes, array $defaultScopes): ?array
+    {
+        if ($id <= 0 || !$this->credentialsTableExists()) {
+            return null;
+        }
+
+        $row = (new Query())
+            ->from(self::TABLE)
+            ->where(['id' => $id])
+            ->one();
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $handle = (string)($row['handle'] ?? '');
+        if ($handle === '') {
+            return null;
+        }
+
+        $normalizedDisplayName = $this->normalizeDisplayName($displayName, $handle);
+        $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
+        $encodedScopes = json_encode($normalizedScopes, JSON_UNESCAPED_SLASHES);
+        if (!is_string($encodedScopes)) {
+            $encodedScopes = '[]';
+        }
+
+        Craft::$app->getDb()->createCommand()->update(self::TABLE, [
+            'displayName' => $normalizedDisplayName,
+            'scopes' => $encodedScopes,
+            'dateUpdated' => gmdate('Y-m-d H:i:s'),
+        ], ['id' => $id])->execute();
+
+        return $this->getManagedCredentialById($id, $defaultScopes);
+    }
+
+    public function deleteManagedCredential(int $id): bool
+    {
+        if ($id <= 0 || !$this->credentialsTableExists()) {
+            return false;
+        }
+
+        $deleted = Craft::$app->getDb()->createCommand()
+            ->delete(self::TABLE, ['id' => $id])
+            ->execute();
+
+        return $deleted > 0;
+    }
+
     public function recordCredentialUse(int $id, string $authMethod, string $ip): void
     {
         if ($id <= 0 || !$this->credentialsTableExists()) {
@@ -206,6 +254,18 @@ class CredentialService extends Component
         $rows = $this->getManagedCredentials($defaultScopes);
         foreach ($rows as $credential) {
             if (($credential['handle'] ?? '') === $handle) {
+                return $credential;
+            }
+        }
+
+        return null;
+    }
+
+    private function getManagedCredentialById(int $id, array $defaultScopes): ?array
+    {
+        $rows = $this->getManagedCredentials($defaultScopes);
+        foreach ($rows as $credential) {
+            if ((int)($credential['id'] ?? 0) === $id) {
                 return $credential;
             }
         }

@@ -47,7 +47,8 @@ Legacy aliases remain supported:
 
 ### Credentials
 
-- CP-managed credential create/rotate/revoke workflow
+- CP-managed credential create/edit scopes/rotate/revoke/delete workflow
 - one-time token reveal on create/rotate
 - last-used metadata (`lastUsedAt`, `lastUsedIp`, auth method)
+- permission-granular actions (`view`, `manage`, `rotate`, `revoke`, `delete`)
 - compatibility with existing env-defined credentials

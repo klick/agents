@@ -8,8 +8,10 @@ use craft\base\Element;
 use craft\base\Model;
 use craft\helpers\App;
 use craft\events\RegisterUrlRulesEvent;
+use craft\events\RegisterUserPermissionsEvent;
 use craft\events\ModelEvent;
 use craft\elements\Entry;
+use craft\services\UserPermissions;
 use craft\web\UrlManager;
 use craft\web\View;
 use yii\base\Event;
@@ -22,6 +24,12 @@ use Klick\Agents\services\WebhookService;
 
 class Plugin extends BasePlugin
 {
+    public const PERMISSION_CREDENTIALS_VIEW = 'agents-viewCredentials';
+    public const PERMISSION_CREDENTIALS_MANAGE = 'agents-manageCredentials';
+    public const PERMISSION_CREDENTIALS_ROTATE = 'agents-rotateCredentials';
+    public const PERMISSION_CREDENTIALS_REVOKE = 'agents-revokeCredentials';
+    public const PERMISSION_CREDENTIALS_DELETE = 'agents-deleteCredentials';
+
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
     public string $schemaVersion = '0.3.0';
@@ -42,6 +50,7 @@ class Plugin extends BasePlugin
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
+        $this->registerPermissionHooks();
         $this->logSecurityConfigurationWarnings();
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
@@ -284,5 +293,35 @@ class Plugin extends BasePlugin
 
             Craft::warning($message, __METHOD__);
         }
+    }
+
+    private function registerPermissionHooks(): void
+    {
+        Event::on(
+            UserPermissions::class,
+            UserPermissions::EVENT_REGISTER_PERMISSIONS,
+            function(RegisterUserPermissionsEvent $event): void {
+                $event->permissions[] = [
+                    'heading' => 'Agents Credentials',
+                    'permissions' => [
+                        self::PERMISSION_CREDENTIALS_VIEW => [
+                            'label' => 'View managed credentials tab',
+                        ],
+                        self::PERMISSION_CREDENTIALS_MANAGE => [
+                            'label' => 'Create and edit managed credentials',
+                        ],
+                        self::PERMISSION_CREDENTIALS_ROTATE => [
+                            'label' => 'Rotate managed credential tokens',
+                        ],
+                        self::PERMISSION_CREDENTIALS_REVOKE => [
+                            'label' => 'Revoke managed credentials',
+                        ],
+                        self::PERMISSION_CREDENTIALS_DELETE => [
+                            'label' => 'Delete managed credentials',
+                        ],
+                    ],
+                ];
+            }
+        );
     }
 }

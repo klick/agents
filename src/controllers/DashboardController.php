@@ -106,6 +106,8 @@ class DashboardController extends Controller
 
     public function actionCredentials(): Response
     {
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
@@ -119,6 +121,10 @@ class DashboardController extends Controller
             'managedCredentials' => $managedCredentials,
             'defaultScopes' => $defaultScopes,
             'revealedCredential' => $this->pullRevealedCredential(),
+            'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
+            'canRotateCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_ROTATE),
+            'canRevokeCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_REVOKE),
+            'canDeleteCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_DELETE),
         ]);
     }
 
@@ -195,7 +201,7 @@ class DashboardController extends Controller
     public function actionCreateCredential(): Response
     {
         $this->requirePostRequest();
-        $this->requireAdmin();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
 
         $plugin = Plugin::getInstance();
         $defaultScopes = $this->getDefaultScopes();
@@ -223,10 +229,41 @@ class DashboardController extends Controller
         return $this->redirectToPostedUrl(null, 'agents/credentials');
     }
 
+    public function actionUpdateCredential(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
+
+        $plugin = Plugin::getInstance();
+        $defaultScopes = $this->getDefaultScopes();
+        $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $scopes = $this->parseScopesInput((string)$this->request->getBodyParam('credentialScopes', ''));
+
+        if ($credentialId <= 0) {
+            $this->setFailFlash('Missing credential id.');
+            return $this->redirectToPostedUrl(null, 'agents/credentials');
+        }
+
+        try {
+            $credential = $plugin->getCredentialService()->updateManagedCredential($credentialId, $displayName, $scopes, $defaultScopes);
+            if (!is_array($credential)) {
+                $this->setFailFlash('Credential not found.');
+                return $this->redirectToPostedUrl(null, 'agents/credentials');
+            }
+
+            $this->setSuccessFlash(sprintf('Credential `%s` updated.', (string)($credential['handle'] ?? 'credential')));
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to update credential: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/credentials');
+    }
+
     public function actionRotateCredential(): Response
     {
         $this->requirePostRequest();
-        $this->requireAdmin();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_ROTATE);
 
         $plugin = Plugin::getInstance();
         $defaultScopes = $this->getDefaultScopes();
@@ -263,7 +300,7 @@ class DashboardController extends Controller
     public function actionRevokeCredential(): Response
     {
         $this->requirePostRequest();
-        $this->requireAdmin();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_REVOKE);
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
@@ -280,6 +317,31 @@ class DashboardController extends Controller
             }
         } catch (Throwable $e) {
             $this->setFailFlash('Unable to revoke credential: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/credentials');
+    }
+
+    public function actionDeleteCredential(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_DELETE);
+
+        $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        if ($credentialId <= 0) {
+            $this->setFailFlash('Missing credential id.');
+            return $this->redirectToPostedUrl(null, 'agents/credentials');
+        }
+
+        try {
+            $deleted = Plugin::getInstance()->getCredentialService()->deleteManagedCredential($credentialId);
+            if (!$deleted) {
+                $this->setFailFlash('Credential not found.');
+            } else {
+                $this->setSuccessFlash('Credential deleted.');
+            }
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to delete credential: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -383,5 +445,29 @@ class DashboardController extends Controller
         $session->remove(self::SESSION_REVEALED_CREDENTIAL);
 
         return is_array($value) ? $value : null;
+    }
+
+    private function requireCredentialPermission(string $permission): void
+    {
+        if ($this->canCredentialPermission($permission)) {
+            return;
+        }
+
+        $this->requirePermission($permission);
+    }
+
+    private function canCredentialPermission(string $permission): bool
+    {
+        $userComponent = Craft::$app->getUser();
+        $identity = $userComponent->getIdentity();
+        if ($identity === null) {
+            return false;
+        }
+
+        if ((bool)$identity->admin) {
+            return true;
+        }
+
+        return $userComponent->checkPermission($permission);
     }
 }

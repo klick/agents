@@ -36,8 +36,10 @@ expect_fixed "agents_credentials" "$MIGRATION_FILE" "Managed credentials migrati
 expect_fixed "'tokenHash'" "$MIGRATION_FILE" "Managed credentials migration includes token hash column"
 expect_fixed "class CredentialService extends Component" "$CREDENTIAL_SERVICE" "CredentialService class exists"
 expect_fixed "createManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports credential creation"
+expect_fixed "updateManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports credential profile/scope updates"
 expect_fixed "rotateManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports credential rotation"
 expect_fixed "revokeManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports credential revocation"
+expect_fixed "deleteManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports credential deletion"
 expect_fixed "recordCredentialUse" "$CREDENTIAL_SERVICE" "CredentialService tracks last-used metadata"
 
 expect_fixed "getManagedCredentialsForRuntime" "$SECURITY_SERVICE" "Security policy consumes managed credentials for runtime auth"
@@ -46,11 +48,19 @@ expect_fixed "recordCredentialUse" "$API_CONTROLLER" "API auth path records mana
 
 expect_fixed "actionCredentials" "$DASHBOARD_CONTROLLER" "Dashboard controller exposes credentials tab"
 expect_fixed "actionCreateCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports credential creation action"
+expect_fixed "actionUpdateCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports credential update action"
 expect_fixed "actionRotateCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports credential rotation action"
 expect_fixed "actionRevokeCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports credential revoke action"
+expect_fixed "actionDeleteCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports credential delete action"
+expect_fixed "requireCredentialPermission" "$DASHBOARD_CONTROLLER" "Dashboard controller enforces credential permissions"
+expect_fixed "canCredentialPermission" "$DASHBOARD_CONTROLLER" "Dashboard controller exposes credential permission checks"
 
 expect_fixed "CredentialService::class" "$PLUGIN_FILE" "Plugin registers CredentialService component"
 expect_fixed "'agents/credentials'" "$PLUGIN_FILE" "Plugin exposes CP credentials route/subnav"
+expect_fixed "EVENT_REGISTER_PERMISSIONS" "$PLUGIN_FILE" "Plugin registers custom credential permissions"
+expect_fixed "PERMISSION_CREDENTIALS_MANAGE" "$PLUGIN_FILE" "Plugin defines credential permission constants"
 expect_fixed "Manage CP-controlled API credentials" "$CP_TEMPLATE" "Credentials CP template is present"
+expect_fixed "update-credential" "$CP_TEMPLATE" "Credentials CP template supports update action"
+expect_fixed "delete-credential" "$CP_TEMPLATE" "Credentials CP template supports delete action"
 
 echo "Credential lifecycle regression checks completed."
