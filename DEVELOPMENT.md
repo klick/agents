@@ -93,13 +93,13 @@ Direct harnesses (optional while debugging):
 If you temporarily linked a project to local plugin code, restore it to a released version:
 
 ```bash
-./scripts/dev/restore-store-install.sh ~/www/sites/coloursource ^0.1.2
+./scripts/dev/restore-store-install.sh ~/www/sites/coloursource ^0.1.3
 ```
 
 ## Production-bound projects (for example Coloursource)
 
 Recommended policy:
 
-- Keep `composer.json` pinned to released plugin versions (for example `^0.1.2`).
+- Keep `composer.json` pinned to released plugin versions (for example `^0.1.3`).
 - Do not keep a permanent path repository override in those projects.
 - If emergency local debugging is required, add a temporary path repository, test, then remove it immediately.
