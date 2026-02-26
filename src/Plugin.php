@@ -196,6 +196,23 @@ class Plugin extends BasePlugin
         ];
     }
 
+    public function isCommercePluginEnabled(): bool
+    {
+        $projectConfig = Craft::$app->getProjectConfig();
+        $configuredEnabled = $projectConfig->get('plugins.commerce.enabled');
+
+        if (is_bool($configuredEnabled)) {
+            return $configuredEnabled;
+        }
+
+        if (is_numeric($configuredEnabled)) {
+            return ((int)$configuredEnabled) === 1;
+        }
+
+        $normalized = strtolower(trim((string)$configuredEnabled));
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
     protected function createSettingsModel(): ?Model
     {
         return new Settings();

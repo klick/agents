@@ -29,7 +29,7 @@ class ReadinessService extends Component
             'timezone' => date_default_timezone_get(),
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             'enabledPlugins' => [
-                'commerce' => (bool)Craft::$app->getPlugins()->getPlugin('commerce'),
+                'commerce' => Plugin::getInstance()?->isCommercePluginEnabled() ?? false,
             ],
             'systemComponents' => [
                 'db' => (bool)Craft::$app->getDb(),
@@ -51,7 +51,7 @@ class ReadinessService extends Component
     {
         $isSiteRequest = (bool)Craft::$app->getRequest()->getIsSiteRequest();
         $databaseAvailable = (bool)Craft::$app->getDb();
-        $commerceEnabled = (bool)Craft::$app->getPlugins()->getPlugin('commerce');
+        $commerceEnabled = Plugin::getInstance()?->isCommercePluginEnabled() ?? false;
 
         return [
             [

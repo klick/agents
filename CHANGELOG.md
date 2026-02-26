@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.1 - 2026-02-26
+
+- Hardened Commerce availability checks in discovery/readiness surfaces to use project config state instead of forcing Commerce plugin bootstrap.
+- Reduced risk of early `getCurrentStore()` fatals during plugin startup in environments where Commerce store/site mappings are incomplete.
+
 ## 0.3.0 - 2026-02-26
 
 - Added Control Panel credential lifecycle foundation: managed credential create/edit scopes/rotate/revoke/delete flows and one-time token reveal UX.

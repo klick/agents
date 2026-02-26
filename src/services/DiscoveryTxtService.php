@@ -237,7 +237,7 @@ class DiscoveryTxtService extends Component
         $siteName = $this->getSiteName();
         $siteUrl = $this->getSiteUrl();
         $generatedAt = gmdate('Y-m-d\TH:i:s\Z');
-        $commerceEnabled = (bool)Craft::$app->getPlugins()->getPlugin('commerce');
+        $commerceEnabled = Plugin::getInstance()?->isCommercePluginEnabled() ?? false;
         $summary = trim($settings->commerceSummary);
         if ($summary === '') {
             $summary = 'Machine-readable commerce metadata and policy pointers.';
