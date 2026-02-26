@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.4 - 2026-02-26
+
+- Reworked the Control Plane CP interface into a queue-first operator flow (`Now`, `Act`, `Configure`, `Audit`).
+- Added guided approval/execution forms with optional advanced JSON overrides for payload and metadata.
+- Added policy-aware execute guardrails in CP (disabled-policy blocking, approval-required validation, action-type match checks).
+- Improved control action flash messaging for idempotent replay, approval decisions, and blocked/failed execution outcomes.
+
 ## 0.3.3 - 2026-02-26
 
 - Added control-plane foundation with governed policies, approvals, idempotent action execution ledger, and immutable audit events.

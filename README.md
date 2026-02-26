@@ -1,8 +1,8 @@
 # Agents Plugin
 
-Machine-readable readiness and diagnostics API Craft CMS and Commerce.
+Machine-readable readiness/discovery API and governed control-plane plugin for Craft CMS and Commerce.
 
-Current plugin version: **0.3.0**
+Current plugin version: **0.3.4**
 
 ## Purpose
 
@@ -11,9 +11,17 @@ This plugin gives external/internal agents a stable interface for:
 - health checks for automation (`/agents/v1/health`)
 - readiness summaries (`/agents/v1/readiness`)
 - product snapshot browsing (`/agents/v1/products`)
+- control policies/approvals/execution ledger/audit (`/agents/v1/control/*`)
 - read-only CLI discovery commands (`craft agents/*`)
 
-It is intentionally scoped to **read-only, operational visibility** in this stage.
+The API now includes:
+
+- read surfaces for diagnostics and discovery
+- sign-and-control primitives for governed machine actions:
+  - policy evaluation
+  - approval gates
+  - idempotent execution ledger
+  - immutable audit events
 
 It also exposes proposal-oriented discovery files at root-level endpoints:
 
@@ -30,7 +38,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.3.0
+composer require klick/agents:^0.3.4
 php craft plugin/install agents
 ```
 
@@ -98,6 +106,13 @@ Credential lifecycle permission keys (CP):
 - `agents-revokeCredentials`
 - `agents-deleteCredentials`
 
+Control-plane permission keys (CP):
+
+- `agents-viewControlPlane`
+- `agents-manageControlPolicies`
+- `agents-manageControlApprovals`
+- `agents-executeControlActions`
+
 Supported token transports:
 
 - `Authorization: Bearer <token>` (default)
@@ -131,6 +146,8 @@ Validation notes:
 
 Base URL (this project): `/agents/v1`
 
+Read/discovery endpoints:
+
 - `GET /health`
 - `GET /readiness`
 - `GET /products`
@@ -143,10 +160,47 @@ Base URL (this project): `/agents/v1`
 - `GET /capabilities`
 - `GET /openapi.json`
 
+Control-plane endpoints:
+
+- `GET /control/policies`
+- `POST /control/policies/upsert`
+- `GET /control/approvals`
+- `POST /control/approvals/request`
+- `POST /control/approvals/decide`
+- `GET /control/executions`
+- `POST /control/actions/execute`
+- `GET /control/audit`
+
 Root-level discovery files:
 
 - `GET /llms.txt` (public when enabled)
 - `GET /commerce.txt` (public when enabled)
+
+### Scope catalog
+
+Read scopes:
+
+- `health:read`
+- `readiness:read`
+- `products:read`
+- `orders:read`
+- `orders:read_sensitive`
+- `entries:read`
+- `entries:read_all_statuses`
+- `changes:read`
+- `sections:read`
+- `capabilities:read`
+- `openapi:read`
+- `control:policies:read`
+- `control:approvals:read`
+- `control:executions:read`
+- `control:audit:read`
+
+Write scopes:
+
+- `control:policies:write`
+- `control:approvals:write`
+- `control:actions:execute`
 
 ## CLI Commands
 
@@ -229,6 +283,29 @@ Identifier notes for show commands:
   - `action` (`created|updated|deleted`)
   - `updatedAt` (RFC3339 UTC)
   - `snapshot` (minimal object for `created|updated`, `null` for `deleted` tombstones)
+
+### Control endpoint parameters and behavior
+
+- `POST /control/policies/upsert` body:
+  - `handle` (required)
+  - `actionPattern` (required, wildcard-compatible)
+  - `displayName`, `riskLevel`, `enabled`, `requiresApproval`, `config`
+- `GET /control/approvals` query: `status`, `actionType`, `limit`
+- `POST /control/approvals/request` body:
+  - `actionType` (required)
+  - `actionRef`, `reason`, `payload`, `metadata`
+  - idempotency via `X-Idempotency-Key` header (or `idempotencyKey` body field)
+- `POST /control/approvals/decide` body:
+  - `approvalId` (required)
+  - `decision` (`approved|rejected`)
+  - `decisionReason`
+- `GET /control/executions` query: `status`, `actionType`, `limit`
+- `POST /control/actions/execute` body:
+  - `actionType` (required)
+  - `idempotencyKey` (required, header or body)
+  - `actionRef`, `approvalId`, `payload`
+  - response may include `idempotentReplay=true` when the key was already processed
+- `GET /control/audit` query: `category`, `actorId`, `limit`
 
 ### Incremental sync rules
 
@@ -317,11 +394,13 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Exceeded limits return HTTP `429` with `RATE_LIMIT_EXCEEDED`.
 - Missing/invalid credentials return HTTP `401`.
 - Missing required scope returns HTTP `403` with `FORBIDDEN`.
-- Non-`GET`/`HEAD` requests are rejected (`405 METHOD_NOT_ALLOWED`, or `400` when CSRF validation fails first).
+- Read/discovery endpoints are `GET`/`HEAD` only.
+- Control-plane write endpoints accept `POST` and are token-authenticated API actions.
 - Misconfigured production token setup returns HTTP `503` with `SERVER_MISCONFIGURED`.
 - Disabled runtime state returns HTTP `503` with `SERVICE_DISABLED`.
 - Invalid request payload/params return HTTP `400` with `INVALID_REQUEST`.
 - Missing resource lookups return HTTP `404` with `NOT_FOUND`.
+- Unexpected server errors return HTTP `500` with `INTERNAL_ERROR`.
 - Query-token auth is disabled by default to reduce token leakage risk.
 - Credential parsing is strict for `PLUGIN_AGENTS_API_CREDENTIALS` (credential objects only) and ignores malformed scalar entries.
 - Sensitive order fields are scope-gated; email is redacted by default unless `orders:read_sensitive` is granted.
@@ -339,10 +418,11 @@ Note: `llms.txt` and `commerce.txt` are public discovery surfaces and are not gu
    - `FORBIDDEN` (`403`): token missing required scope.
    - `INVALID_REQUEST` (`400`): malformed query or invalid identifier combination.
    - `NOT_FOUND` (`404`): requested resource does not exist.
-   - `METHOD_NOT_ALLOWED` (`405`): endpoint only supports `GET`/`HEAD`.
+   - `METHOD_NOT_ALLOWED` (`405`): endpoint does not support the HTTP method used.
    - `RATE_LIMIT_EXCEEDED` (`429`): respect `X-RateLimit-*` and retry after reset.
    - `SERVICE_DISABLED` (`503`): plugin runtime disabled by env/CP setting.
    - `SERVER_MISCONFIGURED` (`503`): token/security env configuration invalid.
+   - `INTERNAL_ERROR` (`500`): unexpected server-side failure.
 4. Correlate by `X-Request-Id` in server logs for root-cause details.
 
 ## Discovery Text Config (`config/agents.php`)
@@ -385,11 +465,12 @@ return [
 
 ## CP views
 
-- `Agents` section now uses 6 deep-linkable cockpit tabs:
+- `Agents` section now uses 7 deep-linkable cockpit tabs:
   - `agents/overview`
   - `agents/readiness`
   - `agents/discovery`
   - `agents/security`
+  - `agents/control`
   - `agents/settings`
   - `agents/credentials`
 - Legacy CP paths remain valid:
@@ -410,6 +491,12 @@ return [
 - Security:
   - read-only effective auth/rate-limit/redaction/webhook posture
   - centralized warning output from shared security policy logic
+- Control Plane:
+  - queue-first operator flow: pending approvals and execution attention panels
+  - guided approval request fields with optional advanced JSON override
+  - policy-aware execution guardrails (disabled policy blocks, approval linkage checks)
+  - configurable policy catalog (risk, approval, enablement) with advanced config JSON
+  - immutable control audit trail and collapsible full snapshot JSON
 - Settings:
   - deep-linkable runtime plugin settings editor
   - preserves env-lock behavior for `enabled`
@@ -419,7 +506,7 @@ return [
 
 ## CP rollout regression checklist
 
-1. Verify all six tabs load and subnav selection matches the active route.
+1. Verify all seven tabs load and subnav selection matches the active route.
 2. Verify legacy aliases `agents`, `agents/dashboard`, and `agents/health` still resolve.
 3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
 4. Verify discovery actions work:
@@ -428,7 +515,12 @@ return [
    - prewarm `commerce`
    - clear discovery cache
 5. Verify security tab shows posture without exposing token/secret values.
-6. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
+6. Verify control tab flows:
+   - create/update policy
+   - request/approve/reject approval
+   - execute action with idempotency key
+   - audit event appears for each state transition
+7. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
 
 ## Namespace migration
 
@@ -445,6 +537,9 @@ return [
 6. Start with default scopes; only add elevated scopes when required:
    - `orders:read_sensitive`
    - `entries:read_all_statuses`
+   - `control:policies:write`
+   - `control:approvals:write`
+   - `control:actions:execute`
 7. Verify `capabilities`/`openapi.json` outputs reflect active auth transport/settings.
 8. Run `scripts/security-regression-check.sh` against your environment before promotion.
 
@@ -453,7 +548,7 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
+  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read control:policies:read control:approvals:read control:executions:read control:audit:read\"`
 
 ## Secure Deployment Verification
 
@@ -472,7 +567,11 @@ curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
   "https://example.com/agents/v1/entries?status=all&limit=1"
 
-# 5) Run local regression script
+# 5) Control policy list (new control scope required)
+curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
+  "https://example.com/agents/v1/control/policies"
+
+# 6) Run local regression script
 ./scripts/security-regression-check.sh https://example.com "$PLUGIN_AGENTS_API_TOKEN"
 ```
 
@@ -484,6 +583,7 @@ Planned improvements include:
 - Additional diagnostics for operational readiness and integration health.
 - Broader OpenAPI coverage and schema detail improvements.
 - Optional export/report formats for automation workflows.
+- Action-adapter integration for control-plane execution side effects.
 - Continued hardening of auth, rate limiting, and observability.
 
 ### Incremental Sync Contract (v0.2.0)

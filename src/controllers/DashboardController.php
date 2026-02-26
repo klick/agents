@@ -111,15 +111,64 @@ class DashboardController extends Controller
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
         $snapshot = $plugin->getControlPlaneService()->getControlPlaneSnapshot(25);
+        $policies = (array)($snapshot['policies'] ?? []);
+        $approvals = (array)($snapshot['approvals'] ?? []);
+        $executions = (array)($snapshot['executions'] ?? []);
+        $auditEvents = (array)($snapshot['audit'] ?? []);
+
+        $actionTypes = [];
+        foreach ($approvals as $approval) {
+            $actionType = trim((string)($approval['actionType'] ?? ''));
+            if ($actionType !== '') {
+                $actionTypes[] = $actionType;
+            }
+        }
+
+        foreach ($executions as $execution) {
+            $actionType = trim((string)($execution['actionType'] ?? ''));
+            if ($actionType !== '') {
+                $actionTypes[] = $actionType;
+            }
+        }
+
+        $policyHintsByActionType = $this->buildPolicyHintsByActionType($actionTypes);
+        $approvalsWithPolicy = $this->appendPolicyHints($approvals, $policyHintsByActionType);
+        $executionsWithPolicy = $this->appendPolicyHints($executions, $policyHintsByActionType);
+
+        $pendingApprovals = [];
+        $approvedApprovalsById = [];
+        foreach ($approvalsWithPolicy as $approval) {
+            $status = strtolower(trim((string)($approval['status'] ?? '')));
+            if ($status === 'pending') {
+                $pendingApprovals[] = $approval;
+            } elseif ($status === 'approved') {
+                $approvalId = (int)($approval['id'] ?? 0);
+                if ($approvalId > 0) {
+                    $approvedApprovalsById[$approvalId] = (string)($approval['actionType'] ?? '');
+                }
+            }
+        }
+
+        $attentionExecutions = [];
+        foreach ($executionsWithPolicy as $execution) {
+            $status = strtolower(trim((string)($execution['status'] ?? '')));
+            if (in_array($status, ['blocked', 'failed'], true)) {
+                $attentionExecutions[] = $execution;
+            }
+        }
 
         return $this->renderCpTemplate('agents/control', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'controlSummary' => (array)($snapshot['summary'] ?? []),
-            'controlPolicies' => (array)($snapshot['policies'] ?? []),
-            'controlApprovals' => (array)($snapshot['approvals'] ?? []),
-            'controlExecutions' => (array)($snapshot['executions'] ?? []),
-            'controlAuditEvents' => (array)($snapshot['audit'] ?? []),
+            'controlPolicies' => $policies,
+            'controlApprovals' => $approvalsWithPolicy,
+            'controlExecutions' => $executionsWithPolicy,
+            'controlAuditEvents' => $auditEvents,
+            'controlPendingApprovals' => $pendingApprovals,
+            'controlAttentionExecutions' => $attentionExecutions,
+            'controlPolicyHintsByActionType' => $policyHintsByActionType,
+            'controlApprovedApprovalsById' => $approvedApprovalsById,
             'controlSnapshotJson' => $this->prettyPrintJson($snapshot),
             'canManagePolicies' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE),
             'canManageApprovals' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
@@ -450,19 +499,40 @@ class DashboardController extends Controller
 
         $service = Plugin::getInstance()->getControlPlaneService();
         $idempotencyKey = trim((string)$this->request->getBodyParam('idempotencyKey', ''));
+        $guidedPayload = $this->buildGuidedMap([
+            'orderId' => 'payloadOrderId',
+            'returnId' => 'payloadReturnId',
+            'customerId' => 'payloadCustomerId',
+            'note' => 'payloadNote',
+        ]);
+        $guidedMetadata = $this->buildGuidedMap([
+            'source' => 'metadataSource',
+            'channel' => 'metadataChannel',
+        ]);
 
         try {
+            $rawPayload = $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadJson', ''));
+            $rawMetadata = $this->parseJsonBodyParam((string)$this->request->getBodyParam('metadataJson', ''));
             $approval = $service->requestApproval([
                 'actionType' => (string)$this->request->getBodyParam('actionType', ''),
                 'actionRef' => (string)$this->request->getBodyParam('actionRef', ''),
                 'reason' => (string)$this->request->getBodyParam('reason', ''),
                 'idempotencyKey' => $idempotencyKey,
-                'payload' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadJson', '')),
-                'metadata' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('metadataJson', '')),
+                'payload' => array_replace($guidedPayload, $rawPayload),
+                'metadata' => array_replace($guidedMetadata, $rawMetadata),
             ], $this->buildCpActorContext());
 
             $status = (string)($approval['status'] ?? 'pending');
-            $this->setSuccessFlash(sprintf('Approval #%d requested (%s).', (int)($approval['id'] ?? 0), $status));
+            if ((bool)($approval['idempotentReplay'] ?? false)) {
+                $this->setSuccessFlash(sprintf(
+                    'Approval request replayed safely (idempotency key `%s`). Existing request #%d remains `%s`.',
+                    $idempotencyKey !== '' ? $idempotencyKey : 'n/a',
+                    (int)($approval['id'] ?? 0),
+                    $status
+                ));
+            } else {
+                $this->setSuccessFlash(sprintf('Approval #%d requested and queued as `%s`.', (int)($approval['id'] ?? 0), $status));
+            }
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
@@ -497,7 +567,13 @@ class DashboardController extends Controller
                 return $this->redirectToPostedUrl(null, 'agents/control');
             }
 
-            $this->setSuccessFlash(sprintf('Approval #%d is now `%s`.', $approvalId, (string)($approval['status'] ?? 'pending')));
+            $decisionStatus = (string)($approval['status'] ?? 'pending');
+            $this->setSuccessFlash(sprintf(
+                'Approval #%d for `%s` is now `%s`.',
+                $approvalId,
+                (string)($approval['actionType'] ?? 'action'),
+                $decisionStatus
+            ));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
@@ -514,21 +590,45 @@ class DashboardController extends Controller
 
         $service = Plugin::getInstance()->getControlPlaneService();
         $idempotencyKey = trim((string)$this->request->getBodyParam('idempotencyKey', ''));
+        $guidedPayload = $this->buildGuidedMap([
+            'orderId' => 'payloadOrderId',
+            'returnId' => 'payloadReturnId',
+            'reasonCode' => 'payloadReasonCode',
+            'operatorNote' => 'payloadOperatorNote',
+        ]);
 
         try {
+            $rawPayload = $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadJson', ''));
             $execution = $service->executeAction([
                 'actionType' => (string)$this->request->getBodyParam('actionType', ''),
                 'actionRef' => (string)$this->request->getBodyParam('actionRef', ''),
                 'approvalId' => (int)$this->request->getBodyParam('approvalId', 0),
                 'idempotencyKey' => $idempotencyKey,
-                'payload' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadJson', '')),
+                'payload' => array_replace($guidedPayload, $rawPayload),
             ], $this->buildCpActorContext());
 
             $status = (string)($execution['status'] ?? 'unknown');
-            if ($status === 'succeeded') {
-                $this->setSuccessFlash(sprintf('Control action executed successfully (%s).', $idempotencyKey !== '' ? $idempotencyKey : 'no idempotency key'));
+            if ((bool)($execution['idempotentReplay'] ?? false)) {
+                $this->setSuccessFlash(sprintf(
+                    'Execution replay protected by idempotency key `%s`. Existing execution #%d returned.',
+                    $idempotencyKey !== '' ? $idempotencyKey : 'n/a',
+                    (int)($execution['id'] ?? 0)
+                ));
+            } elseif ($status === 'succeeded') {
+                $this->setSuccessFlash(sprintf(
+                    'Action `%s` executed as `%s` (ledger #%d).',
+                    (string)($execution['actionType'] ?? 'action'),
+                    $status,
+                    (int)($execution['id'] ?? 0)
+                ));
             } else {
-                $this->setFailFlash(sprintf('Control action recorded with `%s` status. %s', $status, (string)($execution['errorMessage'] ?? '')));
+                $this->setFailFlash(sprintf(
+                    'Execution `%s` for `%s` is `%s`. %s',
+                    $idempotencyKey !== '' ? $idempotencyKey : 'n/a',
+                    (string)($execution['actionType'] ?? 'action'),
+                    $status,
+                    (string)($execution['errorMessage'] ?? 'Review approval/policy requirements.')
+                ));
             }
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
@@ -650,6 +750,67 @@ class DashboardController extends Controller
 
         $decoded = json_decode($value, true);
         return is_array($decoded) ? $decoded : [];
+    }
+
+    private function buildGuidedMap(array $fieldMap): array
+    {
+        $values = [];
+        foreach ($fieldMap as $key => $paramName) {
+            if (!is_string($key) || !is_string($paramName)) {
+                continue;
+            }
+
+            $value = trim((string)$this->request->getBodyParam($paramName, ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $values[$key] = $value;
+        }
+
+        return $values;
+    }
+
+    private function buildPolicyHintsByActionType(array $actionTypes): array
+    {
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $hints = [];
+        foreach ($actionTypes as $actionTypeRaw) {
+            $actionType = trim((string)$actionTypeRaw);
+            if ($actionType === '' || isset($hints[$actionType])) {
+                continue;
+            }
+
+            $policy = $service->resolvePolicyForAction($actionType);
+            $hints[$actionType] = [
+                'handle' => (string)($policy['handle'] ?? ''),
+                'riskLevel' => (string)($policy['riskLevel'] ?? 'unknown'),
+                'requiresApproval' => (bool)($policy['requiresApproval'] ?? true),
+                'enabled' => (bool)($policy['enabled'] ?? true),
+                'requiredScope' => (string)($policy['requiredScope'] ?? 'control:actions:execute'),
+            ];
+        }
+
+        return $hints;
+    }
+
+    private function appendPolicyHints(array $items, array $hintsByActionType): array
+    {
+        $enriched = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $actionType = trim((string)($item['actionType'] ?? ''));
+            if ($actionType !== '' && isset($hintsByActionType[$actionType])) {
+                $item['policy'] = $hintsByActionType[$actionType];
+            }
+
+            $enriched[] = $item;
+        }
+
+        return $enriched;
     }
 
     private function storeRevealedCredential(array $credential): void
