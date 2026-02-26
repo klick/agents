@@ -4,6 +4,12 @@ title: Changelog
 
 # Changelog
 
+## Unreleased
+
+- Added CP credential lifecycle foundation (managed credential create/rotate/revoke).
+- Added one-time token reveal UX and last-used metadata visibility in the CP.
+- Added runtime auth support for CP-managed credentials alongside env credentials.
+
 ## 0.2.0 (2026-02-26)
 
 - Promoted incremental sync capabilities to the `v0.2.0` minor release baseline.

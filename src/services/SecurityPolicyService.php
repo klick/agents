@@ -2,8 +2,10 @@
 
 namespace Klick\Agents\services;
 
+use Craft;
 use craft\base\Component;
 use craft\helpers\App;
+use Klick\Agents\Plugin;
 
 class SecurityPolicyService extends Component
 {
@@ -72,18 +74,39 @@ class SecurityPolicyService extends Component
         }
 
         $credentialsParseError = false;
-        $credentials = $this->parseCredentials((string)App::env('PLUGIN_AGENTS_API_CREDENTIALS'), $tokenScopes, $credentialsParseError);
+        $envCredentials = $this->parseCredentials((string)App::env('PLUGIN_AGENTS_API_CREDENTIALS'), $tokenScopes, $credentialsParseError);
 
         $primaryApiToken = trim((string)App::env('PLUGIN_AGENTS_API_TOKEN'));
         if ($primaryApiToken !== '') {
-            $credentials[] = [
+            $envCredentials[] = [
                 'id' => 'default',
                 'token' => $primaryApiToken,
                 'scopes' => $tokenScopes,
+                'source' => 'env',
             ];
         }
 
-        $credentials = $this->deduplicateCredentials($credentials, $tokenScopes);
+        $managedCredentials = [];
+        $plugin = Plugin::getInstance();
+        if ($plugin !== null) {
+            try {
+                $managedCredentials = $plugin->getCredentialService()->getManagedCredentialsForRuntime($tokenScopes);
+            } catch (\Throwable $e) {
+                Craft::warning('Unable to load managed credentials for runtime auth: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+
+        $credentials = $this->deduplicateCredentials(array_merge($managedCredentials, $envCredentials), $tokenScopes);
+
+        $envCredentialCount = 0;
+        $managedCredentialCount = 0;
+        foreach ($credentials as $credential) {
+            if (($credential['source'] ?? 'env') === 'cp') {
+                $managedCredentialCount++;
+            } else {
+                $envCredentialCount++;
+            }
+        }
 
         $rateLimitPerMinute = (int)App::env('PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE');
         if ($rateLimitPerMinute <= 0) {
@@ -121,6 +144,8 @@ class SecurityPolicyService extends Component
             'credentials' => $credentials,
             'credentialsParseError' => $credentialsParseError,
             'primaryApiTokenConfigured' => $primaryApiToken !== '',
+            'envCredentialCount' => $envCredentialCount,
+            'managedCredentialCount' => $managedCredentialCount,
             'tokenScopes' => $tokenScopes,
             'rateLimitPerMinute' => $rateLimitPerMinute,
             'rateLimitWindowSeconds' => $rateLimitWindowSeconds,
@@ -180,12 +205,12 @@ class SecurityPolicyService extends Component
             if ($config['isProduction'] && $config['failOnMissingTokenInProd']) {
                 $warnings[] = [
                     'level' => 'error',
-                    'message' => 'Agents API credentials are required but no usable `PLUGIN_AGENTS_API_TOKEN`/`PLUGIN_AGENTS_API_CREDENTIALS` were found. Requests will fail-closed in production.',
+                    'message' => 'Agents API credentials are required but no usable env/managed credentials were found. Requests will fail-closed in production.',
                 ];
             } else {
                 $warnings[] = [
                     'level' => 'warning',
-                    'message' => 'Agents API credentials are required but no usable `PLUGIN_AGENTS_API_TOKEN`/`PLUGIN_AGENTS_API_CREDENTIALS` were found. Set `PLUGIN_AGENTS_REQUIRE_TOKEN=false` for explicit local-only bypass.',
+                    'message' => 'Agents API credentials are required but no usable env/managed credentials were found. Set `PLUGIN_AGENTS_REQUIRE_TOKEN=false` for explicit local-only bypass.',
                 ];
             }
         }
@@ -212,7 +237,8 @@ class SecurityPolicyService extends Component
         $config = $this->getRuntimeConfig();
         $credentialIds = [];
         foreach ($config['credentials'] as $credential) {
-            $credentialIds[] = (string)($credential['id'] ?? 'default');
+            $source = (string)($credential['source'] ?? 'env');
+            $credentialIds[] = sprintf('%s:%s', $source, (string)($credential['id'] ?? 'default'));
         }
 
         $warnings = $this->getWarnings();
@@ -235,6 +261,8 @@ class SecurityPolicyService extends Component
                 'allowQueryToken' => (bool)$config['allowQueryToken'],
                 'failOnMissingTokenInProd' => (bool)$config['failOnMissingTokenInProd'],
                 'credentialCount' => count($config['credentials']),
+                'envCredentialCount' => (int)$config['envCredentialCount'],
+                'managedCredentialCount' => (int)$config['managedCredentialCount'],
                 'credentialIds' => $credentialIds,
                 'tokenScopes' => array_values((array)$config['tokenScopes']),
             ],
@@ -370,6 +398,7 @@ class SecurityPolicyService extends Component
             'id' => $id,
             'token' => $token,
             'scopes' => $this->normalizeScopes($value['scopes'] ?? null, $defaultScopes),
+            'source' => 'env',
         ];
     }
 
@@ -404,21 +433,34 @@ class SecurityPolicyService extends Component
         $seen = [];
         foreach ($credentials as $credential) {
             $token = (string)($credential['token'] ?? '');
-            if ($token === '') {
+            $tokenHash = strtolower(trim((string)($credential['tokenHash'] ?? '')));
+            if ($token === '' && !preg_match('/^[a-f0-9]{64}$/', $tokenHash)) {
                 continue;
             }
 
-            $tokenHash = sha1($token);
-            if (isset($seen[$tokenHash])) {
+            $fingerprint = $token !== '' ? 'plain:' . sha1($token) : 'hash:' . $tokenHash;
+            if (isset($seen[$fingerprint])) {
                 continue;
             }
-            $seen[$tokenHash] = true;
+            $seen[$fingerprint] = true;
 
-            $deduped[] = [
+            $normalized = [
                 'id' => (string)($credential['id'] ?? 'default'),
-                'token' => $token,
                 'scopes' => $this->normalizeScopes($credential['scopes'] ?? null, $defaultScopes),
+                'source' => (string)($credential['source'] ?? 'env'),
             ];
+
+            if ($token !== '') {
+                $normalized['token'] = $token;
+            } else {
+                $normalized['tokenHash'] = $tokenHash;
+            }
+
+            if (isset($credential['managedCredentialId'])) {
+                $normalized['managedCredentialId'] = (int)$credential['managedCredentialId'];
+            }
+
+            $deduped[] = $normalized;
         }
 
         return $deduped;

@@ -4,12 +4,13 @@ title: Control Panel Cockpit
 
 # Control Panel Cockpit
 
-The plugin CP section provides a 4-tab operational cockpit:
+The plugin CP section provides a 5-tab operational cockpit:
 
 - `agents/overview`
 - `agents/readiness`
 - `agents/discovery`
 - `agents/security`
+- `agents/credentials`
 
 Legacy aliases remain supported:
 
@@ -44,3 +45,9 @@ Legacy aliases remain supported:
 - warning and error visibility
 - no secret value exposure
 
+### Credentials
+
+- CP-managed credential create/rotate/revoke workflow
+- one-time token reveal on create/rotate
+- last-used metadata (`lastUsedAt`, `lastUsedIp`, auth method)
+- compatibility with existing env-defined credentials

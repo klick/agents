@@ -14,6 +14,7 @@ use craft\web\UrlManager;
 use craft\web\View;
 use yii\base\Event;
 use Klick\Agents\models\Settings;
+use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ReadinessService;
 use Klick\Agents\services\SecurityPolicyService;
@@ -23,7 +24,7 @@ class Plugin extends BasePlugin
 {
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.1.1';
+    public string $schemaVersion = '0.3.0';
 
     public static ?self $plugin = null;
 
@@ -37,6 +38,7 @@ class Plugin extends BasePlugin
             'discoveryTxtService' => DiscoveryTxtService::class,
             'securityPolicyService' => SecurityPolicyService::class,
             'webhookService' => WebhookService::class,
+            'credentialService' => CredentialService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
@@ -77,6 +79,10 @@ class Plugin extends BasePlugin
                 'label' => 'Security',
                 'url' => 'agents/security',
             ],
+            'credentials' => [
+                'label' => 'Credentials',
+                'url' => 'agents/credentials',
+            ],
         ];
 
         return $item;
@@ -91,6 +97,7 @@ class Plugin extends BasePlugin
                 'agents/readiness' => 'agents/dashboard/readiness',
                 'agents/discovery' => 'agents/dashboard/discovery',
                 'agents/security' => 'agents/dashboard/security',
+                'agents/credentials' => 'agents/dashboard/credentials',
                 // Legacy aliases retained for backward-compatible deep links.
                 'agents/dashboard' => 'agents/dashboard/dashboard',
                 'agents/health' => 'agents/dashboard/health',
@@ -144,6 +151,13 @@ class Plugin extends BasePlugin
     {
         /** @var SecurityPolicyService $service */
         $service = $this->get('securityPolicyService');
+        return $service;
+    }
+
+    public function getCredentialService(): CredentialService
+    {
+        /** @var CredentialService $service */
+        $service = $this->get('credentialService');
         return $service;
     }
 

@@ -510,6 +510,19 @@ class ApiController extends Controller
             ];
         }
 
+        $managedCredentialId = (int)($matchedCredential['managedCredentialId'] ?? 0);
+        if ($managedCredentialId > 0) {
+            try {
+                Plugin::getInstance()->getCredentialService()->recordCredentialUse(
+                    $managedCredentialId,
+                    (string)($providedToken['source'] ?? 'unknown'),
+                    $this->getClientIp()
+                );
+            } catch (\Throwable $e) {
+                Craft::warning('Unable to update managed credential last-used metadata: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+
         return [
             'principalFingerprint' => $matchedCredential['principalFingerprint'],
             'credentialId' => $matchedCredential['id'],
@@ -520,20 +533,40 @@ class ApiController extends Controller
 
     private function matchCredential(string $providedToken, array $credentials): ?array
     {
+        $providedTokenHash = hash('sha256', $providedToken);
+
         foreach ($credentials as $credential) {
             $token = (string)($credential['token'] ?? '');
-            if ($token === '') {
+            $tokenHash = strtolower(trim((string)($credential['tokenHash'] ?? '')));
+            $matched = false;
+            $principalFingerprint = '';
+
+            if ($token !== '') {
+                if (!hash_equals($token, $providedToken)) {
+                    continue;
+                }
+                $matched = true;
+                $principalFingerprint = sha1($token);
+            } elseif (preg_match('/^[a-f0-9]{64}$/', $tokenHash)) {
+                if (!hash_equals($tokenHash, $providedTokenHash)) {
+                    continue;
+                }
+                $matched = true;
+                $principalFingerprint = sha1($tokenHash);
+            } else {
                 continue;
             }
 
-            if (!hash_equals($token, $providedToken)) {
+            if (!$matched) {
                 continue;
             }
 
             return [
                 'id' => (string)($credential['id'] ?? 'default'),
                 'scopes' => (array)($credential['scopes'] ?? self::DEFAULT_TOKEN_SCOPES),
-                'principalFingerprint' => sha1($token),
+                'principalFingerprint' => $principalFingerprint,
+                'source' => (string)($credential['source'] ?? 'env'),
+                'managedCredentialId' => isset($credential['managedCredentialId']) ? (int)$credential['managedCredentialId'] : 0,
             ];
         }
 

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+- Added Control Panel credential lifecycle foundation: managed credential create/rotate/revoke flows and one-time token reveal UX.
+- Added managed credential persistence with runtime auth integration and last-used metadata tracking (`lastUsedAt`, `lastUsedIp`, auth method).
+- Added CP Credentials tab and updated CP/docs posture to reflect hybrid env + managed credential support.
+
 ## 0.2.0 - 2026-02-26
 
 - Promoted incremental sync capabilities to the `v0.2.0` minor baseline.

@@ -26,6 +26,8 @@
       <li>Query token transport: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
       <li>Fail on missing token in prod: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
       <li>Configured credential count: <strong>{{ securityPosture.authentication.credentialCount }}</strong></li>
+      <li>Env credential count: <strong>{{ securityPosture.authentication.envCredentialCount|default(0) }}</strong></li>
+      <li>Managed credential count: <strong>{{ securityPosture.authentication.managedCredentialCount|default(0) }}</strong></li>
       <li>Credential IDs: <strong>{{ securityPosture.authentication.credentialIds|join(', ') ?: 'none' }}</strong></li>
     </ul>
     <p><strong>Default token scopes</strong></p>
