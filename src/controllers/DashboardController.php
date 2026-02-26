@@ -104,6 +104,20 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function actionSettings(): Response
+    {
+        $this->requireAdmin();
+
+        $plugin = Plugin::getInstance();
+        $enabledState = $plugin->getAgentsEnabledState();
+
+        return $this->renderCpTemplate('agents/settings-tab', [
+            'settings' => $this->getSettingsModel(),
+            'agentsEnabledLocked' => (bool)$enabledState['locked'],
+            'agentsEnabledSource' => (string)$enabledState['source'],
+        ]);
+    }
+
     public function actionCredentials(): Response
     {
         $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
@@ -159,6 +173,37 @@ class DashboardController extends Controller
 
         $this->setSuccessFlash($enabled ? 'Agents API enabled.' : 'Agents API disabled.');
         return $this->redirectToPostedUrl(null, 'agents/overview');
+    }
+
+    public function actionSaveSettings(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        $plugin = Plugin::getInstance();
+        $settings = $this->getSettingsModel();
+        $enabledState = $plugin->getAgentsEnabledState();
+
+        $settingsData = get_object_vars($settings);
+        $settingsData['enabled'] = (bool)$enabledState['locked']
+            ? (bool)$enabledState['enabled']
+            : $this->parseBooleanBodyParam('enabled', (bool)$settings->enabled);
+        $settingsData['enableLlmsTxt'] = $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
+        $settingsData['enableCommerceTxt'] = $this->parseBooleanBodyParam('enableCommerceTxt', (bool)$settings->enableCommerceTxt);
+
+        $saved = Craft::$app->getPlugins()->savePluginSettings($plugin, $settingsData);
+        if (!$saved) {
+            $this->setFailFlash('Couldn’t save Agents settings.');
+            return $this->redirectToPostedUrl(null, 'agents/settings');
+        }
+
+        if ((bool)$enabledState['locked']) {
+            $this->setSuccessFlash('Agents settings saved. `enabled` remains controlled by `PLUGIN_AGENTS_ENABLED`.');
+        } else {
+            $this->setSuccessFlash('Agents settings saved.');
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/settings');
     }
 
     public function actionPrewarmDiscovery(): Response
@@ -431,6 +476,17 @@ class DashboardController extends Controller
         $scopes = array_values(array_unique($scopes));
         sort($scopes);
         return $scopes;
+    }
+
+    private function parseBooleanBodyParam(string $name, bool $default = false): bool
+    {
+        $raw = $this->request->getBodyParam($name);
+        if ($raw === null) {
+            return $default;
+        }
+
+        $value = strtolower(trim((string)$raw));
+        return in_array($value, ['1', 'true', 'on', 'yes'], true);
     }
 
     private function storeRevealedCredential(array $credential): void

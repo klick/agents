@@ -385,11 +385,13 @@ return [
 
 ## CP views
 
-- `Agents` section now uses 4 deep-linkable cockpit tabs:
+- `Agents` section now uses 6 deep-linkable cockpit tabs:
   - `agents/overview`
   - `agents/readiness`
   - `agents/discovery`
   - `agents/security`
+  - `agents/settings`
+  - `agents/credentials`
 - Legacy CP paths remain valid:
   - `agents` resolves to `overview`
   - `agents/dashboard` resolves to `overview`
@@ -408,10 +410,16 @@ return [
 - Security:
   - read-only effective auth/rate-limit/redaction/webhook posture
   - centralized warning output from shared security policy logic
+- Settings:
+  - deep-linkable runtime plugin settings editor
+  - preserves env-lock behavior for `enabled`
+- Credentials:
+  - managed credential lifecycle (create/edit scopes/rotate/revoke/delete)
+  - one-time token reveal on create/rotate
 
 ## CP rollout regression checklist
 
-1. Verify all four tabs load and subnav selection matches the active route.
+1. Verify all six tabs load and subnav selection matches the active route.
 2. Verify legacy aliases `agents`, `agents/dashboard`, and `agents/health` still resolve.
 3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
 4. Verify discovery actions work:

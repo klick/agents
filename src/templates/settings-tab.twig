@@ -1,0 +1,19 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "Agents Settings" %}
+{% set selectedSubnavItem = "settings" %}
+
+{% block content %}
+  <h1>Settings</h1>
+  <p class="text-sm text-muted">Configure runtime plugin settings from a deep-linkable Agents tab.</p>
+
+  <form method="post" accept-charset="UTF-8">
+    {{ csrfInput() }}
+    {{ actionInput('agents/dashboard/save-settings') }}
+    {{ redirectInput('agents/settings') }}
+
+    {% include 'agents/settings' %}
+
+    <button class="btn submit" type="submit">Save Settings</button>
+  </form>
+{% endblock %}

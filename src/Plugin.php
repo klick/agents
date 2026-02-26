@@ -88,6 +88,10 @@ class Plugin extends BasePlugin
                 'label' => 'Security',
                 'url' => 'agents/security',
             ],
+            'settings' => [
+                'label' => 'Settings',
+                'url' => 'agents/settings',
+            ],
             'credentials' => [
                 'label' => 'Credentials',
                 'url' => 'agents/credentials',
@@ -106,6 +110,7 @@ class Plugin extends BasePlugin
                 'agents/readiness' => 'agents/dashboard/readiness',
                 'agents/discovery' => 'agents/dashboard/discovery',
                 'agents/security' => 'agents/dashboard/security',
+                'agents/settings' => 'agents/dashboard/settings',
                 'agents/credentials' => 'agents/dashboard/credentials',
                 // Legacy aliases retained for backward-compatible deep links.
                 'agents/dashboard' => 'agents/dashboard/dashboard',
