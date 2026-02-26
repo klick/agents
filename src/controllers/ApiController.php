@@ -265,10 +265,10 @@ class ApiController extends Controller
         }
 
         $config = $this->getSecurityConfig();
-
+        $pluginVersion = $this->resolvePluginVersion();
         return $this->jsonResponse([
             'service' => 'agents',
-            'version' => '0.1.2',
+            'version' => $pluginVersion,
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             'basePath' => '/agents/v1',
             'requestIdHeader' => 'X-Request-Id',
@@ -312,12 +312,12 @@ class ApiController extends Controller
         }
 
         $config = $this->getSecurityConfig();
-
+        $pluginVersion = $this->resolvePluginVersion();
         return $this->jsonResponse([
             'openapi' => '3.1.0',
             'info' => [
                 'title' => 'Agents API',
-                'version' => '0.1.2',
+                'version' => $pluginVersion,
                 'description' => 'Read-only agent discovery API for products, orders, entries, changes, and sections.',
             ],
             'servers' => [
@@ -325,8 +325,8 @@ class ApiController extends Controller
                 ['url' => '/', 'description' => 'Site root discovery files'],
             ],
             'paths' => [
-                '/health' => ['get' => ['summary' => 'Health summary', 'responses' => ['200' => ['description' => 'OK']], 'x-required-scopes' => ['health:read']]],
-                '/readiness' => ['get' => ['summary' => 'Readiness summary', 'responses' => ['200' => ['description' => 'OK']], 'x-required-scopes' => ['readiness:read']]],
+                '/health' => ['get' => ['summary' => 'Health summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['health:read']]],
+                '/readiness' => ['get' => ['summary' => 'Readiness summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['readiness:read']]],
                 '/products' => ['get' => [
                     'summary' => 'Product snapshot list',
                     'parameters' => [
@@ -337,7 +337,10 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ],
-                    'responses' => ['200' => ['description' => 'OK']],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request (e.g. malformed cursor/updatedSince).'],
+                    ]),
                     'x-required-scopes' => ['products:read'],
                 ]],
                 '/orders' => ['get' => [
@@ -349,7 +352,10 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ],
-                    'responses' => ['200' => ['description' => 'OK']],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request.'],
+                    ]),
                     'x-required-scopes' => ['orders:read'],
                     'x-optional-scopes' => ['orders:read_sensitive'],
                 ]],
@@ -359,7 +365,11 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
                         ['in' => 'query', 'name' => 'number', 'schema' => ['type' => 'string']],
                     ],
-                    'responses' => ['200' => ['description' => 'OK'], '400' => ['description' => 'Invalid request'], '404' => ['description' => 'Not found']],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                        '404' => ['description' => 'Not found'],
+                    ]),
                     'x-required-scopes' => ['orders:read'],
                     'x-optional-scopes' => ['orders:read_sensitive'],
                 ]],
@@ -375,7 +385,11 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ],
-                    'responses' => ['200' => ['description' => 'OK'], '403' => ['description' => 'Missing scope for non-live status access']],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                        '403' => ['description' => 'Missing scope for non-live status access'],
+                    ]),
                     'x-required-scopes' => ['entries:read'],
                     'x-optional-scopes' => ['entries:read_all_statuses'],
                 ]],
@@ -387,7 +401,10 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
                     ],
-                    'responses' => ['200' => ['description' => 'OK'], '400' => ['description' => 'Invalid request']],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                    ]),
                     'x-required-scopes' => ['changes:read'],
                 ]],
                 '/entries/show' => ['get' => [
@@ -397,15 +414,19 @@ class ApiController extends Controller
                         ['in' => 'query', 'name' => 'slug', 'schema' => ['type' => 'string']],
                         ['in' => 'query', 'name' => 'section', 'schema' => ['type' => 'string']],
                     ],
-                    'responses' => ['200' => ['description' => 'OK'], '400' => ['description' => 'Invalid request'], '404' => ['description' => 'Not found']],
+                    'responses' => $this->openApiGuardedResponses([
+                        '200' => ['description' => 'OK'],
+                        '400' => ['description' => 'Invalid request'],
+                        '404' => ['description' => 'Not found'],
+                    ]),
                     'x-required-scopes' => ['entries:read'],
                     'x-optional-scopes' => ['entries:read_all_statuses'],
                 ]],
-                '/sections' => ['get' => ['summary' => 'Section list', 'responses' => ['200' => ['description' => 'OK']], 'x-required-scopes' => ['sections:read']]],
-                '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => ['200' => ['description' => 'OK']], 'x-required-scopes' => ['capabilities:read']]],
-                '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => ['200' => ['description' => 'OK']], 'x-required-scopes' => ['openapi:read']]],
-                '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled']]]],
-                '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled']]]],
+                '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
+                '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['capabilities:read']]],
+                '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['openapi:read']]],
+                '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
+                '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
             ],
             'components' => [
                 'securitySchemes' => $this->buildOpenApiSecuritySchemes($config),
@@ -799,6 +820,18 @@ class ApiController extends Controller
         return $security;
     }
 
+    private function openApiGuardedResponses(array $responses): array
+    {
+        $guardResponses = [
+            '401' => ['description' => 'Missing or invalid token.'],
+            '403' => ['description' => 'Token is valid but missing required scope.'],
+            '429' => ['description' => 'Rate limit exceeded.'],
+            '503' => ['description' => 'Service disabled or server misconfigured.'],
+        ];
+
+        return array_merge($responses, $guardResponses);
+    }
+
     private function unauthorizedResponse(string $message): Response
     {
         return $this->errorResponse(401, self::ERROR_UNAUTHORIZED, $message);
@@ -919,6 +952,18 @@ class ApiController extends Controller
     {
         $response->headers->set('X-Request-Id', $this->getRequestId());
         return $response;
+    }
+    private function resolvePluginVersion(): string
+    {
+        $plugin = Plugin::getInstance();
+        if ($plugin !== null) {
+            $version = trim((string)$plugin->getVersion());
+            if ($version !== '') {
+                return $version;
+            }
+        }
+
+        return '0.1.2';
     }
 
     private function getRequestId(): string
