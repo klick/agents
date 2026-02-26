@@ -120,6 +120,17 @@ class ApiController extends Controller
             'updatedSince' => $request->getQueryParam('updatedSince'),
         ]);
 
+        $errors = $payload['page']['errors'] ?? [];
+        if (!empty($errors)) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, (string)$errors[0], [
+                'details' => array_values($errors),
+            ]);
+        }
+
+        if (isset($payload['page']['errors'])) {
+            unset($payload['page']['errors']);
+        }
+
         return $this->jsonResponse($payload);
     }
 
@@ -877,10 +888,11 @@ class ApiController extends Controller
 
         return false;
     }
-
     private function jsonResponse(array $payload): Response
     {
-        return $this->attachRequestId($this->asJson($payload));
+        $response = $this->asJson($payload);
+        $this->applyNoStoreHeaders($response);
+        return $this->attachRequestId($response);
     }
 
     private function errorResponse(int $statusCode, string $code, string $message, array $extra = []): Response
@@ -891,10 +903,16 @@ class ApiController extends Controller
             'status' => $statusCode,
             'requestId' => $this->getRequestId(),
         ], $extra);
-
         $response = $this->asJson($payload);
+        $this->applyNoStoreHeaders($response);
         $response->setStatusCode($statusCode);
         return $this->attachRequestId($response);
+    }
+    private function applyNoStoreHeaders(Response $response): void
+    {
+        $response->headers->set('Cache-Control', 'no-store, private');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
     }
 
     private function attachRequestId(Response $response): Response
