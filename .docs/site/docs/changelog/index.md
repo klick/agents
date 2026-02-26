@@ -1,0 +1,32 @@
+---
+title: Changelog
+---
+
+# Changelog
+
+## 0.1.3 (2026-02-25)
+
+- Added request correlation IDs and standardized error schema behavior.
+- Added incremental sync enhancements and unified `/changes` feed.
+- Added optional signed webhook delivery and queue retry behavior.
+- Added CP cockpit IA v1 with 4 tabs:
+  - overview
+  - readiness
+  - discovery
+  - security
+- Added shared `SecurityPolicyService` for API/CP/startup warning parity.
+- Added discovery operator controls and metadata previews.
+- Fixed CP template resolution to follow Craft plugin conventions.
+
+## 0.1.2 (2026-02-24)
+
+- Hardened auth defaults and fail-closed behavior.
+- Added discovery docs generation and cache invalidation hooks.
+- Improved rate limiting strategy.
+
+## 0.1.1 (2026-02-20)
+
+- Initial release with read-only API, discoverability endpoints, and CLI commands.
+
+For full source-of-truth release history, see `CHANGELOG.md` in the repository root.
+

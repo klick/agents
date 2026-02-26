@@ -5,3 +5,7 @@
 /.docs/internal/
 
 /.tasks/
+
+/.docs/site/node_modules/
+/.docs/site/docs/.vitepress/cache/
+/.docs/site/docs/.vitepress/dist/
