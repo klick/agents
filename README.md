@@ -2,7 +2,7 @@
 
 Machine-readable readiness and diagnostics API Craft CMS and Commerce.
 
-Current plugin version: **0.1.4**
+Current plugin version: **0.2.0**
 
 ## Purpose
 
@@ -30,7 +30,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.1.4
+composer require klick/agents:^0.2.0
 php craft plugin/install agents
 ```
 

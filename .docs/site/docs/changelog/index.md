@@ -4,6 +4,19 @@ title: Changelog
 
 # Changelog
 
+## 0.2.0 (2026-02-26)
+
+- Promoted incremental sync capabilities to the `v0.2.0` minor release baseline.
+- Finalized deterministic continuation semantics for `/products`, `/orders`, `/entries`, and `/changes`.
+- Finalized signed webhook delivery with queue retries and documented verification details.
+- Completed OpenAPI/capabilities/docs parity and release-gate regression integration.
+
+## 0.1.4 (2026-02-26)
+
+- Hardened incremental request validation behavior on `/products`.
+- Added no-store cache headers for guarded API and guarded error responses.
+- Expanded OpenAPI guarded error metadata and regression harness integration.
+
 ## 0.1.3 (2026-02-25)
 
 - Added request correlation IDs and standardized error schema behavior.
@@ -29,4 +42,3 @@ title: Changelog
 - Initial release with read-only API, discoverability endpoints, and CLI commands.
 
 For full source-of-truth release history, see `CHANGELOG.md` in the repository root.
-

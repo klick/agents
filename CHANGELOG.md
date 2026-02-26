@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.2.0 - 2026-02-26
+
+- Promoted incremental sync capabilities to the `v0.2.0` minor baseline.
+- Finalized deterministic `cursor`/`updatedSince` continuation behavior on `/products`, `/orders`, `/entries`, and `/changes`.
+- Finalized queued webhook delivery with `X-Agents-Webhook-Signature` (`HMAC-SHA256`) and bounded retry semantics.
+- Completed OpenAPI/capabilities alignment and integrated incremental/webhook regression harnesses into release gating.
+
 ## 0.1.4 - 2026-02-26
 
 - Hardened incremental request validation on `/products` to return deterministic `400 INVALID_REQUEST` for malformed `cursor`/`updatedSince` inputs.

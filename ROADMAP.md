@@ -1,8 +1,8 @@
 # Agents Plugin Roadmap
 
-Date: 2026-02-24  
-Current release: `v0.1.2`  
-Next feature focus: Incremental sync for agents (`v0.2.0`)
+Date: 2026-02-26  
+Current release: `v0.2.0`  
+Next feature focus: Credential lifecycle in Control Panel (`v0.3.0`)
 
 ## Objectives
 
@@ -152,4 +152,3 @@ Acceptance criteria:
 
 Acceptance criteria:
 - `v0.3.0` tagged and published with migration guidance.
-
