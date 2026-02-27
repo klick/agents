@@ -33,6 +33,17 @@
   offLabel: 'Disabled',
 }) }}
 
+{% if refundApprovalsExperimentalEnabled ?? false %}
+  {{ forms.lightswitchField({
+    label: 'Allow manual refund approvals in Control',
+    instructions: 'Turn this on only if humans should create refund approval requests here. Recommended off: agents/integrations create requests, humans only approve/reject.',
+    name: 'allowCpApprovalRequests',
+    on: settings.allowCpApprovalRequests ?? false,
+    onLabel: 'Manual refund approvals allowed',
+    offLabel: 'Agent-first mode',
+  }) }}
+{% endif %}
+
 {% if agentsEnabledLocked %}
   <p class="warning">`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
 {% endif %}

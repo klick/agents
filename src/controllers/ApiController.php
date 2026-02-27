@@ -281,6 +281,36 @@ class ApiController extends Controller
 
         $config = $this->getSecurityConfig();
         $pluginVersion = $this->resolvePluginVersion();
+        $endpoints = [
+            ['method' => 'GET', 'path' => '/health', 'requiredScopes' => ['health:read']],
+            ['method' => 'GET', 'path' => '/readiness', 'requiredScopes' => ['readiness:read']],
+            ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
+            ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
+            ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
+            ['method' => 'GET', 'path' => '/entries', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
+            ['method' => 'GET', 'path' => '/entries/show', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
+            ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
+            ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
+            ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
+            ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
+            ['method' => 'GET', 'path' => '/control/policies', 'requiredScopes' => ['control:policies:read']],
+            ['method' => 'POST', 'path' => '/control/policies/upsert', 'requiredScopes' => ['control:policies:write']],
+            ['method' => 'GET', 'path' => '/control/approvals', 'requiredScopes' => ['control:approvals:read']],
+            ['method' => 'POST', 'path' => '/control/approvals/request', 'requiredScopes' => ['control:approvals:request'], 'optionalScopes' => ['control:approvals:write']],
+            ['method' => 'POST', 'path' => '/control/approvals/decide', 'requiredScopes' => ['control:approvals:decide'], 'optionalScopes' => ['control:approvals:write']],
+            ['method' => 'GET', 'path' => '/control/executions', 'requiredScopes' => ['control:executions:read']],
+            ['method' => 'POST', 'path' => '/control/actions/execute', 'requiredScopes' => ['control:actions:execute'], 'optionalScopes' => ['policy.config.requiredScope']],
+            ['method' => 'GET', 'path' => '/control/audit', 'requiredScopes' => ['control:audit:read']],
+            ['method' => 'GET', 'path' => '/llms.txt', 'public' => true],
+            ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
+        ];
+        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+            $endpoints = array_values(array_filter(
+                $endpoints,
+                static fn(array $endpoint): bool => !str_starts_with((string)($endpoint['path'] ?? ''), '/control/')
+            ));
+        }
+
         return $this->jsonResponse([
             'service' => 'agents',
             'version' => $pluginVersion,
@@ -293,29 +323,7 @@ class ApiController extends Controller
                 'availableScopes' => $this->availableScopes(),
             ],
             'errorCodes' => $this->errorTaxonomy(),
-            'endpoints' => [
-                ['method' => 'GET', 'path' => '/health', 'requiredScopes' => ['health:read']],
-                ['method' => 'GET', 'path' => '/readiness', 'requiredScopes' => ['readiness:read']],
-                ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
-                ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
-                ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
-                ['method' => 'GET', 'path' => '/entries', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
-                ['method' => 'GET', 'path' => '/entries/show', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
-                ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
-                ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
-                ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
-                ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
-                ['method' => 'GET', 'path' => '/control/policies', 'requiredScopes' => ['control:policies:read']],
-                ['method' => 'POST', 'path' => '/control/policies/upsert', 'requiredScopes' => ['control:policies:write']],
-                ['method' => 'GET', 'path' => '/control/approvals', 'requiredScopes' => ['control:approvals:read']],
-                ['method' => 'POST', 'path' => '/control/approvals/request', 'requiredScopes' => ['control:approvals:write']],
-                ['method' => 'POST', 'path' => '/control/approvals/decide', 'requiredScopes' => ['control:approvals:write']],
-                ['method' => 'GET', 'path' => '/control/executions', 'requiredScopes' => ['control:executions:read']],
-                ['method' => 'POST', 'path' => '/control/actions/execute', 'requiredScopes' => ['control:actions:execute'], 'optionalScopes' => ['policy.config.requiredScope']],
-                ['method' => 'GET', 'path' => '/control/audit', 'requiredScopes' => ['control:audit:read']],
-                ['method' => 'GET', 'path' => '/llms.txt', 'public' => true],
-                ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
-            ],
+            'endpoints' => $endpoints,
             'commands' => [
                 'agents/product-list',
                 'agents/order-list',
@@ -336,6 +344,188 @@ class ApiController extends Controller
 
         $config = $this->getSecurityConfig();
         $pluginVersion = $this->resolvePluginVersion();
+        $paths = [
+            '/health' => ['get' => ['summary' => 'Health summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['health:read']]],
+            '/readiness' => ['get' => ['summary' => 'Readiness summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['readiness:read']]],
+            '/products' => ['get' => [
+                'summary' => 'Product snapshot list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['live', 'pending', 'disabled', 'expired', 'all']]],
+                    ['in' => 'query', 'name' => 'sort', 'schema' => ['type' => 'string', 'enum' => ['updatedAt', 'createdAt', 'title']]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request (e.g. malformed cursor/updatedSince).'],
+                ]),
+                'x-required-scopes' => ['products:read'],
+            ]],
+            '/orders' => ['get' => [
+                'summary' => 'Order list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'lastDays', 'schema' => ['type' => 'integer', 'minimum' => 0]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request.'],
+                ]),
+                'x-required-scopes' => ['orders:read'],
+                'x-optional-scopes' => ['orders:read_sensitive'],
+            ]],
+            '/orders/show' => ['get' => [
+                'summary' => 'Single order by id or number',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'number', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['orders:read'],
+                'x-optional-scopes' => ['orders:read_sensitive'],
+            ]],
+            '/entries' => ['get' => [
+                'summary' => 'Entry list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'section', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'type', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['live', 'pending', 'disabled', 'expired', 'all']]],
+                    ['in' => 'query', 'name' => 'search', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '403' => ['description' => 'Missing scope for non-live status access'],
+                ]),
+                'x-required-scopes' => ['entries:read'],
+                'x-optional-scopes' => ['entries:read_all_statuses'],
+            ]],
+            '/changes' => ['get' => [
+                'summary' => 'Unified incremental changes feed',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'types', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated list: products,orders,entries'],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['changes:read'],
+            ]],
+            '/entries/show' => ['get' => [
+                'summary' => 'Single entry by id or slug',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'slug', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'section', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['entries:read'],
+                'x-optional-scopes' => ['entries:read_all_statuses'],
+            ]],
+            '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
+            '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['capabilities:read']]],
+            '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['openapi:read']]],
+            '/control/policies' => ['get' => ['summary' => 'List control policies', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['control:policies:read']]],
+            '/control/policies/upsert' => ['post' => [
+                'summary' => 'Create or update a control policy',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['control:policies:write'],
+            ]],
+            '/control/approvals' => ['get' => [
+                'summary' => 'List approval requests',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'actionType', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                ],
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['control:approvals:read'],
+            ]],
+            '/control/approvals/request' => ['post' => [
+                'summary' => 'Create approval request',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['control:approvals:request'],
+                'x-optional-scopes' => ['control:approvals:write'],
+            ]],
+            '/control/approvals/decide' => ['post' => [
+                'summary' => 'Approve or reject approval request',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['control:approvals:decide'],
+                'x-optional-scopes' => ['control:approvals:write'],
+            ]],
+            '/control/executions' => ['get' => [
+                'summary' => 'List action execution ledger',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'actionType', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                ],
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['control:executions:read'],
+            ]],
+            '/control/actions/execute' => ['post' => [
+                'summary' => 'Execute an idempotent control action',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '403' => ['description' => 'Missing required execution scope'],
+                ]),
+                'x-required-scopes' => ['control:actions:execute'],
+                'x-optional-scopes' => ['policy.config.requiredScope'],
+            ]],
+            '/control/audit' => ['get' => [
+                'summary' => 'List control-plane audit events',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'category', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'actorId', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                ],
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['control:audit:read'],
+            ]],
+            '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
+            '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
+        ];
+        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+            foreach ($this->controlOpenApiPaths() as $path) {
+                unset($paths[$path]);
+            }
+        }
+
         return $this->jsonResponse([
             'openapi' => '3.1.0',
             'info' => [
@@ -347,180 +537,7 @@ class ApiController extends Controller
                 ['url' => '/agents/v1', 'description' => 'Primary API'],
                 ['url' => '/', 'description' => 'Site root discovery files'],
             ],
-            'paths' => [
-                '/health' => ['get' => ['summary' => 'Health summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['health:read']]],
-                '/readiness' => ['get' => ['summary' => 'Readiness summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['readiness:read']]],
-                '/products' => ['get' => [
-                    'summary' => 'Product snapshot list',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['live', 'pending', 'disabled', 'expired', 'all']]],
-                        ['in' => 'query', 'name' => 'sort', 'schema' => ['type' => 'string', 'enum' => ['updatedAt', 'createdAt', 'title']]],
-                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
-                        ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
-                    ],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request (e.g. malformed cursor/updatedSince).'],
-                    ]),
-                    'x-required-scopes' => ['products:read'],
-                ]],
-                '/orders' => ['get' => [
-                    'summary' => 'Order list',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'lastDays', 'schema' => ['type' => 'integer', 'minimum' => 0]],
-                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
-                        ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
-                    ],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request.'],
-                    ]),
-                    'x-required-scopes' => ['orders:read'],
-                    'x-optional-scopes' => ['orders:read_sensitive'],
-                ]],
-                '/orders/show' => ['get' => [
-                    'summary' => 'Single order by id or number',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
-                        ['in' => 'query', 'name' => 'number', 'schema' => ['type' => 'string']],
-                    ],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                        '404' => ['description' => 'Not found'],
-                    ]),
-                    'x-required-scopes' => ['orders:read'],
-                    'x-optional-scopes' => ['orders:read_sensitive'],
-                ]],
-                '/entries' => ['get' => [
-                    'summary' => 'Entry list',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'section', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'type', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['live', 'pending', 'disabled', 'expired', 'all']]],
-                        ['in' => 'query', 'name' => 'search', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
-                        ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
-                    ],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                        '403' => ['description' => 'Missing scope for non-live status access'],
-                    ]),
-                    'x-required-scopes' => ['entries:read'],
-                    'x-optional-scopes' => ['entries:read_all_statuses'],
-                ]],
-                '/changes' => ['get' => [
-                    'summary' => 'Unified incremental changes feed',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'types', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated list: products,orders,entries'],
-                        ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
-                        ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
-                    ],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                    ]),
-                    'x-required-scopes' => ['changes:read'],
-                ]],
-                '/entries/show' => ['get' => [
-                    'summary' => 'Single entry by id or slug',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
-                        ['in' => 'query', 'name' => 'slug', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'section', 'schema' => ['type' => 'string']],
-                    ],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                        '404' => ['description' => 'Not found'],
-                    ]),
-                    'x-required-scopes' => ['entries:read'],
-                    'x-optional-scopes' => ['entries:read_all_statuses'],
-                ]],
-                '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
-                '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['capabilities:read']]],
-                '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['openapi:read']]],
-                '/control/policies' => ['get' => ['summary' => 'List control policies', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['control:policies:read']]],
-                '/control/policies/upsert' => ['post' => [
-                    'summary' => 'Create or update a control policy',
-                    'requestBody' => ['required' => true],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                    ]),
-                    'x-required-scopes' => ['control:policies:write'],
-                ]],
-                '/control/approvals' => ['get' => [
-                    'summary' => 'List approval requests',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'actionType', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
-                    ],
-                    'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
-                    'x-required-scopes' => ['control:approvals:read'],
-                ]],
-                '/control/approvals/request' => ['post' => [
-                    'summary' => 'Create approval request',
-                    'requestBody' => ['required' => true],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                    ]),
-                    'x-required-scopes' => ['control:approvals:write'],
-                ]],
-                '/control/approvals/decide' => ['post' => [
-                    'summary' => 'Approve or reject approval request',
-                    'requestBody' => ['required' => true],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                        '404' => ['description' => 'Not found'],
-                    ]),
-                    'x-required-scopes' => ['control:approvals:write'],
-                ]],
-                '/control/executions' => ['get' => [
-                    'summary' => 'List action execution ledger',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'actionType', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
-                    ],
-                    'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
-                    'x-required-scopes' => ['control:executions:read'],
-                ]],
-                '/control/actions/execute' => ['post' => [
-                    'summary' => 'Execute an idempotent control action',
-                    'requestBody' => ['required' => true],
-                    'responses' => $this->openApiGuardedResponses([
-                        '200' => ['description' => 'OK'],
-                        '400' => ['description' => 'Invalid request'],
-                        '403' => ['description' => 'Missing required execution scope'],
-                    ]),
-                    'x-required-scopes' => ['control:actions:execute'],
-                    'x-optional-scopes' => ['policy.config.requiredScope'],
-                ]],
-                '/control/audit' => ['get' => [
-                    'summary' => 'List control-plane audit events',
-                    'parameters' => [
-                        ['in' => 'query', 'name' => 'category', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'actorId', 'schema' => ['type' => 'string']],
-                        ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
-                    ],
-                    'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
-                    'x-required-scopes' => ['control:audit:read'],
-                ]],
-                '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
-                '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
-            ],
+            'paths' => $paths,
             'components' => [
                 'securitySchemes' => $this->buildOpenApiSecuritySchemes($config),
                 'x-error-codes' => $this->errorTaxonomy(),
@@ -531,6 +548,10 @@ class ApiController extends Controller
 
     public function actionControlPolicies(): Response
     {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
         if (($guard = $this->guardRequest('control:policies:read')) !== null) {
             return $guard;
         }
@@ -548,6 +569,10 @@ class ApiController extends Controller
 
     public function actionControlPolicyUpsert(): Response
     {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
         if (($guard = $this->guardRequest('control:policies:write', ['POST'])) !== null) {
             return $guard;
         }
@@ -579,6 +604,10 @@ class ApiController extends Controller
 
     public function actionControlApprovals(): Response
     {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
         if (($guard = $this->guardRequest('control:approvals:read')) !== null) {
             return $guard;
         }
@@ -600,12 +629,28 @@ class ApiController extends Controller
 
     public function actionControlApprovalRequest(): Response
     {
-        if (($guard = $this->guardRequest('control:approvals:write', ['POST'])) !== null) {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
+        if (($guard = $this->guardRequestAnyScopes(['control:approvals:request', 'control:approvals:write'], ['POST'])) !== null) {
             return $guard;
         }
 
         $request = Craft::$app->getRequest();
         $service = Plugin::getInstance()->getControlPlaneService();
+        $metadata = $this->resolveBodyArrayParam('metadata');
+
+        $source = trim((string)($metadata['source'] ?? ''));
+        $agentId = trim((string)($metadata['agentId'] ?? ''));
+        $traceId = trim((string)($metadata['traceId'] ?? ''));
+        if ($source === '' || $agentId === '' || $traceId === '') {
+            return $this->errorResponse(
+                400,
+                self::ERROR_INVALID_REQUEST,
+                'metadata.source, metadata.agentId, and metadata.traceId are required for approval requests.'
+            );
+        }
 
         try {
             $approval = $service->requestApproval([
@@ -614,7 +659,7 @@ class ApiController extends Controller
                 'reason' => (string)$request->getBodyParam('reason', ''),
                 'idempotencyKey' => $this->resolveIdempotencyKey(),
                 'payload' => $this->resolveBodyArrayParam('payload'),
-                'metadata' => $this->resolveBodyArrayParam('metadata'),
+                'metadata' => $metadata,
             ], $this->buildControlActorContext());
         } catch (\InvalidArgumentException $e) {
             return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
@@ -630,7 +675,11 @@ class ApiController extends Controller
 
     public function actionControlApprovalDecide(): Response
     {
-        if (($guard = $this->guardRequest('control:approvals:write', ['POST'])) !== null) {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
+        if (($guard = $this->guardRequestAnyScopes(['control:approvals:decide', 'control:approvals:write'], ['POST'])) !== null) {
             return $guard;
         }
 
@@ -664,6 +713,10 @@ class ApiController extends Controller
 
     public function actionControlExecutions(): Response
     {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
         if (($guard = $this->guardRequest('control:executions:read')) !== null) {
             return $guard;
         }
@@ -685,6 +738,10 @@ class ApiController extends Controller
 
     public function actionControlActionsExecute(): Response
     {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
         if (($guard = $this->guardRequest('control:actions:execute', ['POST'])) !== null) {
             return $guard;
         }
@@ -729,6 +786,10 @@ class ApiController extends Controller
 
     public function actionControlAudit(): Response
     {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
         if (($guard = $this->guardRequest('control:audit:read')) !== null) {
             return $guard;
         }
@@ -784,6 +845,37 @@ class ApiController extends Controller
         }
 
         return null;
+    }
+
+    private function guardRequestAnyScopes(array $requiredScopes, array $allowedMethods = ['GET', 'HEAD']): ?Response
+    {
+        if (($guard = $this->guardRequest('', $allowedMethods)) !== null) {
+            return $guard;
+        }
+
+        $normalizedScopes = [];
+        foreach ($requiredScopes as $requiredScope) {
+            if (!is_string($requiredScope) || trim($requiredScope) === '') {
+                continue;
+            }
+
+            $normalizedScopes[] = trim($requiredScope);
+        }
+
+        if (empty($normalizedScopes)) {
+            return null;
+        }
+
+        foreach ($normalizedScopes as $scope) {
+            if ($this->hasScope($scope)) {
+                return null;
+            }
+        }
+
+        return $this->forbiddenResponse(
+            implode(' | ', $normalizedScopes),
+            sprintf('Missing required scope. Provide one of: %s.', implode(', ', $normalizedScopes))
+        );
     }
 
     private function authenticateRequest(array $config): array
@@ -1062,6 +1154,12 @@ class ApiController extends Controller
     {
         $scopes = $this->authContext['scopes'] ?? $this->getSecurityConfig()['tokenScopes'];
         $normalized = array_values(array_unique(array_map('strval', $scopes)));
+        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+            $normalized = array_values(array_filter(
+                $normalized,
+                static fn(string $scope): bool => !str_starts_with($scope, 'control:')
+            ));
+        }
         sort($normalized);
         return $normalized;
     }
@@ -1078,7 +1176,7 @@ class ApiController extends Controller
 
     private function availableScopes(): array
     {
-        return [
+        $scopes = [
             'health:read' => 'Read service health summary.',
             'readiness:read' => 'Read readiness summary and score.',
             'products:read' => 'Read product snapshot endpoints.',
@@ -1093,10 +1191,62 @@ class ApiController extends Controller
             'control:policies:read' => 'Read control action policies.',
             'control:policies:write' => 'Create and update control action policies.',
             'control:approvals:read' => 'Read approval request queue.',
-            'control:approvals:write' => 'Request, approve, and reject control approvals.',
+            'control:approvals:request' => 'Create control approval requests (agent/orchestrator flow).',
+            'control:approvals:decide' => 'Approve or reject pending control approvals (human sign-off flow).',
+            'control:approvals:write' => 'Legacy combined scope for request+decide control approvals.',
             'control:executions:read' => 'Read control action execution ledger.',
             'control:actions:execute' => 'Execute idempotent control actions.',
             'control:audit:read' => 'Read immutable control-plane audit log.',
+        ];
+        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+            foreach ($this->controlScopeKeys() as $scope) {
+                unset($scopes[$scope]);
+            }
+        }
+
+        return $scopes;
+    }
+
+    private function isRefundApprovalsExperimentalEnabled(): bool
+    {
+        return Plugin::getInstance()->isRefundApprovalsExperimentalEnabled();
+    }
+
+    private function guardRefundApprovalsExperimentalEnabled(): ?Response
+    {
+        if ($this->isRefundApprovalsExperimentalEnabled()) {
+            return null;
+        }
+
+        return $this->errorResponse(404, self::ERROR_NOT_FOUND, 'Endpoint is not available.');
+    }
+
+    private function controlOpenApiPaths(): array
+    {
+        return [
+            '/control/policies',
+            '/control/policies/upsert',
+            '/control/approvals',
+            '/control/approvals/request',
+            '/control/approvals/decide',
+            '/control/executions',
+            '/control/actions/execute',
+            '/control/audit',
+        ];
+    }
+
+    private function controlScopeKeys(): array
+    {
+        return [
+            'control:policies:read',
+            'control:policies:write',
+            'control:approvals:read',
+            'control:approvals:request',
+            'control:approvals:decide',
+            'control:approvals:write',
+            'control:executions:read',
+            'control:actions:execute',
+            'control:audit:read',
         ];
     }
 

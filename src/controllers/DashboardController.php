@@ -8,6 +8,7 @@ use Klick\Agents\models\Settings;
 use craft\web\Controller;
 use craft\web\View;
 use Throwable;
+use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 class DashboardController extends Controller
@@ -106,9 +107,11 @@ class DashboardController extends Controller
 
     public function actionControl(): Response
     {
+        $this->requireRefundApprovalsExperimentalEnabled();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
 
         $plugin = Plugin::getInstance();
+        $settings = $this->getSettingsModel();
         $enabledState = $plugin->getAgentsEnabledState();
         $snapshot = $plugin->getControlPlaneService()->getControlPlaneSnapshot(25);
         $policies = (array)($snapshot['policies'] ?? []);
@@ -170,6 +173,7 @@ class DashboardController extends Controller
             'controlPolicyHintsByActionType' => $policyHintsByActionType,
             'controlApprovedApprovalsById' => $approvedApprovalsById,
             'controlSnapshotJson' => $this->prettyPrintJson($snapshot),
+            'allowCpApprovalRequests' => (bool)$settings->allowCpApprovalRequests,
             'canManagePolicies' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE),
             'canManageApprovals' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
             'canExecuteActions' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE),
@@ -187,6 +191,7 @@ class DashboardController extends Controller
             'settings' => $this->getSettingsModel(),
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
+            'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
         ]);
     }
 
@@ -260,6 +265,7 @@ class DashboardController extends Controller
         $settingsData['enabled'] = (bool)$enabledState['locked']
             ? (bool)$enabledState['enabled']
             : $this->parseBooleanBodyParam('enabled', (bool)$settings->enabled);
+        $settingsData['allowCpApprovalRequests'] = $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests);
         $settingsData['enableLlmsTxt'] = $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
         $settingsData['enableCommerceTxt'] = $this->parseBooleanBodyParam('enableCommerceTxt', (bool)$settings->enableCommerceTxt);
 
@@ -466,6 +472,7 @@ class DashboardController extends Controller
 
     public function actionUpsertControlPolicy(): Response
     {
+        $this->requireRefundApprovalsExperimentalEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE);
 
@@ -494,8 +501,15 @@ class DashboardController extends Controller
 
     public function actionRequestControlApproval(): Response
     {
+        $this->requireRefundApprovalsExperimentalEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
+
+        $settings = $this->getSettingsModel();
+        if (!(bool)$settings->allowCpApprovalRequests) {
+            $this->setFailFlash('Manual refund-approval form is off (agent-first mode). Ask your integration to submit the request via API.');
+            return $this->redirectToPostedUrl(null, 'agents/control');
+        }
 
         $service = Plugin::getInstance()->getControlPlaneService();
         $idempotencyKey = trim((string)$this->request->getBodyParam('idempotencyKey', ''));
@@ -525,13 +539,13 @@ class DashboardController extends Controller
             $status = (string)($approval['status'] ?? 'pending');
             if ((bool)($approval['idempotentReplay'] ?? false)) {
                 $this->setSuccessFlash(sprintf(
-                    'Approval request replayed safely (idempotency key `%s`). Existing request #%d remains `%s`.',
+                    'This request was already submitted earlier (duplicate-protection key `%s`). Reusing request #%d (`%s`).',
                     $idempotencyKey !== '' ? $idempotencyKey : 'n/a',
                     (int)($approval['id'] ?? 0),
                     $status
                 ));
             } else {
-                $this->setSuccessFlash(sprintf('Approval #%d requested and queued as `%s`.', (int)($approval['id'] ?? 0), $status));
+                $this->setSuccessFlash(sprintf('Request #%d created (`%s`).', (int)($approval['id'] ?? 0), $status));
             }
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
@@ -544,6 +558,7 @@ class DashboardController extends Controller
 
     public function actionDecideControlApproval(): Response
     {
+        $this->requireRefundApprovalsExperimentalEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
 
@@ -569,7 +584,7 @@ class DashboardController extends Controller
 
             $decisionStatus = (string)($approval['status'] ?? 'pending');
             $this->setSuccessFlash(sprintf(
-                'Approval #%d for `%s` is now `%s`.',
+                'Request #%d (`%s`) is now `%s`.',
                 $approvalId,
                 (string)($approval['actionType'] ?? 'action'),
                 $decisionStatus
@@ -585,6 +600,7 @@ class DashboardController extends Controller
 
     public function actionExecuteControlAction(): Response
     {
+        $this->requireRefundApprovalsExperimentalEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
 
@@ -610,13 +626,13 @@ class DashboardController extends Controller
             $status = (string)($execution['status'] ?? 'unknown');
             if ((bool)($execution['idempotentReplay'] ?? false)) {
                 $this->setSuccessFlash(sprintf(
-                    'Execution replay protected by idempotency key `%s`. Existing execution #%d returned.',
+                    'This run already exists for duplicate-protection key `%s`. Reusing run #%d.',
                     $idempotencyKey !== '' ? $idempotencyKey : 'n/a',
                     (int)($execution['id'] ?? 0)
                 ));
             } elseif ($status === 'succeeded') {
                 $this->setSuccessFlash(sprintf(
-                    'Action `%s` executed as `%s` (ledger #%d).',
+                    'Run recorded for `%s` as `%s` (entry #%d).',
                     (string)($execution['actionType'] ?? 'action'),
                     $status,
                     (int)($execution['id'] ?? 0)
@@ -642,7 +658,7 @@ class DashboardController extends Controller
     private function getApiEndpoints(): array
     {
         $apiBasePath = '/agents/v1';
-        return [
+        $endpoints = [
             $apiBasePath . '/health',
             $apiBasePath . '/readiness',
             $apiBasePath . '/products',
@@ -652,12 +668,18 @@ class DashboardController extends Controller
             $apiBasePath . '/sections',
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',
-            $apiBasePath . '/control/policies',
-            $apiBasePath . '/control/approvals',
-            $apiBasePath . '/control/executions',
-            $apiBasePath . '/control/actions/execute',
-            $apiBasePath . '/control/audit',
         ];
+        if ($this->isRefundApprovalsExperimentalEnabled()) {
+            $endpoints = array_merge($endpoints, [
+                $apiBasePath . '/control/policies',
+                $apiBasePath . '/control/approvals',
+                $apiBasePath . '/control/executions',
+                $apiBasePath . '/control/actions/execute',
+                $apiBasePath . '/control/audit',
+            ]);
+        }
+
+        return $endpoints;
     }
 
     private function getDiscoveryEndpoints(): array
@@ -899,5 +921,19 @@ class DashboardController extends Controller
             'requestId' => 'cp-' . substr(sha1(uniqid('', true)), 0, 12),
             'ipAddress' => (string)(Craft::$app->getRequest()->getUserIP() ?: 'unknown'),
         ];
+    }
+
+    private function isRefundApprovalsExperimentalEnabled(): bool
+    {
+        return Plugin::getInstance()->isRefundApprovalsExperimentalEnabled();
+    }
+
+    private function requireRefundApprovalsExperimentalEnabled(): void
+    {
+        if ($this->isRefundApprovalsExperimentalEnabled()) {
+            return;
+        }
+
+        throw new NotFoundHttpException('Not found.');
     }
 }

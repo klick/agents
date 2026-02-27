@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.5 - 2026-02-27
+
+- Hid refund-approvals/control surfaces behind `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL` (default off): CP tab/routes, API routes, capabilities/OpenAPI discoverability, and related scope catalog entries are now gated.
+- Added agent-first approval request mode: CP request form is disabled by default and can be re-enabled via settings.
+- Added API scope split for approvals: `control:approvals:request` and `control:approvals:decide` (legacy `control:approvals:write` remains supported).
+- Added required approval-request provenance metadata on API (`metadata.source`, `metadata.agentId`, `metadata.traceId`).
+
 ## 0.3.4 - 2026-02-26
 
 - Reworked the Control Plane CP interface into a queue-first operator flow (`Now`, `Act`, `Configure`, `Audit`).

@@ -2,7 +2,7 @@
 
 Machine-readable readiness/discovery API and governed control-plane plugin for Craft CMS and Commerce.
 
-Current plugin version: **0.3.4**
+Current plugin version: **0.3.5**
 
 ## Purpose
 
@@ -38,7 +38,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.3.4
+composer require klick/agents:^0.3.5
 php craft plugin/install agents
 ```
 
@@ -70,6 +70,7 @@ Environment variables:
 - `PLUGIN_AGENTS_WEBHOOK_SECRET` (required when webhook URL is set; used for HMAC signature)
 - `PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS` (default: `5`)
 - `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default: `3`, max queue retry attempts)
+- `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL` (default: `false`; enables refund-approval/control surfaces)
 
 These are documented in `.env.example`.
 
@@ -160,7 +161,7 @@ Read/discovery endpoints:
 - `GET /capabilities`
 - `GET /openapi.json`
 
-Control-plane endpoints:
+Control-plane endpoints (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
 
 - `GET /control/policies`
 - `POST /control/policies/upsert`
@@ -191,16 +192,18 @@ Read scopes:
 - `sections:read`
 - `capabilities:read`
 - `openapi:read`
-- `control:policies:read`
-- `control:approvals:read`
-- `control:executions:read`
-- `control:audit:read`
+- `control:policies:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:approvals:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:executions:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:audit:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 
 Write scopes:
 
-- `control:policies:write`
-- `control:approvals:write`
-- `control:actions:execute`
+- `control:policies:write` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:approvals:request` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:approvals:decide` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:approvals:write` (legacy combined scope, backward-compatible; only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:actions:execute` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 
 ## CLI Commands
 
@@ -294,6 +297,7 @@ Identifier notes for show commands:
 - `POST /control/approvals/request` body:
   - `actionType` (required)
   - `actionRef`, `reason`, `payload`, `metadata`
+  - `metadata.source`, `metadata.agentId`, `metadata.traceId` are required (agent provenance)
   - idempotency via `X-Idempotency-Key` header (or `idempotencyKey` body field)
 - `POST /control/approvals/decide` body:
   - `approvalId` (required)
@@ -465,14 +469,15 @@ return [
 
 ## CP views
 
-- `Agents` section now uses 7 deep-linkable cockpit tabs:
+- `Agents` section uses 6 deep-linkable cockpit tabs by default:
   - `agents/overview`
   - `agents/readiness`
   - `agents/discovery`
   - `agents/security`
-  - `agents/control`
   - `agents/settings`
   - `agents/credentials`
+- Optional experimental tab (enabled via `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
+  - `agents/control`
 - Legacy CP paths remain valid:
   - `agents` resolves to `overview`
   - `agents/dashboard` resolves to `overview`
@@ -491,9 +496,10 @@ return [
 - Security:
   - read-only effective auth/rate-limit/redaction/webhook posture
   - centralized warning output from shared security policy logic
-- Control Plane:
-  - queue-first operator flow: pending approvals and execution attention panels
-  - guided approval request fields with optional advanced JSON override
+- Refund Approvals (`agents/control`, experimental flag required):
+  - queue-first operator flow for refund approvals and blocked/failed refund runs
+  - agent-first approval model: CP approval-request form is disabled by default
+  - optional CP request fallback can be enabled in Settings (`allowCpApprovalRequests`)
   - policy-aware execution guardrails (disabled policy blocks, approval linkage checks)
   - configurable policy catalog (risk, approval, enablement) with advanced config JSON
   - immutable control audit trail and collapsible full snapshot JSON
@@ -506,7 +512,7 @@ return [
 
 ## CP rollout regression checklist
 
-1. Verify all seven tabs load and subnav selection matches the active route.
+1. Verify all default tabs load and subnav selection matches the active route.
 2. Verify legacy aliases `agents`, `agents/dashboard`, and `agents/health` still resolve.
 3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
 4. Verify discovery actions work:
@@ -515,9 +521,10 @@ return [
    - prewarm `commerce`
    - clear discovery cache
 5. Verify security tab shows posture without exposing token/secret values.
-6. Verify control tab flows:
+6. When `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, verify control tab flows:
    - create/update policy
-   - request/approve/reject approval
+   - request approval via API (agent token) with provenance metadata
+   - approve/reject approval in CP
    - execute action with idempotency key
    - audit event appears for each state transition
 7. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
@@ -537,9 +544,11 @@ return [
 6. Start with default scopes; only add elevated scopes when required:
    - `orders:read_sensitive`
    - `entries:read_all_statuses`
-   - `control:policies:write`
-   - `control:approvals:write`
-   - `control:actions:execute`
+   - `control:policies:write` (experimental flag only)
+   - `control:approvals:request` (experimental flag only)
+   - `control:approvals:decide` (experimental flag only)
+   - `control:approvals:write` (legacy compatibility; experimental flag only)
+   - `control:actions:execute` (experimental flag only)
 7. Verify `capabilities`/`openapi.json` outputs reflect active auth transport/settings.
 8. Run `scripts/security-regression-check.sh` against your environment before promotion.
 
@@ -548,7 +557,8 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read control:policies:read control:approvals:read control:executions:read control:audit:read\"`
+  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
+  - If `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, optionally append control read scopes: `control:policies:read control:approvals:read control:executions:read control:audit:read`
 
 ## Secure Deployment Verification
 
@@ -567,7 +577,7 @@ curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
   "https://example.com/agents/v1/entries?status=all&limit=1"
 
-# 5) Control policy list (new control scope required)
+# 5) Control policy list (only when PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true)
 curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
   "https://example.com/agents/v1/control/policies"
 

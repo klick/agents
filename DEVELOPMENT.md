@@ -75,6 +75,11 @@ This updates the sandbox `.env` and writes `config/agents.php` with stable local
 ./scripts/qa/release-gate.sh
 ```
 
+Release messaging guardrail:
+
+- Keep commit messages, release descriptions, and changelog entries user-facing.
+- Avoid internal or ignored file-path references in release communication.
+
 Optional live check:
 
 ```bash

@@ -77,7 +77,7 @@ class Plugin extends BasePlugin
     {
         $item = parent::getCpNavItem();
         $item['label'] = 'Agents';
-        $item['subnav'] = [
+        $subnav = [
             'overview' => [
                 'label' => 'Overview',
                 'url' => 'agents/overview',
@@ -94,19 +94,22 @@ class Plugin extends BasePlugin
                 'label' => 'Security',
                 'url' => 'agents/security',
             ],
-            'control' => [
-                'label' => 'Control Plane',
-                'url' => 'agents/control',
-            ],
-            'settings' => [
-                'label' => 'Settings',
-                'url' => 'agents/settings',
-            ],
-            'credentials' => [
-                'label' => 'Credentials',
-                'url' => 'agents/credentials',
-            ],
         ];
+        if ($this->isRefundApprovalsExperimentalEnabled()) {
+            $subnav['control'] = [
+                'label' => 'Refund Approvals',
+                'url' => 'agents/control',
+            ];
+        }
+        $subnav['settings'] = [
+            'label' => 'Settings',
+            'url' => 'agents/settings',
+        ];
+        $subnav['credentials'] = [
+            'label' => 'Credentials',
+            'url' => 'agents/credentials',
+        ];
+        $item['subnav'] = $subnav;
 
         return $item;
     }
@@ -114,26 +117,30 @@ class Plugin extends BasePlugin
     private function registerCpRoutes(): void
     {
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function(RegisterUrlRulesEvent $event): void {
-            $event->rules = array_merge($event->rules, [
+            $rules = [
                 'agents' => 'agents/dashboard/overview',
                 'agents/overview' => 'agents/dashboard/overview',
                 'agents/readiness' => 'agents/dashboard/readiness',
                 'agents/discovery' => 'agents/dashboard/discovery',
                 'agents/security' => 'agents/dashboard/security',
-                'agents/control' => 'agents/dashboard/control',
                 'agents/settings' => 'agents/dashboard/settings',
                 'agents/credentials' => 'agents/dashboard/credentials',
                 // Legacy aliases retained for backward-compatible deep links.
                 'agents/dashboard' => 'agents/dashboard/dashboard',
                 'agents/health' => 'agents/dashboard/health',
-            ]);
+            ];
+            if ($this->isRefundApprovalsExperimentalEnabled()) {
+                $rules['agents/control'] = 'agents/dashboard/control';
+            }
+
+            $event->rules = array_merge($event->rules, $rules);
         });
     }
 
     private function registerSiteRoutes(): void
     {
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_SITE_URL_RULES, function(RegisterUrlRulesEvent $event): void {
-            $event->rules = array_merge($event->rules, [
+            $rules = [
                 'llms.txt' => 'agents/api/llms-txt',
                 'commerce.txt' => 'agents/api/commerce-txt',
                 'agents/v1/health' => 'agents/api/health',
@@ -147,15 +154,21 @@ class Plugin extends BasePlugin
                 'agents/v1/sections' => 'agents/api/sections',
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
-                'agents/v1/control/policies' => 'agents/api/control-policies',
-                'agents/v1/control/policies/upsert' => 'agents/api/control-policy-upsert',
-                'agents/v1/control/approvals' => 'agents/api/control-approvals',
-                'agents/v1/control/approvals/request' => 'agents/api/control-approval-request',
-                'agents/v1/control/approvals/decide' => 'agents/api/control-approval-decide',
-                'agents/v1/control/executions' => 'agents/api/control-executions',
-                'agents/v1/control/actions/execute' => 'agents/api/control-actions-execute',
-                'agents/v1/control/audit' => 'agents/api/control-audit',
-            ]);
+            ];
+            if ($this->isRefundApprovalsExperimentalEnabled()) {
+                $rules = array_merge($rules, [
+                    'agents/v1/control/policies' => 'agents/api/control-policies',
+                    'agents/v1/control/policies/upsert' => 'agents/api/control-policy-upsert',
+                    'agents/v1/control/approvals' => 'agents/api/control-approvals',
+                    'agents/v1/control/approvals/request' => 'agents/api/control-approval-request',
+                    'agents/v1/control/approvals/decide' => 'agents/api/control-approval-decide',
+                    'agents/v1/control/executions' => 'agents/api/control-executions',
+                    'agents/v1/control/actions/execute' => 'agents/api/control-actions-execute',
+                    'agents/v1/control/audit' => 'agents/api/control-audit',
+                ]);
+            }
+
+            $event->rules = array_merge($event->rules, $rules);
         });
     }
 
@@ -244,6 +257,11 @@ class Plugin extends BasePlugin
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
+    public function isRefundApprovalsExperimentalEnabled(): bool
+    {
+        return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL');
+    }
+
     protected function createSettingsModel(): ?Model
     {
         return new Settings();
@@ -259,6 +277,7 @@ class Plugin extends BasePlugin
             'settings' => $settingsModel,
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
+            'refundApprovalsExperimentalEnabled' => $this->isRefundApprovalsExperimentalEnabled(),
         ], View::TEMPLATE_MODE_CP);
     }
 
@@ -369,24 +388,25 @@ class Plugin extends BasePlugin
                         ],
                     ],
                 ];
-
-                $event->permissions[] = [
-                    'heading' => 'Agents Control Plane',
-                    'permissions' => [
-                        self::PERMISSION_CONTROL_VIEW => [
-                            'label' => 'View control plane tab',
+                if ($this->isRefundApprovalsExperimentalEnabled()) {
+                    $event->permissions[] = [
+                        'heading' => 'Agents Refund Approvals',
+                        'permissions' => [
+                            self::PERMISSION_CONTROL_VIEW => [
+                                'label' => 'View refund approvals tab',
+                            ],
+                            self::PERMISSION_CONTROL_POLICIES_MANAGE => [
+                                'label' => 'Create and edit refund rules',
+                            ],
+                            self::PERMISSION_CONTROL_APPROVALS_MANAGE => [
+                                'label' => 'Approve and reject refund approvals',
+                            ],
+                            self::PERMISSION_CONTROL_ACTIONS_EXECUTE => [
+                                'label' => 'Run approved refund actions',
+                            ],
                         ],
-                        self::PERMISSION_CONTROL_POLICIES_MANAGE => [
-                            'label' => 'Create and edit control policies',
-                        ],
-                        self::PERMISSION_CONTROL_APPROVALS_MANAGE => [
-                            'label' => 'Request and decide approvals',
-                        ],
-                        self::PERMISSION_CONTROL_ACTIONS_EXECUTE => [
-                            'label' => 'Execute control actions',
-                        ],
-                    ],
-                ];
+                    ];
+                }
             }
         );
     }
