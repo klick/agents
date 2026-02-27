@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.7 - 2026-02-27
+
+- Fixed CP navigation state so the Agents section/subnav remains active across Dashboard, Settings, API Keys, and Return Requests routes.
+- Fixed plugin settings entry-point behavior: opening Agents from `admin/settings/plugins` now redirects to `admin/agents/dashboard/overview`.
+- Added an `Agents discovery caches` option to Craft’s Clear Caches utility (`agents-discovery`) to clear cached `llms.txt` and `commerce.txt` documents.
+- Added canonical CP redirects for `admin/agents` and `admin/agents/dashboard` to `admin/agents/dashboard/overview`.
+
 ## 0.3.6 - 2026-02-27
 
 - Polished CP IA by consolidating Overview/Readiness/Discovery/Security into a Dashboard with top tabs, while preserving legacy deep links via redirects.

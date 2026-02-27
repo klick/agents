@@ -23,6 +23,12 @@ class DashboardController extends Controller
 
     public function actionDashboard(): Response
     {
+        $request = Craft::$app->getRequest();
+        $pathInfo = trim((string)$request->getPathInfo(), '/');
+        if ($pathInfo === 'agents' || $pathInfo === 'agents/dashboard') {
+            return $this->redirect('agents/dashboard/overview');
+        }
+
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
         $settings = $this->getSettingsModel();

@@ -2,7 +2,7 @@
 
 Machine-readable readiness/discovery API and governed control-plane plugin for Craft CMS and Commerce.
 
-Current plugin version: **0.3.6**
+Current plugin version: **0.3.7**
 
 ## Purpose
 
@@ -38,7 +38,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.3.6
+composer require klick/agents:^0.3.7
 php craft plugin/install agents
 ```
 
