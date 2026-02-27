@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.8 - 2026-02-27
+
+- Improved Dashboard tab readability by using the active tab label as the page heading.
+- Removed repeated service-state panels from Readiness, Discovery, and Security tabs to reduce duplicate status noise.
+- Refined Discovery tab document panels: default-at-a-glance status now focuses on URL and Last Modified, additional metadata is collapsed under Details, and preview code blocks use a subtle bordered style.
+
 ## 0.3.7 - 2026-02-27
 
 - Fixed CP navigation state so the Agents section/subnav remains active across Dashboard, Settings, API Keys, and Return Requests routes.

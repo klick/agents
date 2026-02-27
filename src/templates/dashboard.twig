@@ -13,10 +13,10 @@
   }) %}
 {% endfor %}
 {% set selectedTab = activeDashboardTab %}
+{% set dashboardHeading = tabs[selectedTab].label ?? 'Dashboard' %}
 
 {% block content %}
-  <h1>Dashboard</h1>
-  <p class="text-sm text-muted">Overview, readiness, discovery, and security are grouped here as focused tabs.</p>
+  <h1>{{ dashboardHeading }}</h1>
 
   {% if activeDashboardTab == 'overview' %}
     <div class="border rounded p-3" style="margin-bottom: 16px;">
@@ -55,6 +55,8 @@
       </form>
     </div>
 
+    <hr>
+
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Quick Actions</h2>
       <form method="post" accept-charset="UTF-8" style="margin-bottom: 8px;">
@@ -67,6 +69,8 @@
       <p><a href="{{ url('agents/dashboard/discovery') }}">Open Discovery for document-specific refresh and cache clear</a></p>
     </div>
 
+    <hr>
+
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Feature Status</h2>
       <ul>
@@ -77,6 +81,8 @@
         <li>Security errors: <strong>{{ securityWarningCounts.errors|default(0) }}</strong></li>
       </ul>
     </div>
+
+    <hr>
 
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Quick Links</h2>
@@ -93,6 +99,8 @@
         {% endfor %}
       </ul>
     </div>
+
+    <hr>
 
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Where to change what</h2>
@@ -123,6 +131,8 @@
         </tbody>
       </table>
     </div>
+
+    <hr>
 
     <div class="border rounded p-3">
       <h2 class="h4">Readiness Snapshot</h2>
@@ -168,17 +178,6 @@
 
   {% if activeDashboardTab == 'readiness' %}
     <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Service State</h2>
-      <p>
-        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
-        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
-        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
-      </p>
-      <p>Overall status: <strong>{{ readinessDiagnostics.status|default('unknown') }}</strong></p>
-      <p>Readiness score: <strong>{{ readinessDiagnostics.readinessScore|default(0) }}</strong> / 100 (ready at {{ readinessDiagnostics.thresholdReady|default(50) }}+)</p>
-    </div>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Score Breakdown</h2>
       <table class="data fullwidth">
         <thead>
@@ -205,6 +204,8 @@
       </table>
     </div>
 
+    <hr>
+
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Component Checks</h2>
       <p><strong>System components</strong></p>
@@ -221,6 +222,8 @@
       </ul>
     </div>
 
+    <hr>
+
     {% if readinessDiagnostics.warnings|length %}
       <div class="border rounded p-3 warning" style="margin-bottom: 16px;">
         <h2 class="h4">Warnings</h2>
@@ -230,6 +233,7 @@
           {% endfor %}
         </ul>
       </div>
+      <hr>
     {% endif %}
 
     <div class="border rounded p-3" style="margin-bottom: 16px;">
@@ -239,12 +243,16 @@
       </details>
     </div>
 
+    <hr>
+
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <details>
         <summary><strong>Readiness Data (Technical JSON)</strong></summary>
         <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessSummaryJson }}</pre>
       </details>
     </div>
+
+    <hr>
 
     <div class="border rounded p-3">
       <details>
@@ -255,15 +263,6 @@
   {% endif %}
 
   {% if activeDashboardTab == 'discovery' %}
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Service State</h2>
-      <p>
-        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
-        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
-        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
-      </p>
-    </div>
-
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Quick Actions</h2>
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
@@ -298,28 +297,65 @@
       <p class="text-sm text-muted">These actions only refresh generated discovery files and cache state. Content policy still comes from config.</p>
     </div>
 
+    <hr>
+
     {% for key, document in discoveryStatus.documents %}
+      {% if not loop.first %}
+        <hr>
+      {% endif %}
       <div class="border rounded p-3" style="margin-bottom: 16px;">
         <h2 class="h4">{{ document.name }}</h2>
         <p>
           <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
           <strong>{{ document.enabled ? 'Enabled' : 'Disabled' }}</strong>
-          <span class="text-muted">({{ document.path }})</span>
         </p>
         <table class="data fullwidth" style="margin-bottom: 8px;">
           <tbody>
-          <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
-          <tr><th>Cache TTL</th><td>{{ document.cacheTtlSeconds }} seconds</td></tr>
-          <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
-          <tr><th>Last Modified</th><td>{{ document.lastModified ?: 'n/a' }}</td></tr>
-          <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
-          <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
+          <tr>
+            <th style="border-bottom: 1px solid #e5e7eb;">URL</th>
+            <td style="border-bottom: 1px solid #e5e7eb;"><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td>
+          </tr>
+          <tr>
+            <th>Last Modified</th>
+            <td>{{ document.lastModified ?: 'n/a' }}</td>
+          </tr>
           </tbody>
         </table>
+
         <h3>Preview</h3>
-        <pre class="border rounded p-3">{{ document.preview ?: '# Disabled' }}</pre>
+        <pre class="rounded p-3" style="border: 1px solid #d1d5db; background: #f9fafb; padding: 12px;"><code style="background: transparent; color: inherit;">{{ document.preview ?: '# Disabled' }}</code></pre>
+
+        <details style="margin-top: 10px;">
+          <summary><strong>Details</strong></summary>
+          <table class="data fullwidth" style="margin-top: 8px;">
+            <tbody>
+            <tr>
+              <th style="border-bottom: 1px solid #e5e7eb;">Path</th>
+              <td style="border-bottom: 1px solid #e5e7eb;"><code>{{ document.path }}</code></td>
+            </tr>
+            <tr>
+              <th style="border-bottom: 1px solid #e5e7eb;">Cache TTL</th>
+              <td style="border-bottom: 1px solid #e5e7eb;">{{ document.cacheTtlSeconds }} seconds</td>
+            </tr>
+            <tr>
+              <th style="border-bottom: 1px solid #e5e7eb;">ETag</th>
+              <td style="border-bottom: 1px solid #e5e7eb;">{{ document.etag ?: 'n/a' }}</td>
+            </tr>
+            <tr>
+              <th style="border-bottom: 1px solid #e5e7eb;">Bytes</th>
+              <td style="border-bottom: 1px solid #e5e7eb;">{{ document.bytes }}</td>
+            </tr>
+            <tr>
+              <th>Lines</th>
+              <td>{{ document.lineCount }}</td>
+            </tr>
+            </tbody>
+          </table>
+        </details>
       </div>
     {% endfor %}
+
+    <hr>
 
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Where to change what</h2>
@@ -330,6 +366,8 @@
       </ul>
     </div>
 
+    <hr>
+
     <div class="border rounded p-3">
       <details>
         <summary><strong>Discovery Status (Technical JSON)</strong></summary>
@@ -339,16 +377,6 @@
   {% endif %}
 
   {% if activeDashboardTab == 'security' %}
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Service State</h2>
-      <p>
-        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
-        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
-        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
-      </p>
-      <p>Environment: <strong>{{ securityPosture.environment|default('unknown') }}</strong></p>
-    </div>
-
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Authentication</h2>
       <ul>
@@ -370,6 +398,8 @@
       </ul>
     </div>
 
+    <hr>
+
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Rate Limit and Privacy</h2>
       <ul>
@@ -377,6 +407,8 @@
         <li>Email redaction: <strong>{{ securityPosture.privacy.redactEmail ? 'enabled' : 'disabled' }}</strong></li>
       </ul>
     </div>
+
+    <hr>
 
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Webhook</h2>
@@ -389,6 +421,8 @@
         <li>Max attempts: <strong>{{ securityPosture.webhook.maxAttempts }}</strong></li>
       </ul>
     </div>
+
+    <hr>
 
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Warnings</h2>
@@ -409,6 +443,8 @@
         <p>No active security warnings.</p>
       {% endif %}
     </div>
+
+    <hr>
 
     <div class="border rounded p-3">
       <details>

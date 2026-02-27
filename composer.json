@@ -3,7 +3,7 @@
   "description": "Agents plugin for Craft Commerce diagnostics and agent-ready workflows.",
   "type": "craft-plugin",
   "homepage": "https://github.com/klick/agents",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "license": "proprietary",
   "keywords": [
     "craft",
