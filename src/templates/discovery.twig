@@ -5,7 +5,7 @@
 
 {% block content %}
   <h1>Discovery</h1>
-  <p class="text-sm text-muted">Read-only status and metadata for `llms.txt` and `commerce.txt`.</p>
+  <p class="text-sm text-muted">Status and cache controls for <code>llms.txt</code> and <code>commerce.txt</code>.</p>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Service State</h2>
@@ -17,37 +17,37 @@
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Operator Actions</h2>
+    <h2 class="h4">Quick Actions</h2>
     <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
       <form method="post" accept-charset="UTF-8">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/prewarm-discovery') }}
         {{ redirectInput('agents/discovery') }}
         <input type="hidden" name="target" value="all">
-        <button class="btn submit" type="submit">Prewarm All</button>
+        <button class="btn submit" type="submit">Refresh All</button>
       </form>
       <form method="post" accept-charset="UTF-8">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/prewarm-discovery') }}
         {{ redirectInput('agents/discovery') }}
         <input type="hidden" name="target" value="llms">
-        <button class="btn" type="submit">Prewarm llms.txt</button>
+        <button class="btn" type="submit">Refresh llms.txt</button>
       </form>
       <form method="post" accept-charset="UTF-8">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/prewarm-discovery') }}
         {{ redirectInput('agents/discovery') }}
         <input type="hidden" name="target" value="commerce">
-        <button class="btn" type="submit">Prewarm commerce.txt</button>
+        <button class="btn" type="submit">Refresh commerce.txt</button>
       </form>
       <form method="post" accept-charset="UTF-8">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/clear-discovery-cache') }}
         {{ redirectInput('agents/discovery') }}
-        <button class="btn" type="submit">Clear Discovery Cache</button>
+        <button class="btn" type="submit">Clear cache</button>
       </form>
     </div>
-    <p class="text-sm text-muted">These actions only refresh/clear generated discovery documents. Policy/content remains config-owned.</p>
+    <p class="text-sm text-muted">These actions only refresh generated discovery files and cache state. Content policy still comes from config.</p>
   </div>
 
   {% for key, document in discoveryStatus.documents %}
@@ -74,16 +74,18 @@
   {% endfor %}
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Ownership Split</h2>
+    <h2 class="h4">Where to change what</h2>
     <ul>
-      <li>Use <code>config/agents.php</code> for discovery policy/content.</li>
-      <li>Use CP for safe cache operations and status inspection.</li>
+      <li>Use <code>config/agents.php</code> for discovery content and policy.</li>
+      <li>Use this CP tab for cache refresh/clear and status checks.</li>
       <li>Do not edit secrets in CP.</li>
     </ul>
   </div>
 
   <div class="border rounded p-3">
-    <h2 class="h4">Discovery Status JSON</h2>
-    <pre class="border rounded p-3">{{ discoveryStatusJson }}</pre>
+    <details>
+      <summary><strong>Discovery Status (Technical JSON)</strong></summary>
+      <pre class="border rounded p-3" style="margin-top: 8px;">{{ discoveryStatusJson }}</pre>
+    </details>
   </div>
 {% endblock %}

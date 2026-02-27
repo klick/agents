@@ -5,7 +5,7 @@
 
 {% block content %}
   <h1>Security</h1>
-  <p class="text-sm text-muted">Read-only effective security posture derived from environment/config.</p>
+  <p class="text-sm text-muted">Read-only security status from your environment and plugin configuration.</p>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Service State</h2>
@@ -21,13 +21,13 @@
     <h2 class="h4">Authentication</h2>
     <ul>
       <li>Token required: <strong>{{ securityPosture.authentication.required ? 'yes' : 'no' }}</strong></li>
-      <li>Requested token required: <strong>{{ securityPosture.authentication.requestedRequireToken ? 'yes' : 'no' }}</strong></li>
+      <li>Configured requirement: <strong>{{ securityPosture.authentication.requestedRequireToken ? 'yes' : 'no' }}</strong></li>
       <li>Forced in production: <strong>{{ securityPosture.authentication.tokenRequirementForcedInProd ? 'yes' : 'no' }}</strong></li>
-      <li>Query token transport: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
-      <li>Fail on missing token in prod: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
-      <li>Configured credential count: <strong>{{ securityPosture.authentication.credentialCount }}</strong></li>
-      <li>Env credential count: <strong>{{ securityPosture.authentication.envCredentialCount|default(0) }}</strong></li>
-      <li>Managed credential count: <strong>{{ securityPosture.authentication.managedCredentialCount|default(0) }}</strong></li>
+      <li>Allow query-token auth: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
+      <li>Fail in production when token missing: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
+      <li>Total active credentials: <strong>{{ securityPosture.authentication.credentialCount }}</strong></li>
+      <li>Env credentials: <strong>{{ securityPosture.authentication.envCredentialCount|default(0) }}</strong></li>
+      <li>Managed CP credentials: <strong>{{ securityPosture.authentication.managedCredentialCount|default(0) }}</strong></li>
       <li>Credential IDs: <strong>{{ securityPosture.authentication.credentialIds|join(', ') ?: 'none' }}</strong></li>
     </ul>
     <p><strong>Default token scopes</strong></p>
@@ -47,7 +47,7 @@
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Webhook Posture</h2>
+    <h2 class="h4">Webhook</h2>
     <ul>
       <li>Webhook enabled: <strong>{{ securityPosture.webhook.enabled ? 'yes' : 'no' }}</strong></li>
       <li>Webhook URL configured: <strong>{{ securityPosture.webhook.urlConfigured ? 'yes' : 'no' }}</strong></li>
@@ -79,7 +79,9 @@
   </div>
 
   <div class="border rounded p-3">
-    <h2 class="h4">Effective Security JSON</h2>
-    <pre class="border rounded p-3">{{ securityPostureJson }}</pre>
+    <details>
+      <summary><strong>Security Data (Technical JSON)</strong></summary>
+      <pre class="border rounded p-3" style="margin-top: 8px;">{{ securityPostureJson }}</pre>
+    </details>
   </div>
 {% endblock %}

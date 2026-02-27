@@ -1,0 +1,421 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = "Agents Dashboard" %}
+{% set selectedSubnavItem = "dashboard" %}
+{% set tabs = {} %}
+{% for tab in dashboardTabs %}
+  {% set tabs = tabs|merge({
+    (tab.key): {
+      label: tab.label,
+      url: url(tab.url),
+    }
+  }) %}
+{% endfor %}
+{% set selectedTab = activeDashboardTab %}
+
+{% block content %}
+  <h1>Dashboard</h1>
+  <p class="text-sm text-muted">Overview, readiness, discovery, and security are grouped here as focused tabs.</p>
+
+  {% if activeDashboardTab == 'overview' %}
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Service State</h2>
+      <p>
+        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+      </p>
+      <form id="agents-enabled-form" method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/toggle-enabled') }}
+        {{ redirectInput('agents/dashboard/overview') }}
+
+        {{ forms.lightswitchField({
+          id: 'agents-enabled-switch',
+          name: 'enabled',
+          fieldLabel: 'API availability',
+          instructions: agentsEnabledLocked
+            ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
+            : 'Turn the Agents API on or off.',
+          on: agentsEnabled,
+          onLabel: false,
+          offLabel: false,
+          disabled: agentsEnabledLocked,
+        }) }}
+
+        {% if agentsEnabledLocked %}
+          <p class="warning">This is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
+        {% else %}
+          <p class="text-sm text-muted">Saved immediately when switched.</p>
+          <noscript>
+            <button class="btn submit" type="submit">Save</button>
+          </noscript>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Quick Actions</h2>
+      <form method="post" accept-charset="UTF-8" style="margin-bottom: 8px;">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/prewarm-discovery') }}
+        {{ redirectInput('agents/dashboard/discovery') }}
+        <input type="hidden" name="target" value="all">
+        <button class="btn submit" type="submit">Refresh Discovery Cache (All)</button>
+      </form>
+      <p><a href="{{ url('agents/dashboard/discovery') }}">Open Discovery for document-specific refresh and cache clear</a></p>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Feature Status</h2>
+      <ul>
+        <li><code>llms.txt</code>: <strong>{{ discoveryEnabled.llms ? 'enabled' : 'disabled' }}</strong></li>
+        <li><code>commerce.txt</code>: <strong>{{ discoveryEnabled.commerce ? 'enabled' : 'disabled' }}</strong></li>
+        <li>Webhook delivery: <strong>{{ webhookEnabled ? 'enabled' : 'disabled' }}</strong></li>
+        <li>Security warnings: <strong>{{ securityWarningCounts.warnings|default(0) }}</strong></li>
+        <li>Security errors: <strong>{{ securityWarningCounts.errors|default(0) }}</strong></li>
+      </ul>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Quick Links</h2>
+      <p><strong>API endpoints</strong></p>
+      <ul>
+        {% for endpoint in apiEndpoints %}
+          <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
+        {% endfor %}
+      </ul>
+      <p><strong>Discovery documents</strong></p>
+      <ul>
+        {% for endpoint in discoveryEndpoints %}
+          <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Where to change what</h2>
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>Area</th>
+          <th>Primary place</th>
+          <th>Notes</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>Service on/off</td>
+          <td>CP</td>
+          <td>Can be env-locked with <code>PLUGIN_AGENTS_ENABLED</code>.</td>
+        </tr>
+        <tr>
+          <td>Discovery content</td>
+          <td><code>config/agents.php</code></td>
+          <td>Config is the source of truth for policy and content.</td>
+        </tr>
+        <tr>
+          <td>Auth and API keys</td>
+          <td>CP + <code>.env</code></td>
+          <td>Use API Keys tab for managed rotate/revoke; env keys remain supported.</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="border rounded p-3">
+      <h2 class="h4">Readiness Snapshot</h2>
+      <p>Status: <strong>{{ overviewReadiness.status|default('unknown') }}</strong></p>
+      <p>Score: <strong>{{ overviewReadiness.readinessScore|default(0) }}</strong> / 100</p>
+      <details>
+        <summary><strong>Technical JSON</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ overviewReadinessJson }}</pre>
+      </details>
+    </div>
+
+    {% if not agentsEnabledLocked %}
+      {% js %}
+        (() => {
+          const form = document.getElementById('agents-enabled-form');
+          if (!form) {
+            return;
+          }
+          const switchButton = form.querySelector('button.lightswitch');
+          const valueInput = form.querySelector('input[name="enabled"]');
+          if (!switchButton || !valueInput) {
+            return;
+          }
+
+          let previousValue = valueInput.value;
+          switchButton.addEventListener('click', () => {
+            window.requestAnimationFrame(() => {
+              if (valueInput.value === previousValue) {
+                return;
+              }
+              previousValue = valueInput.value;
+              if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+              } else {
+                form.submit();
+              }
+            });
+          });
+        })();
+      {% endjs %}
+    {% endif %}
+  {% endif %}
+
+  {% if activeDashboardTab == 'readiness' %}
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Service State</h2>
+      <p>
+        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+      </p>
+      <p>Overall status: <strong>{{ readinessDiagnostics.status|default('unknown') }}</strong></p>
+      <p>Readiness score: <strong>{{ readinessDiagnostics.readinessScore|default(0) }}</strong> / 100 (ready at {{ readinessDiagnostics.thresholdReady|default(50) }}+)</p>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Score Breakdown</h2>
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>Check</th>
+          <th>Weight</th>
+          <th>Result</th>
+          <th>Score</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for criterion in readinessDiagnostics.breakdown %}
+          <tr>
+            <td>{{ criterion.label }}</td>
+            <td>{{ criterion.weight }}</td>
+            <td>
+              <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
+              {{ criterion.passed ? 'pass' : 'needs attention' }}
+            </td>
+            <td>{{ criterion.score }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Component Checks</h2>
+      <p><strong>System components</strong></p>
+      <ul>
+        {% for key, value in readinessDiagnostics.componentChecks.systemComponents %}
+          <li>{{ key }}: <strong>{{ value ? 'ok' : 'unavailable' }}</strong></li>
+        {% endfor %}
+      </ul>
+      <p><strong>Plugin checks</strong></p>
+      <ul>
+        {% for key, value in readinessDiagnostics.componentChecks.enabledPlugins %}
+          <li>{{ key }}: <strong>{{ value ? 'enabled' : 'disabled' }}</strong></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    {% if readinessDiagnostics.warnings|length %}
+      <div class="border rounded p-3 warning" style="margin-bottom: 16px;">
+        <h2 class="h4">Warnings</h2>
+        <ul>
+          {% for warning in readinessDiagnostics.warnings %}
+            <li>{{ warning }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <details>
+        <summary><strong>Health Data (Technical JSON)</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessHealthJson }}</pre>
+      </details>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <details>
+        <summary><strong>Readiness Data (Technical JSON)</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessSummaryJson }}</pre>
+      </details>
+    </div>
+
+    <div class="border rounded p-3">
+      <details>
+        <summary><strong>Diagnostics (Technical JSON)</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessDiagnosticsJson }}</pre>
+      </details>
+    </div>
+  {% endif %}
+
+  {% if activeDashboardTab == 'discovery' %}
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Service State</h2>
+      <p>
+        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+      </p>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Quick Actions</h2>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+        <form method="post" accept-charset="UTF-8">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/prewarm-discovery') }}
+          {{ redirectInput('agents/dashboard/discovery') }}
+          <input type="hidden" name="target" value="all">
+          <button class="btn submit" type="submit">Refresh All</button>
+        </form>
+        <form method="post" accept-charset="UTF-8">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/prewarm-discovery') }}
+          {{ redirectInput('agents/dashboard/discovery') }}
+          <input type="hidden" name="target" value="llms">
+          <button class="btn" type="submit">Refresh llms.txt</button>
+        </form>
+        <form method="post" accept-charset="UTF-8">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/prewarm-discovery') }}
+          {{ redirectInput('agents/dashboard/discovery') }}
+          <input type="hidden" name="target" value="commerce">
+          <button class="btn" type="submit">Refresh commerce.txt</button>
+        </form>
+        <form method="post" accept-charset="UTF-8">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/clear-discovery-cache') }}
+          {{ redirectInput('agents/dashboard/discovery') }}
+          <button class="btn" type="submit">Clear cache</button>
+        </form>
+      </div>
+      <p class="text-sm text-muted">These actions only refresh generated discovery files and cache state. Content policy still comes from config.</p>
+    </div>
+
+    {% for key, document in discoveryStatus.documents %}
+      <div class="border rounded p-3" style="margin-bottom: 16px;">
+        <h2 class="h4">{{ document.name }}</h2>
+        <p>
+          <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
+          <strong>{{ document.enabled ? 'Enabled' : 'Disabled' }}</strong>
+          <span class="text-muted">({{ document.path }})</span>
+        </p>
+        <table class="data fullwidth" style="margin-bottom: 8px;">
+          <tbody>
+          <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
+          <tr><th>Cache TTL</th><td>{{ document.cacheTtlSeconds }} seconds</td></tr>
+          <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
+          <tr><th>Last Modified</th><td>{{ document.lastModified ?: 'n/a' }}</td></tr>
+          <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
+          <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
+          </tbody>
+        </table>
+        <h3>Preview</h3>
+        <pre class="border rounded p-3">{{ document.preview ?: '# Disabled' }}</pre>
+      </div>
+    {% endfor %}
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Where to change what</h2>
+      <ul>
+        <li>Use <code>config/agents.php</code> for discovery content and policy.</li>
+        <li>Use this CP tab for cache refresh/clear and status checks.</li>
+        <li>Do not edit secrets in CP.</li>
+      </ul>
+    </div>
+
+    <div class="border rounded p-3">
+      <details>
+        <summary><strong>Discovery Status (Technical JSON)</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ discoveryStatusJson }}</pre>
+      </details>
+    </div>
+  {% endif %}
+
+  {% if activeDashboardTab == 'security' %}
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Service State</h2>
+      <p>
+        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+      </p>
+      <p>Environment: <strong>{{ securityPosture.environment|default('unknown') }}</strong></p>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Authentication</h2>
+      <ul>
+        <li>Token required: <strong>{{ securityPosture.authentication.required ? 'yes' : 'no' }}</strong></li>
+        <li>Configured requirement: <strong>{{ securityPosture.authentication.requestedRequireToken ? 'yes' : 'no' }}</strong></li>
+        <li>Forced in production: <strong>{{ securityPosture.authentication.tokenRequirementForcedInProd ? 'yes' : 'no' }}</strong></li>
+        <li>Allow query-token auth: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
+        <li>Fail in production when token missing: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
+        <li>Total active credentials: <strong>{{ securityPosture.authentication.credentialCount }}</strong></li>
+        <li>Env credentials: <strong>{{ securityPosture.authentication.envCredentialCount|default(0) }}</strong></li>
+        <li>Managed CP credentials: <strong>{{ securityPosture.authentication.managedCredentialCount|default(0) }}</strong></li>
+        <li>Credential IDs: <strong>{{ securityPosture.authentication.credentialIds|join(', ') ?: 'none' }}</strong></li>
+      </ul>
+      <p><strong>Default token scopes</strong></p>
+      <ul>
+        {% for scope in securityPosture.authentication.tokenScopes %}
+          <li>{{ scope }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Rate Limit and Privacy</h2>
+      <ul>
+        <li>Rate limit: <strong>{{ securityPosture.rateLimit.perMinute }}</strong> requests / {{ securityPosture.rateLimit.windowSeconds }}s</li>
+        <li>Email redaction: <strong>{{ securityPosture.privacy.redactEmail ? 'enabled' : 'disabled' }}</strong></li>
+      </ul>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Webhook</h2>
+      <ul>
+        <li>Webhook enabled: <strong>{{ securityPosture.webhook.enabled ? 'yes' : 'no' }}</strong></li>
+        <li>Webhook URL configured: <strong>{{ securityPosture.webhook.urlConfigured ? 'yes' : 'no' }}</strong></li>
+        <li>Webhook secret configured: <strong>{{ securityPosture.webhook.secretConfigured ? 'yes' : 'no' }}</strong></li>
+        <li>Destination host: <strong>{{ securityPosture.webhook.destinationHost ?: 'n/a' }}</strong></li>
+        <li>Timeout seconds: <strong>{{ securityPosture.webhook.timeoutSeconds }}</strong></li>
+        <li>Max attempts: <strong>{{ securityPosture.webhook.maxAttempts }}</strong></li>
+      </ul>
+    </div>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Warnings</h2>
+      <p>
+        Errors: <strong>{{ securityPosture.warningCounts.errors|default(0) }}</strong>,
+        warnings: <strong>{{ securityPosture.warningCounts.warnings|default(0) }}</strong>
+      </p>
+      {% if securityPosture.warnings|length %}
+        <ul>
+          {% for warning in securityPosture.warnings %}
+            <li>
+              <strong>[{{ warning.level|upper }}]</strong>
+              {{ warning.message }}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No active security warnings.</p>
+      {% endif %}
+    </div>
+
+    <div class="border rounded p-3">
+      <details>
+        <summary><strong>Security Data (Technical JSON)</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ securityPostureJson }}</pre>
+      </details>
+    </div>
+  {% endif %}
+
+{% endblock %}

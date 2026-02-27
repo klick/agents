@@ -1,24 +1,24 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = "Agents Refund Approvals" %}
+{% set title = "Agents Return Requests" %}
 {% set selectedSubnavItem = "control" %}
 
 {% block content %}
-  <h1>Refund Approvals</h1>
-  <p class="text-sm text-muted">Simple flow: after return intake/inspection, an agent creates a refund-approval request, a human approves/rejects it, then an approved refund action can run.</p>
+  <h1>Return Requests</h1>
+  <p class="text-sm text-muted">This page is for internal refund decisions after return intake and inspection. Customer returns can proceed as usual; this queue controls whether refunds are approved and recorded.</p>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">How this works</h2>
+    <h2 class="h4">Flow in 3 steps</h2>
     <ol style="margin: 0 0 0 18px;">
-      <li>Return is initiated and physically handled as usual.</li>
-      <li>Agent sends a refund-approval request for internal decision.</li>
-      <li>You approve or reject it, then approved refund actions can run safely (with duplicate protection).</li>
+      <li>An agent/integration creates a return request when a refund needs review.</li>
+      <li>A human approves or rejects the request.</li>
+      <li>An approved action is run once, with duplicate protection.</li>
     </ol>
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">What Needs Attention</h2>
+    <h2 class="h4">Now</h2>
     <p>
       <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
       <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
@@ -27,15 +27,15 @@
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px;">
       <div class="border rounded p-2">
-        <div class="light">Pending refund approvals</div>
+        <div class="light">Waiting for decision</div>
         <div style="font-size: 24px;"><strong>{{ controlSummary.approvalsPending|default(0) }}</strong></div>
       </div>
       <div class="border rounded p-2">
-        <div class="light">Blocked refund runs</div>
+        <div class="light">Runs blocked</div>
         <div style="font-size: 24px;"><strong>{{ controlSummary.executionsBlocked|default(0) }}</strong></div>
       </div>
       <div class="border rounded p-2">
-        <div class="light">Successful refund runs</div>
+        <div class="light">Runs completed</div>
         <div style="font-size: 24px;"><strong>{{ controlSummary.executionsSucceeded|default(0) }}</strong></div>
       </div>
       <div class="border rounded p-2">
@@ -43,24 +43,24 @@
         <div style="font-size: 24px;"><strong>{{ controlSummary.policies|default(0) }}</strong></div>
       </div>
       <div class="border rounded p-2">
-        <div class="light">History entries</div>
+        <div class="light">Activity entries</div>
         <div style="font-size: 24px;"><strong>{{ controlSummary.auditEvents|default(0) }}</strong></div>
       </div>
     </div>
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Pending Refund Approvals</h2>
+    <h2 class="h4">Waiting for Decision</h2>
     {% if controlPendingApprovals|length %}
       <table class="data fullwidth">
         <thead>
         <tr>
-          <th>Request</th>
-          <th>Refund Action</th>
+          <th>Request #</th>
+          <th>Action</th>
           <th>Rule</th>
-          <th>Requested By</th>
-          <th>Why</th>
-          <th>Decide</th>
+          <th>Requested</th>
+          <th>Reason</th>
+          <th>Decision</th>
         </tr>
         </thead>
         <tbody>
@@ -70,13 +70,13 @@
             <td>#{{ approval.id }}</td>
             <td>
               <code>{{ approval.actionType }}</code><br>
-              <span class="light">{{ approval.actionRef ?: 'none' }}</span>
+              <span class="light">{{ approval.actionRef ?: 'no case reference' }}</span>
             </td>
             <td>
               {% if policy %}
-                <span class="badge">IMPACT {{ policy.riskLevel|upper }}</span>
+                <span class="badge">RISK {{ policy.riskLevel|upper }}</span>
                 <div class="light">Rule: <code>{{ policy.handle }}</code></div>
-                <div class="light">Needs approval: {{ policy.requiresApproval ? 'yes' : 'no' }}</div>
+                <div class="light">Approval required: {{ policy.requiresApproval ? 'yes' : 'no' }}</div>
               {% else %}
                 <span class="light">Default rule</span>
               {% endif %}
@@ -88,22 +88,22 @@
             <td>{{ approval.reason ?: 'n/a' }}</td>
             <td>
               {% if canManageApprovals %}
-                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Approve request #{{ approval.id }} for {{ approval.actionType }}?" style="margin-bottom: 6px;">
+                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})?" style="margin-bottom: 6px;">
                   {{ csrfInput() }}
                   {{ actionInput('agents/dashboard/decide-control-approval') }}
                   {{ redirectInput('agents/control') }}
                   <input type="hidden" name="approvalId" value="{{ approval.id }}">
                   <input type="hidden" name="decision" value="approved">
-                  <input type="text" name="decisionReason" placeholder="Why approve?" style="width: 100%; margin-bottom: 4px;">
+                  <input type="text" name="decisionReason" placeholder="Optional note" style="width: 100%; margin-bottom: 4px;">
                   <button class="btn" type="submit">Approve</button>
                 </form>
-                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Reject request #{{ approval.id }} for {{ approval.actionType }}?">
+                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Reject request #{{ approval.id }} ({{ approval.actionType }})?">
                   {{ csrfInput() }}
                   {{ actionInput('agents/dashboard/decide-control-approval') }}
                   {{ redirectInput('agents/control') }}
                   <input type="hidden" name="approvalId" value="{{ approval.id }}">
                   <input type="hidden" name="decision" value="rejected">
-                  <input type="text" name="decisionReason" placeholder="Why reject?" style="width: 100%; margin-bottom: 4px;">
+                  <input type="text" name="decisionReason" placeholder="Reason for rejection" style="width: 100%; margin-bottom: 4px;">
                   <button class="btn" type="submit">Reject</button>
                 </form>
               {% else %}
@@ -115,21 +115,21 @@
         </tbody>
       </table>
     {% else %}
-      <p>Nothing is waiting for approval.</p>
+      <p>No requests are waiting for a decision.</p>
     {% endif %}
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Refund Runs That Need Attention</h2>
+    <h2 class="h4">Runs That Need Follow-up</h2>
     {% if controlAttentionExecutions|length %}
       <table class="data fullwidth">
         <thead>
         <tr>
-          <th>Run</th>
-          <th>Refund Action</th>
-          <th>State</th>
+          <th>Run #</th>
+          <th>Action</th>
+          <th>Status</th>
           <th>Rule</th>
-          <th>What Went Wrong</th>
+          <th>Issue</th>
         </tr>
         </thead>
         <tbody>
@@ -139,18 +139,18 @@
             <td>#{{ execution.id }}</td>
             <td>
               <code>{{ execution.actionType }}</code><br>
-              <span class="light">{{ execution.actionRef ?: 'none' }}</span>
+              <span class="light">{{ execution.actionRef ?: 'no case reference' }}</span>
             </td>
             <td><strong>{{ execution.status }}</strong></td>
             <td>
               {% if policy %}
-                <span class="badge">IMPACT {{ policy.riskLevel|upper }}</span>
+                <span class="badge">RISK {{ policy.riskLevel|upper }}</span>
                 <div class="light">Rule: <code>{{ policy.handle }}</code></div>
               {% else %}
                 <span class="light">Default rule</span>
               {% endif %}
             </td>
-            <td>{{ execution.errorMessage ?: 'Check rule or approval requirements.' }}</td>
+            <td>{{ execution.errorMessage ?: 'Check rule/approval requirements and retry.' }}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -161,50 +161,52 @@
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Create Refund Approval (Manual)</h2>
+    <h2 class="h4">Create Request Manually (Fallback)</h2>
+    <p class="light">Recommended flow: agents create requests via API. Use this form only if you need a manual fallback.</p>
+
     {% if canManageApprovals and allowCpApprovalRequests %}
-      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Send this request for approval?">
+      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Create this return request?">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/request-control-approval') }}
         {{ redirectInput('agents/control') }}
 
         {{ forms.textField({
-          label: 'Refund Action Name',
-          instructions: 'Machine name for the refund action. Example: returns.exception.refund.',
+          label: 'Action name',
+          instructions: 'Internal action key. Example: returns.exception.refund',
           name: 'actionType',
           required: true,
           placeholder: 'returns.exception.refund',
         }) }}
 
         {{ forms.textField({
-          label: 'Case Reference',
-          instructions: 'Optional business reference (order, return, case, ticket).',
+          label: 'Case reference',
+          instructions: 'Optional order/return/case reference.',
           name: 'actionRef',
           placeholder: 'order-12345:return-998',
         }) }}
 
         {{ forms.textField({
-          label: 'Duplicate Protection Key',
-          instructions: 'Optional but recommended. Reusing this key avoids accidental duplicate requests.',
+          label: 'Duplicate protection key',
+          instructions: 'Optional but recommended. Reuse prevents accidental duplicates.',
           name: 'idempotencyKey',
           placeholder: 'approval-returns-12345-v1',
         }) }}
 
         {{ forms.textareaField({
-          label: 'Why This Needs Approval',
+          label: 'Reason for review',
           name: 'reason',
           rows: 2,
-          placeholder: 'High-value return exceeded policy threshold.',
+          placeholder: 'High-value return outside normal threshold.',
         }) }}
 
-        <h3 class="h5">Details</h3>
+        <h3 class="h5">Request Details</h3>
         {{ forms.textField({
-          label: 'Order Number/ID',
+          label: 'Order number / ID',
           name: 'payloadOrderId',
           placeholder: '12345',
         }) }}
         {{ forms.textField({
-          label: 'Return Number/ID',
+          label: 'Return number / ID',
           name: 'payloadReturnId',
           placeholder: '998',
         }) }}
@@ -214,19 +216,19 @@
           placeholder: 'cust_001',
         }) }}
         {{ forms.textField({
-          label: 'Note For Approver',
+          label: 'Approver note',
           name: 'payloadNote',
-          placeholder: 'Photos unclear, requesting manual review.',
+          placeholder: 'Photos are unclear, needs manual decision.',
         }) }}
 
-        <h3 class="h5">Tracking</h3>
+        <h3 class="h5">Source Tracking</h3>
         {{ forms.textField({
           label: 'Source',
           name: 'metadataSource',
           placeholder: 'cp-manual',
         }) }}
         {{ forms.textField({
-          label: 'Channel/Team',
+          label: 'Team/Channel',
           name: 'metadataChannel',
           placeholder: 'ops',
         }) }}
@@ -236,7 +238,7 @@
           <div style="margin-top: 8px;">
             {{ forms.textareaField({
               label: 'Payload JSON',
-              instructions: 'Merged with guided payload fields. JSON values override guided keys when duplicated.',
+              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
               name: 'payloadJson',
               rows: 4,
               value: '{}',
@@ -244,7 +246,7 @@
 
             {{ forms.textareaField({
               label: 'Metadata JSON',
-              instructions: 'Merged with guided metadata fields. JSON values override guided keys when duplicated.',
+              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
               name: 'metadataJson',
               rows: 3,
               value: '{}',
@@ -252,20 +254,20 @@
           </div>
         </details>
 
-        <button class="btn submit" type="submit">Send For Approval</button>
+        <button class="btn submit" type="submit">Create Request</button>
       </form>
     {% elseif canManageApprovals %}
-      <p class="warning">Manual request form is turned off (agent-first mode).</p>
-      <p class="light">Use your agent/integration to call <code>POST /agents/v1/control/approvals/request</code> for refund approvals.</p>
+      <p class="warning">Manual creation is off (agent-first mode).</p>
+      <p class="light">Use your integration to call <code>POST /agents/v1/control/approvals/request</code>.</p>
     {% else %}
-      <p class="warning">You do not have permission to create refund approvals.</p>
+      <p class="warning">You do not have permission to create return requests.</p>
     {% endif %}
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Run Approved Refund Action</h2>
+    <h2 class="h4">Run an Approved Action</h2>
     {% if canExecuteActions %}
-      <p class="light">This checks rules and approvals before sending. Invalid runs are blocked automatically.</p>
+      <p class="light">This checks rule + approval requirements first and blocks invalid runs automatically.</p>
 
       <form method="post" accept-charset="UTF-8" id="control-execute-form" class="js-confirm-form" data-confirm-message="">
         {{ csrfInput() }}
@@ -273,7 +275,7 @@
         {{ redirectInput('agents/control') }}
 
         {{ forms.textField({
-          label: 'Refund Action Name',
+          label: 'Action name',
           id: 'execute-action-type',
           name: 'actionType',
           required: true,
@@ -281,44 +283,44 @@
         }) }}
 
         {{ forms.textField({
-          label: 'Case Reference',
+          label: 'Case reference',
           name: 'actionRef',
           placeholder: 'order-12345:return-998',
         }) }}
 
         {{ forms.textField({
-          label: 'Approved Request Number',
+          label: 'Approved request #',
           id: 'execute-approval-id',
           name: 'approvalId',
-          instructions: 'If the rule requires approval, enter the approved request number.',
+          instructions: 'Required when the matching rule needs approval.',
           placeholder: '123',
         }) }}
 
         {{ forms.textField({
-          label: 'Duplicate Protection Key',
+          label: 'Duplicate protection key',
           name: 'idempotencyKey',
           required: true,
           placeholder: 'exec-returns-12345-v1',
         }) }}
 
-        <h3 class="h5">Details</h3>
+        <h3 class="h5">Run Details</h3>
         {{ forms.textField({
-          label: 'Order Number/ID',
+          label: 'Order number / ID',
           name: 'payloadOrderId',
           placeholder: '12345',
         }) }}
         {{ forms.textField({
-          label: 'Return Number/ID',
+          label: 'Return number / ID',
           name: 'payloadReturnId',
           placeholder: '998',
         }) }}
         {{ forms.textField({
-          label: 'Reason Code (Optional)',
+          label: 'Reason code (optional)',
           name: 'payloadReasonCode',
           placeholder: 'DAMAGED_ITEM',
         }) }}
         {{ forms.textField({
-          label: 'Operator Note',
+          label: 'Operator note',
           name: 'payloadOperatorNote',
           placeholder: 'Refund approved after manual check.',
         }) }}
@@ -328,7 +330,7 @@
           <div style="margin-top: 8px;">
             {{ forms.textareaField({
               label: 'Payload JSON',
-              instructions: 'Merged with guided payload fields. JSON values override guided keys when duplicated.',
+              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
               name: 'payloadJson',
               rows: 4,
               value: '{}',
@@ -340,21 +342,21 @@
         <button class="btn submit" id="execute-submit" type="submit">Run Action</button>
       </form>
     {% else %}
-      <p class="warning">You do not have permission to execute actions.</p>
+      <p class="warning">You do not have permission to run actions.</p>
     {% endif %}
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Refund Rules</h2>
+    <h2 class="h4">Rules</h2>
 
     {% if controlPolicies|length %}
       <table class="data fullwidth" style="margin-bottom: 12px;">
         <thead>
         <tr>
-          <th>Rule</th>
-          <th>Matches Workflow</th>
-          <th>Impact</th>
-          <th>Needs Approval</th>
+          <th>Rule key</th>
+          <th>Matches action</th>
+          <th>Risk</th>
+          <th>Approval required</th>
           <th>Active</th>
         </tr>
         </thead>
@@ -376,7 +378,7 @@
 
     {% if canManagePolicies %}
       <details>
-        <summary><strong>Create or update rule</strong></summary>
+        <summary><strong>Create or update a rule</strong></summary>
         <div style="margin-top: 8px;">
           <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
             {{ csrfInput() }}
@@ -384,7 +386,7 @@
             {{ redirectInput('agents/control') }}
 
             {{ forms.textField({
-              label: 'Rule Key',
+              label: 'Rule key',
               instructions: 'Stable machine key for this rule.',
               name: 'handle',
               required: true,
@@ -392,13 +394,13 @@
             }) }}
 
             {{ forms.textField({
-              label: 'Rule Name',
+              label: 'Rule name',
               name: 'displayName',
               placeholder: 'Returns Exception High Risk',
             }) }}
 
             {{ forms.textField({
-              label: 'Workflow Match Pattern',
+              label: 'Action match pattern',
               instructions: 'Wildcard pattern, for example: returns.exception.*',
               name: 'actionPattern',
               required: true,
@@ -406,7 +408,7 @@
             }) }}
 
             {{ forms.selectField({
-              label: 'Impact Level',
+              label: 'Risk level',
               name: 'riskLevel',
               options: [
                 {label: 'low', value: 'low'},
@@ -419,7 +421,7 @@
 
             <div style="margin-bottom: 8px;">
               <input type="hidden" name="requiresApproval" value="0">
-              <label><input type="checkbox" name="requiresApproval" value="1" checked> Needs approval</label>
+              <label><input type="checkbox" name="requiresApproval" value="1" checked> Require approval</label>
             </div>
 
             <div style="margin-bottom: 8px;">
@@ -428,11 +430,11 @@
             </div>
 
             <details style="margin-bottom: 12px;">
-              <summary><strong>Advanced Rule JSON</strong></summary>
+              <summary><strong>Advanced rule JSON</strong></summary>
               <div style="margin-top: 8px;">
                 {{ forms.textareaField({
-                  label: 'Advanced Config JSON',
-                  instructions: 'Optional advanced values, e.g. {"requiredScope":"control:actions:execute"}.',
+                  label: 'Advanced config JSON',
+                  instructions: 'Optional advanced values, for example: {"requiredScope":"control:actions:execute"}.',
                   name: 'configJson',
                   rows: 4,
                   value: '{"requiredScope":"control:actions:execute"}',
@@ -450,7 +452,7 @@
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Refund Approval History</h2>
+    <h2 class="h4">Activity Log</h2>
     {% if controlAuditEvents|length %}
       <table class="data fullwidth">
         <thead>
@@ -458,8 +460,8 @@
           <th>Time</th>
           <th>Type</th>
           <th>Event</th>
-          <th>By</th>
-          <th>Details</th>
+          <th>Actor</th>
+          <th>Summary</th>
         </tr>
         </thead>
         <tbody>
@@ -479,7 +481,7 @@
     {% endif %}
 
     <details style="margin-top: 12px;">
-      <summary><strong>Raw System Data (Advanced)</strong></summary>
+      <summary><strong>Technical Data (Advanced)</strong></summary>
       <pre class="border rounded p-3" style="margin-top: 8px;">{{ controlSnapshotJson }}</pre>
     </details>
   </div>
@@ -562,7 +564,7 @@
 
           if (!actionType) {
             executeButton.disabled = true;
-            hintNode.textContent = 'Enter a refund action name first.';
+            hintNode.textContent = 'Enter an action name to validate this run.';
             executeForm.setAttribute('data-confirm-message', '');
             return;
           }
@@ -582,7 +584,7 @@
           if (requiresApproval) {
             if (!approvalIdRaw) {
               executeButton.disabled = true;
-              hintNode.textContent = `Impact ${risk}. This rule needs approval. Enter an approved request number to continue.`;
+              hintNode.textContent = `Risk ${risk}. This rule needs an approved request number.`;
               executeForm.setAttribute('data-confirm-message', '');
               return;
             }
@@ -590,7 +592,7 @@
             const approvalId = Number.parseInt(approvalIdRaw, 10);
             if (!Number.isInteger(approvalId) || !approvedApprovalsById[approvalId]) {
               executeButton.disabled = true;
-              hintNode.textContent = `Impact ${risk}. Request number must point to an approved request.`;
+              hintNode.textContent = `Risk ${risk}. Request number must point to an approved request.`;
               executeForm.setAttribute('data-confirm-message', '');
               return;
             }
@@ -598,19 +600,19 @@
             const approvedActionType = String(approvedApprovalsById[approvalId] || '');
             if (approvedActionType !== actionType) {
               executeButton.disabled = true;
-              hintNode.textContent = `Impact ${risk}. Request #${approvalId} is for ${approvedActionType}, not ${actionType}.`;
+              hintNode.textContent = `Risk ${risk}. Request #${approvalId} is for ${approvedActionType}, not ${actionType}.`;
               executeForm.setAttribute('data-confirm-message', '');
               return;
             }
           }
 
           executeButton.disabled = false;
-          hintNode.textContent = `Ready. Impact ${risk}. Approval ${requiresApproval ? 'required and validated' : 'not required'} by rule ${policy.handle || 'default-control-policy'}.`;
+          hintNode.textContent = `Ready. Risk ${risk}. Approval ${requiresApproval ? 'required and validated' : 'not required'} by rule ${policy.handle || 'default-control-policy'}.`;
 
           const approvalSegment = requiresApproval
             ? ` Request #${approvalIdRaw} has been validated.`
             : ' This rule does not require approval.';
-          executeForm.setAttribute('data-confirm-message', `Run ${actionType} with impact ${risk}?${approvalSegment}`);
+          executeForm.setAttribute('data-confirm-message', `Run ${actionType} with risk ${risk}?${approvalSegment}`);
         };
 
         actionTypeInput.addEventListener('input', setExecuteState);

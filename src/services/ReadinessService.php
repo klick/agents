@@ -49,17 +49,18 @@ class ReadinessService extends Component
 
     public function getReadinessBreakdown(): array
     {
-        $isSiteRequest = (bool)Craft::$app->getRequest()->getIsSiteRequest();
+        $request = Craft::$app->getRequest();
+        $hasWebRequestContext = (bool)($request->getIsSiteRequest() || $request->getIsCpRequest());
         $databaseAvailable = (bool)Craft::$app->getDb();
         $commerceEnabled = Plugin::getInstance()?->isCommercePluginEnabled() ?? false;
 
         return [
             [
-                'id' => 'site-request',
-                'label' => 'Site request context available',
+                'id' => 'web-request',
+                'label' => 'Web request context available',
                 'weight' => 20,
-                'passed' => $isSiteRequest,
-                'score' => $isSiteRequest ? 20 : 0,
+                'passed' => $hasWebRequestContext,
+                'score' => $hasWebRequestContext ? 20 : 0,
             ],
             [
                 'id' => 'database',

@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.6 - 2026-02-27
+
+- Polished CP IA by consolidating Overview/Readiness/Discovery/Security into a Dashboard with top tabs, while preserving legacy deep links via redirects.
+- Renamed and simplified the experimental approvals area to Return Requests with clearer queue-first copy (`Now`, decisions, follow-up runs, activity) and agent-first fallback messaging.
+- Improved API Keys UX with preset examples, native Craft scope selection, one-time key copy/download helpers, and a revoke+rotate shortcut action.
+- Improved CP readability by default-collapsing technical JSON blocks and tightening labels/messages across settings and credential actions.
+- Updated readiness diagnostics to treat CP and site web contexts as valid request context for the web-request readiness check.
+
 ## 0.3.5 - 2026-02-27
 
 - Hid refund-approvals/control surfaces behind `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL` (default off): CP tab/routes, API routes, capabilities/OpenAPI discoverability, and related scope catalog entries are now gated.

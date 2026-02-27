@@ -6,10 +6,10 @@
 
 {% block content %}
   <h1>Overview</h1>
-  <p class="text-sm text-muted">Operational runtime controls and quick links.</p>
+  <p class="text-sm text-muted">Turn the API on/off and jump to key endpoints and operational checks.</p>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Runtime State</h2>
+    <h2 class="h4">Service State</h2>
     <p>
       <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
       <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
@@ -23,20 +23,20 @@
       {{ forms.lightswitchField({
         id: 'agents-enabled-switch',
         name: 'enabled',
-        fieldLabel: 'Agents API',
+        fieldLabel: 'API availability',
         instructions: agentsEnabledLocked
           ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-          : 'Toggle to enable or disable the Agents API.',
+          : 'Turn the Agents API on or off.',
         on: agentsEnabled,
-        onLabel: 'Enabled',
-        offLabel: 'Disabled',
+        onLabel: false,
+        offLabel: false,
         disabled: agentsEnabledLocked,
       }) }}
 
       {% if agentsEnabledLocked %}
-        <p class="warning">State is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
+        <p class="warning">This is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
       {% else %}
-        <p class="text-sm text-muted">Saved immediately when toggled.</p>
+        <p class="text-sm text-muted">Saved immediately when switched.</p>
         <noscript>
           <button class="btn submit" type="submit">Save</button>
         </noscript>
@@ -45,22 +45,22 @@
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Operator Actions</h2>
+    <h2 class="h4">Quick Actions</h2>
     <form method="post" accept-charset="UTF-8" style="margin-bottom: 8px;">
       {{ csrfInput() }}
       {{ actionInput('agents/dashboard/prewarm-discovery') }}
       {{ redirectInput('agents/overview') }}
       <input type="hidden" name="target" value="all">
-      <button class="btn submit" type="submit">Prewarm Discovery (All)</button>
+      <button class="btn submit" type="submit">Refresh Discovery Cache (All)</button>
     </form>
-    <p><a href="{{ url('agents/discovery') }}">Open Discovery tab for scoped prewarm and cache clear actions</a></p>
+    <p><a href="{{ url('agents/discovery') }}">Open Discovery for document-specific refresh and cache clear</a></p>
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Feature Status</h2>
     <ul>
-      <li>Discovery `llms.txt`: <strong>{{ discoveryEnabled.llms ? 'enabled' : 'disabled' }}</strong></li>
-      <li>Discovery `commerce.txt`: <strong>{{ discoveryEnabled.commerce ? 'enabled' : 'disabled' }}</strong></li>
+      <li><code>llms.txt</code>: <strong>{{ discoveryEnabled.llms ? 'enabled' : 'disabled' }}</strong></li>
+      <li><code>commerce.txt</code>: <strong>{{ discoveryEnabled.commerce ? 'enabled' : 'disabled' }}</strong></li>
       <li>Webhook delivery: <strong>{{ webhookEnabled ? 'enabled' : 'disabled' }}</strong></li>
       <li>Security warnings: <strong>{{ securityWarningCounts.warnings|default(0) }}</strong></li>
       <li>Security errors: <strong>{{ securityWarningCounts.errors|default(0) }}</strong></li>
@@ -75,7 +75,7 @@
         <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
       {% endfor %}
     </ul>
-    <p><strong>Discovery endpoints</strong></p>
+    <p><strong>Discovery documents</strong></p>
     <ul>
       {% for endpoint in discoveryEndpoints %}
         <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
@@ -84,30 +84,30 @@
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Ownership Split</h2>
+    <h2 class="h4">Where to change what</h2>
     <table class="data fullwidth">
       <thead>
       <tr>
         <th>Area</th>
-        <th>Owner</th>
+        <th>Primary place</th>
         <th>Notes</th>
       </tr>
       </thead>
       <tbody>
       <tr>
-        <td>Runtime on/off</td>
+        <td>Service on/off</td>
         <td>CP</td>
         <td>Can be env-locked with <code>PLUGIN_AGENTS_ENABLED</code>.</td>
       </tr>
       <tr>
-        <td>Discovery policy/content</td>
+        <td>Discovery content</td>
         <td><code>config/agents.php</code></td>
-        <td>Config-first policy and content ownership.</td>
+        <td>Config is the source of truth for policy and content.</td>
       </tr>
       <tr>
-        <td>Auth and credentials</td>
+        <td>Auth and API keys</td>
         <td>CP + <code>.env</code></td>
-        <td>Use Credentials tab for managed rotate/revoke lifecycle; env credentials remain supported.</td>
+        <td>Use API Keys tab for managed rotate/revoke; env keys remain supported.</td>
       </tr>
       </tbody>
     </table>
@@ -117,7 +117,10 @@
     <h2 class="h4">Readiness Snapshot</h2>
     <p>Status: <strong>{{ readiness.status|default('unknown') }}</strong></p>
     <p>Score: <strong>{{ readiness.readinessScore|default(0) }}</strong> / 100</p>
-    <pre class="border rounded p-3">{{ readinessJson }}</pre>
+    <details>
+      <summary><strong>Technical JSON</strong></summary>
+      <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessJson }}</pre>
+    </details>
   </div>
 
   {% if not agentsEnabledLocked %}
@@ -150,4 +153,5 @@
       })();
     {% endjs %}
   {% endif %}
+
 {% endblock %}

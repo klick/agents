@@ -14,31 +14,37 @@ use yii\web\Response;
 class DashboardController extends Controller
 {
     private const SESSION_REVEALED_CREDENTIAL = 'agents.revealedCredential';
+    private const DASHBOARD_TABS = ['overview', 'readiness', 'discovery', 'security'];
 
     public function actionIndex(): Response
     {
-        return $this->redirect('agents/overview');
+        return $this->redirect('agents/dashboard/overview');
     }
 
     public function actionDashboard(): Response
     {
-        return $this->redirect('agents/overview');
-    }
-
-    public function actionOverview(): Response
-    {
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
         $settings = $this->getSettingsModel();
-        $readiness = $plugin->getReadinessService()->getReadinessDiagnostics();
+        $readinessService = $plugin->getReadinessService();
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
+        $activeDashboardTab = $this->resolveDashboardTab();
+        $dashboardTabs = $this->dashboardTabs();
 
-        return $this->renderCpTemplate('agents/overview', [
+        $overviewReadiness = $readinessService->getReadinessDiagnostics();
+        $readinessHealth = $readinessService->getHealthSummary();
+        $readinessSummary = $readinessService->getReadinessSummary();
+        $readinessDiagnostics = $readinessService->getReadinessDiagnostics();
+        $discoveryStatus = $plugin->getDiscoveryTxtService()->getDiscoveryStatus();
+
+        return $this->renderCpTemplate('agents/dashboard', [
+            'activeDashboardTab' => $activeDashboardTab,
+            'dashboardTabs' => $dashboardTabs,
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
-            'readiness' => $readiness,
-            'readinessJson' => $this->prettyPrintJson($readiness['summary'] ?? []),
+            'overviewReadiness' => $overviewReadiness,
+            'overviewReadinessJson' => $this->prettyPrintJson($overviewReadiness['summary'] ?? []),
             'discoveryEnabled' => [
                 'llms' => (bool)$settings->enableLlmsTxt,
                 'commerce' => (bool)$settings->enableCommerceTxt,
@@ -47,39 +53,12 @@ class DashboardController extends Controller
             'securityWarningCounts' => (array)($securityPosture['warningCounts'] ?? []),
             'apiEndpoints' => $this->getApiEndpoints(),
             'discoveryEndpoints' => $this->getDiscoveryEndpoints(),
-        ]);
-    }
-
-    public function actionReadiness(): Response
-    {
-        $plugin = Plugin::getInstance();
-        $enabledState = $plugin->getAgentsEnabledState();
-        $health = $plugin->getReadinessService()->getHealthSummary();
-        $readiness = $plugin->getReadinessService()->getReadinessSummary();
-        $diagnostics = $plugin->getReadinessService()->getReadinessDiagnostics();
-
-        return $this->renderCpTemplate('agents/readiness', [
-            'agentsEnabled' => (bool)$enabledState['enabled'],
-            'agentsEnabledSource' => (string)$enabledState['source'],
-            'health' => $health,
-            'readiness' => $readiness,
-            'diagnostics' => $diagnostics,
-            'healthJson' => $this->prettyPrintJson($health),
-            'readinessJson' => $this->prettyPrintJson($readiness),
-            'diagnosticsJson' => $this->prettyPrintJson($diagnostics),
-        ]);
-    }
-
-    public function actionDiscovery(): Response
-    {
-        $plugin = Plugin::getInstance();
-        $enabledState = $plugin->getAgentsEnabledState();
-        $settings = $this->getSettingsModel();
-        $discoveryStatus = $plugin->getDiscoveryTxtService()->getDiscoveryStatus();
-
-        return $this->renderCpTemplate('agents/discovery', [
-            'agentsEnabled' => (bool)$enabledState['enabled'],
-            'agentsEnabledSource' => (string)$enabledState['source'],
+            'readinessHealth' => $readinessHealth,
+            'readinessSummary' => $readinessSummary,
+            'readinessDiagnostics' => $readinessDiagnostics,
+            'readinessHealthJson' => $this->prettyPrintJson($readinessHealth),
+            'readinessSummaryJson' => $this->prettyPrintJson($readinessSummary),
+            'readinessDiagnosticsJson' => $this->prettyPrintJson($readinessDiagnostics),
             'discoveryStatus' => $discoveryStatus,
             'discoveryStatusJson' => $this->prettyPrintJson($discoveryStatus),
             'discoveryConfig' => [
@@ -88,21 +67,29 @@ class DashboardController extends Controller
                 'llmsTtl' => (int)$settings->llmsTxtCacheTtl,
                 'commerceTtl' => (int)$settings->commerceTxtCacheTtl,
             ],
+            'securityPosture' => $securityPosture,
+            'securityPostureJson' => $this->prettyPrintJson($securityPosture),
         ]);
+    }
+
+    public function actionOverview(): Response
+    {
+        return $this->redirect('agents/dashboard/overview');
+    }
+
+    public function actionReadiness(): Response
+    {
+        return $this->redirect('agents/dashboard/readiness');
+    }
+
+    public function actionDiscovery(): Response
+    {
+        return $this->redirect('agents/dashboard/discovery');
     }
 
     public function actionSecurity(): Response
     {
-        $plugin = Plugin::getInstance();
-        $enabledState = $plugin->getAgentsEnabledState();
-        $posture = $plugin->getSecurityPolicyService()->getCpPosture();
-
-        return $this->renderCpTemplate('agents/security', [
-            'agentsEnabled' => (bool)$enabledState['enabled'],
-            'agentsEnabledSource' => (string)$enabledState['source'],
-            'securityPosture' => $posture,
-            'securityPostureJson' => $this->prettyPrintJson($posture),
-        ]);
+        return $this->redirect('agents/dashboard/security');
     }
 
     public function actionControl(): Response
@@ -221,7 +208,7 @@ class DashboardController extends Controller
 
     public function actionHealth(): Response
     {
-        return $this->redirect('agents/readiness');
+        return $this->redirect('agents/dashboard/readiness');
     }
 
     public function actionToggleEnabled(): Response
@@ -233,7 +220,7 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         if ((bool)$enabledState['locked']) {
             $this->setFailFlash('Agents enabled state is controlled by `PLUGIN_AGENTS_ENABLED` and cannot be changed from the Control Panel.');
-            return $this->redirectToPostedUrl(null, 'agents/overview');
+            return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
         }
 
         $enabledRaw = strtolower(trim((string)$this->request->getBodyParam('enabled', '0')));
@@ -245,11 +232,11 @@ class DashboardController extends Controller
 
         if (!$saved) {
             $this->setFailFlash('Couldn’t save Agents settings.');
-            return $this->redirectToPostedUrl(null, 'agents/overview');
+            return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
         }
 
         $this->setSuccessFlash($enabled ? 'Agents API enabled.' : 'Agents API disabled.');
-        return $this->redirectToPostedUrl(null, 'agents/overview');
+        return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
     }
 
     public function actionSaveSettings(): Response
@@ -265,7 +252,9 @@ class DashboardController extends Controller
         $settingsData['enabled'] = (bool)$enabledState['locked']
             ? (bool)$enabledState['enabled']
             : $this->parseBooleanBodyParam('enabled', (bool)$settings->enabled);
-        $settingsData['allowCpApprovalRequests'] = $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests);
+        $settingsData['allowCpApprovalRequests'] = $plugin->isRefundApprovalsExperimentalEnabled()
+            ? $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests)
+            : false;
         $settingsData['enableLlmsTxt'] = $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
         $settingsData['enableCommerceTxt'] = $this->parseBooleanBodyParam('enableCommerceTxt', (bool)$settings->enableCommerceTxt);
 
@@ -303,7 +292,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Discovery prewarm failed: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/discovery');
+        return $this->redirectToPostedUrl(null, 'agents/dashboard/discovery');
     }
 
     public function actionClearDiscoveryCache(): Response
@@ -318,7 +307,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to clear discovery caches: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/discovery');
+        return $this->redirectToPostedUrl(null, 'agents/dashboard/discovery');
     }
 
     public function actionCreateCredential(): Response
@@ -330,7 +319,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $handle = (string)$this->request->getBodyParam('credentialHandle', '');
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
-        $scopes = $this->parseScopesInput((string)$this->request->getBodyParam('credentialScopes', ''));
+        $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
 
         try {
             $result = $plugin->getCredentialService()->createManagedCredential($handle, $displayName, $scopes, $defaultScopes);
@@ -342,11 +331,11 @@ class DashboardController extends Controller
                 'action' => 'created',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Credential `%s` created. Copy the token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('API key `%s` created. Copy the token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to create credential: ' . $e->getMessage());
+            $this->setFailFlash('Unable to create API key: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -361,23 +350,23 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
-        $scopes = $this->parseScopesInput((string)$this->request->getBodyParam('credentialScopes', ''));
+        $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing credential id.');
+            $this->setFailFlash('Missing API key ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $credential = $plugin->getCredentialService()->updateManagedCredential($credentialId, $displayName, $scopes, $defaultScopes);
             if (!is_array($credential)) {
-                $this->setFailFlash('Credential not found.');
+                $this->setFailFlash('API key not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
-            $this->setSuccessFlash(sprintf('Credential `%s` updated.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('API key `%s` updated.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to update credential: ' . $e->getMessage());
+            $this->setFailFlash('Unable to update API key: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -393,14 +382,14 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing credential id.');
+            $this->setFailFlash('Missing API key ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
-                $this->setFailFlash('Credential not found.');
+                $this->setFailFlash('API key not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
@@ -412,9 +401,9 @@ class DashboardController extends Controller
                 'action' => 'rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Credential `%s` rotated. Copy the new token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('API key `%s` rotated. Copy the new token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to rotate credential: ' . $e->getMessage());
+            $this->setFailFlash('Unable to rotate API key: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -427,19 +416,56 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing credential id.');
+            $this->setFailFlash('Missing API key ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $revoked = Plugin::getInstance()->getCredentialService()->revokeManagedCredential($credentialId);
             if (!$revoked) {
-                $this->setFailFlash('Credential not found.');
+                $this->setFailFlash('API key not found.');
             } else {
-                $this->setSuccessFlash('Credential revoked.');
+                $this->setSuccessFlash('API key revoked.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to revoke credential: ' . $e->getMessage());
+            $this->setFailFlash('Unable to revoke API key: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/credentials');
+    }
+
+    public function actionRevokeAndRotateCredential(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_ROTATE);
+
+        $plugin = Plugin::getInstance();
+        $defaultScopes = $this->getDefaultScopes();
+        $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+
+        if ($credentialId <= 0) {
+            $this->setFailFlash('Missing API key ID.');
+            return $this->redirectToPostedUrl(null, 'agents/credentials');
+        }
+
+        try {
+            $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
+            if (!is_array($result)) {
+                $this->setFailFlash('API key not found.');
+                return $this->redirectToPostedUrl(null, 'agents/credentials');
+            }
+
+            $credential = (array)($result['credential'] ?? []);
+            $this->storeRevealedCredential([
+                'token' => (string)($result['token'] ?? ''),
+                'handle' => (string)($credential['handle'] ?? ''),
+                'displayName' => (string)($credential['displayName'] ?? ''),
+                'action' => 'revoked and rotated',
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            ]);
+            $this->setSuccessFlash(sprintf('API key `%s` revoked and rotated. Old token is now invalid. Copy the new token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to revoke and rotate API key: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -452,19 +478,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing credential id.');
+            $this->setFailFlash('Missing API key ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $deleted = Plugin::getInstance()->getCredentialService()->deleteManagedCredential($credentialId);
             if (!$deleted) {
-                $this->setFailFlash('Credential not found.');
+                $this->setFailFlash('API key not found.');
             } else {
-                $this->setSuccessFlash('Credential deleted.');
+                $this->setSuccessFlash('API key deleted.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to delete credential: ' . $e->getMessage());
+            $this->setFailFlash('Unable to delete API key: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -489,11 +515,11 @@ class DashboardController extends Controller
                 'config' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('configJson', '')),
             ], $this->buildCpActorContext());
 
-            $this->setSuccessFlash(sprintf('Policy `%s` saved.', (string)($policy['handle'] ?? 'policy')));
+            $this->setSuccessFlash(sprintf('Rule `%s` saved.', (string)($policy['handle'] ?? 'rule')));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to save control policy: ' . $e->getMessage());
+            $this->setFailFlash('Unable to save rule: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/control');
@@ -507,7 +533,7 @@ class DashboardController extends Controller
 
         $settings = $this->getSettingsModel();
         if (!(bool)$settings->allowCpApprovalRequests) {
-            $this->setFailFlash('Manual refund-approval form is off (agent-first mode). Ask your integration to submit the request via API.');
+            $this->setFailFlash('Manual form is off (agent-first mode). Ask your integration to submit the request via API.');
             return $this->redirectToPostedUrl(null, 'agents/control');
         }
 
@@ -550,7 +576,7 @@ class DashboardController extends Controller
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to request control approval: ' . $e->getMessage());
+            $this->setFailFlash('Unable to create request: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/control');
@@ -565,7 +591,7 @@ class DashboardController extends Controller
         $service = Plugin::getInstance()->getControlPlaneService();
         $approvalId = (int)$this->request->getBodyParam('approvalId', 0);
         if ($approvalId <= 0) {
-            $this->setFailFlash('Missing approval id.');
+            $this->setFailFlash('Missing request number.');
             return $this->redirectToPostedUrl(null, 'agents/control');
         }
 
@@ -578,7 +604,7 @@ class DashboardController extends Controller
             );
 
             if (!is_array($approval)) {
-                $this->setFailFlash('Approval not found.');
+                $this->setFailFlash('Request not found.');
                 return $this->redirectToPostedUrl(null, 'agents/control');
             }
 
@@ -592,7 +618,7 @@ class DashboardController extends Controller
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to decide approval: ' . $e->getMessage());
+            $this->setFailFlash('Unable to save decision: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/control');
@@ -632,24 +658,24 @@ class DashboardController extends Controller
                 ));
             } elseif ($status === 'succeeded') {
                 $this->setSuccessFlash(sprintf(
-                    'Run recorded for `%s` as `%s` (entry #%d).',
+                    'Run recorded for `%s` as `%s` (run #%d).',
                     (string)($execution['actionType'] ?? 'action'),
                     $status,
                     (int)($execution['id'] ?? 0)
                 ));
             } else {
                 $this->setFailFlash(sprintf(
-                    'Execution `%s` for `%s` is `%s`. %s',
+                    'Run `%s` for `%s` is `%s`. %s',
                     $idempotencyKey !== '' ? $idempotencyKey : 'n/a',
                     (string)($execution['actionType'] ?? 'action'),
                     $status,
-                    (string)($execution['errorMessage'] ?? 'Review approval/policy requirements.')
+                    (string)($execution['errorMessage'] ?? 'Review rule/approval requirements.')
                 ));
             }
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to execute control action: ' . $e->getMessage());
+            $this->setFailFlash('Unable to run action: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/control');
@@ -688,6 +714,40 @@ class DashboardController extends Controller
             '/llms.txt',
             '/commerce.txt',
         ];
+    }
+
+    private function dashboardTabs(): array
+    {
+        return [
+            ['key' => 'overview', 'label' => 'Overview', 'url' => 'agents/dashboard/overview'],
+            ['key' => 'readiness', 'label' => 'Readiness', 'url' => 'agents/dashboard/readiness'],
+            ['key' => 'discovery', 'label' => 'Discovery', 'url' => 'agents/dashboard/discovery'],
+            ['key' => 'security', 'label' => 'Security', 'url' => 'agents/dashboard/security'],
+        ];
+    }
+
+    private function resolveDashboardTab(): string
+    {
+        $request = Craft::$app->getRequest();
+        $tabFromQuery = strtolower(trim((string)$request->getQueryParam('tab', '')));
+        if (in_array($tabFromQuery, self::DASHBOARD_TABS, true)) {
+            return $tabFromQuery;
+        }
+
+        $pathInfo = trim((string)$request->getPathInfo(), '/');
+        if (preg_match('#^agents/dashboard/(overview|readiness|discovery|security)$#', $pathInfo, $matches) === 1) {
+            return (string)$matches[1];
+        }
+
+        if (preg_match('#^agents/(overview|readiness|discovery|security)$#', $pathInfo, $matches) === 1) {
+            return (string)$matches[1];
+        }
+
+        if ($pathInfo === 'agents/health') {
+            return 'readiness';
+        }
+
+        return 'overview';
     }
 
     private function getSettingsModel(): Settings
@@ -729,9 +789,28 @@ class DashboardController extends Controller
         return array_values(array_unique($normalized));
     }
 
-    private function parseScopesInput(string $raw): array
+    private function parseScopesInput(mixed $rawInput): array
     {
-        $parts = preg_split('/[\s,]+/', strtolower($raw)) ?: [];
+        $values = [];
+        if (is_array($rawInput)) {
+            foreach ($rawInput as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $values[] = (string)$value;
+            }
+        } elseif (is_string($rawInput) || is_numeric($rawInput)) {
+            $values[] = (string)$rawInput;
+        }
+
+        $parts = [];
+        foreach ($values as $value) {
+            $chunks = preg_split('/[\s,]+/', strtolower($value)) ?: [];
+            foreach ($chunks as $chunk) {
+                $parts[] = $chunk;
+            }
+        }
+
         $scopes = [];
         foreach ($parts as $part) {
             $scope = trim((string)$part);

@@ -78,26 +78,14 @@ class Plugin extends BasePlugin
         $item = parent::getCpNavItem();
         $item['label'] = 'Agents';
         $subnav = [
-            'overview' => [
-                'label' => 'Overview',
-                'url' => 'agents/overview',
-            ],
-            'readiness' => [
-                'label' => 'Readiness',
-                'url' => 'agents/readiness',
-            ],
-            'discovery' => [
-                'label' => 'Discovery',
-                'url' => 'agents/discovery',
-            ],
-            'security' => [
-                'label' => 'Security',
-                'url' => 'agents/security',
+            'dashboard' => [
+                'label' => 'Dashboard',
+                'url' => 'agents/dashboard/overview',
             ],
         ];
         if ($this->isRefundApprovalsExperimentalEnabled()) {
             $subnav['control'] = [
-                'label' => 'Refund Approvals',
+                'label' => 'Return Requests',
                 'url' => 'agents/control',
             ];
         }
@@ -106,7 +94,7 @@ class Plugin extends BasePlugin
             'url' => 'agents/settings',
         ];
         $subnav['credentials'] = [
-            'label' => 'Credentials',
+            'label' => 'API Keys',
             'url' => 'agents/credentials',
         ];
         $item['subnav'] = $subnav;
@@ -118,15 +106,19 @@ class Plugin extends BasePlugin
     {
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function(RegisterUrlRulesEvent $event): void {
             $rules = [
-                'agents' => 'agents/dashboard/overview',
-                'agents/overview' => 'agents/dashboard/overview',
-                'agents/readiness' => 'agents/dashboard/readiness',
-                'agents/discovery' => 'agents/dashboard/discovery',
-                'agents/security' => 'agents/dashboard/security',
+                'agents' => 'agents/dashboard/dashboard',
+                'agents/overview' => 'agents/dashboard/dashboard',
+                'agents/readiness' => 'agents/dashboard/dashboard',
+                'agents/discovery' => 'agents/dashboard/dashboard',
+                'agents/security' => 'agents/dashboard/dashboard',
                 'agents/settings' => 'agents/dashboard/settings',
                 'agents/credentials' => 'agents/dashboard/credentials',
                 // Legacy aliases retained for backward-compatible deep links.
                 'agents/dashboard' => 'agents/dashboard/dashboard',
+                'agents/dashboard/overview' => 'agents/dashboard/dashboard',
+                'agents/dashboard/readiness' => 'agents/dashboard/dashboard',
+                'agents/dashboard/discovery' => 'agents/dashboard/dashboard',
+                'agents/dashboard/security' => 'agents/dashboard/dashboard',
                 'agents/health' => 'agents/dashboard/health',
             ];
             if ($this->isRefundApprovalsExperimentalEnabled()) {
@@ -390,19 +382,19 @@ class Plugin extends BasePlugin
                 ];
                 if ($this->isRefundApprovalsExperimentalEnabled()) {
                     $event->permissions[] = [
-                        'heading' => 'Agents Refund Approvals',
+                        'heading' => 'Agents Return Requests',
                         'permissions' => [
                             self::PERMISSION_CONTROL_VIEW => [
-                                'label' => 'View refund approvals tab',
+                                'label' => 'View return requests tab',
                             ],
                             self::PERMISSION_CONTROL_POLICIES_MANAGE => [
-                                'label' => 'Create and edit refund rules',
+                                'label' => 'Create and edit return rules',
                             ],
                             self::PERMISSION_CONTROL_APPROVALS_MANAGE => [
-                                'label' => 'Approve and reject refund approvals',
+                                'label' => 'Approve and reject return requests',
                             ],
                             self::PERMISSION_CONTROL_ACTIONS_EXECUTE => [
-                                'label' => 'Run approved refund actions',
+                                'label' => 'Run approved return actions',
                             ],
                         ],
                     ];

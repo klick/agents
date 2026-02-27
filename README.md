@@ -2,7 +2,7 @@
 
 Machine-readable readiness/discovery API and governed control-plane plugin for Craft CMS and Commerce.
 
-Current plugin version: **0.3.5**
+Current plugin version: **0.3.6**
 
 ## Purpose
 
@@ -38,7 +38,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.3.5
+composer require klick/agents:^0.3.6
 php craft plugin/install agents
 ```
 
@@ -95,7 +95,7 @@ Credential sources:
 
 - `PLUGIN_AGENTS_API_CREDENTIALS` (strict JSON credential objects with per-credential scopes)
 - `PLUGIN_AGENTS_API_TOKEN` (legacy single-token fallback)
-- Control Panel managed credentials (Credentials tab: create/edit scopes/rotate/revoke/delete with last-used metadata)
+- Control Panel managed credentials (API Keys tab: create/edit scopes/rotate/revoke/delete with last-used metadata)
 
 Managed credentials are stored in plugin DB tables and participate in runtime auth alongside env credentials.
 
@@ -469,59 +469,61 @@ return [
 
 ## CP views
 
-- `Agents` section uses 6 deep-linkable cockpit tabs by default:
-  - `agents/overview`
-  - `agents/readiness`
-  - `agents/discovery`
-  - `agents/security`
-  - `agents/settings`
-  - `agents/credentials`
-- Optional experimental tab (enabled via `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
-  - `agents/control`
-- Legacy CP paths remain valid:
-  - `agents` resolves to `overview`
-  - `agents/dashboard` resolves to `overview`
-  - `agents/health` resolves to `readiness`
-- Overview:
+- `Agents` section now uses 3 primary subnav views by default:
+  - `agents/dashboard/overview` (`Dashboard`)
+  - `agents/settings` (`Settings`)
+  - `agents/credentials` (`API Keys`)
+- Optional experimental subnav view (enabled via `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
+  - `agents/control` (`Return Requests`)
+- Dashboard includes top tabs:
+  - `Overview` (`agents/dashboard/overview`)
+  - `Readiness` (`agents/dashboard/readiness`)
+  - `Discovery` (`agents/dashboard/discovery`)
+  - `Security` (`agents/dashboard/security`)
+- Legacy CP paths remain valid and resolve to Dashboard tabs:
+  - `agents` -> `dashboard/overview`
+  - `agents/overview` -> `dashboard/overview`
+  - `agents/readiness` -> `dashboard/readiness`
+  - `agents/discovery` -> `dashboard/discovery`
+  - `agents/security` -> `dashboard/security`
+  - `agents/health` -> `dashboard/readiness`
+- Dashboard/Overview:
   - runtime enabled/disabled state and source (`env` vs CP setting)
   - env-lock aware runtime toggle
-  - quick endpoint links + discovery prewarm entrypoint
+  - quick endpoint links + discovery refresh entrypoint
   - ownership split guidance (`CP` vs `config/agents.php` vs `.env`)
-- Readiness:
+- Dashboard/Readiness:
   - readiness score, criterion breakdown, component checks, warnings
   - health/readiness diagnostic JSON snapshots
-- Discovery:
+- Dashboard/Discovery:
   - read-only `llms.txt`/`commerce.txt` status, metadata, preview snippets
-  - operator actions: prewarm (`all|llms|commerce`) and clear cache
-- Security:
+  - operator actions: refresh (`all|llms|commerce`) and clear cache
+- Dashboard/Security:
   - read-only effective auth/rate-limit/redaction/webhook posture
   - centralized warning output from shared security policy logic
-- Refund Approvals (`agents/control`, experimental flag required):
-  - queue-first operator flow for refund approvals and blocked/failed refund runs
-  - agent-first approval model: CP approval-request form is disabled by default
-  - optional CP request fallback can be enabled in Settings (`allowCpApprovalRequests`)
-  - policy-aware execution guardrails (disabled policy blocks, approval linkage checks)
-  - configurable policy catalog (risk, approval, enablement) with advanced config JSON
-  - immutable control audit trail and collapsible full snapshot JSON
-- Settings:
-  - deep-linkable runtime plugin settings editor
-  - preserves env-lock behavior for `enabled`
-- Credentials:
+- Return Requests (`agents/control`, experimental flag required):
+  - queue-first operator flow for requests waiting on human decision
+  - clear split between decision queue, runs needing follow-up, and historical activity
+  - agent-first model: CP request form is disabled by default
+  - optional manual fallback can be enabled in Settings (`allowCpApprovalRequests`)
+  - rule-aware execution guardrails (disabled rule blocks, approval linkage checks)
+  - immutable audit trail with optional advanced snapshot JSON
+- API Keys:
   - managed credential lifecycle (create/edit scopes/rotate/revoke/delete)
   - one-time token reveal on create/rotate
 
 ## CP rollout regression checklist
 
-1. Verify all default tabs load and subnav selection matches the active route.
-2. Verify legacy aliases `agents`, `agents/dashboard`, and `agents/health` still resolve.
+1. Verify Dashboard subnav loads and each top tab (`overview`, `readiness`, `discovery`, `security`) switches correctly.
+2. Verify legacy aliases (`agents`, `agents/overview`, `agents/readiness`, `agents/discovery`, `agents/security`, `agents/health`) still resolve to the expected Dashboard tab.
 3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
 4. Verify discovery actions work:
-   - prewarm `all`
-   - prewarm `llms`
-   - prewarm `commerce`
+   - refresh `all`
+   - refresh `llms`
+   - refresh `commerce`
    - clear discovery cache
 5. Verify security tab shows posture without exposing token/secret values.
-6. When `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, verify control tab flows:
+6. When `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, verify Return Requests flows:
    - create/update policy
    - request approval via API (agent token) with provenance metadata
    - approve/reject approval in CP

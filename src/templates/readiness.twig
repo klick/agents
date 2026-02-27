@@ -5,7 +5,7 @@
 
 {% block content %}
   <h1>Readiness</h1>
-  <p class="text-sm text-muted">Health and readiness diagnostics with score criteria.</p>
+  <p class="text-sm text-muted">Check if the plugin is ready for agent traffic and see what needs attention.</p>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Service State</h2>
@@ -14,7 +14,7 @@
       <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
       <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
     </p>
-    <p>Readiness status: <strong>{{ diagnostics.status|default('unknown') }}</strong></p>
+    <p>Overall status: <strong>{{ diagnostics.status|default('unknown') }}</strong></p>
     <p>Readiness score: <strong>{{ diagnostics.readinessScore|default(0) }}</strong> / 100 (ready at {{ diagnostics.thresholdReady|default(50) }}+)</p>
   </div>
 
@@ -23,7 +23,7 @@
     <table class="data fullwidth">
       <thead>
       <tr>
-        <th>Criterion</th>
+        <th>Check</th>
         <th>Weight</th>
         <th>Result</th>
         <th>Score</th>
@@ -36,7 +36,7 @@
           <td>{{ criterion.weight }}</td>
           <td>
             <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
-            {{ criterion.passed ? 'pass' : 'fail' }}
+            {{ criterion.passed ? 'pass' : 'needs attention' }}
           </td>
           <td>{{ criterion.score }}</td>
         </tr>
@@ -53,7 +53,7 @@
         <li>{{ key }}: <strong>{{ value ? 'ok' : 'unavailable' }}</strong></li>
       {% endfor %}
     </ul>
-    <p><strong>Enabled plugins</strong></p>
+    <p><strong>Plugin checks</strong></p>
     <ul>
       {% for key, value in diagnostics.componentChecks.enabledPlugins %}
         <li>{{ key }}: <strong>{{ value ? 'enabled' : 'disabled' }}</strong></li>
@@ -73,17 +73,23 @@
   {% endif %}
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Health JSON</h2>
-    <pre class="border rounded p-3">{{ healthJson }}</pre>
+    <details>
+      <summary><strong>Health Data (Technical JSON)</strong></summary>
+      <pre class="border rounded p-3" style="margin-top: 8px;">{{ healthJson }}</pre>
+    </details>
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
-    <h2 class="h4">Readiness JSON</h2>
-    <pre class="border rounded p-3">{{ readinessJson }}</pre>
+    <details>
+      <summary><strong>Readiness Data (Technical JSON)</strong></summary>
+      <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessJson }}</pre>
+    </details>
   </div>
 
   <div class="border rounded p-3">
-    <h2 class="h4">Diagnostic JSON</h2>
-    <pre class="border rounded p-3">{{ diagnosticsJson }}</pre>
+    <details>
+      <summary><strong>Diagnostics (Technical JSON)</strong></summary>
+      <pre class="border rounded p-3" style="margin-top: 8px;">{{ diagnosticsJson }}</pre>
+    </details>
   </div>
 {% endblock %}

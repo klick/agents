@@ -59,7 +59,7 @@ expect_fixed "CredentialService::class" "$PLUGIN_FILE" "Plugin registers Credent
 expect_fixed "'agents/credentials'" "$PLUGIN_FILE" "Plugin exposes CP credentials route/subnav"
 expect_fixed "EVENT_REGISTER_PERMISSIONS" "$PLUGIN_FILE" "Plugin registers custom credential permissions"
 expect_fixed "PERMISSION_CREDENTIALS_MANAGE" "$PLUGIN_FILE" "Plugin defines credential permission constants"
-expect_fixed "Manage CP-controlled API credentials" "$CP_TEMPLATE" "Credentials CP template is present"
+expect_fixed "Create and manage API keys used by agent integrations" "$CP_TEMPLATE" "Credentials CP template is present"
 expect_fixed "update-credential" "$CP_TEMPLATE" "Credentials CP template supports update action"
 expect_fixed "delete-credential" "$CP_TEMPLATE" "Credentials CP template supports delete action"
 

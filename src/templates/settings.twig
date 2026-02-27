@@ -1,46 +1,49 @@
 {% import '_includes/forms' as forms %}
 
-<p class="light">Configure runtime plugin settings available in Control Panel.</p>
+{% set requestsFeatureEnabled = refundApprovalsExperimentalEnabled ?? false %}
+<p class="light">
+  Runtime options for API availability and discovery files{% if requestsFeatureEnabled %}, plus return-request fallback behavior{% endif %}.
+</p>
 
 {{ forms.lightswitchField({
   first: true,
   label: 'Enable Agents API',
   instructions: agentsEnabledLocked
     ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-    : 'Toggle the Agents API and related discovery endpoints.',
+    : 'Turn the Agents API and related discovery endpoints on or off.',
   name: 'enabled',
   on: settings.enabled ?? true,
-  onLabel: 'Enabled',
-  offLabel: 'Disabled',
+  onLabel: false,
+  offLabel: false,
   disabled: agentsEnabledLocked,
 }) }}
 
 {{ forms.lightswitchField({
   label: 'Enable llms.txt',
-  instructions: 'Controls whether /llms.txt is served.',
+  instructions: 'Serve or hide /llms.txt.',
   name: 'enableLlmsTxt',
   on: settings.enableLlmsTxt ?? true,
-  onLabel: 'Enabled',
-  offLabel: 'Disabled',
+  onLabel: false,
+  offLabel: false,
 }) }}
 
 {{ forms.lightswitchField({
   label: 'Enable commerce.txt',
-  instructions: 'Controls whether /commerce.txt is served.',
+  instructions: 'Serve or hide /commerce.txt.',
   name: 'enableCommerceTxt',
   on: settings.enableCommerceTxt ?? true,
-  onLabel: 'Enabled',
-  offLabel: 'Disabled',
+  onLabel: false,
+  offLabel: false,
 }) }}
 
-{% if refundApprovalsExperimentalEnabled ?? false %}
+{% if requestsFeatureEnabled %}
   {{ forms.lightswitchField({
-    label: 'Allow manual refund approvals in Control',
-    instructions: 'Turn this on only if humans should create refund approval requests here. Recommended off: agents/integrations create requests, humans only approve/reject.',
+    label: 'Allow manual return requests in Return Requests tab',
+    instructions: 'Use only as fallback. Recommended off: agents/integrations create requests, humans only approve/reject.',
     name: 'allowCpApprovalRequests',
     on: settings.allowCpApprovalRequests ?? false,
-    onLabel: 'Manual refund approvals allowed',
-    offLabel: 'Agent-first mode',
+    onLabel: false,
+    offLabel: false,
   }) }}
 {% endif %}
 
@@ -48,4 +51,4 @@
   <p class="warning">`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
 {% endif %}
 
-<p><a href="{{ url('agents/overview') }}">Open Agents overview</a></p>
+<p><a href="{{ url('agents/dashboard/overview') }}">Back to Dashboard</a></p>
