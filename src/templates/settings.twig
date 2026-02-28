@@ -1,6 +1,8 @@
 {% import '_includes/forms' as forms %}
 
 {% set requestsFeatureEnabled = refundApprovalsExperimentalEnabled ?? false %}
+{% set llmsTxtSettingLocked = llmsTxtSettingLocked ?? false %}
+{% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}
 <p class="light">
   Runtime options for API availability and discovery files{% if requestsFeatureEnabled %}, plus return-request fallback behavior{% endif %}.
 </p>
@@ -20,20 +22,26 @@
 
 {{ forms.lightswitchField({
   label: 'Enable llms.txt',
-  instructions: 'Serve or hide /llms.txt.',
+  instructions: llmsTxtSettingLocked
+    ? 'Controlled by config/agents.php (`enableLlmsTxt`).'
+    : 'Serve or hide /llms.txt.',
   name: 'enableLlmsTxt',
   on: settings.enableLlmsTxt ?? true,
   onLabel: false,
   offLabel: false,
+  disabled: llmsTxtSettingLocked,
 }) }}
 
 {{ forms.lightswitchField({
   label: 'Enable commerce.txt',
-  instructions: 'Serve or hide /commerce.txt.',
+  instructions: commerceTxtSettingLocked
+    ? 'Controlled by config/agents.php (`enableCommerceTxt`).'
+    : 'Serve or hide /commerce.txt.',
   name: 'enableCommerceTxt',
   on: settings.enableCommerceTxt ?? true,
   onLabel: false,
   offLabel: false,
+  disabled: commerceTxtSettingLocked,
 }) }}
 
 {% if requestsFeatureEnabled %}
@@ -49,6 +57,9 @@
 
 {% if agentsEnabledLocked %}
   <p class="warning">`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
+{% endif %}
+{% if llmsTxtSettingLocked or commerceTxtSettingLocked %}
+  <p class="warning">Some discovery settings are controlled by `config/agents.php` and cannot be changed in CP.</p>
 {% endif %}
 
 <p><a href="{{ url('agents/dashboard/overview') }}">Back to Dashboard</a></p>

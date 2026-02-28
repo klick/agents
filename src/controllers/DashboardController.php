@@ -179,12 +179,15 @@ class DashboardController extends Controller
 
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
+        $settingsOverrides = $this->getSettingsOverrides();
 
         return $this->renderCpTemplate('agents/settings-tab', [
             'settings' => $this->getSettingsModel(),
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
+            'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
+            'commerceTxtSettingLocked' => (bool)($settingsOverrides['enableCommerceTxt'] ?? false),
         ]);
     }
 
@@ -253,6 +256,9 @@ class DashboardController extends Controller
         $plugin = Plugin::getInstance();
         $settings = $this->getSettingsModel();
         $enabledState = $plugin->getAgentsEnabledState();
+        $settingsOverrides = $this->getSettingsOverrides();
+        $llmsLocked = (bool)($settingsOverrides['enableLlmsTxt'] ?? false);
+        $commerceLocked = (bool)($settingsOverrides['enableCommerceTxt'] ?? false);
 
         $settingsData = get_object_vars($settings);
         $settingsData['enabled'] = (bool)$enabledState['locked']
@@ -261,8 +267,12 @@ class DashboardController extends Controller
         $settingsData['allowCpApprovalRequests'] = $plugin->isRefundApprovalsExperimentalEnabled()
             ? $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests)
             : false;
-        $settingsData['enableLlmsTxt'] = $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
-        $settingsData['enableCommerceTxt'] = $this->parseBooleanBodyParam('enableCommerceTxt', (bool)$settings->enableCommerceTxt);
+        $settingsData['enableLlmsTxt'] = $llmsLocked
+            ? (bool)$settings->enableLlmsTxt
+            : $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
+        $settingsData['enableCommerceTxt'] = $commerceLocked
+            ? (bool)$settings->enableCommerceTxt
+            : $this->parseBooleanBodyParam('enableCommerceTxt', (bool)$settings->enableCommerceTxt);
 
         $saved = Craft::$app->getPlugins()->savePluginSettings($plugin, $settingsData);
         if (!$saved) {
@@ -270,8 +280,19 @@ class DashboardController extends Controller
             return $this->redirectToPostedUrl(null, 'agents/settings');
         }
 
+        $notes = [];
         if ((bool)$enabledState['locked']) {
-            $this->setSuccessFlash('Agents settings saved. `enabled` remains controlled by `PLUGIN_AGENTS_ENABLED`.');
+            $notes[] = '`enabled` remains controlled by `PLUGIN_AGENTS_ENABLED`.';
+        }
+        if ($llmsLocked) {
+            $notes[] = '`enableLlmsTxt` is controlled by `config/agents.php`.';
+        }
+        if ($commerceLocked) {
+            $notes[] = '`enableCommerceTxt` is controlled by `config/agents.php`.';
+        }
+
+        if (!empty($notes)) {
+            $this->setSuccessFlash('Agents settings saved. ' . implode(' ', $notes));
         } else {
             $this->setSuccessFlash('Agents settings saved.');
         }
@@ -844,8 +865,32 @@ class DashboardController extends Controller
             return $default;
         }
 
+        if (is_array($raw)) {
+            if (empty($raw)) {
+                return $default;
+            }
+            $raw = end($raw);
+        }
+
+        if (is_bool($raw)) {
+            return $raw;
+        }
+
         $value = strtolower(trim((string)$raw));
         return in_array($value, ['1', 'true', 'on', 'yes'], true);
+    }
+
+    private function getSettingsOverrides(): array
+    {
+        $config = Craft::$app->getConfig()->getConfigFromFile('agents');
+        if (!is_array($config)) {
+            return [];
+        }
+
+        return [
+            'enableLlmsTxt' => array_key_exists('enableLlmsTxt', $config),
+            'enableCommerceTxt' => array_key_exists('enableCommerceTxt', $config),
+        ];
     }
 
     private function parseJsonBodyParam(string $raw): array

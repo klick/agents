@@ -140,6 +140,8 @@ class Plugin extends BasePlugin
             $rules = [
                 'llms.txt' => 'agents/api/llms-txt',
                 'commerce.txt' => 'agents/api/commerce-txt',
+                'capabilities' => 'agents/api/capabilities',
+                'openapi.json' => 'agents/api/openapi',
                 'agents/v1/health' => 'agents/api/health',
                 'agents/v1/readiness' => 'agents/api/readiness',
                 'agents/v1/products' => 'agents/api/products',
@@ -151,6 +153,7 @@ class Plugin extends BasePlugin
                 'agents/v1/sections' => 'agents/api/sections',
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
+                'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
             ];
             if ($this->isRefundApprovalsExperimentalEnabled()) {
                 $rules = array_merge($rules, [

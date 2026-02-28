@@ -2,7 +2,7 @@
 
 Machine-readable readiness/discovery API and governed control-plane plugin for Craft CMS and Commerce.
 
-Current plugin version: **0.3.8**
+Current plugin version: **0.3.9**
 
 ## Purpose
 
@@ -10,6 +10,7 @@ This plugin gives external/internal agents a stable interface for:
 
 - health checks for automation (`/agents/v1/health`)
 - readiness summaries (`/agents/v1/readiness`)
+- auth introspection for token diagnostics (`/agents/v1/auth/whoami`)
 - product snapshot browsing (`/agents/v1/products`)
 - control policies/approvals/execution ledger/audit (`/agents/v1/control/*`)
 - read-only CLI discovery commands (`craft agents/*`)
@@ -38,7 +39,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.3.8
+composer require klick/agents:^0.3.9
 php craft plugin/install agents
 ```
 
@@ -151,6 +152,7 @@ Read/discovery endpoints:
 
 - `GET /health`
 - `GET /readiness`
+- `GET /auth/whoami`
 - `GET /products`
 - `GET /orders`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
@@ -176,6 +178,9 @@ Root-level discovery files:
 
 - `GET /llms.txt` (public when enabled)
 - `GET /commerce.txt` (public when enabled)
+- Discovery aliases:
+  - `GET /capabilities` -> `GET /agents/v1/capabilities`
+  - `GET /openapi.json` -> `GET /agents/v1/openapi.json`
 
 ### Scope catalog
 
@@ -183,6 +188,7 @@ Read scopes:
 
 - `health:read`
 - `readiness:read`
+- `auth:read`
 - `products:read`
 - `orders:read`
 - `orders:read_sensitive`
@@ -216,6 +222,10 @@ Craft-native command routes:
 - `craft agents/entry-show`
 - `craft agents/section-list`
 - `craft agents/discovery-prewarm`
+- `craft agents/auth-check`
+- `craft agents/discovery-check`
+- `craft agents/readiness-check`
+- `craft agents/smoke`
 
 Examples:
 
@@ -247,6 +257,15 @@ php craft agents/section-list
 # Prewarm llms.txt + commerce.txt cache
 php craft agents/discovery-prewarm
 php craft agents/discovery-prewarm --target=llms --json=1
+
+# Auth posture check
+php craft agents/auth-check
+php craft agents/auth-check --strict=1 --json=1
+
+# Discovery/readiness/smoke checks
+php craft agents/discovery-check --json=1
+php craft agents/readiness-check --json=1
+php craft agents/smoke --json=1
 ```
 
 CLI output defaults to human-readable text. Add `--json=1` for machine consumption.

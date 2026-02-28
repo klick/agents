@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.9 - 2026-02-28
+
+- Hardened discovery contract by adding root discovery aliases (`/capabilities`, `/openapi.json`) that map to the guarded API descriptors.
+- Added authenticated introspection endpoint `GET /agents/v1/auth/whoami` with scope visibility, auth method details, and rate-limit snapshot.
+- Added CLI validation commands for operators and CI:
+  - `craft agents/auth-check`
+  - `craft agents/discovery-check`
+  - `craft agents/readiness-check`
+  - `craft agents/smoke`
+- Updated capabilities/OpenAPI/README contract metadata to include new auth/discovery surfaces and CLI checks.
+- Updated `llms.txt` discovery output to annotate auth requirements/scopes and include canonical alias pointers.
+- Dashboard settings now respect `config/agents.php` overrides for discovery toggles (`enableLlmsTxt`, `enableCommerceTxt`) and display lock-state guidance in CP.
+
 ## 0.3.8 - 2026-02-27
 
 - Improved Dashboard tab readability by using the active tab label as the page heading.

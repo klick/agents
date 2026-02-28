@@ -15,6 +15,7 @@ class ApiController extends Controller
     private const DEFAULT_TOKEN_SCOPES = [
         'health:read',
         'readiness:read',
+        'auth:read',
         'products:read',
         'orders:read',
         'entries:read',
@@ -284,6 +285,7 @@ class ApiController extends Controller
         $endpoints = [
             ['method' => 'GET', 'path' => '/health', 'requiredScopes' => ['health:read']],
             ['method' => 'GET', 'path' => '/readiness', 'requiredScopes' => ['readiness:read']],
+            ['method' => 'GET', 'path' => '/auth/whoami', 'requiredScopes' => ['auth:read']],
             ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
             ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
@@ -316,6 +318,10 @@ class ApiController extends Controller
             'version' => $pluginVersion,
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             'basePath' => '/agents/v1',
+            'discoveryAliases' => [
+                '/capabilities' => '/agents/v1/capabilities',
+                '/openapi.json' => '/agents/v1/openapi.json',
+            ],
             'requestIdHeader' => 'X-Request-Id',
             'authentication' => $this->buildCapabilitiesAuthentication($config),
             'authorization' => [
@@ -332,6 +338,10 @@ class ApiController extends Controller
                 'agents/entry-show',
                 'agents/section-list',
                 'agents/discovery-prewarm',
+                'agents/auth-check',
+                'agents/discovery-check',
+                'agents/readiness-check',
+                'agents/smoke',
             ],
         ]);
     }
@@ -347,6 +357,11 @@ class ApiController extends Controller
         $paths = [
             '/health' => ['get' => ['summary' => 'Health summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['health:read']]],
             '/readiness' => ['get' => ['summary' => 'Readiness summary', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['readiness:read']]],
+            '/auth/whoami' => ['get' => [
+                'summary' => 'Authenticated caller diagnostics',
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['auth:read'],
+            ]],
             '/products' => ['get' => [
                 'summary' => 'Product snapshot list',
                 'parameters' => [
@@ -537,12 +552,58 @@ class ApiController extends Controller
                 ['url' => '/agents/v1', 'description' => 'Primary API'],
                 ['url' => '/', 'description' => 'Site root discovery files'],
             ],
+            'x-discovery-aliases' => [
+                '/capabilities' => '/agents/v1/capabilities',
+                '/openapi.json' => '/agents/v1/openapi.json',
+            ],
             'paths' => $paths,
             'components' => [
                 'securitySchemes' => $this->buildOpenApiSecuritySchemes($config),
                 'x-error-codes' => $this->errorTaxonomy(),
             ],
             'security' => $this->buildOpenApiSecurity($config),
+        ]);
+    }
+
+    public function actionAuthWhoami(): Response
+    {
+        if (($guard = $this->guardRequest('auth:read')) !== null) {
+            return $guard;
+        }
+
+        $config = $this->getSecurityConfig();
+        $grantedScopes = $this->getGrantedScopes();
+        $rateLimitLimit = (int)$this->response->headers->get('X-RateLimit-Limit', 0);
+        $rateLimitRemaining = (int)$this->response->headers->get('X-RateLimit-Remaining', 0);
+        $rateLimitReset = (int)$this->response->headers->get('X-RateLimit-Reset', 0);
+
+        return $this->jsonResponse([
+            'service' => 'agents',
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'requestId' => $this->getRequestId(),
+            'principal' => [
+                'credentialId' => (string)($this->authContext['credentialId'] ?? 'anonymous'),
+                'credentialSource' => (string)($this->authContext['credentialSource'] ?? 'unknown'),
+                'managedCredentialId' => isset($this->authContext['managedCredentialId']) ? (int)$this->authContext['managedCredentialId'] : null,
+                'authMethod' => (string)($this->authContext['authMethod'] ?? 'unknown'),
+                'principalFingerprint' => (string)($this->authContext['principalFingerprint'] ?? ''),
+            ],
+            'authorization' => [
+                'grantedScopes' => $grantedScopes,
+                'availableScopes' => $this->availableScopes(),
+            ],
+            'runtimeSecurity' => [
+                'requireToken' => (bool)$config['requireToken'],
+                'allowQueryToken' => (bool)$config['allowQueryToken'],
+                'redactEmail' => (bool)$config['redactEmail'],
+            ],
+            'rateLimit' => [
+                'limit' => $rateLimitLimit,
+                'remaining' => $rateLimitRemaining,
+                'resetAtEpoch' => $rateLimitReset,
+                'windowSeconds' => (int)($config['rateLimitWindowSeconds'] ?? 60),
+                'resetAt' => $rateLimitReset > 0 ? gmdate('Y-m-d\TH:i:s\Z', $rateLimitReset) : null,
+            ],
         ]);
     }
 
@@ -930,6 +991,8 @@ class ApiController extends Controller
         return [
             'principalFingerprint' => $matchedCredential['principalFingerprint'],
             'credentialId' => $matchedCredential['id'],
+            'credentialSource' => (string)($matchedCredential['source'] ?? 'env'),
+            'managedCredentialId' => isset($matchedCredential['managedCredentialId']) ? (int)$matchedCredential['managedCredentialId'] : null,
             'scopes' => $matchedCredential['scopes'],
             'authMethod' => $providedToken['source'],
         ];
@@ -1179,6 +1242,7 @@ class ApiController extends Controller
         $scopes = [
             'health:read' => 'Read service health summary.',
             'readiness:read' => 'Read readiness summary and score.',
+            'auth:read' => 'Read authenticated caller diagnostics (`/auth/whoami`).',
             'products:read' => 'Read product snapshot endpoints.',
             'orders:read' => 'Read order metadata endpoints.',
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',

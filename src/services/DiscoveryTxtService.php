@@ -219,10 +219,13 @@ class DiscoveryTxtService extends Component
         }
 
         if ($settings->llmsIncludeAgentsLinks) {
-            $lines[] = '- OpenAPI: ' . $this->toAbsoluteUrl('/agents/v1/openapi.json');
-            $lines[] = '- Capabilities: ' . $this->toAbsoluteUrl('/agents/v1/capabilities');
-            $lines[] = '- Products API: ' . $this->toAbsoluteUrl('/agents/v1/products?status=live&limit=50');
-            $lines[] = '- Entries API: ' . $this->toAbsoluteUrl('/agents/v1/entries?status=live&limit=50');
+            $lines[] = '- OpenAPI: ' . $this->toAbsoluteUrl('/agents/v1/openapi.json') . ' (auth required, scope: openapi:read)';
+            $lines[] = '- Capabilities: ' . $this->toAbsoluteUrl('/agents/v1/capabilities') . ' (auth required, scope: capabilities:read)';
+            $lines[] = '- Whoami: ' . $this->toAbsoluteUrl('/agents/v1/auth/whoami') . ' (auth required, scope: auth:read)';
+            $lines[] = '- Products API: ' . $this->toAbsoluteUrl('/agents/v1/products?status=live&limit=50') . ' (auth required, scope: products:read)';
+            $lines[] = '- Entries API: ' . $this->toAbsoluteUrl('/agents/v1/entries?status=live&limit=50') . ' (auth required, scope: entries:read)';
+            $lines[] = '- Discovery alias: ' . $this->toAbsoluteUrl('/capabilities') . ' (alias of /agents/v1/capabilities)';
+            $lines[] = '- OpenAPI alias: ' . $this->toAbsoluteUrl('/openapi.json') . ' (alias of /agents/v1/openapi.json)';
         }
 
         foreach ($this->normalizeLinks($settings->llmsLinks, 'Link') as $link) {

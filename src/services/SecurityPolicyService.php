@@ -12,6 +12,7 @@ class SecurityPolicyService extends Component
     private const DEFAULT_TOKEN_SCOPES = [
         'health:read',
         'readiness:read',
+        'auth:read',
         'products:read',
         'orders:read',
         'entries:read',
