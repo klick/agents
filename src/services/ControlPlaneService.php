@@ -17,6 +17,7 @@ class ControlPlaneService extends Component
     private const APPROVAL_STATUS_PENDING = 'pending';
     private const APPROVAL_STATUS_APPROVED = 'approved';
     private const APPROVAL_STATUS_REJECTED = 'rejected';
+    private const APPROVAL_STATUS_EXPIRED = 'expired';
 
     private const EXECUTION_STATUS_PENDING = 'pending';
     private const EXECUTION_STATUS_BLOCKED = 'blocked';
@@ -30,6 +31,8 @@ class ControlPlaneService extends Component
 
     public function getControlPlaneSnapshot(int $limit = 20): array
     {
+        $this->applyApprovalEscalationRules(max(50, $this->normalizeLimit($limit * 2, 50)));
+
         return [
             'summary' => $this->getSummary(),
             'policies' => $this->getPolicies(),
@@ -44,6 +47,7 @@ class ControlPlaneService extends Component
         return [
             'policies' => $this->countRows(self::TABLE_POLICIES),
             'approvalsPending' => $this->countRows(self::TABLE_APPROVALS, ['status' => self::APPROVAL_STATUS_PENDING]),
+            'approvalsExpired' => $this->countRows(self::TABLE_APPROVALS, ['status' => self::APPROVAL_STATUS_EXPIRED]),
             'executionsBlocked' => $this->countRows(self::TABLE_EXECUTIONS, ['status' => self::EXECUTION_STATUS_BLOCKED]),
             'executionsSucceeded' => $this->countRows(self::TABLE_EXECUTIONS, ['status' => self::EXECUTION_STATUS_SUCCEEDED]),
             'auditEvents' => $this->countRows(self::TABLE_AUDIT),
@@ -184,6 +188,8 @@ class ControlPlaneService extends Component
             return [];
         }
 
+        $this->applyApprovalEscalationRules($this->normalizeLimit($limit, 50));
+
         $query = (new Query())
             ->from(self::TABLE_APPROVALS)
             ->orderBy(['dateCreated' => SORT_DESC, 'id' => SORT_DESC])
@@ -199,6 +205,101 @@ class ControlPlaneService extends Component
 
         $rows = $query->all();
         return array_map(fn(array $row) => $this->hydrateApproval($row), $rows);
+    }
+
+    public function applyApprovalEscalationRules(int $limit = 100): array
+    {
+        if (!$this->tableExists(self::TABLE_APPROVALS)) {
+            return ['escalated' => 0, 'expired' => 0];
+        }
+
+        $rows = (new Query())
+            ->from(self::TABLE_APPROVALS)
+            ->where(['status' => self::APPROVAL_STATUS_PENDING])
+            ->orderBy(['dateCreated' => SORT_DESC, 'id' => SORT_DESC])
+            ->limit($this->normalizeLimit($limit, 100))
+            ->all();
+
+        $escalated = 0;
+        $expired = 0;
+        $nowTs = time();
+        $now = gmdate('Y-m-d H:i:s');
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $createdTs = strtotime((string)($row['dateCreated'] ?? ''));
+            if ($createdTs === false) {
+                continue;
+            }
+
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $expireAfterMinutes = max(0, (int)($row['expireAfterMinutes'] ?? 0));
+            $escalateAfterMinutes = max(0, (int)($row['escalateAfterMinutes'] ?? 0));
+            $escalatedAt = $this->normalizeOptionalString($row['escalatedAt'] ?? null);
+            $expiredAt = $this->normalizeOptionalString($row['expiredAt'] ?? null);
+
+            if ($expiredAt !== null && $expiredAt !== '') {
+                continue;
+            }
+
+            if ($expireAfterMinutes > 0 && $nowTs >= ($createdTs + ($expireAfterMinutes * 60))) {
+                Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, [
+                    'status' => self::APPROVAL_STATUS_EXPIRED,
+                    'expiredAt' => $now,
+                    'dateUpdated' => $now,
+                ], ['id' => $id])->execute();
+
+                $expired++;
+                $this->writeAuditEvent([
+                    'category' => 'control.approval',
+                    'action' => 'auto-expire',
+                    'outcome' => 'warning',
+                    'actorType' => 'system',
+                    'actorId' => 'system:sla',
+                    'entityType' => 'approval',
+                    'entityId' => (string)$id,
+                    'summary' => sprintf('Approval `%d` auto-expired after SLA timeout.', $id),
+                    'metadata' => [
+                        'expireAfterMinutes' => $expireAfterMinutes,
+                    ],
+                ]);
+                continue;
+            }
+
+            if ($escalateAfterMinutes > 0 && ($escalatedAt === null || $escalatedAt === '') && $nowTs >= ($createdTs + ($escalateAfterMinutes * 60))) {
+                Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, [
+                    'escalatedAt' => $now,
+                    'dateUpdated' => $now,
+                ], ['id' => $id])->execute();
+
+                $escalated++;
+                $this->writeAuditEvent([
+                    'category' => 'control.approval',
+                    'action' => 'auto-escalate',
+                    'outcome' => 'warning',
+                    'actorType' => 'system',
+                    'actorId' => 'system:sla',
+                    'entityType' => 'approval',
+                    'entityId' => (string)$id,
+                    'summary' => sprintf('Approval `%d` auto-escalated after SLA threshold.', $id),
+                    'metadata' => [
+                        'escalateAfterMinutes' => $escalateAfterMinutes,
+                    ],
+                ]);
+            }
+        }
+
+        return [
+            'escalated' => $escalated,
+            'expired' => $expired,
+        ];
     }
 
     public function requestApproval(array $input, array $actor = []): array
@@ -227,6 +328,7 @@ class ControlPlaneService extends Component
         $metadata = $this->normalizeArray($input['metadata'] ?? []);
         $policy = $this->resolvePolicyForAction($actionType);
         $requiredApprovals = $this->resolveRequiredApprovals($actionType, $payload, $metadata, $policy);
+        $slaPolicy = $this->resolveApprovalSlaPolicy($policy);
 
         $now = gmdate('Y-m-d H:i:s');
 
@@ -242,9 +344,14 @@ class ControlPlaneService extends Component
             'requestPayload' => $this->encodeJson($payload),
             'metadata' => $this->encodeJson($metadata),
             'requiredApprovals' => $requiredApprovals,
+            'slaDueAt' => $slaPolicy['slaDueAt'],
+            'escalateAfterMinutes' => $slaPolicy['escalateAfterMinutes'],
+            'expireAfterMinutes' => $slaPolicy['expireAfterMinutes'],
             'secondaryDecisionBy' => null,
             'secondaryDecisionReason' => null,
             'secondaryDecisionAt' => null,
+            'escalatedAt' => null,
+            'expiredAt' => null,
             'decidedAt' => null,
             'dateCreated' => $now,
             'dateUpdated' => $now,
@@ -279,6 +386,9 @@ class ControlPlaneService extends Component
                 'idempotencyKey' => $idempotencyKey,
                 'requiredApprovals' => $requiredApprovals,
                 'policyHandle' => (string)($policy['handle'] ?? 'default'),
+                'slaDueAt' => $slaPolicy['slaDueAt'],
+                'escalateAfterMinutes' => $slaPolicy['escalateAfterMinutes'],
+                'expireAfterMinutes' => $slaPolicy['expireAfterMinutes'],
             ],
         ]);
 
@@ -490,7 +600,11 @@ class ControlPlaneService extends Component
                     $approvalStatus = strtolower(trim((string)($approval['status'] ?? self::APPROVAL_STATUS_PENDING)));
                     if ($approvalStatus !== self::APPROVAL_STATUS_APPROVED) {
                         $status = 'blocked';
-                        $reasons[] = 'Linked approval is not approved.';
+                        if ($approvalStatus === self::APPROVAL_STATUS_EXPIRED) {
+                            $reasons[] = 'Linked approval has expired.';
+                        } else {
+                            $reasons[] = 'Linked approval is not approved.';
+                        }
                     } elseif ((string)($approval['actionType'] ?? '') !== $actionType) {
                         $status = 'blocked';
                         $reasons[] = 'Linked approval action type mismatch.';
@@ -578,7 +692,11 @@ class ControlPlaneService extends Component
                 $approvalStatus = strtolower(trim((string)($approval['status'] ?? '')));
                 if ($approvalStatus !== self::APPROVAL_STATUS_APPROVED) {
                     $status = self::EXECUTION_STATUS_BLOCKED;
-                    $errorMessage = 'Linked approval is not approved.';
+                    if ($approvalStatus === self::APPROVAL_STATUS_EXPIRED) {
+                        $errorMessage = 'Linked approval has expired.';
+                    } else {
+                        $errorMessage = 'Linked approval is not approved.';
+                    }
                     $resultPayload['message'] = $errorMessage;
                 } elseif ((string)($approval['actionType'] ?? '') !== $actionType) {
                     $status = self::EXECUTION_STATUS_BLOCKED;
@@ -808,6 +926,29 @@ class ControlPlaneService extends Component
         return min(2, max(1, $required));
     }
 
+    private function resolveApprovalSlaPolicy(array $policy): array
+    {
+        $config = $this->normalizeArray($policy['config'] ?? []);
+        $slaMinutes = max(0, (int)($config['approvalSlaMinutes'] ?? 0));
+        $escalateAfterMinutes = max(0, (int)($config['escalateAfterMinutes'] ?? 0));
+        $expireAfterMinutes = max(0, (int)($config['expireAfterMinutes'] ?? 0));
+
+        if ($expireAfterMinutes > 0 && $escalateAfterMinutes > $expireAfterMinutes) {
+            $escalateAfterMinutes = $expireAfterMinutes;
+        }
+
+        $slaDueAt = null;
+        if ($slaMinutes > 0) {
+            $slaDueAt = gmdate('Y-m-d H:i:s', time() + ($slaMinutes * 60));
+        }
+
+        return [
+            'slaDueAt' => $slaDueAt,
+            'escalateAfterMinutes' => $escalateAfterMinutes > 0 ? $escalateAfterMinutes : null,
+            'expireAfterMinutes' => $expireAfterMinutes > 0 ? $expireAfterMinutes : null,
+        ];
+    }
+
     private function defaultPolicy(): array
     {
         return [
@@ -861,6 +1002,34 @@ class ControlPlaneService extends Component
             $approvalCount = min($approvalCount, 1);
         }
 
+        $slaDueAt = $this->toIso8601($row['slaDueAt'] ?? null);
+        $escalatedAt = $this->toIso8601($row['escalatedAt'] ?? null);
+        $expiredAt = $this->toIso8601($row['expiredAt'] ?? null);
+        $slaSecondsRemaining = null;
+        if ($slaDueAt !== null) {
+            $dueTs = strtotime($slaDueAt);
+            if ($dueTs !== false) {
+                $slaSecondsRemaining = $dueTs - time();
+            }
+        }
+
+        $slaState = 'none';
+        if ($status === self::APPROVAL_STATUS_EXPIRED || $expiredAt !== null) {
+            $slaState = 'expired';
+        } elseif (in_array($status, [self::APPROVAL_STATUS_APPROVED, self::APPROVAL_STATUS_REJECTED], true)) {
+            $slaState = 'completed';
+        } elseif ($escalatedAt !== null) {
+            $slaState = 'escalated';
+        } elseif ($slaSecondsRemaining !== null) {
+            if ($slaSecondsRemaining < 0) {
+                $slaState = 'overdue';
+            } elseif ($slaSecondsRemaining <= 300) {
+                $slaState = 'due_soon';
+            } else {
+                $slaState = 'on_time';
+            }
+        }
+
         return [
             'id' => (int)($row['id'] ?? 0),
             'actionType' => (string)($row['actionType'] ?? ''),
@@ -878,6 +1047,13 @@ class ControlPlaneService extends Component
             'requiredApprovals' => $requiredApprovals,
             'approvalCount' => $approvalCount,
             'approvalsRemaining' => max(0, $requiredApprovals - $approvalCount),
+            'slaDueAt' => $slaDueAt,
+            'escalateAfterMinutes' => isset($row['escalateAfterMinutes']) ? (int)$row['escalateAfterMinutes'] : null,
+            'expireAfterMinutes' => isset($row['expireAfterMinutes']) ? (int)$row['expireAfterMinutes'] : null,
+            'slaState' => $slaState,
+            'slaSecondsRemaining' => $slaSecondsRemaining,
+            'escalatedAt' => $escalatedAt,
+            'expiredAt' => $expiredAt,
             'decidedAt' => $this->toIso8601($row['decidedAt'] ?? null),
             'secondaryDecisionAt' => $this->toIso8601($row['secondaryDecisionAt'] ?? null),
             'dateCreated' => $this->toIso8601($row['dateCreated'] ?? null),

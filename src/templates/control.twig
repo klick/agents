@@ -31,6 +31,10 @@
         <div style="font-size: 24px;"><strong>{{ controlSummary.approvalsPending|default(0) }}</strong></div>
       </div>
       <div class="border rounded p-2">
+        <div class="light">Expired approvals</div>
+        <div style="font-size: 24px;"><strong>{{ controlSummary.approvalsExpired|default(0) }}</strong></div>
+      </div>
+      <div class="border rounded p-2">
         <div class="light">Runs blocked</div>
         <div style="font-size: 24px;"><strong>{{ controlSummary.executionsBlocked|default(0) }}</strong></div>
       </div>
@@ -60,6 +64,7 @@
           <th>Rule</th>
           <th>Requested</th>
           <th>Reason</th>
+          <th>SLA</th>
           <th>Decision</th>
         </tr>
         </thead>
@@ -95,6 +100,13 @@
               <div class="light">{{ approval.dateCreated ?: 'n/a' }}</div>
             </td>
             <td>{{ approval.reason ?: 'n/a' }}</td>
+            <td>
+              <div><strong>{{ approval.slaState|default('none') }}</strong></div>
+              <div class="light">due: {{ approval.slaDueAt ?: 'n/a' }}</div>
+              {% if approval.escalatedAt %}
+                <div class="light">escalated: {{ approval.escalatedAt }}</div>
+              {% endif %}
+            </td>
             <td>
               {% if canManageApprovals %}
                 <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})?" style="margin-bottom: 6px;">
