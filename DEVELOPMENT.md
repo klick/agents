@@ -78,6 +78,7 @@ This updates the sandbox `.env` and writes `config/agents.php` with stable local
 Release messaging guardrail:
 
 - Keep commit messages, release descriptions, and changelog entries user-facing.
+- Do not include internal political/org commentary in changelog entries or release notes.
 - Avoid internal or ignored file-path references in release communication.
 
 Optional live check:

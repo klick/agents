@@ -25,6 +25,7 @@ graph TD
   - Bump version in `composer.json` and README current version line.
   - Move current `Unreleased` notes into `## 0.3.10 - 2026-03-02`.
   - Ensure install snippet reflects `^0.3.10`.
+  - Keep changelog/release notes user-facing; exclude internal political/org commentary.
 
 - `R2` `depends_on: [R1]`
   - Run `./scripts/qa/release-gate.sh`.
