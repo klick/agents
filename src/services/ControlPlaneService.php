@@ -368,6 +368,78 @@ class ControlPlaneService extends Component
         return array_map(fn(array $row) => $this->hydrateExecution($row), $rows);
     }
 
+    public function simulateAction(array $input): array
+    {
+        $actionType = $this->normalizeActionType((string)($input['actionType'] ?? ''));
+        if ($actionType === '') {
+            throw new \InvalidArgumentException('Simulation action type is required.');
+        }
+
+        $actionRef = $this->normalizeOptionalString($input['actionRef'] ?? null, 128);
+        $payload = $this->normalizeArray($input['payload'] ?? []);
+        $approvalId = isset($input['approvalId']) ? (int)$input['approvalId'] : 0;
+
+        $policy = $this->resolvePolicyForAction($actionType);
+        $requiredScope = $this->normalizeOptionalString($policy['requiredScope'] ?? null, 96);
+
+        $status = 'allowed';
+        $reasons = [];
+        $resolvedApprovalId = null;
+        $approvalStatus = 'not_required';
+
+        if (!(bool)($policy['enabled'] ?? true)) {
+            $status = 'blocked';
+            $reasons[] = 'Matched policy is disabled for execution.';
+        }
+
+        if ((bool)($policy['requiresApproval'] ?? true)) {
+            $approvalStatus = 'required';
+            if ($approvalId <= 0) {
+                if ($status !== 'blocked') {
+                    $status = 'requires_approval';
+                }
+                $reasons[] = 'Approval is required before execution.';
+            } else {
+                $approval = $this->findApprovalById($approvalId);
+                if (!is_array($approval)) {
+                    $status = 'blocked';
+                    $reasons[] = 'Linked approval could not be found.';
+                } else {
+                    $resolvedApprovalId = (int)($approval['id'] ?? 0);
+                    $approvalStatus = strtolower(trim((string)($approval['status'] ?? self::APPROVAL_STATUS_PENDING)));
+                    if ($approvalStatus !== self::APPROVAL_STATUS_APPROVED) {
+                        $status = 'blocked';
+                        $reasons[] = 'Linked approval is not approved.';
+                    } elseif ((string)($approval['actionType'] ?? '') !== $actionType) {
+                        $status = 'blocked';
+                        $reasons[] = 'Linked approval action type mismatch.';
+                    }
+                }
+            }
+        }
+
+        if (empty($reasons) && $status !== 'allowed') {
+            $reasons[] = 'Execution is blocked by current policy evaluation.';
+        }
+
+        return [
+            'simulation' => true,
+            'actionType' => $actionType,
+            'actionRef' => $actionRef,
+            'requiredScope' => $requiredScope,
+            'policy' => $policy,
+            'approvalId' => $resolvedApprovalId,
+            'requestPayload' => $payload,
+            'evaluation' => [
+                'status' => $status,
+                'approvalStatus' => $approvalStatus,
+                'wouldExecute' => $status === 'allowed',
+                'reasons' => $reasons,
+            ],
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+        ];
+    }
+
     public function executeAction(array $input, array $actor = []): array
     {
         $this->requireTable(self::TABLE_EXECUTIONS, 'Execution storage table is unavailable. Run plugin migrations.');

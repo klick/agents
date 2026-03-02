@@ -347,6 +347,103 @@
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
+    <h2 class="h4">Policy Simulator (Dry Run)</h2>
+    <p class="light">Evaluate policy/approval outcomes without recording an execution run.</p>
+
+    {% if canExecuteActions %}
+      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Run dry-run simulation?">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/simulate-control-action') }}
+        {{ redirectInput('agents/control') }}
+
+        {{ forms.textField({
+          label: 'Action name',
+          name: 'simulationActionType',
+          required: true,
+          placeholder: 'returns.exception.refund',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Case reference',
+          name: 'simulationActionRef',
+          placeholder: 'order-12345:return-998',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Approved request # (optional)',
+          name: 'simulationApprovalId',
+          placeholder: '123',
+        }) }}
+
+        <h3 class="h5">Dry-Run Payload</h3>
+        {{ forms.textField({
+          label: 'Order number / ID',
+          name: 'simulationPayloadOrderId',
+          placeholder: '12345',
+        }) }}
+        {{ forms.textField({
+          label: 'Return number / ID',
+          name: 'simulationPayloadReturnId',
+          placeholder: '998',
+        }) }}
+        {{ forms.textField({
+          label: 'Reason code',
+          name: 'simulationPayloadReasonCode',
+          placeholder: 'DAMAGED_ITEM',
+        }) }}
+        {{ forms.textField({
+          label: 'Operator note',
+          name: 'simulationPayloadOperatorNote',
+          placeholder: 'Dry-run validation before execution.',
+        }) }}
+
+        <details style="margin-bottom: 12px;">
+          <summary><strong>Advanced JSON payload override (optional)</strong></summary>
+          <div style="margin-top: 8px;">
+            {{ forms.textareaField({
+              label: 'Payload JSON',
+              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
+              name: 'simulationPayloadJson',
+              rows: 4,
+              value: '{}',
+            }) }}
+          </div>
+        </details>
+
+        <button class="btn" type="submit">Run Dry-Run</button>
+      </form>
+    {% else %}
+      <p class="warning">You do not have permission to run policy simulations.</p>
+    {% endif %}
+
+    {% if controlSimulationResult %}
+      <hr>
+      <h3 class="h5">Latest Dry-Run Result</h3>
+      {% set simEval = controlSimulationResult.evaluation ?? {} %}
+      {% set simPolicy = controlSimulationResult.policy ?? {} %}
+      <ul>
+        <li>Status: <strong>{{ simEval.status ?? 'unknown' }}</strong></li>
+        <li>Would execute: <strong>{{ simEval.wouldExecute ? 'yes' : 'no' }}</strong></li>
+        <li>Required scope: <strong>{{ controlSimulationResult.requiredScope ?: 'n/a' }}</strong></li>
+        <li>Policy: <strong>{{ simPolicy.handle ?: 'default' }}</strong></li>
+        <li>Approval status: <strong>{{ simEval.approvalStatus ?? 'n/a' }}</strong></li>
+      </ul>
+      {% if simEval.reasons is defined and simEval.reasons|length %}
+        <p><strong>Reasons</strong></p>
+        <ul>
+          {% for reason in simEval.reasons %}
+            <li>{{ reason }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <details>
+        <summary><strong>Technical JSON</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ controlSimulationResult|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+      </details>
+    {% endif %}
+  </div>
+
+  <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Rules</h2>
 
     {% if controlPolicies|length %}

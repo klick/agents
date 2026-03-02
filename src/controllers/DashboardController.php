@@ -14,6 +14,7 @@ use yii\web\Response;
 class DashboardController extends Controller
 {
     private const SESSION_REVEALED_CREDENTIAL = 'agents.revealedCredential';
+    private const SESSION_CONTROL_SIMULATION = 'agents.controlSimulation';
     private const DASHBOARD_TABS = ['overview', 'readiness', 'discovery', 'security'];
 
     public function actionIndex(): Response
@@ -191,6 +192,7 @@ class DashboardController extends Controller
             'controlAttentionExecutions' => $attentionExecutions,
             'controlPolicyHintsByActionType' => $policyHintsByActionType,
             'controlApprovedApprovalsById' => $approvedApprovalsById,
+            'controlSimulationResult' => $this->pullControlSimulationResult(),
             'controlSnapshotJson' => $this->prettyPrintJson($snapshot),
             'allowCpApprovalRequests' => (bool)$settings->allowCpApprovalRequests,
             'canManagePolicies' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE),
@@ -886,6 +888,48 @@ class DashboardController extends Controller
         return $this->redirectToPostedUrl(null, 'agents/control');
     }
 
+    public function actionSimulateControlAction(): Response
+    {
+        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requirePostRequest();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $guidedPayload = $this->buildGuidedMap([
+            'orderId' => 'simulationPayloadOrderId',
+            'returnId' => 'simulationPayloadReturnId',
+            'reasonCode' => 'simulationPayloadReasonCode',
+            'operatorNote' => 'simulationPayloadOperatorNote',
+        ]);
+
+        try {
+            $rawPayload = $this->parseJsonBodyParam((string)$this->request->getBodyParam('simulationPayloadJson', ''));
+            $result = $service->simulateAction([
+                'actionType' => (string)$this->request->getBodyParam('simulationActionType', ''),
+                'actionRef' => (string)$this->request->getBodyParam('simulationActionRef', ''),
+                'approvalId' => (int)$this->request->getBodyParam('simulationApprovalId', 0),
+                'payload' => array_replace($guidedPayload, $rawPayload),
+            ]);
+
+            $this->storeControlSimulationResult($result);
+
+            $status = (string)($result['evaluation']['status'] ?? 'unknown');
+            if ($status === 'allowed') {
+                $this->setSuccessFlash('Dry-run passed: this action currently satisfies policy/approval requirements.');
+            } else {
+                $reasons = (array)($result['evaluation']['reasons'] ?? []);
+                $firstReason = !empty($reasons) ? (string)$reasons[0] : 'Dry-run blocked by current policy evaluation.';
+                $this->setFailFlash(sprintf('Dry-run result: `%s`. %s', $status, $firstReason));
+            }
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to run policy simulator: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/control');
+    }
+
     private function getApiEndpoints(): array
     {
         $apiBasePath = '/agents/v1';
@@ -907,6 +951,7 @@ class DashboardController extends Controller
                 $apiBasePath . '/control/policies',
                 $apiBasePath . '/control/approvals',
                 $apiBasePath . '/control/executions',
+                $apiBasePath . '/control/policy-simulate',
                 $apiBasePath . '/control/actions/execute',
                 $apiBasePath . '/control/audit',
             ]);
@@ -1311,6 +1356,20 @@ class DashboardController extends Controller
     private function storeRevealedCredential(array $credential): void
     {
         Craft::$app->getSession()->set(self::SESSION_REVEALED_CREDENTIAL, $credential);
+    }
+
+    private function storeControlSimulationResult(array $result): void
+    {
+        Craft::$app->getSession()->set(self::SESSION_CONTROL_SIMULATION, $result);
+    }
+
+    private function pullControlSimulationResult(): ?array
+    {
+        $session = Craft::$app->getSession();
+        $value = $session->get(self::SESSION_CONTROL_SIMULATION);
+        $session->remove(self::SESSION_CONTROL_SIMULATION);
+
+        return is_array($value) ? $value : null;
     }
 
     private function pullRevealedCredential(): ?array

@@ -323,6 +323,7 @@ class ApiController extends Controller
             ['method' => 'POST', 'path' => '/control/approvals/request', 'requiredScopes' => ['control:approvals:request'], 'optionalScopes' => ['control:approvals:write']],
             ['method' => 'POST', 'path' => '/control/approvals/decide', 'requiredScopes' => ['control:approvals:decide'], 'optionalScopes' => ['control:approvals:write']],
             ['method' => 'GET', 'path' => '/control/executions', 'requiredScopes' => ['control:executions:read']],
+            ['method' => 'POST', 'path' => '/control/policy-simulate', 'requiredScopes' => ['control:actions:simulate']],
             ['method' => 'POST', 'path' => '/control/actions/execute', 'requiredScopes' => ['control:actions:execute'], 'optionalScopes' => ['policy.config.requiredScope']],
             ['method' => 'GET', 'path' => '/control/audit', 'requiredScopes' => ['control:audit:read']],
             ['method' => 'GET', 'path' => '/webhooks/dlq', 'requiredScopes' => ['webhooks:dlq:read']],
@@ -554,6 +555,15 @@ class ApiController extends Controller
                 ],
                 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
                 'x-required-scopes' => ['control:executions:read'],
+            ]],
+            '/control/policy-simulate' => ['post' => [
+                'summary' => 'Dry-run policy/approval evaluation for a proposed action',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['control:actions:simulate'],
             ]],
             '/control/actions/execute' => ['post' => [
                 'summary' => 'Execute an idempotent control action',
@@ -911,6 +921,40 @@ class ApiController extends Controller
             'meta' => [
                 'count' => count($executions),
             ],
+        ]);
+    }
+
+    public function actionControlPolicySimulate(): Response
+    {
+        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+            return $guard;
+        }
+
+        if (($guard = $this->guardRequest('control:actions:simulate', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getControlPlaneService();
+
+        try {
+            $simulation = $service->simulateAction([
+                'actionType' => (string)$request->getBodyParam('actionType', ''),
+                'actionRef' => (string)$request->getBodyParam('actionRef', ''),
+                'approvalId' => (int)$request->getBodyParam('approvalId', 0),
+                'payload' => $request->getBodyParam('payload', []),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\RuntimeException $e) {
+            return $this->misconfiguredResponse($e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Control policy simulation failed: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to simulate control action.');
+        }
+
+        return $this->jsonResponse([
+            'data' => $simulation,
         ]);
     }
 
@@ -1588,6 +1632,7 @@ class ApiController extends Controller
             'control:approvals:decide' => 'Approve or reject pending control approvals (human sign-off flow).',
             'control:approvals:write' => 'Legacy combined scope for request+decide control approvals.',
             'control:executions:read' => 'Read control action execution ledger.',
+            'control:actions:simulate' => 'Run dry-run policy and approval evaluation without execution.',
             'control:actions:execute' => 'Execute idempotent control actions.',
             'control:audit:read' => 'Read immutable control-plane audit log.',
             'webhooks:dlq:read' => 'Read failed webhook dead-letter events.',
@@ -1625,6 +1670,7 @@ class ApiController extends Controller
             '/control/approvals/request',
             '/control/approvals/decide',
             '/control/executions',
+            '/control/policy-simulate',
             '/control/actions/execute',
             '/control/audit',
         ];
@@ -1640,6 +1686,7 @@ class ApiController extends Controller
             'control:approvals:decide',
             'control:approvals:write',
             'control:executions:read',
+            'control:actions:simulate',
             'control:actions:execute',
             'control:audit:read',
         ];

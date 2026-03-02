@@ -170,6 +170,7 @@ class Plugin extends BasePlugin
                     'agents/v1/control/approvals/request' => 'agents/api/control-approval-request',
                     'agents/v1/control/approvals/decide' => 'agents/api/control-approval-decide',
                     'agents/v1/control/executions' => 'agents/api/control-executions',
+                    'agents/v1/control/policy-simulate' => 'agents/api/control-policy-simulate',
                     'agents/v1/control/actions/execute' => 'agents/api/control-actions-execute',
                     'agents/v1/control/audit' => 'agents/api/control-audit',
                 ]);
