@@ -229,12 +229,33 @@ class DashboardController extends Controller
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
         $defaultScopes = (array)($posture['authentication']['tokenScopes'] ?? []);
         $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
+        $credentialExpirySummary = [
+            'expired' => 0,
+            'expiringSoon' => 0,
+            'activeWithExpiry' => 0,
+        ];
+        foreach ($managedCredentials as $credential) {
+            if (!is_array($credential) || (bool)($credential['revoked'] ?? false)) {
+                continue;
+            }
+
+            $status = strtolower(trim((string)($credential['expiryStatus'] ?? 'none')));
+            if ($status === 'expired') {
+                $credentialExpirySummary['expired']++;
+            } elseif ($status === 'expiring_soon') {
+                $credentialExpirySummary['expiringSoon']++;
+                $credentialExpirySummary['activeWithExpiry']++;
+            } elseif ($status === 'active') {
+                $credentialExpirySummary['activeWithExpiry']++;
+            }
+        }
 
         return $this->renderCpTemplate('agents/credentials', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'securityPosture' => $posture,
             'managedCredentials' => $managedCredentials,
+            'credentialExpirySummary' => $credentialExpirySummary,
             'defaultScopes' => $defaultScopes,
             'revealedCredential' => $this->pullRevealedCredential(),
             'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
@@ -464,9 +485,20 @@ class DashboardController extends Controller
                 ['created', 'updated', 'deleted']
             ),
         ];
+        $expiryPolicy = [
+            'ttlDays' => $this->parseNullableIntegerBodyParam('credentialTtlDays'),
+            'expiryReminderDays' => $this->parseNullableIntegerBodyParam('credentialExpiryReminderDays'),
+        ];
 
         try {
-            $result = $plugin->getCredentialService()->createManagedCredential($handle, $displayName, $scopes, $defaultScopes, $webhookSubscriptions);
+            $result = $plugin->getCredentialService()->createManagedCredential(
+                $handle,
+                $displayName,
+                $scopes,
+                $defaultScopes,
+                $webhookSubscriptions,
+                $expiryPolicy
+            );
             $credential = (array)($result['credential'] ?? []);
             $this->storeRevealedCredential([
                 'token' => (string)($result['token'] ?? ''),
@@ -505,6 +537,10 @@ class DashboardController extends Controller
                 ['created', 'updated', 'deleted']
             ),
         ];
+        $expiryPolicy = [
+            'ttlDays' => $this->parseNullableIntegerBodyParam('credentialTtlDays'),
+            'expiryReminderDays' => $this->parseNullableIntegerBodyParam('credentialExpiryReminderDays'),
+        ];
 
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing API key ID.');
@@ -512,7 +548,14 @@ class DashboardController extends Controller
         }
 
         try {
-            $credential = $plugin->getCredentialService()->updateManagedCredential($credentialId, $displayName, $scopes, $defaultScopes, $webhookSubscriptions);
+            $credential = $plugin->getCredentialService()->updateManagedCredential(
+                $credentialId,
+                $displayName,
+                $scopes,
+                $defaultScopes,
+                $webhookSubscriptions,
+                $expiryPolicy
+            );
             if (!is_array($credential)) {
                 $this->setFailFlash('API key not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -1050,6 +1093,28 @@ class DashboardController extends Controller
 
         $value = strtolower(trim((string)$raw));
         return in_array($value, ['1', 'true', 'on', 'yes'], true);
+    }
+
+    private function parseNullableIntegerBodyParam(string $name): ?int
+    {
+        $raw = $this->request->getBodyParam($name);
+        if ($raw === null) {
+            return null;
+        }
+
+        if (is_array($raw)) {
+            if (empty($raw)) {
+                return null;
+            }
+            $raw = end($raw);
+        }
+
+        $value = trim((string)$raw);
+        if ($value === '' || !is_numeric($value)) {
+            return null;
+        }
+
+        return (int)$value;
     }
 
     private function getSettingsOverrides(): array

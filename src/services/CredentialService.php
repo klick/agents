@@ -11,10 +11,12 @@ class CredentialService extends Component
 {
     private const TABLE = '{{%agents_credentials}}';
     private const TOKEN_RANDOM_BYTES = 24;
+    private const DEFAULT_EXPIRY_REMINDER_DAYS = 7;
     private const WEBHOOK_RESOURCE_TYPES = ['entry', 'order', 'product'];
     private const WEBHOOK_ACTIONS = ['created', 'updated', 'deleted'];
 
     private ?bool $supportsWebhookSubscriptionColumns = null;
+    private ?bool $supportsExpiryColumns = null;
 
     public function getManagedCredentialsForRuntime(array $defaultScopes): array
     {
@@ -30,6 +32,10 @@ class CredentialService extends Component
 
         $credentials = [];
         foreach ($rows as $row) {
+            if ($this->isCredentialExpired($row)) {
+                continue;
+            }
+
             $tokenHash = strtolower(trim((string)($row['tokenHash'] ?? '')));
             if (!preg_match('/^[a-f0-9]{64}$/', $tokenHash)) {
                 continue;
@@ -64,6 +70,7 @@ class CredentialService extends Component
 
         $credentials = [];
         foreach ($rows as $row) {
+            $expiry = $this->decodeExpiryPolicy($row);
             $credentials[] = [
                 'id' => (int)($row['id'] ?? 0),
                 'handle' => (string)($row['handle'] ?? ''),
@@ -71,6 +78,11 @@ class CredentialService extends Component
                 'tokenPrefix' => (string)($row['tokenPrefix'] ?? ''),
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
+                'expiresAt' => $expiry['expiresAt'],
+                'expiryReminderDays' => $expiry['expiryReminderDays'],
+                'expiresInDays' => $expiry['expiresInDays'],
+                'expiryStatus' => $expiry['status'],
+                'expiryPolicy' => $expiry,
                 'revoked' => !empty($row['revokedAt']),
                 'revokedAt' => $this->toIso8601($row['revokedAt'] ?? null),
                 'rotatedAt' => $this->toIso8601($row['rotatedAt'] ?? null),
@@ -103,6 +115,10 @@ class CredentialService extends Component
                 continue;
             }
 
+            if ($this->isCredentialExpired($row)) {
+                continue;
+            }
+
             $decoded = $this->decodeWebhookSubscriptions($row);
             if (!(bool)($decoded['active'] ?? false)) {
                 continue;
@@ -124,7 +140,8 @@ class CredentialService extends Component
         string $displayName,
         array $scopes,
         array $defaultScopes,
-        array $webhookSubscriptions = []
+        array $webhookSubscriptions = [],
+        array $expiryPolicy = []
     ): array
     {
         if (!$this->credentialsTableExists()) {
@@ -139,6 +156,7 @@ class CredentialService extends Component
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $normalizedHandle);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
+        $normalizedExpiryPolicy = $this->resolveCreateExpiryPolicy($expiryPolicy);
 
         $exists = (new Query())
             ->from(self::TABLE)
@@ -171,6 +189,10 @@ class CredentialService extends Component
         if ($this->supportsWebhookSubscriptionColumns()) {
             $insertData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
             $insertData['webhookActions'] = $this->encodeJson($normalizedWebhookSubscriptions['actions']);
+        }
+        if ($this->supportsExpiryColumns()) {
+            $insertData['expiresAt'] = $normalizedExpiryPolicy['expiresAt'];
+            $insertData['expiryReminderDays'] = (int)$normalizedExpiryPolicy['expiryReminderDays'];
         }
 
         Craft::$app->getDb()->createCommand()->insert(self::TABLE, $insertData)->execute();
@@ -239,7 +261,8 @@ class CredentialService extends Component
         string $displayName,
         array $scopes,
         array $defaultScopes,
-        array $webhookSubscriptions = []
+        array $webhookSubscriptions = [],
+        array $expiryPolicy = []
     ): ?array
     {
         if ($id <= 0 || !$this->credentialsTableExists()) {
@@ -262,6 +285,7 @@ class CredentialService extends Component
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $handle);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
+        $normalizedExpiryPolicy = $this->resolveUpdateExpiryPolicy($row, $expiryPolicy);
         $encodedScopes = json_encode($normalizedScopes, JSON_UNESCAPED_SLASHES);
         if (!is_string($encodedScopes)) {
             $encodedScopes = '[]';
@@ -274,6 +298,10 @@ class CredentialService extends Component
         if ($this->supportsWebhookSubscriptionColumns()) {
             $updateData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
             $updateData['webhookActions'] = $this->encodeJson($normalizedWebhookSubscriptions['actions']);
+        }
+        if ($this->supportsExpiryColumns()) {
+            $updateData['expiresAt'] = $normalizedExpiryPolicy['expiresAt'];
+            $updateData['expiryReminderDays'] = (int)$normalizedExpiryPolicy['expiryReminderDays'];
         }
 
         Craft::$app->getDb()->createCommand()->update(self::TABLE, $updateData, ['id' => $id])->execute();
@@ -361,6 +389,24 @@ class CredentialService extends Component
         return $this->supportsWebhookSubscriptionColumns;
     }
 
+    private function supportsExpiryColumns(): bool
+    {
+        if ($this->supportsExpiryColumns !== null) {
+            return $this->supportsExpiryColumns;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsExpiryColumns = false;
+            return false;
+        }
+
+        $this->supportsExpiryColumns = $schema->getColumn('expiresAt') !== null
+            && $schema->getColumn('expiryReminderDays') !== null;
+
+        return $this->supportsExpiryColumns;
+    }
+
     private function normalizeHandle(string $value): string
     {
         $normalized = strtolower(trim($value));
@@ -415,6 +461,93 @@ class CredentialService extends Component
             'resourceTypes' => $resourceTypes,
             'actions' => $actions,
             'active' => !empty($resourceTypes) || !empty($actions),
+        ];
+    }
+
+    private function isCredentialExpired(array $row): bool
+    {
+        $expiry = $this->decodeExpiryPolicy($row);
+        return (bool)($expiry['isExpired'] ?? false);
+    }
+
+    private function decodeExpiryPolicy(array $row): array
+    {
+        $default = [
+            'expiresAt' => null,
+            'expiryReminderDays' => self::DEFAULT_EXPIRY_REMINDER_DAYS,
+            'expiresInDays' => null,
+            'isExpired' => false,
+            'isExpiringSoon' => false,
+            'status' => 'none',
+        ];
+
+        if (!$this->supportsExpiryColumns()) {
+            return $default;
+        }
+
+        $expiresAtRaw = $this->normalizeDateString($row['expiresAt'] ?? null);
+        $expiryReminderDays = $this->normalizeReminderDays($row['expiryReminderDays'] ?? self::DEFAULT_EXPIRY_REMINDER_DAYS);
+        if ($expiresAtRaw === null) {
+            $default['expiryReminderDays'] = $expiryReminderDays;
+            return $default;
+        }
+
+        $expiresTimestamp = strtotime($expiresAtRaw);
+        if ($expiresTimestamp === false) {
+            $default['expiryReminderDays'] = $expiryReminderDays;
+            return $default;
+        }
+
+        $now = time();
+        $remainingSeconds = $expiresTimestamp - $now;
+        $expiresInDays = (int)floor($remainingSeconds / 86400);
+        $isExpired = $remainingSeconds <= 0;
+        $isExpiringSoon = !$isExpired && $expiresInDays <= $expiryReminderDays;
+
+        return [
+            'expiresAt' => $this->toIso8601($expiresAtRaw),
+            'expiryReminderDays' => $expiryReminderDays,
+            'expiresInDays' => $expiresInDays,
+            'isExpired' => $isExpired,
+            'isExpiringSoon' => $isExpiringSoon,
+            'status' => $isExpired ? 'expired' : ($isExpiringSoon ? 'expiring_soon' : 'active'),
+        ];
+    }
+
+    private function resolveCreateExpiryPolicy(array $input): array
+    {
+        $ttlDays = $this->normalizeNullableInt($input['ttlDays'] ?? null);
+        $expiresAt = null;
+        if ($ttlDays !== null && $ttlDays > 0) {
+            $expiresAt = gmdate('Y-m-d H:i:s', time() + ($ttlDays * 86400));
+        }
+
+        return [
+            'expiresAt' => $expiresAt,
+            'expiryReminderDays' => $this->normalizeReminderDays($input['expiryReminderDays'] ?? null),
+        ];
+    }
+
+    private function resolveUpdateExpiryPolicy(array $row, array $input): array
+    {
+        $currentExpiry = $this->normalizeDateString($row['expiresAt'] ?? null);
+        $currentReminder = $this->normalizeReminderDays($row['expiryReminderDays'] ?? self::DEFAULT_EXPIRY_REMINDER_DAYS);
+
+        $ttlDays = $this->normalizeNullableInt($input['ttlDays'] ?? null);
+        $reminderDays = $this->normalizeNullableInt($input['expiryReminderDays'] ?? null);
+
+        $expiresAt = $currentExpiry;
+        if ($ttlDays !== null) {
+            if ($ttlDays <= 0) {
+                $expiresAt = null;
+            } else {
+                $expiresAt = gmdate('Y-m-d H:i:s', time() + ($ttlDays * 86400));
+            }
+        }
+
+        return [
+            'expiresAt' => $expiresAt,
+            'expiryReminderDays' => $reminderDays === null ? $currentReminder : $this->normalizeReminderDays($reminderDays),
         ];
     }
 
@@ -506,6 +639,56 @@ class CredentialService extends Component
     {
         $encoded = json_encode($value, JSON_UNESCAPED_SLASHES);
         return is_string($encoded) ? $encoded : '[]';
+    }
+
+    private function normalizeDateString(mixed $value): ?string
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return null;
+        }
+
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($raw);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return gmdate('Y-m-d H:i:s', $timestamp);
+    }
+
+    private function normalizeNullableInt(mixed $value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_string($value) && trim($value) === '') {
+            return null;
+        }
+
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        return (int)$value;
+    }
+
+    private function normalizeReminderDays(mixed $value): int
+    {
+        $normalized = $this->normalizeNullableInt($value);
+        if ($normalized === null) {
+            return self::DEFAULT_EXPIRY_REMINDER_DAYS;
+        }
+
+        if ($normalized < 1) {
+            return self::DEFAULT_EXPIRY_REMINDER_DAYS;
+        }
+
+        return min($normalized, 365);
     }
 
     private function toIso8601(mixed $raw): ?string
