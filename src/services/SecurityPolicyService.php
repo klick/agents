@@ -19,6 +19,7 @@ class SecurityPolicyService extends Component
         'changes:read',
         'sections:read',
         'consumers:read',
+        'schema:read',
         'capabilities:read',
         'openapi:read',
         'control:policies:read',

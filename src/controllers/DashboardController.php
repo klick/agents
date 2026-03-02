@@ -953,6 +953,7 @@ class DashboardController extends Controller
             $apiBasePath . '/sections',
             $apiBasePath . '/consumers/lag',
             $apiBasePath . '/consumers/checkpoint',
+            $apiBasePath . '/schema',
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',
         ];

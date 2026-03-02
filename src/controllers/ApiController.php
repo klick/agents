@@ -22,6 +22,7 @@ class ApiController extends Controller
         'changes:read',
         'sections:read',
         'consumers:read',
+        'schema:read',
         'capabilities:read',
         'openapi:read',
         'control:policies:read',
@@ -296,6 +297,46 @@ class ApiController extends Controller
         return $this->respondWithPayload($payload);
     }
 
+    public function actionSchema(): Response
+    {
+        if (($guard = $this->guardRequest('schema:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $version = strtolower(trim((string)$request->getQueryParam('version', 'v1')));
+        if ($version === '') {
+            $version = 'v1';
+        }
+
+        $catalogs = $this->versionedSchemaCatalogs();
+        if (!isset($catalogs[$version]) || !is_array($catalogs[$version])) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, sprintf('Unsupported schema version `%s`.', $version));
+        }
+
+        $schemas = $catalogs[$version];
+        $endpoint = strtolower(trim((string)$request->getQueryParam('endpoint', '')));
+        if ($endpoint !== '') {
+            if (!isset($schemas[$endpoint])) {
+                return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, sprintf('Unknown schema endpoint `%s` for version `%s`.', $endpoint, $version));
+            }
+
+            return $this->jsonResponse([
+                'version' => $version,
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'endpoint' => $endpoint,
+                'schema' => $schemas[$endpoint],
+            ]);
+        }
+
+        return $this->jsonResponse([
+            'version' => $version,
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'count' => count($schemas),
+            'schemas' => $schemas,
+        ]);
+    }
+
     public function actionCapabilities(): Response
     {
         if (($guard = $this->guardRequest('capabilities:read')) !== null) {
@@ -317,6 +358,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
             ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read']],
             ['method' => 'POST', 'path' => '/consumers/checkpoint', 'requiredScopes' => ['consumers:write']],
+            ['method' => 'GET', 'path' => '/schema', 'requiredScopes' => ['schema:read']],
             ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
             ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
             ['method' => 'GET', 'path' => '/control/policies', 'requiredScopes' => ['control:policies:read']],
@@ -512,6 +554,18 @@ class ApiController extends Controller
                     '400' => ['description' => 'Invalid request'],
                 ]),
                 'x-required-scopes' => ['consumers:write'],
+            ]],
+            '/schema' => ['get' => [
+                'summary' => 'Versioned machine-readable endpoint schemas',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'version', 'schema' => ['type' => 'string'], 'description' => 'Schema catalog version. Defaults to `v1`.'],
+                    ['in' => 'query', 'name' => 'endpoint', 'schema' => ['type' => 'string'], 'description' => 'Optional endpoint key to return a single schema.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid version or endpoint'],
+                ]),
+                'x-required-scopes' => ['schema:read'],
             ]],
             '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['capabilities:read']]],
             '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['openapi:read']]],
@@ -1633,6 +1687,7 @@ class ApiController extends Controller
             'sections:read' => 'Read section list endpoint.',
             'consumers:read' => 'Read per-integration consumer lag/checkpoint status.',
             'consumers:write' => 'Record per-integration consumer checkpoints for lag tracking.',
+            'schema:read' => 'Read machine-readable endpoint schemas for a specific version.',
             'capabilities:read' => 'Read capabilities descriptor endpoint.',
             'openapi:read' => 'Read OpenAPI descriptor endpoint.',
             'control:policies:read' => 'Read control action policies.',
@@ -2092,6 +2147,141 @@ class ApiController extends Controller
     private function isListArray(array $value): bool
     {
         return array_is_list($value);
+    }
+
+    private function versionedSchemaCatalogs(): array
+    {
+        return [
+            'v1' => [
+                'products.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/products',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'q' => ['type' => 'string'],
+                            'status' => ['type' => 'string'],
+                            'sort' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'id' => ['type' => 'integer'],
+                                        'title' => ['type' => 'string'],
+                                        'slug' => ['type' => 'string'],
+                                        'status' => ['type' => 'string'],
+                                        'updatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                                    ],
+                                ],
+                            ],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'orders.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/orders',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'lastDays' => ['type' => 'integer'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'entries.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/entries',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'section' => ['type' => 'string'],
+                            'type' => ['type' => 'string'],
+                            'status' => ['type' => 'string'],
+                            'search' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'changes.feed' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/changes',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'types' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'cursor' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'schema.catalog' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/schema',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'version' => ['type' => 'string'],
+                            'endpoint' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'version' => ['type' => 'string'],
+                            'count' => ['type' => 'integer'],
+                            'schemas' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+            ],
+        ];
     }
 
     private function respondWithPayload(array $payload, bool $expectSingle = false, string $notFoundMessage = 'Resource not found.'): Response
