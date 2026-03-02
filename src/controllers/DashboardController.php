@@ -42,6 +42,21 @@ class DashboardController extends Controller
         $readinessSummary = $readinessService->getReadinessSummary();
         $readinessDiagnostics = $readinessService->getReadinessDiagnostics();
         $discoveryStatus = $plugin->getDiscoveryTxtService()->getDiscoveryStatus();
+        $consumerLagSnapshot = [
+            'summary' => [
+                'count' => 0,
+                'healthy' => 0,
+                'warning' => 0,
+                'critical' => 0,
+                'maxLagSeconds' => 0,
+            ],
+            'rows' => [],
+        ];
+        try {
+            $consumerLagSnapshot = $plugin->getConsumerLagService()->getLagSummary(100);
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load consumer lag summary for CP: ' . $e->getMessage(), __METHOD__);
+        }
         $webhookDeadLetters = [];
         try {
             $webhookDeadLetters = $plugin->getWebhookService()->getDeadLetterEvents([], 20);
@@ -81,6 +96,8 @@ class DashboardController extends Controller
                 'llmsTtl' => (int)$settings->llmsTxtCacheTtl,
                 'commerceTtl' => (int)$settings->commerceTxtCacheTtl,
             ],
+            'consumerLagSummary' => (array)($consumerLagSnapshot['summary'] ?? []),
+            'consumerLagRows' => (array)($consumerLagSnapshot['rows'] ?? []),
             'webhookDeadLetters' => $webhookDeadLetters,
             'securityPosture' => $securityPosture,
             'securityPostureJson' => $this->prettyPrintJson($securityPosture),
@@ -829,6 +846,8 @@ class DashboardController extends Controller
             $apiBasePath . '/entries',
             $apiBasePath . '/changes',
             $apiBasePath . '/sections',
+            $apiBasePath . '/consumers/lag',
+            $apiBasePath . '/consumers/checkpoint',
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',
         ];

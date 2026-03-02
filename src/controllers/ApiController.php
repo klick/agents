@@ -21,6 +21,7 @@ class ApiController extends Controller
         'entries:read',
         'changes:read',
         'sections:read',
+        'consumers:read',
         'capabilities:read',
         'openapi:read',
         'control:policies:read',
@@ -312,6 +313,8 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/entries/show', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
             ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
+            ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read']],
+            ['method' => 'POST', 'path' => '/consumers/checkpoint', 'requiredScopes' => ['consumers:write']],
             ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
             ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
             ['method' => 'GET', 'path' => '/control/policies', 'requiredScopes' => ['control:policies:read']],
@@ -480,6 +483,25 @@ class ApiController extends Controller
                 'x-optional-scopes' => ['entries:read_all_statuses'],
             ]],
             '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
+            '/consumers/lag' => ['get' => [
+                'summary' => 'List consumer checkpoint lag by integration/resource',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'integrationKey', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'resourceType', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 1000]],
+                ],
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['consumers:read'],
+            ]],
+            '/consumers/checkpoint' => ['post' => [
+                'summary' => 'Record latest consumer checkpoint/cursor for lag tracking',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['consumers:write'],
+            ]],
             '/capabilities' => ['get' => ['summary' => 'Feature and command discovery', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['capabilities:read']]],
             '/openapi.json' => ['get' => ['summary' => 'OpenAPI descriptor', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['openapi:read']]],
             '/control/policies' => ['get' => ['summary' => 'List control policies', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['control:policies:read']]],
@@ -646,6 +668,59 @@ class ApiController extends Controller
                 'windowSeconds' => (int)($config['rateLimitWindowSeconds'] ?? 60),
                 'resetAt' => $rateLimitReset > 0 ? gmdate('Y-m-d\TH:i:s\Z', $rateLimitReset) : null,
             ],
+        ]);
+    }
+
+    public function actionConsumersLag(): Response
+    {
+        if (($guard = $this->guardRequest('consumers:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getConsumerLagService();
+        $rows = $service->getConsumerLag([
+            'integrationKey' => (string)$request->getQueryParam('integrationKey', ''),
+            'resourceType' => (string)$request->getQueryParam('resourceType', ''),
+        ], (int)$request->getQueryParam('limit', 200));
+
+        return $this->jsonResponse([
+            'data' => $rows,
+            'meta' => [
+                'count' => count($rows),
+            ],
+        ]);
+    }
+
+    public function actionConsumersCheckpoint(): Response
+    {
+        if (($guard = $this->guardRequest('consumers:write', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getConsumerLagService();
+
+        try {
+            $checkpoint = $service->upsertCheckpoint([
+                'integrationKey' => $request->getBodyParam('integrationKey', ''),
+                'resourceType' => $request->getBodyParam('resourceType', ''),
+                'cursor' => $request->getBodyParam('cursor', ''),
+                'updatedSince' => $request->getBodyParam('updatedSince', ''),
+                'checkpointAt' => $request->getBodyParam('checkpointAt', ''),
+                'metadata' => $request->getBodyParam('metadata', []),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\RuntimeException $e) {
+            return $this->misconfiguredResponse($e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Unable to record consumer checkpoint: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to record consumer checkpoint.');
+        }
+
+        return $this->jsonResponse([
+            'data' => $checkpoint,
         ]);
     }
 
@@ -1350,6 +1425,8 @@ class ApiController extends Controller
             'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
             'changes:read' => 'Read unified cross-resource incremental changes feed.',
             'sections:read' => 'Read section list endpoint.',
+            'consumers:read' => 'Read per-integration consumer lag/checkpoint status.',
+            'consumers:write' => 'Record per-integration consumer checkpoints for lag tracking.',
             'capabilities:read' => 'Read capabilities descriptor endpoint.',
             'openapi:read' => 'Read OpenAPI descriptor endpoint.',
             'control:policies:read' => 'Read control action policies.',

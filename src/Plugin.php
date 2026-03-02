@@ -20,6 +20,7 @@ use craft\web\View;
 use yii\base\Event;
 use Klick\Agents\models\Settings;
 use Klick\Agents\services\ControlPlaneService;
+use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ReadinessService;
@@ -56,6 +57,7 @@ class Plugin extends BasePlugin
             'webhookService' => WebhookService::class,
             'credentialService' => CredentialService::class,
             'controlPlaneService' => ControlPlaneService::class,
+            'consumerLagService' => ConsumerLagService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
@@ -155,6 +157,8 @@ class Plugin extends BasePlugin
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
+                'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoint',
+                'agents/v1/consumers/lag' => 'agents/api/consumers-lag',
                 'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
                 'agents/v1/webhooks/dlq/replay' => 'agents/api/webhook-dlq-replay',
             ];
@@ -214,6 +218,13 @@ class Plugin extends BasePlugin
     {
         /** @var ControlPlaneService $service */
         $service = $this->get('controlPlaneService');
+        return $service;
+    }
+
+    public function getConsumerLagService(): ConsumerLagService
+    {
+        /** @var ConsumerLagService $service */
+        $service = $this->get('consumerLagService');
         return $service;
     }
 

@@ -225,6 +225,49 @@
 
     <hr>
 
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Consumer Lag</h2>
+      <p>
+        Integrations tracked: <strong>{{ consumerLagSummary.count|default(0) }}</strong>,
+        healthy: <strong>{{ consumerLagSummary.healthy|default(0) }}</strong>,
+        warning: <strong>{{ consumerLagSummary.warning|default(0) }}</strong>,
+        critical: <strong>{{ consumerLagSummary.critical|default(0) }}</strong>,
+        max lag: <strong>{{ consumerLagSummary.maxLagSeconds|default(0) }}s</strong>
+      </p>
+
+      {% if consumerLagRows|length %}
+        <table class="data fullwidth">
+          <thead>
+          <tr>
+            <th>Integration</th>
+            <th>Resource</th>
+            <th>Checkpoint</th>
+            <th>Lag</th>
+            <th>Bucket</th>
+          </tr>
+          </thead>
+          <tbody>
+          {% for row in consumerLagRows|slice(0, 10) %}
+            <tr>
+              <td><code>{{ row.integrationKey }}</code></td>
+              <td><code>{{ row.resourceType }}</code></td>
+              <td>{{ row.checkpointAt ?: 'n/a' }}</td>
+              <td>{{ row.lagSeconds }}s</td>
+              <td><strong>{{ row.lagBucket }}</strong></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% if consumerLagRows|length > 10 %}
+          <p class="light">Showing top 10 highest lag rows.</p>
+        {% endif %}
+      {% else %}
+        <p>No consumer checkpoint telemetry submitted yet.</p>
+      {% endif %}
+    </div>
+
+    <hr>
+
     {% if readinessDiagnostics.warnings|length %}
       <div class="border rounded p-3 warning" style="margin-bottom: 16px;">
         <h2 class="h4">Warnings</h2>
