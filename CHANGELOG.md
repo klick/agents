@@ -10,7 +10,6 @@ All notable changes to this project are documented in this file.
 - Added CP-editable custom body settings for `llms.txt` and `commerce.txt`, including config lock-state awareness.
 - Added Settings actions to reset custom `llms.txt` and `commerce.txt` bodies back to generated defaults.
 - Extended discovery cache/prewarm/status flows to cover `llms-full.txt` and invalidate on settings save.
-- Clarified product framing across docs/CP copy as a governed agent runtime for Craft; discovery docs are now explicitly presented as one feature.
 - Updated Dashboard discovery tab copy/labels to `Discovery Docs` for clearer IA.
 
 ## 0.3.9 - 2026-02-28
