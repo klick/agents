@@ -816,12 +816,22 @@ class DashboardController extends Controller
             }
 
             $decisionStatus = (string)($approval['status'] ?? 'pending');
-            $this->setSuccessFlash(sprintf(
-                'Request #%d (`%s`) is now `%s`.',
-                $approvalId,
-                (string)($approval['actionType'] ?? 'action'),
-                $decisionStatus
-            ));
+            $approvalsRemaining = (int)($approval['approvalsRemaining'] ?? 0);
+            if ($decisionStatus === 'pending' && $approvalsRemaining > 0) {
+                $this->setSuccessFlash(sprintf(
+                    'Request #%d (`%s`) recorded one approval and is still pending (%d more needed).',
+                    $approvalId,
+                    (string)($approval['actionType'] ?? 'action'),
+                    $approvalsRemaining
+                ));
+            } else {
+                $this->setSuccessFlash(sprintf(
+                    'Request #%d (`%s`) is now `%s`.',
+                    $approvalId,
+                    (string)($approval['actionType'] ?? 'action'),
+                    $decisionStatus
+                ));
+            }
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {

@@ -80,6 +80,15 @@
               {% else %}
                 <span class="light">Default rule</span>
               {% endif %}
+              <div class="light">
+                Approvals: {{ approval.approvalCount|default(0) }}/{{ approval.requiredApprovals|default(1) }}
+                {% if approval.approvalsRemaining|default(0) > 0 %}
+                  ({{ approval.approvalsRemaining }} remaining)
+                {% endif %}
+              </div>
+              {% if approval.decidedBy %}
+                <div class="light">Primary approver: {{ approval.decidedBy }}</div>
+              {% endif %}
             </td>
             <td>
               <div>{{ approval.requestedBy }}</div>

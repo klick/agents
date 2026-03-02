@@ -225,6 +225,8 @@ class ControlPlaneService extends Component
         $requestedBy = $this->resolveActorId($actor);
         $payload = $this->normalizeArray($input['payload'] ?? []);
         $metadata = $this->normalizeArray($input['metadata'] ?? []);
+        $policy = $this->resolvePolicyForAction($actionType);
+        $requiredApprovals = $this->resolveRequiredApprovals($actionType, $payload, $metadata, $policy);
 
         $now = gmdate('Y-m-d H:i:s');
 
@@ -239,6 +241,10 @@ class ControlPlaneService extends Component
             'idempotencyKey' => $idempotencyKey !== '' ? $idempotencyKey : null,
             'requestPayload' => $this->encodeJson($payload),
             'metadata' => $this->encodeJson($metadata),
+            'requiredApprovals' => $requiredApprovals,
+            'secondaryDecisionBy' => null,
+            'secondaryDecisionReason' => null,
+            'secondaryDecisionAt' => null,
             'decidedAt' => null,
             'dateCreated' => $now,
             'dateUpdated' => $now,
@@ -271,6 +277,8 @@ class ControlPlaneService extends Component
                 'actionType' => $actionType,
                 'actionRef' => $actionRef,
                 'idempotencyKey' => $idempotencyKey,
+                'requiredApprovals' => $requiredApprovals,
+                'policyHandle' => (string)($policy['handle'] ?? 'default'),
             ],
         ]);
 
@@ -305,14 +313,90 @@ class ControlPlaneService extends Component
         $now = gmdate('Y-m-d H:i:s');
         $resolvedDecisionReason = $this->normalizeOptionalString($decisionReason);
         $decidedBy = $this->resolveActorId($actor);
+        $requiredApprovals = max(1, (int)($existing['requiredApprovals'] ?? 1));
+        $primaryDecider = $this->normalizeOptionalString($existing['decidedBy'] ?? null, 128);
+        $secondaryDecider = $this->normalizeOptionalString($existing['secondaryDecisionBy'] ?? null, 128);
 
-        Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, [
-            'status' => $status,
-            'decidedBy' => $decidedBy,
-            'decisionReason' => $resolvedDecisionReason,
-            'decidedAt' => $now,
+        if ($status === self::APPROVAL_STATUS_REJECTED) {
+            Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, [
+                'status' => self::APPROVAL_STATUS_REJECTED,
+                'decidedBy' => $primaryDecider ?: $decidedBy,
+                'decisionReason' => $resolvedDecisionReason,
+                'decidedAt' => $now,
+                'secondaryDecisionBy' => null,
+                'secondaryDecisionReason' => null,
+                'secondaryDecisionAt' => null,
+                'dateUpdated' => $now,
+            ], ['id' => $approvalId])->execute();
+
+            $updatedRejected = (new Query())
+                ->from(self::TABLE_APPROVALS)
+                ->where(['id' => $approvalId])
+                ->one();
+
+            if (!is_array($updatedRejected)) {
+                return null;
+            }
+
+            $hydratedRejected = $this->hydrateApproval($updatedRejected);
+            $this->writeAuditEvent([
+                'category' => 'control.approval',
+                'action' => 'decision',
+                'outcome' => 'warning',
+                'actorType' => (string)($actor['actorType'] ?? 'system'),
+                'actorId' => $decidedBy,
+                'requestId' => (string)($actor['requestId'] ?? ''),
+                'ipAddress' => (string)($actor['ipAddress'] ?? ''),
+                'entityType' => 'approval',
+                'entityId' => (string)$approvalId,
+                'summary' => sprintf('Approval `%d` rejected.', $approvalId),
+                'metadata' => [
+                    'decision' => self::APPROVAL_STATUS_REJECTED,
+                    'decisionReason' => $resolvedDecisionReason,
+                    'requiredApprovals' => $requiredApprovals,
+                ],
+            ]);
+
+            return $hydratedRejected;
+        }
+
+        $updateData = [
+            'status' => self::APPROVAL_STATUS_APPROVED,
             'dateUpdated' => $now,
-        ], ['id' => $approvalId])->execute();
+        ];
+        $auditOutcome = 'success';
+        $auditSummary = sprintf('Approval `%d` marked `%s`.', $approvalId, self::APPROVAL_STATUS_APPROVED);
+        $auditMetadata = [
+            'decision' => self::APPROVAL_STATUS_APPROVED,
+            'decisionReason' => $resolvedDecisionReason,
+            'requiredApprovals' => $requiredApprovals,
+        ];
+
+        if ($requiredApprovals <= 1) {
+            $updateData['decidedBy'] = $decidedBy;
+            $updateData['decisionReason'] = $resolvedDecisionReason;
+            $updateData['decidedAt'] = $now;
+        } elseif ($primaryDecider === null || $primaryDecider === '') {
+            $updateData['status'] = self::APPROVAL_STATUS_PENDING;
+            $updateData['decidedBy'] = $decidedBy;
+            $updateData['decisionReason'] = $resolvedDecisionReason;
+            $updateData['decidedAt'] = $now;
+            $auditOutcome = 'info';
+            $auditSummary = sprintf('Approval `%d` recorded first approval from `%s`; awaiting second approver.', $approvalId, $decidedBy);
+            $auditMetadata['stage'] = 'first-approval';
+        } else {
+            if ($primaryDecider === $decidedBy || ($secondaryDecider !== null && $secondaryDecider !== '' && $secondaryDecider === $decidedBy)) {
+                throw new \InvalidArgumentException('Second approval must be made by a different approver.');
+            }
+
+            $updateData['secondaryDecisionBy'] = $decidedBy;
+            $updateData['secondaryDecisionReason'] = $resolvedDecisionReason;
+            $updateData['secondaryDecisionAt'] = $now;
+            $updateData['decidedAt'] = $existing['decidedAt'] ?? $now;
+            $auditMetadata['stage'] = 'second-approval';
+        }
+
+        Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, $updateData, ['id' => $approvalId])->execute();
 
         $updated = (new Query())
             ->from(self::TABLE_APPROVALS)
@@ -328,18 +412,15 @@ class ControlPlaneService extends Component
         $this->writeAuditEvent([
             'category' => 'control.approval',
             'action' => 'decision',
-            'outcome' => $status === self::APPROVAL_STATUS_APPROVED ? 'success' : 'warning',
+            'outcome' => $auditOutcome,
             'actorType' => (string)($actor['actorType'] ?? 'system'),
             'actorId' => $decidedBy,
             'requestId' => (string)($actor['requestId'] ?? ''),
             'ipAddress' => (string)($actor['ipAddress'] ?? ''),
             'entityType' => 'approval',
             'entityId' => (string)$approvalId,
-            'summary' => sprintf('Approval `%d` marked `%s`.', $approvalId, $status),
-            'metadata' => [
-                'decision' => $status,
-                'decisionReason' => $resolvedDecisionReason,
-            ],
+            'summary' => $auditSummary,
+            'metadata' => $auditMetadata,
         ]);
 
         return $hydrated;
@@ -684,6 +765,49 @@ class ControlPlaneService extends Component
         return $matched;
     }
 
+    private function resolveRequiredApprovals(string $actionType, array $payload, array $metadata, array $policy): int
+    {
+        $required = 1;
+        $riskLevel = strtolower(trim((string)($policy['riskLevel'] ?? self::RISK_LEVEL_MEDIUM)));
+        if (in_array($riskLevel, [self::RISK_LEVEL_HIGH, self::RISK_LEVEL_CRITICAL], true)) {
+            $required = 2;
+        }
+
+        $config = $this->normalizeArray($policy['config'] ?? []);
+        $configRequired = isset($config['requiredApprovals']) ? (int)$config['requiredApprovals'] : 0;
+        if ($configRequired >= 2) {
+            $required = 2;
+        }
+
+        if ((bool)($config['twoPersonApproval'] ?? false)) {
+            $required = 2;
+        }
+
+        $amountThreshold = $config['dualApprovalMinAmount'] ?? null;
+        if (is_numeric($amountThreshold)) {
+            $amount = $this->extractApprovalAmount($payload, $metadata);
+            if ($amount !== null && $amount >= (float)$amountThreshold) {
+                $required = 2;
+            }
+        }
+
+        $category = $this->extractApprovalCategory($payload, $metadata);
+        $categories = $this->normalizeStringArray($config['dualApprovalCategories'] ?? []);
+        if ($category !== null && in_array($category, $categories, true)) {
+            $required = 2;
+        }
+
+        $actionPatterns = $this->normalizeStringArray($config['dualApprovalActionPatterns'] ?? []);
+        foreach ($actionPatterns as $pattern) {
+            if ($this->matchesActionPattern($actionType, $pattern)) {
+                $required = 2;
+                break;
+            }
+        }
+
+        return min(2, max(1, $required));
+    }
+
     private function defaultPolicy(): array
     {
         return [
@@ -722,19 +846,40 @@ class ControlPlaneService extends Component
 
     private function hydrateApproval(array $row): array
     {
+        $requiredApprovals = max(1, (int)($row['requiredApprovals'] ?? 1));
+        $primaryDecisionBy = $this->normalizeOptionalString($row['decidedBy'] ?? null, 128);
+        $secondaryDecisionBy = $this->normalizeOptionalString($row['secondaryDecisionBy'] ?? null, 128);
+        $approvalCount = 0;
+        if ($primaryDecisionBy !== null && $primaryDecisionBy !== '') {
+            $approvalCount++;
+        }
+        if ($secondaryDecisionBy !== null && $secondaryDecisionBy !== '') {
+            $approvalCount++;
+        }
+        $status = strtolower(trim((string)($row['status'] ?? self::APPROVAL_STATUS_PENDING)));
+        if ($status === self::APPROVAL_STATUS_REJECTED) {
+            $approvalCount = min($approvalCount, 1);
+        }
+
         return [
             'id' => (int)($row['id'] ?? 0),
             'actionType' => (string)($row['actionType'] ?? ''),
             'actionRef' => $this->normalizeOptionalString($row['actionRef'] ?? null, 128),
-            'status' => strtolower(trim((string)($row['status'] ?? self::APPROVAL_STATUS_PENDING))),
+            'status' => $status,
             'requestedBy' => (string)($row['requestedBy'] ?? ''),
-            'decidedBy' => $this->normalizeOptionalString($row['decidedBy'] ?? null, 128),
+            'decidedBy' => $primaryDecisionBy,
+            'secondaryDecisionBy' => $secondaryDecisionBy,
             'reason' => $this->normalizeOptionalString($row['reason'] ?? null),
             'decisionReason' => $this->normalizeOptionalString($row['decisionReason'] ?? null),
+            'secondaryDecisionReason' => $this->normalizeOptionalString($row['secondaryDecisionReason'] ?? null),
             'idempotencyKey' => $this->normalizeOptionalString($row['idempotencyKey'] ?? null, 128),
             'requestPayload' => $this->decodeJsonArray((string)($row['requestPayload'] ?? '[]')),
             'metadata' => $this->decodeJsonArray((string)($row['metadata'] ?? '[]')),
+            'requiredApprovals' => $requiredApprovals,
+            'approvalCount' => $approvalCount,
+            'approvalsRemaining' => max(0, $requiredApprovals - $approvalCount),
             'decidedAt' => $this->toIso8601($row['decidedAt'] ?? null),
+            'secondaryDecisionAt' => $this->toIso8601($row['secondaryDecisionAt'] ?? null),
             'dateCreated' => $this->toIso8601($row['dateCreated'] ?? null),
             'dateUpdated' => $this->toIso8601($row['dateUpdated'] ?? null),
         ];
@@ -958,6 +1103,76 @@ class ControlPlaneService extends Component
         }
 
         return [];
+    }
+
+    private function normalizeStringArray(mixed $value): array
+    {
+        $items = [];
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if (!is_string($item) && !is_numeric($item)) {
+                    continue;
+                }
+                $items[] = strtolower(trim((string)$item));
+            }
+        } elseif (is_string($value) || is_numeric($value)) {
+            $chunks = preg_split('/[\s,]+/', strtolower(trim((string)$value))) ?: [];
+            foreach ($chunks as $chunk) {
+                $items[] = trim((string)$chunk);
+            }
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if ($item === '') {
+                continue;
+            }
+            $normalized[] = $item;
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+        return $normalized;
+    }
+
+    private function extractApprovalAmount(array $payload, array $metadata): ?float
+    {
+        $candidates = [
+            $payload['amount'] ?? null,
+            $payload['total'] ?? null,
+            $payload['totalPrice'] ?? null,
+            $metadata['amount'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_numeric($candidate)) {
+                return (float)$candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractApprovalCategory(array $payload, array $metadata): ?string
+    {
+        $candidates = [
+            $payload['category'] ?? null,
+            $payload['reasonCode'] ?? null,
+            $metadata['category'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (!is_string($candidate) && !is_numeric($candidate)) {
+                continue;
+            }
+
+            $value = strtolower(trim((string)$candidate));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     private function normalizeOptionalString(mixed $value, int $maxLength = 65535): ?string
