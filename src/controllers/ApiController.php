@@ -167,6 +167,7 @@ class ApiController extends Controller
             unset($payload['page']['errors']);
         }
 
+        $payload = $this->applyListProjectionAndFilters($payload);
         return $this->jsonResponse($payload);
     }
 
@@ -192,7 +193,7 @@ class ApiController extends Controller
             'updatedSince' => $updatedSince,
         ]);
 
-        return $this->respondWithPayload($payload);
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
     }
 
     public function actionOrderShow(): Response
@@ -237,7 +238,7 @@ class ApiController extends Controller
             'updatedSince' => $request->getQueryParam('updatedSince'),
         ]);
 
-        return $this->respondWithPayload($payload);
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
     }
 
     public function actionChanges(): Response
@@ -263,6 +264,7 @@ class ApiController extends Controller
 
         unset($payload['meta']);
 
+        $payload = $this->applyListProjectionAndFilters($payload);
         return $this->jsonResponse($payload);
     }
 
@@ -397,6 +399,8 @@ class ApiController extends Controller
                     ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
                     ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                     ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
                 ],
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
@@ -412,6 +416,8 @@ class ApiController extends Controller
                     ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
                     ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                     ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
                 ],
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
@@ -445,6 +451,8 @@ class ApiController extends Controller
                     ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
                     ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                     ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
                 ],
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
@@ -461,6 +469,8 @@ class ApiController extends Controller
                     ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                     ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
                 ],
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
@@ -1853,6 +1863,235 @@ class ApiController extends Controller
         return $this->errorResponse(403, self::ERROR_FORBIDDEN, $message, [
             'requiredScope' => $requiredScope,
         ]);
+    }
+
+    private function applyListProjectionAndFilters(array $payload, string $dataKey = 'data'): array
+    {
+        $request = Craft::$app->getRequest();
+        $fields = $this->parseFieldsParam((string)$request->getQueryParam('fields', ''));
+        $filters = $this->parseFilterParam((string)$request->getQueryParam('filter', ''));
+
+        if (empty($fields) && empty($filters)) {
+            return $payload;
+        }
+
+        if (!array_key_exists($dataKey, $payload) || !is_array($payload[$dataKey])) {
+            return $payload;
+        }
+
+        $data = $payload[$dataKey];
+        if ($this->isListArray($data)) {
+            $processed = [];
+            foreach ($data as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                if (!$this->matchesFilterExpressions($row, $filters)) {
+                    continue;
+                }
+
+                $processed[] = $this->projectRowByFields($row, $fields);
+            }
+            $payload[$dataKey] = $processed;
+
+            if (isset($payload['meta']) && is_array($payload['meta'])) {
+                $payload['meta']['count'] = count($processed);
+            }
+            if (isset($payload['page']) && is_array($payload['page'])) {
+                $payload['page']['count'] = count($processed);
+            }
+
+            return $payload;
+        }
+
+        if (!$this->matchesFilterExpressions($data, $filters)) {
+            $payload[$dataKey] = null;
+            return $payload;
+        }
+
+        $payload[$dataKey] = $this->projectRowByFields($data, $fields);
+        return $payload;
+    }
+
+    private function parseFieldsParam(string $raw): array
+    {
+        $tokens = preg_split('/[\s,]+/', trim($raw)) ?: [];
+        $fields = [];
+        foreach ($tokens as $token) {
+            $field = trim((string)$token);
+            if ($field === '') {
+                continue;
+            }
+
+            if (preg_match('/^[a-zA-Z0-9_.-]+$/', $field) !== 1) {
+                continue;
+            }
+
+            $fields[] = $field;
+        }
+
+        $fields = array_values(array_unique($fields));
+        sort($fields);
+        return $fields;
+    }
+
+    private function parseFilterParam(string $raw): array
+    {
+        $tokens = preg_split('/\s*,\s*/', trim($raw)) ?: [];
+        $filters = [];
+        foreach ($tokens as $token) {
+            $candidate = trim((string)$token);
+            if ($candidate === '' || !str_contains($candidate, ':')) {
+                continue;
+            }
+
+            [$path, $value] = explode(':', $candidate, 2);
+            $path = trim($path);
+            $value = trim($value);
+            if ($path === '' || $value === '') {
+                continue;
+            }
+
+            if (preg_match('/^[a-zA-Z0-9_.-]+$/', $path) !== 1) {
+                continue;
+            }
+
+            $filters[] = ['path' => $path, 'value' => $value];
+        }
+
+        return $filters;
+    }
+
+    private function matchesFilterExpressions(array $row, array $filters): bool
+    {
+        if (empty($filters)) {
+            return true;
+        }
+
+        foreach ($filters as $filter) {
+            $path = (string)($filter['path'] ?? '');
+            $expected = (string)($filter['value'] ?? '');
+            if ($path === '' || $expected === '') {
+                continue;
+            }
+
+            $exists = false;
+            $actual = $this->getPathValue($row, $path, $exists);
+            if (!$exists) {
+                return false;
+            }
+
+            if (!$this->matchesFilterValue($actual, $expected)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function matchesFilterValue(mixed $actual, string $expected): bool
+    {
+        if (is_array($actual) || is_object($actual)) {
+            return false;
+        }
+
+        $actualString = strtolower(trim((string)$actual));
+        $expectedNormalized = strtolower(trim($expected));
+        if ($expectedNormalized === '') {
+            return true;
+        }
+
+        if (str_starts_with($expectedNormalized, '~')) {
+            $needle = substr($expectedNormalized, 1);
+            return $needle === '' || str_contains($actualString, $needle);
+        }
+
+        if (str_contains($expectedNormalized, '*')) {
+            $escaped = preg_quote($expectedNormalized, '/');
+            $regex = '/^' . str_replace('\\*', '.*', $escaped) . '$/i';
+            return preg_match($regex, (string)$actual) === 1;
+        }
+
+        if (in_array($expectedNormalized, ['true', 'false'], true)) {
+            return ((bool)$actual) === ($expectedNormalized === 'true');
+        }
+
+        if (is_numeric($actual) && is_numeric($expectedNormalized)) {
+            return (float)$actual === (float)$expectedNormalized;
+        }
+
+        return $actualString === $expectedNormalized;
+    }
+
+    private function projectRowByFields(array $row, array $fields): array
+    {
+        if (empty($fields)) {
+            return $row;
+        }
+
+        $projected = [];
+        foreach ($fields as $fieldPath) {
+            $exists = false;
+            $value = $this->getPathValue($row, $fieldPath, $exists);
+            if (!$exists) {
+                continue;
+            }
+
+            $this->setPathValue($projected, $fieldPath, $value);
+        }
+
+        return $projected;
+    }
+
+    private function getPathValue(array $row, string $path, bool &$exists): mixed
+    {
+        $segments = array_filter(explode('.', $path), static fn(string $segment): bool => $segment !== '');
+        if (empty($segments)) {
+            $exists = false;
+            return null;
+        }
+
+        $current = $row;
+        foreach ($segments as $segment) {
+            if (!is_array($current) || !array_key_exists($segment, $current)) {
+                $exists = false;
+                return null;
+            }
+
+            $current = $current[$segment];
+        }
+
+        $exists = true;
+        return $current;
+    }
+
+    private function setPathValue(array &$target, string $path, mixed $value): void
+    {
+        $segments = array_filter(explode('.', $path), static fn(string $segment): bool => $segment !== '');
+        if (empty($segments)) {
+            return;
+        }
+
+        $pointer = &$target;
+        foreach ($segments as $index => $segment) {
+            $isLast = $index === (count($segments) - 1);
+            if ($isLast) {
+                $pointer[$segment] = $value;
+                continue;
+            }
+
+            if (!isset($pointer[$segment]) || !is_array($pointer[$segment])) {
+                $pointer[$segment] = [];
+            }
+
+            $pointer = &$pointer[$segment];
+        }
+    }
+
+    private function isListArray(array $value): bool
+    {
+        return array_is_list($value);
     }
 
     private function respondWithPayload(array $payload, bool $expectSingle = false, string $notFoundMessage = 'Resource not found.'): Response
