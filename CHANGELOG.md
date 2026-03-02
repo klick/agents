@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.4.0 - 2026-03-02
+
+- Added webhook dead-letter queue persistence with guarded API replay endpoints and Control Panel replay controls.
+- Added per-credential webhook subscription targeting (resource/action filters) to reduce firehose delivery.
+- Added consumer lag tracking surfaces (`/agents/v1/consumers/checkpoint`, `/agents/v1/consumers/lag`) and dashboard visibility.
+- Added credential expiry policies (TTL + reminder windows), CP warnings, and runtime exclusion of expired managed keys.
+- Added credential CIDR allowlists with runtime API auth enforcement and CP management UI.
+- Added policy simulator dry-run flow (`/agents/v1/control/policy-simulate`) plus CP simulation tooling.
+- Added two-person approval support for high-risk actions with staged approval progress tracking.
+- Added SLA escalation and auto-expiry behavior for pending approvals, including surfaced SLA state in CP/API payloads.
+- Added list endpoint projection/filter support (`fields`, `filter`) on key read surfaces to reduce payload size.
+- Added versioned machine-readable schema catalog endpoint (`/agents/v1/schema`) for safer client generation.
+
 ## 0.3.10 - 2026-03-02
 
 - Added optional extended discovery export `GET /llms-full.txt` with capabilities/OpenAPI/CP surface alignment.
