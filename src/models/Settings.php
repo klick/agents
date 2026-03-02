@@ -9,13 +9,16 @@ class Settings extends Model
     public bool $enabled = true;
     public bool $allowCpApprovalRequests = false;
     public bool $enableLlmsTxt = true;
+    public bool $enableLlmsFullTxt = false;
     public bool $enableCommerceTxt = true;
     public int $llmsTxtCacheTtl = 86400;
     public int $commerceTxtCacheTtl = 3600;
+    public string $llmsTxtBody = '';
     public string $llmsSiteSummary = '';
     public bool $llmsIncludeAgentsLinks = true;
     public bool $llmsIncludeSitemapLink = true;
     public array $llmsLinks = [];
+    public string $commerceTxtBody = '';
     public string $commerceSummary = '';
     public array $commercePolicyUrls = [];
     public array $commerceSupport = [];
@@ -25,9 +28,9 @@ class Settings extends Model
     public function rules(): array
     {
         return [
-            [['enabled', 'allowCpApprovalRequests', 'enableLlmsTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
+            [['enabled', 'allowCpApprovalRequests', 'enableLlmsTxt', 'enableLlmsFullTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
             [['llmsTxtCacheTtl', 'commerceTxtCacheTtl'], 'integer', 'min' => 0, 'max' => 604800],
-            [['llmsSiteSummary', 'commerceSummary', 'commerceCatalogUrl'], 'string'],
+            [['llmsTxtBody', 'llmsSiteSummary', 'commerceTxtBody', 'commerceSummary', 'commerceCatalogUrl'], 'string'],
             [['llmsLinks', 'commercePolicyUrls', 'commerceSupport', 'commerceAttributes'], 'safe'],
         ];
     }

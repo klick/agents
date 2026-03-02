@@ -353,6 +353,9 @@ class AgentsController extends Controller
             $bytes = (int)($document['bytes'] ?? 0);
             $url = trim((string)($document['url'] ?? ''));
             if (!$enabled) {
+                if ($key === 'llmsFull') {
+                    continue;
+                }
                 $warnings[] = sprintf('%s is disabled.', $name);
                 continue;
             }
@@ -365,7 +368,12 @@ class AgentsController extends Controller
             }
         }
 
-        if ((bool)($settings->enableLlmsTxt ?? false) && (bool)($settings->llmsIncludeAgentsLinks ?? false)) {
+        $hasCustomLlmsBody = trim((string)($settings->llmsTxtBody ?? '')) !== '';
+        if (
+            !$hasCustomLlmsBody &&
+            (bool)($settings->enableLlmsTxt ?? false) &&
+            (bool)($settings->llmsIncludeAgentsLinks ?? false)
+        ) {
             $llmsDocument = $service->getLlmsTxtDocument();
             $llmsBody = (string)($llmsDocument['body'] ?? '');
             if ($llmsBody === '') {

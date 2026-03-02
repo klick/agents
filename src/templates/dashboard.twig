@@ -66,7 +66,7 @@
         <input type="hidden" name="target" value="all">
         <button class="btn submit" type="submit">Refresh Discovery Cache (All)</button>
       </form>
-      <p><a href="{{ url('agents/dashboard/discovery') }}">Open Discovery for document-specific refresh and cache clear</a></p>
+      <p><a href="{{ url('agents/dashboard/discovery') }}">Open Discovery Docs for document-specific refresh and cache clear</a></p>
     </div>
 
     <hr>
@@ -75,6 +75,7 @@
       <h2 class="h4">Feature Status</h2>
       <ul>
         <li><code>llms.txt</code>: <strong>{{ discoveryEnabled.llms ? 'enabled' : 'disabled' }}</strong></li>
+        <li><code>llms-full.txt</code>: <strong>{{ discoveryEnabled.llmsFull ? 'enabled' : 'disabled' }}</strong></li>
         <li><code>commerce.txt</code>: <strong>{{ discoveryEnabled.commerce ? 'enabled' : 'disabled' }}</strong></li>
         <li>Webhook delivery: <strong>{{ webhookEnabled ? 'enabled' : 'disabled' }}</strong></li>
         <li>Security warnings: <strong>{{ securityWarningCounts.warnings|default(0) }}</strong></li>
@@ -92,7 +93,7 @@
           <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
         {% endfor %}
       </ul>
-      <p><strong>Discovery documents</strong></p>
+      <p><strong>Discovery docs</strong></p>
       <ul>
         {% for endpoint in discoveryEndpoints %}
           <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
@@ -120,8 +121,8 @@
         </tr>
         <tr>
           <td>Discovery content</td>
-          <td><code>config/agents.php</code></td>
-          <td>Config is the source of truth for policy and content.</td>
+          <td>CP Settings + <code>config/agents.php</code></td>
+          <td>Use CP custom body fields for direct edits; config keys can lock/override those values.</td>
         </tr>
         <tr>
           <td>Auth and API keys</td>
@@ -284,6 +285,13 @@
           {{ csrfInput() }}
           {{ actionInput('agents/dashboard/prewarm-discovery') }}
           {{ redirectInput('agents/dashboard/discovery') }}
+          <input type="hidden" name="target" value="llms-full">
+          <button class="btn" type="submit">Refresh llms-full.txt</button>
+        </form>
+        <form method="post" accept-charset="UTF-8">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/prewarm-discovery') }}
+          {{ redirectInput('agents/dashboard/discovery') }}
           <input type="hidden" name="target" value="commerce">
           <button class="btn" type="submit">Refresh commerce.txt</button>
         </form>
@@ -294,7 +302,7 @@
           <button class="btn" type="submit">Clear cache</button>
         </form>
       </div>
-      <p class="text-sm text-muted">These actions only refresh generated discovery files and cache state. Content policy still comes from config.</p>
+      <p class="text-sm text-muted">These actions refresh discovery files and cache state after content/config changes.</p>
     </div>
 
     <hr>
@@ -360,8 +368,9 @@
     <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Where to change what</h2>
       <ul>
-        <li>Use <code>config/agents.php</code> for discovery content and policy.</li>
-        <li>Use this CP tab for cache refresh/clear and status checks.</li>
+        <li>Use Settings tab custom body fields to edit <code>llms.txt</code> and <code>commerce.txt</code>.</li>
+        <li>Use <code>config/agents.php</code> when you need environment-level overrides or lock-state control.</li>
+        <li>Use this Discovery Docs tab for cache refresh/clear and status checks.</li>
         <li>Do not edit secrets in CP.</li>
       </ul>
     </div>
@@ -370,7 +379,7 @@
 
     <div class="border rounded p-3">
       <details>
-        <summary><strong>Discovery Status (Technical JSON)</strong></summary>
+        <summary><strong>Discovery Docs Status (Technical JSON)</strong></summary>
         <pre class="border rounded p-3" style="margin-top: 8px;">{{ discoveryStatusJson }}</pre>
       </details>
     </div>

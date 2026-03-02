@@ -84,6 +84,24 @@ class ApiController extends Controller
         return $this->respondWithDiscoveryDocument($document);
     }
 
+    public function actionLlmsFullTxt(): Response
+    {
+        if (($methodResponse = $this->enforceReadRequest()) !== null) {
+            return $methodResponse;
+        }
+
+        if (!Plugin::getInstance()->isAgentsEnabled()) {
+            return $this->serviceDisabledResponse();
+        }
+
+        $document = Plugin::getInstance()->getDiscoveryTxtService()->getLlmsFullTxtDocument();
+        if ($document === null) {
+            throw new NotFoundHttpException('Not found.');
+        }
+
+        return $this->respondWithDiscoveryDocument($document);
+    }
+
     public function actionCommerceTxt(): Response
     {
         if (($methodResponse = $this->enforceReadRequest()) !== null) {
@@ -304,6 +322,7 @@ class ApiController extends Controller
             ['method' => 'POST', 'path' => '/control/actions/execute', 'requiredScopes' => ['control:actions:execute'], 'optionalScopes' => ['policy.config.requiredScope']],
             ['method' => 'GET', 'path' => '/control/audit', 'requiredScopes' => ['control:audit:read']],
             ['method' => 'GET', 'path' => '/llms.txt', 'public' => true],
+            ['method' => 'GET', 'path' => '/llms-full.txt', 'public' => true],
             ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
         ];
         if (!$this->isRefundApprovalsExperimentalEnabled()) {
@@ -533,6 +552,7 @@ class ApiController extends Controller
                 'x-required-scopes' => ['control:audit:read'],
             ]],
             '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
+            '/llms-full.txt' => ['get' => ['summary' => 'Public llms-full.txt extended discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
             '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
         ];
         if (!$this->isRefundApprovalsExperimentalEnabled()) {

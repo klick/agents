@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.3.10 - 2026-03-02
+
+- Added optional extended discovery export `GET /llms-full.txt` with capabilities/OpenAPI/CP surface alignment.
+- Added CP-editable custom body settings for `llms.txt` and `commerce.txt`, including config lock-state awareness.
+- Added Settings actions to reset custom `llms.txt` and `commerce.txt` bodies back to generated defaults.
+- Extended discovery cache/prewarm/status flows to cover `llms-full.txt` and invalidate on settings save.
+- Clarified product framing across docs/CP copy as a governed agent runtime for Craft; discovery docs are now explicitly presented as one feature.
+- Updated Dashboard discovery tab copy/labels to `Discovery Docs` for clearer IA.
+
 ## 0.3.9 - 2026-02-28
 
 - Hardened discovery contract by adding root discovery aliases (`/capabilities`, `/openapi.json`) that map to the guarded API descriptors.

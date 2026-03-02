@@ -1,10 +1,20 @@
 # Agents Plugin
 
-Machine-readable readiness/discovery API and governed control-plane plugin for Craft CMS and Commerce.
+Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.3.9**
+Current plugin version: **0.3.10**
 
 ## Purpose
+
+Agents provides a secure runtime layer for machine integrations on Craft and Commerce:
+
+- scoped token auth with operational introspection
+- stable machine APIs for content/commerce access
+- incremental sync and signed webhook delivery
+- governed control flows (policies, approvals, execution ledger, audit)
+- optional public discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`)
+
+Agents is a runtime + governance plugin; discovery docs are one feature, not the product.
 
 This plugin gives external/internal agents a stable interface for:
 
@@ -15,9 +25,9 @@ This plugin gives external/internal agents a stable interface for:
 - control policies/approvals/execution ledger/audit (`/agents/v1/control/*`)
 - read-only CLI discovery commands (`craft agents/*`)
 
-The API now includes:
+The runtime includes:
 
-- read surfaces for diagnostics and discovery
+- read surfaces for diagnostics and automation
 - sign-and-control primitives for governed machine actions:
   - policy evaluation
   - approval gates
@@ -27,6 +37,7 @@ The API now includes:
 It also exposes proposal-oriented discovery files at root-level endpoints:
 
 - `GET /llms.txt`
+- `GET /llms-full.txt`
 - `GET /commerce.txt`
 
 ## Installation
@@ -39,7 +50,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.3.9
+composer require klick/agents:^0.3.10
 php craft plugin/install agents
 ```
 
@@ -177,6 +188,7 @@ Control-plane endpoints (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=
 Root-level discovery files:
 
 - `GET /llms.txt` (public when enabled)
+- `GET /llms-full.txt` (public when enabled)
 - `GET /commerce.txt` (public when enabled)
 - Discovery aliases:
   - `GET /capabilities` -> `GET /agents/v1/capabilities`
@@ -254,9 +266,10 @@ php craft agents/entry-show --resource-id=123
 # Sections
 php craft agents/section-list
 
-# Prewarm llms.txt + commerce.txt cache
+# Prewarm llms.txt + llms-full.txt + commerce.txt cache
 php craft agents/discovery-prewarm
 php craft agents/discovery-prewarm --target=llms --json=1
+php craft agents/discovery-prewarm --target=llms-full --json=1
 
 # Auth posture check
 php craft agents/auth-check
@@ -373,7 +386,9 @@ Queue note:
 
 Discovery file behavior:
 
-- `llms.txt` / `commerce.txt` are generated dynamically as plain text.
+- `llms.txt` / `commerce.txt` are generated dynamically as plain text by default.
+- `llms.txt` and `commerce.txt` can optionally be served from custom CP-configured body content.
+- `llms-full.txt` is an optional extended discovery export.
 - They include `ETag` + `Last-Modified` headers and support `304 Not Modified`.
 - Output is cached and invalidated on relevant content/product updates.
 
@@ -430,7 +445,7 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Entry access to non-live statuses is scope-gated by `entries:read_all_statuses`.
 - Endpoint is not meant for frontend/public user flows; token is the intended control plane.
 
-Note: `llms.txt` and `commerce.txt` are public discovery surfaces and are not guarded by the API token.
+Note: `llms.txt`, `llms-full.txt`, and `commerce.txt` are public discovery surfaces and are not guarded by the API token.
 
 ## Troubleshooting Flow
 
@@ -457,9 +472,11 @@ These values can be overridden from your project via `config/agents.php`:
 
 return [
     'enableLlmsTxt' => true,
+    'enableLlmsFullTxt' => false,
     'enableCommerceTxt' => true,
     'llmsTxtCacheTtl' => 86400,
     'commerceTxtCacheTtl' => 3600,
+    'llmsTxtBody' => '',
     'llmsSiteSummary' => 'Product and policy discovery for assistants.',
     'llmsIncludeAgentsLinks' => true,
     'llmsIncludeSitemapLink' => true,
@@ -468,6 +485,7 @@ return [
         ['label' => 'Contact', 'url' => '/contact'],
     ],
     'commerceSummary' => 'Commerce metadata for discovery workflows.',
+    'commerceTxtBody' => '',
     'commerceCatalogUrl' => '/agents/v1/products?status=live&limit=200',
     'commercePolicyUrls' => [
         'shipping' => '/shipping-information',
@@ -497,7 +515,7 @@ return [
 - Dashboard includes top tabs:
   - `Overview` (`agents/dashboard/overview`)
   - `Readiness` (`agents/dashboard/readiness`)
-  - `Discovery` (`agents/dashboard/discovery`)
+  - `Discovery Docs` (`agents/dashboard/discovery`)
   - `Security` (`agents/dashboard/security`)
 - Legacy CP paths remain valid and resolve to Dashboard tabs:
   - `agents` -> `dashboard/overview`
@@ -509,14 +527,19 @@ return [
 - Dashboard/Overview:
   - runtime enabled/disabled state and source (`env` vs CP setting)
   - env-lock aware runtime toggle
-  - quick endpoint links + discovery refresh entrypoint
+  - quick endpoint links + discovery docs refresh entrypoint
   - ownership split guidance (`CP` vs `config/agents.php` vs `.env`)
+- Settings:
+  - runtime toggles for `llms.txt`, `llms-full.txt`, and `commerce.txt`
+  - editable custom body fields for `llms.txt` and `commerce.txt` (optional)
+  - one-click reset actions for custom discovery bodies (revert to generated defaults)
+  - config lock-state visibility when keys are overridden via `config/agents.php`
 - Dashboard/Readiness:
   - readiness score, criterion breakdown, component checks, warnings
   - health/readiness diagnostic JSON snapshots
-- Dashboard/Discovery:
-  - read-only `llms.txt`/`commerce.txt` status, metadata, preview snippets
-  - operator actions: refresh (`all|llms|commerce`) and clear cache
+- Dashboard/Discovery Docs:
+  - read-only `llms.txt`/`llms-full.txt`/`commerce.txt` status, metadata, preview snippets
+  - operator actions: refresh (`all|llms|llms-full|commerce`) and clear cache
 - Dashboard/Security:
   - read-only effective auth/rate-limit/redaction/webhook posture
   - centralized warning output from shared security policy logic
@@ -533,14 +556,16 @@ return [
 
 ## CP rollout regression checklist
 
-1. Verify Dashboard subnav loads and each top tab (`overview`, `readiness`, `discovery`, `security`) switches correctly.
+1. Verify Dashboard subnav loads and each top tab (`overview`, `readiness`, `discovery` label = "Discovery Docs", `security`) switches correctly.
 2. Verify legacy aliases (`agents`, `agents/overview`, `agents/readiness`, `agents/discovery`, `agents/security`, `agents/health`) still resolve to the expected Dashboard tab.
 3. Verify runtime lightswitch is disabled when `PLUGIN_AGENTS_ENABLED` is set.
-4. Verify discovery actions work:
+4. Verify discovery docs actions work:
    - refresh `all`
    - refresh `llms`
+   - refresh `llms-full`
    - refresh `commerce`
    - clear discovery cache
+   - when custom body content is configured in Settings, confirm endpoint output reflects those edits
 5. Verify security tab shows posture without exposing token/secret values.
 6. When `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, verify Return Requests flows:
    - create/update policy

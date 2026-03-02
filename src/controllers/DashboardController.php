@@ -53,6 +53,7 @@ class DashboardController extends Controller
             'overviewReadinessJson' => $this->prettyPrintJson($overviewReadiness['summary'] ?? []),
             'discoveryEnabled' => [
                 'llms' => (bool)$settings->enableLlmsTxt,
+                'llmsFull' => (bool)$settings->enableLlmsFullTxt,
                 'commerce' => (bool)$settings->enableCommerceTxt,
             ],
             'webhookEnabled' => (bool)($securityPosture['webhook']['enabled'] ?? false),
@@ -69,6 +70,7 @@ class DashboardController extends Controller
             'discoveryStatusJson' => $this->prettyPrintJson($discoveryStatus),
             'discoveryConfig' => [
                 'llmsEnabled' => (bool)$settings->enableLlmsTxt,
+                'llmsFullEnabled' => (bool)$settings->enableLlmsFullTxt,
                 'commerceEnabled' => (bool)$settings->enableCommerceTxt,
                 'llmsTtl' => (int)$settings->llmsTxtCacheTtl,
                 'commerceTtl' => (int)$settings->commerceTxtCacheTtl,
@@ -187,7 +189,10 @@ class DashboardController extends Controller
             'agentsEnabledSource' => (string)$enabledState['source'],
             'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
             'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
+            'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
             'commerceTxtSettingLocked' => (bool)($settingsOverrides['enableCommerceTxt'] ?? false),
+            'llmsTxtBodySettingLocked' => (bool)($settingsOverrides['llmsTxtBody'] ?? false),
+            'commerceTxtBodySettingLocked' => (bool)($settingsOverrides['commerceTxtBody'] ?? false),
         ]);
     }
 
@@ -257,8 +262,12 @@ class DashboardController extends Controller
         $settings = $this->getSettingsModel();
         $enabledState = $plugin->getAgentsEnabledState();
         $settingsOverrides = $this->getSettingsOverrides();
+        $resetDiscoveryBodyTarget = strtolower(trim((string)$this->request->getBodyParam('resetDiscoveryBodyTarget', '')));
         $llmsLocked = (bool)($settingsOverrides['enableLlmsTxt'] ?? false);
+        $llmsFullLocked = (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false);
         $commerceLocked = (bool)($settingsOverrides['enableCommerceTxt'] ?? false);
+        $llmsBodyLocked = (bool)($settingsOverrides['llmsTxtBody'] ?? false);
+        $commerceBodyLocked = (bool)($settingsOverrides['commerceTxtBody'] ?? false);
 
         $settingsData = get_object_vars($settings);
         $settingsData['enabled'] = (bool)$enabledState['locked']
@@ -270,15 +279,33 @@ class DashboardController extends Controller
         $settingsData['enableLlmsTxt'] = $llmsLocked
             ? (bool)$settings->enableLlmsTxt
             : $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
+        $settingsData['enableLlmsFullTxt'] = $llmsFullLocked
+            ? (bool)$settings->enableLlmsFullTxt
+            : $this->parseBooleanBodyParam('enableLlmsFullTxt', (bool)$settings->enableLlmsFullTxt);
         $settingsData['enableCommerceTxt'] = $commerceLocked
             ? (bool)$settings->enableCommerceTxt
             : $this->parseBooleanBodyParam('enableCommerceTxt', (bool)$settings->enableCommerceTxt);
+        $settingsData['llmsTxtBody'] = $llmsBodyLocked
+            ? (string)$settings->llmsTxtBody
+            : $this->parseStringBodyParam('llmsTxtBody', (string)$settings->llmsTxtBody);
+        $settingsData['commerceTxtBody'] = $commerceBodyLocked
+            ? (string)$settings->commerceTxtBody
+            : $this->parseStringBodyParam('commerceTxtBody', (string)$settings->commerceTxtBody);
+
+        if ($resetDiscoveryBodyTarget === 'llms' && !$llmsBodyLocked) {
+            $settingsData['llmsTxtBody'] = '';
+        }
+        if ($resetDiscoveryBodyTarget === 'commerce' && !$commerceBodyLocked) {
+            $settingsData['commerceTxtBody'] = '';
+        }
 
         $saved = Craft::$app->getPlugins()->savePluginSettings($plugin, $settingsData);
         if (!$saved) {
             $this->setFailFlash('Couldn’t save Agents settings.');
             return $this->redirectToPostedUrl(null, 'agents/settings');
         }
+
+        $plugin->getDiscoveryTxtService()->invalidateAllCaches();
 
         $notes = [];
         if ((bool)$enabledState['locked']) {
@@ -287,12 +314,25 @@ class DashboardController extends Controller
         if ($llmsLocked) {
             $notes[] = '`enableLlmsTxt` is controlled by `config/agents.php`.';
         }
+        if ($llmsFullLocked) {
+            $notes[] = '`enableLlmsFullTxt` is controlled by `config/agents.php`.';
+        }
         if ($commerceLocked) {
             $notes[] = '`enableCommerceTxt` is controlled by `config/agents.php`.';
+        }
+        if ($llmsBodyLocked) {
+            $notes[] = '`llmsTxtBody` is controlled by `config/agents.php`.';
+        }
+        if ($commerceBodyLocked) {
+            $notes[] = '`commerceTxtBody` is controlled by `config/agents.php`.';
         }
 
         if (!empty($notes)) {
             $this->setSuccessFlash('Agents settings saved. ' . implode(' ', $notes));
+        } elseif ($resetDiscoveryBodyTarget === 'llms' && !$llmsBodyLocked) {
+            $this->setSuccessFlash('Agents settings saved. `llms.txt` custom body reset to generated default.');
+        } elseif ($resetDiscoveryBodyTarget === 'commerce' && !$commerceBodyLocked) {
+            $this->setSuccessFlash('Agents settings saved. `commerce.txt` custom body reset to generated default.');
         } else {
             $this->setSuccessFlash('Agents settings saved.');
         }
@@ -306,7 +346,7 @@ class DashboardController extends Controller
         $this->requireAdmin();
 
         $target = strtolower(trim((string)$this->request->getBodyParam('target', 'all')));
-        if (!in_array($target, ['all', 'llms', 'commerce'], true)) {
+        if (!in_array($target, ['all', 'llms', 'llms-full', 'commerce'], true)) {
             $target = 'all';
         }
 
@@ -739,6 +779,7 @@ class DashboardController extends Controller
     {
         return [
             '/llms.txt',
+            '/llms-full.txt',
             '/commerce.txt',
         ];
     }
@@ -748,7 +789,7 @@ class DashboardController extends Controller
         return [
             ['key' => 'overview', 'label' => 'Overview', 'url' => 'agents/dashboard/overview'],
             ['key' => 'readiness', 'label' => 'Readiness', 'url' => 'agents/dashboard/readiness'],
-            ['key' => 'discovery', 'label' => 'Discovery', 'url' => 'agents/dashboard/discovery'],
+            ['key' => 'discovery', 'label' => 'Discovery Docs', 'url' => 'agents/dashboard/discovery'],
             ['key' => 'security', 'label' => 'Security', 'url' => 'agents/dashboard/security'],
         ];
     }
@@ -889,8 +930,29 @@ class DashboardController extends Controller
 
         return [
             'enableLlmsTxt' => array_key_exists('enableLlmsTxt', $config),
+            'enableLlmsFullTxt' => array_key_exists('enableLlmsFullTxt', $config),
             'enableCommerceTxt' => array_key_exists('enableCommerceTxt', $config),
+            'llmsTxtBody' => array_key_exists('llmsTxtBody', $config),
+            'commerceTxtBody' => array_key_exists('commerceTxtBody', $config),
         ];
+    }
+
+    private function parseStringBodyParam(string $name, string $default = ''): string
+    {
+        $raw = $this->request->getBodyParam($name);
+        if ($raw === null) {
+            return $default;
+        }
+
+        if (is_array($raw)) {
+            if (empty($raw)) {
+                return $default;
+            }
+            $raw = end($raw);
+        }
+
+        $value = str_replace(["\r\n", "\r"], "\n", (string)$raw);
+        return trim($value);
     }
 
     private function parseJsonBodyParam(string $raw): array

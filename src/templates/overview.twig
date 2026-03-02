@@ -53,13 +53,14 @@
       <input type="hidden" name="target" value="all">
       <button class="btn submit" type="submit">Refresh Discovery Cache (All)</button>
     </form>
-    <p><a href="{{ url('agents/discovery') }}">Open Discovery for document-specific refresh and cache clear</a></p>
+    <p><a href="{{ url('agents/discovery') }}">Open Discovery Docs for document-specific refresh and cache clear</a></p>
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Feature Status</h2>
     <ul>
       <li><code>llms.txt</code>: <strong>{{ discoveryEnabled.llms ? 'enabled' : 'disabled' }}</strong></li>
+      <li><code>llms-full.txt</code>: <strong>{{ discoveryEnabled.llmsFull ? 'enabled' : 'disabled' }}</strong></li>
       <li><code>commerce.txt</code>: <strong>{{ discoveryEnabled.commerce ? 'enabled' : 'disabled' }}</strong></li>
       <li>Webhook delivery: <strong>{{ webhookEnabled ? 'enabled' : 'disabled' }}</strong></li>
       <li>Security warnings: <strong>{{ securityWarningCounts.warnings|default(0) }}</strong></li>
@@ -75,7 +76,7 @@
         <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
       {% endfor %}
     </ul>
-    <p><strong>Discovery documents</strong></p>
+    <p><strong>Discovery docs</strong></p>
     <ul>
       {% for endpoint in discoveryEndpoints %}
         <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
@@ -101,8 +102,8 @@
       </tr>
       <tr>
         <td>Discovery content</td>
-        <td><code>config/agents.php</code></td>
-        <td>Config is the source of truth for policy and content.</td>
+        <td>CP Settings + <code>config/agents.php</code></td>
+        <td>Use CP custom body fields for direct edits; config keys can lock/override those values.</td>
       </tr>
       <tr>
         <td>Auth and API keys</td>
