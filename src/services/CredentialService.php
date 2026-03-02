@@ -11,6 +11,10 @@ class CredentialService extends Component
 {
     private const TABLE = '{{%agents_credentials}}';
     private const TOKEN_RANDOM_BYTES = 24;
+    private const WEBHOOK_RESOURCE_TYPES = ['entry', 'order', 'product'];
+    private const WEBHOOK_ACTIONS = ['created', 'updated', 'deleted'];
+
+    private ?bool $supportsWebhookSubscriptionColumns = null;
 
     public function getManagedCredentialsForRuntime(array $defaultScopes): array
     {
@@ -35,6 +39,7 @@ class CredentialService extends Component
                 'id' => (string)($row['handle'] ?? ''),
                 'tokenHash' => $tokenHash,
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
+                'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
                 'source' => 'cp',
                 'managedCredentialId' => (int)($row['id'] ?? 0),
             ];
@@ -65,6 +70,7 @@ class CredentialService extends Component
                 'displayName' => (string)($row['displayName'] ?? ''),
                 'tokenPrefix' => (string)($row['tokenPrefix'] ?? ''),
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
+                'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
                 'revoked' => !empty($row['revokedAt']),
                 'revokedAt' => $this->toIso8601($row['revokedAt'] ?? null),
                 'rotatedAt' => $this->toIso8601($row['rotatedAt'] ?? null),
@@ -79,7 +85,47 @@ class CredentialService extends Component
         return $credentials;
     }
 
-    public function createManagedCredential(string $handle, string $displayName, array $scopes, array $defaultScopes): array
+    public function getManagedWebhookSubscriptions(): array
+    {
+        if (!$this->credentialsTableExists() || !$this->supportsWebhookSubscriptionColumns()) {
+            return [];
+        }
+
+        $rows = (new Query())
+            ->from(self::TABLE)
+            ->where(['revokedAt' => null])
+            ->orderBy(['handle' => SORT_ASC])
+            ->all();
+
+        $subscriptions = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $decoded = $this->decodeWebhookSubscriptions($row);
+            if (!(bool)($decoded['active'] ?? false)) {
+                continue;
+            }
+
+            $subscriptions[] = [
+                'credentialId' => (int)($row['id'] ?? 0),
+                'handle' => (string)($row['handle'] ?? ''),
+                'resourceTypes' => (array)($decoded['resourceTypes'] ?? []),
+                'actions' => (array)($decoded['actions'] ?? []),
+            ];
+        }
+
+        return $subscriptions;
+    }
+
+    public function createManagedCredential(
+        string $handle,
+        string $displayName,
+        array $scopes,
+        array $defaultScopes,
+        array $webhookSubscriptions = []
+    ): array
     {
         if (!$this->credentialsTableExists()) {
             throw new \RuntimeException('Credential storage table is unavailable. Run plugin migrations.');
@@ -92,6 +138,7 @@ class CredentialService extends Component
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $normalizedHandle);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
+        $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
 
         $exists = (new Query())
             ->from(self::TABLE)
@@ -106,7 +153,7 @@ class CredentialService extends Component
         $tokenPrefix = substr($token, 0, 12);
         $now = gmdate('Y-m-d H:i:s');
 
-        Craft::$app->getDb()->createCommand()->insert(self::TABLE, [
+        $insertData = [
             'handle' => $normalizedHandle,
             'displayName' => $normalizedDisplayName,
             'tokenHash' => $tokenHash,
@@ -120,7 +167,13 @@ class CredentialService extends Component
             'dateCreated' => $now,
             'dateUpdated' => $now,
             'uid' => StringHelper::UUID(),
-        ])->execute();
+        ];
+        if ($this->supportsWebhookSubscriptionColumns()) {
+            $insertData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
+            $insertData['webhookActions'] = $this->encodeJson($normalizedWebhookSubscriptions['actions']);
+        }
+
+        Craft::$app->getDb()->createCommand()->insert(self::TABLE, $insertData)->execute();
 
         return [
             'token' => $token,
@@ -181,7 +234,13 @@ class CredentialService extends Component
         return $updated > 0;
     }
 
-    public function updateManagedCredential(int $id, string $displayName, array $scopes, array $defaultScopes): ?array
+    public function updateManagedCredential(
+        int $id,
+        string $displayName,
+        array $scopes,
+        array $defaultScopes,
+        array $webhookSubscriptions = []
+    ): ?array
     {
         if ($id <= 0 || !$this->credentialsTableExists()) {
             return null;
@@ -202,16 +261,22 @@ class CredentialService extends Component
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $handle);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
+        $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
         $encodedScopes = json_encode($normalizedScopes, JSON_UNESCAPED_SLASHES);
         if (!is_string($encodedScopes)) {
             $encodedScopes = '[]';
         }
-
-        Craft::$app->getDb()->createCommand()->update(self::TABLE, [
+        $updateData = [
             'displayName' => $normalizedDisplayName,
             'scopes' => $encodedScopes,
             'dateUpdated' => gmdate('Y-m-d H:i:s'),
-        ], ['id' => $id])->execute();
+        ];
+        if ($this->supportsWebhookSubscriptionColumns()) {
+            $updateData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
+            $updateData['webhookActions'] = $this->encodeJson($normalizedWebhookSubscriptions['actions']);
+        }
+
+        Craft::$app->getDb()->createCommand()->update(self::TABLE, $updateData, ['id' => $id])->execute();
 
         return $this->getManagedCredentialById($id, $defaultScopes);
     }
@@ -278,6 +343,24 @@ class CredentialService extends Component
         return Craft::$app->getDb()->getTableSchema(self::TABLE, true) !== null;
     }
 
+    private function supportsWebhookSubscriptionColumns(): bool
+    {
+        if ($this->supportsWebhookSubscriptionColumns !== null) {
+            return $this->supportsWebhookSubscriptionColumns;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsWebhookSubscriptionColumns = false;
+            return false;
+        }
+
+        $this->supportsWebhookSubscriptionColumns = $schema->getColumn('webhookResourceTypes') !== null
+            && $schema->getColumn('webhookActions') !== null;
+
+        return $this->supportsWebhookSubscriptionColumns;
+    }
+
     private function normalizeHandle(string $value): string
     {
         $normalized = strtolower(trim($value));
@@ -315,6 +398,81 @@ class CredentialService extends Component
         return $scopes;
     }
 
+    private function decodeWebhookSubscriptions(array $row): array
+    {
+        if (!$this->supportsWebhookSubscriptionColumns()) {
+            return [
+                'resourceTypes' => [],
+                'actions' => [],
+                'active' => false,
+            ];
+        }
+
+        $resourceTypes = $this->normalizeWebhookValues($row['webhookResourceTypes'] ?? null, self::WEBHOOK_RESOURCE_TYPES);
+        $actions = $this->normalizeWebhookValues($row['webhookActions'] ?? null, self::WEBHOOK_ACTIONS);
+
+        return [
+            'resourceTypes' => $resourceTypes,
+            'actions' => $actions,
+            'active' => !empty($resourceTypes) || !empty($actions),
+        ];
+    }
+
+    private function normalizeWebhookSubscriptions(array $subscriptions): array
+    {
+        $resourceTypes = $this->normalizeWebhookValues($subscriptions['resourceTypes'] ?? null, self::WEBHOOK_RESOURCE_TYPES);
+        $actions = $this->normalizeWebhookValues($subscriptions['actions'] ?? null, self::WEBHOOK_ACTIONS);
+
+        return [
+            'resourceTypes' => $resourceTypes,
+            'actions' => $actions,
+            'active' => !empty($resourceTypes) || !empty($actions),
+        ];
+    }
+
+    private function normalizeWebhookValues(mixed $raw, array $allowed): array
+    {
+        $tokens = [];
+
+        if (is_array($raw)) {
+            foreach ($raw as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } elseif (is_string($raw) || is_numeric($raw)) {
+            $tokens[] = (string)$raw;
+        }
+
+        $parts = [];
+        foreach ($tokens as $token) {
+            $chunks = preg_split('/[\s,]+/', strtolower($token)) ?: [];
+            foreach ($chunks as $chunk) {
+                $normalized = trim((string)$chunk);
+                if ($normalized === '') {
+                    continue;
+                }
+                $parts[] = $normalized;
+            }
+        }
+
+        if (in_array('*', $parts, true)) {
+            $parts = $allowed;
+        }
+
+        $normalized = [];
+        foreach ($parts as $part) {
+            if (in_array($part, $allowed, true)) {
+                $normalized[] = $part;
+            }
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+        return $normalized;
+    }
+
     private function normalizeScopes(array $scopes, array $defaultScopes): array
     {
         $normalized = [];
@@ -342,6 +500,12 @@ class CredentialService extends Component
         $fallback = array_values(array_unique(array_map('strval', $defaultScopes)));
         sort($fallback);
         return $fallback;
+    }
+
+    private function encodeJson(array $value): string
+    {
+        $encoded = json_encode($value, JSON_UNESCAPED_SLASHES);
+        return is_string($encoded) ? $encoded : '[]';
     }
 
     private function toIso8601(mixed $raw): ?string

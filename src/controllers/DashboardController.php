@@ -437,9 +437,19 @@ class DashboardController extends Controller
         $handle = (string)$this->request->getBodyParam('credentialHandle', '');
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
+        $webhookSubscriptions = [
+            'resourceTypes' => $this->parseWebhookDimensionInput(
+                $this->request->getBodyParam('credentialWebhookResourceTypes', []),
+                ['entry', 'order', 'product']
+            ),
+            'actions' => $this->parseWebhookDimensionInput(
+                $this->request->getBodyParam('credentialWebhookActions', []),
+                ['created', 'updated', 'deleted']
+            ),
+        ];
 
         try {
-            $result = $plugin->getCredentialService()->createManagedCredential($handle, $displayName, $scopes, $defaultScopes);
+            $result = $plugin->getCredentialService()->createManagedCredential($handle, $displayName, $scopes, $defaultScopes, $webhookSubscriptions);
             $credential = (array)($result['credential'] ?? []);
             $this->storeRevealedCredential([
                 'token' => (string)($result['token'] ?? ''),
@@ -468,6 +478,16 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
+        $webhookSubscriptions = [
+            'resourceTypes' => $this->parseWebhookDimensionInput(
+                $this->request->getBodyParam('credentialWebhookResourceTypes', []),
+                ['entry', 'order', 'product']
+            ),
+            'actions' => $this->parseWebhookDimensionInput(
+                $this->request->getBodyParam('credentialWebhookActions', []),
+                ['created', 'updated', 'deleted']
+            ),
+        ];
 
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing API key ID.');
@@ -475,7 +495,7 @@ class DashboardController extends Controller
         }
 
         try {
-            $credential = $plugin->getCredentialService()->updateManagedCredential($credentialId, $displayName, $scopes, $defaultScopes);
+            $credential = $plugin->getCredentialService()->updateManagedCredential($credentialId, $displayName, $scopes, $defaultScopes, $webhookSubscriptions);
             if (!is_array($credential)) {
                 $this->setFailFlash('API key not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -947,6 +967,48 @@ class DashboardController extends Controller
         $scopes = array_values(array_unique($scopes));
         sort($scopes);
         return $scopes;
+    }
+
+    private function parseWebhookDimensionInput(mixed $rawInput, array $allowedValues): array
+    {
+        $tokens = [];
+        if (is_array($rawInput)) {
+            foreach ($rawInput as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } elseif (is_string($rawInput) || is_numeric($rawInput)) {
+            $tokens[] = (string)$rawInput;
+        }
+
+        $parts = [];
+        foreach ($tokens as $token) {
+            $chunks = preg_split('/[\s,]+/', strtolower($token)) ?: [];
+            foreach ($chunks as $chunk) {
+                $value = trim((string)$chunk);
+                if ($value === '') {
+                    continue;
+                }
+                $parts[] = $value;
+            }
+        }
+
+        if (in_array('*', $parts, true)) {
+            $parts = $allowedValues;
+        }
+
+        $normalized = [];
+        foreach ($parts as $part) {
+            if (in_array($part, $allowedValues, true)) {
+                $normalized[] = $part;
+            }
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+        return $normalized;
     }
 
     private function parseBooleanBodyParam(string $name, bool $default = false): bool

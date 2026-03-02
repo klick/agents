@@ -53,6 +53,14 @@ class WebhookService extends Component
             return;
         }
 
+        $subscriptionState = $this->resolveCredentialSubscriptionState(
+            (string)$change['resourceType'],
+            (string)$change['action']
+        );
+        if (!(bool)($subscriptionState['shouldDeliver'] ?? true)) {
+            return;
+        }
+
         $eventId = $this->generateEventId();
         $payload = [
             'id' => $eventId,
@@ -62,6 +70,10 @@ class WebhookService extends Component
             'action' => $change['action'],
             'updatedAt' => $change['updatedAt'],
             'snapshot' => $change['snapshot'],
+            'subscriptions' => [
+                'mode' => (string)($subscriptionState['mode'] ?? 'firehose'),
+                'credentialHandles' => (array)($subscriptionState['credentialHandles'] ?? []),
+            ],
         ];
 
         try {
@@ -275,6 +287,77 @@ class WebhookService extends Component
             'replayed' => $replayed,
             'errors' => $errors,
         ];
+    }
+
+    private function resolveCredentialSubscriptionState(string $resourceType, string $action): array
+    {
+        $plugin = Plugin::getInstance();
+        if ($plugin === null) {
+            return [
+                'mode' => 'firehose',
+                'credentialHandles' => [],
+                'shouldDeliver' => true,
+            ];
+        }
+
+        try {
+            $subscriptions = $plugin->getCredentialService()->getManagedWebhookSubscriptions();
+        } catch (\Throwable $e) {
+            Craft::warning('Unable to evaluate credential webhook subscriptions: ' . $e->getMessage(), __METHOD__);
+            return [
+                'mode' => 'firehose',
+                'credentialHandles' => [],
+                'shouldDeliver' => true,
+            ];
+        }
+
+        if (empty($subscriptions)) {
+            return [
+                'mode' => 'firehose',
+                'credentialHandles' => [],
+                'shouldDeliver' => true,
+            ];
+        }
+
+        $matches = [];
+        foreach ($subscriptions as $subscription) {
+            if (!$this->matchesCredentialSubscription($subscription, $resourceType, $action)) {
+                continue;
+            }
+
+            $handle = trim((string)($subscription['handle'] ?? ''));
+            if ($handle !== '') {
+                $matches[] = $handle;
+            }
+        }
+
+        $matches = array_values(array_unique($matches));
+        sort($matches);
+
+        return [
+            'mode' => 'targeted',
+            'credentialHandles' => $matches,
+            'shouldDeliver' => !empty($matches),
+        ];
+    }
+
+    private function matchesCredentialSubscription(array $subscription, string $resourceType, string $action): bool
+    {
+        $subscribedResources = array_values(array_filter(array_map(
+            static fn(mixed $value): string => strtolower(trim((string)$value)),
+            (array)($subscription['resourceTypes'] ?? [])
+        )));
+        $subscribedActions = array_values(array_filter(array_map(
+            static fn(mixed $value): string => strtolower(trim((string)$value)),
+            (array)($subscription['actions'] ?? [])
+        )));
+
+        $resourceMatches = empty($subscribedResources) || in_array(strtolower($resourceType), $subscribedResources, true);
+        if (!$resourceMatches) {
+            return false;
+        }
+
+        return empty($subscribedActions) || in_array(strtolower($action), $subscribedActions, true);
     }
 
     private function mapElementChange(Element $element, string $operation, bool $isNew): ?array
