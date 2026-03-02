@@ -155,6 +155,8 @@ class Plugin extends BasePlugin
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
+                'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
+                'agents/v1/webhooks/dlq/replay' => 'agents/api/webhook-dlq-replay',
             ];
             if ($this->isRefundApprovalsExperimentalEnabled()) {
                 $rules = array_merge($rules, [

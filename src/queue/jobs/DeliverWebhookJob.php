@@ -4,6 +4,7 @@ namespace Klick\Agents\queue\jobs;
 
 use Craft;
 use craft\queue\BaseJob;
+use Klick\Agents\Plugin;
 use yii\base\InvalidConfigException;
 use yii\queue\RetryableJobInterface;
 
@@ -69,6 +70,18 @@ class DeliverWebhookJob extends BaseJob implements RetryableJobInterface
 
     public function canRetry($attempt, $error): bool
     {
+        if ($attempt >= max(1, $this->maxAttempts)) {
+            try {
+                Plugin::getInstance()?->getWebhookService()->recordDeadLetter(
+                    is_array($this->payload) ? $this->payload : [],
+                    (int)$attempt,
+                    (string)($error instanceof \Throwable ? $error->getMessage() : 'Webhook delivery failed.')
+                );
+            } catch (\Throwable $e) {
+                Craft::warning('Unable to store webhook dead-letter event: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+
         return $attempt < max(1, $this->maxAttempts);
     }
 

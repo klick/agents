@@ -42,6 +42,12 @@ class DashboardController extends Controller
         $readinessSummary = $readinessService->getReadinessSummary();
         $readinessDiagnostics = $readinessService->getReadinessDiagnostics();
         $discoveryStatus = $plugin->getDiscoveryTxtService()->getDiscoveryStatus();
+        $webhookDeadLetters = [];
+        try {
+            $webhookDeadLetters = $plugin->getWebhookService()->getDeadLetterEvents([], 20);
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load webhook DLQ events for CP: ' . $e->getMessage(), __METHOD__);
+        }
 
         return $this->renderCpTemplate('agents/dashboard', [
             'activeDashboardTab' => $activeDashboardTab,
@@ -75,6 +81,7 @@ class DashboardController extends Controller
                 'llmsTtl' => (int)$settings->llmsTxtCacheTtl,
                 'commerceTtl' => (int)$settings->commerceTxtCacheTtl,
             ],
+            'webhookDeadLetters' => $webhookDeadLetters,
             'securityPosture' => $securityPosture,
             'securityPostureJson' => $this->prettyPrintJson($securityPosture),
         ]);
@@ -375,6 +382,49 @@ class DashboardController extends Controller
         }
 
         return $this->redirectToPostedUrl(null, 'agents/dashboard/discovery');
+    }
+
+    public function actionReplayWebhookDlq(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        $service = Plugin::getInstance()->getWebhookService();
+        $mode = strtolower(trim((string)$this->request->getBodyParam('mode', 'single')));
+
+        try {
+            if ($mode === 'all') {
+                $limit = (int)$this->request->getBodyParam('limit', 25);
+                $result = $service->replayDeadLetterEvents($limit);
+                $this->setSuccessFlash(sprintf(
+                    'Replay queued for %d/%d dead-letter events.',
+                    (int)($result['replayed'] ?? 0),
+                    (int)($result['attempted'] ?? 0)
+                ));
+            } else {
+                $id = (int)$this->request->getBodyParam('id', 0);
+                if ($id <= 0) {
+                    $this->setFailFlash('Missing dead-letter event ID.');
+                    return $this->redirectToPostedUrl(null, 'agents/dashboard/security');
+                }
+
+                $event = $service->replayDeadLetterEvent($id);
+                if (!is_array($event)) {
+                    $this->setFailFlash('Dead-letter event not found.');
+                    return $this->redirectToPostedUrl(null, 'agents/dashboard/security');
+                }
+
+                $this->setSuccessFlash(sprintf('Dead-letter event #%d queued for replay.', $id));
+            }
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (\RuntimeException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to replay dead-letter event(s): ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/dashboard/security');
     }
 
     public function actionCreateCredential(): Response

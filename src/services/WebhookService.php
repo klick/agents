@@ -8,12 +8,15 @@ use craft\base\Element;
 use craft\elements\Entry;
 use craft\helpers\App;
 use craft\helpers\Queue;
+use craft\helpers\StringHelper;
 use DateTimeInterface;
 use Klick\Agents\Plugin;
 use Klick\Agents\queue\jobs\DeliverWebhookJob;
+use yii\db\Query;
 
 class WebhookService extends Component
 {
+    private const TABLE_DLQ = '{{%agents_webhook_dlq}}';
     private const PRODUCT_CLASS = 'craft\\commerce\\elements\\Product';
     private const ORDER_CLASS = 'craft\\commerce\\elements\\Order';
     private const VARIANT_CLASS = 'craft\\commerce\\elements\\Variant';
@@ -114,6 +117,164 @@ class WebhookService extends Component
         ];
 
         return $this->webhookConfig;
+    }
+
+    public function recordDeadLetter(array $payload, int $attempts, string $lastError): void
+    {
+        if (!$this->deadLetterTableExists()) {
+            return;
+        }
+
+        $eventId = trim((string)($payload['id'] ?? ''));
+        if ($eventId === '') {
+            $eventId = $this->generateEventId();
+        }
+
+        $resourceType = $this->normalizeOptionalString($payload['resourceType'] ?? null, 32);
+        $resourceId = $this->normalizeOptionalString($payload['resourceId'] ?? null, 64);
+        $action = $this->normalizeOptionalString($payload['action'] ?? null, 16);
+        $encodedPayload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!is_string($encodedPayload)) {
+            $encodedPayload = '{}';
+        }
+
+        $now = gmdate('Y-m-d H:i:s');
+        $errorMessage = $this->normalizeOptionalString($lastError, 65535);
+
+        $existing = (new Query())
+            ->from(self::TABLE_DLQ)
+            ->where(['eventId' => $eventId])
+            ->one();
+
+        if (is_array($existing)) {
+            Craft::$app->getDb()->createCommand()->update(self::TABLE_DLQ, [
+                'status' => 'failed',
+                'attempts' => max((int)($existing['attempts'] ?? 0), max(1, $attempts)),
+                'lastError' => $errorMessage,
+                'payload' => $encodedPayload,
+                'dateUpdated' => $now,
+            ], ['id' => (int)($existing['id'] ?? 0)])->execute();
+            return;
+        }
+
+        Craft::$app->getDb()->createCommand()->insert(self::TABLE_DLQ, [
+            'eventId' => $eventId,
+            'resourceType' => $resourceType,
+            'resourceId' => $resourceId,
+            'action' => $action,
+            'status' => 'failed',
+            'attempts' => max(1, $attempts),
+            'lastError' => $errorMessage,
+            'payload' => $encodedPayload,
+            'dateCreated' => $now,
+            'dateUpdated' => $now,
+            'uid' => StringHelper::UUID(),
+        ])->execute();
+    }
+
+    public function getDeadLetterEvents(array $filters = [], int $limit = 100): array
+    {
+        if (!$this->deadLetterTableExists()) {
+            return [];
+        }
+
+        $query = (new Query())
+            ->from(self::TABLE_DLQ)
+            ->orderBy(['dateCreated' => SORT_DESC, 'id' => SORT_DESC])
+            ->limit($this->normalizeLimit($limit, 100, 500));
+
+        $status = trim((string)($filters['status'] ?? ''));
+        if ($status !== '') {
+            $query->andWhere(['status' => strtolower($status)]);
+        }
+
+        $rows = $query->all();
+        $events = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $events[] = $this->hydrateDeadLetterEvent($row);
+        }
+
+        return $events;
+    }
+
+    public function replayDeadLetterEvent(int $id): ?array
+    {
+        if ($id <= 0 || !$this->deadLetterTableExists()) {
+            return null;
+        }
+
+        $row = (new Query())
+            ->from(self::TABLE_DLQ)
+            ->where(['id' => $id])
+            ->one();
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $payload = $this->decodePayload((string)($row['payload'] ?? ''));
+        $eventId = trim((string)($row['eventId'] ?? ''));
+        if ($eventId === '') {
+            $eventId = trim((string)($payload['id'] ?? ''));
+        }
+        if ($eventId === '') {
+            $eventId = $this->generateEventId();
+        }
+
+        $config = $this->getWebhookConfig();
+        if (!(bool)($config['enabled'] ?? false)) {
+            throw new \RuntimeException('Webhook replay is unavailable: webhook URL/secret is not configured.');
+        }
+
+        Queue::push(new DeliverWebhookJob([
+            'url' => (string)$config['url'],
+            'secret' => (string)$config['secret'],
+            'payload' => $payload,
+            'timeoutSeconds' => (int)$config['timeoutSeconds'],
+            'maxAttempts' => (int)$config['maxAttempts'],
+            'eventId' => $eventId,
+        ]));
+
+        Craft::$app->getDb()->createCommand()->update(self::TABLE_DLQ, [
+            'status' => 'queued',
+            'lastError' => null,
+            'dateUpdated' => gmdate('Y-m-d H:i:s'),
+        ], ['id' => $id])->execute();
+
+        $row['status'] = 'queued';
+        $row['lastError'] = null;
+        $row['dateUpdated'] = gmdate('Y-m-d H:i:s');
+        return $this->hydrateDeadLetterEvent($row);
+    }
+
+    public function replayDeadLetterEvents(int $limit = 25): array
+    {
+        $rows = $this->getDeadLetterEvents(['status' => 'failed'], $limit);
+        $replayed = 0;
+        $errors = [];
+        foreach ($rows as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            try {
+                $result = $this->replayDeadLetterEvent($id);
+                if (is_array($result)) {
+                    $replayed++;
+                }
+            } catch (\Throwable $e) {
+                $errors[] = sprintf('ID %d: %s', $id, $e->getMessage());
+            }
+        }
+
+        return [
+            'attempted' => count($rows),
+            'replayed' => $replayed,
+            'errors' => $errors,
+        ];
     }
 
     private function mapElementChange(Element $element, string $operation, bool $isNew): ?array
@@ -229,5 +390,78 @@ class WebhookService extends Component
         } catch (\Throwable) {
             return 'evt_' . str_replace('.', '', (string)microtime(true)) . '_' . substr(sha1(uniqid('', true)), 0, 8);
         }
+    }
+
+    private function deadLetterTableExists(): bool
+    {
+        return Craft::$app->getDb()->getTableSchema(self::TABLE_DLQ, true) !== null;
+    }
+
+    private function decodePayload(string $raw): array
+    {
+        if (trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function hydrateDeadLetterEvent(array $row): array
+    {
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'eventId' => (string)($row['eventId'] ?? ''),
+            'resourceType' => $this->normalizeOptionalString($row['resourceType'] ?? null, 32),
+            'resourceId' => $this->normalizeOptionalString($row['resourceId'] ?? null, 64),
+            'action' => $this->normalizeOptionalString($row['action'] ?? null, 16),
+            'status' => strtolower(trim((string)($row['status'] ?? 'failed'))),
+            'attempts' => (int)($row['attempts'] ?? 0),
+            'lastError' => $this->normalizeOptionalString($row['lastError'] ?? null, 65535),
+            'payload' => $this->decodePayload((string)($row['payload'] ?? '{}')),
+            'dateCreated' => $this->toIso8601($row['dateCreated'] ?? null),
+            'dateUpdated' => $this->toIso8601($row['dateUpdated'] ?? null),
+        ];
+    }
+
+    private function normalizeOptionalString(mixed $value, int $maxLength = 255): ?string
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return null;
+        }
+
+        $normalized = trim((string)$value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (strlen($normalized) > $maxLength) {
+            $normalized = substr($normalized, 0, $maxLength);
+        }
+
+        return $normalized;
+    }
+
+    private function toIso8601(mixed $raw): ?string
+    {
+        if (!is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($raw);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return gmdate('Y-m-d\TH:i:s\Z', $timestamp);
+    }
+
+    private function normalizeLimit(int $limit, int $default, int $max): int
+    {
+        if ($limit <= 0) {
+            return $default;
+        }
+
+        return min($limit, $max);
     }
 }

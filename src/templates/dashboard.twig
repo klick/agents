@@ -434,6 +434,64 @@
     <hr>
 
     <div class="border rounded p-3" style="margin-bottom: 16px;">
+      <h2 class="h4">Webhook Dead-Letter Queue</h2>
+      <p class="light">Final webhook delivery failures are captured here for replay.</p>
+
+      <form method="post" accept-charset="UTF-8" style="margin-bottom: 10px;">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
+        {{ redirectInput('agents/dashboard/security') }}
+        <input type="hidden" name="mode" value="all">
+        <input type="hidden" name="limit" value="25">
+        <button class="btn" type="submit">Replay up to 25 failed events</button>
+      </form>
+
+      {% if webhookDeadLetters|length %}
+        <table class="data fullwidth">
+          <thead>
+          <tr>
+            <th>ID</th>
+            <th>Event</th>
+            <th>Status</th>
+            <th>Attempts</th>
+            <th>Last Error</th>
+            <th>Updated</th>
+            <th>Replay</th>
+          </tr>
+          </thead>
+          <tbody>
+          {% for row in webhookDeadLetters %}
+            <tr>
+              <td>#{{ row.id }}</td>
+              <td>
+                <code>{{ row.eventId }}</code><br>
+                <span class="light">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }} {{ row.action ? '(' ~ row.action ~ ')' : '' }}</span>
+              </td>
+              <td><strong>{{ row.status }}</strong></td>
+              <td>{{ row.attempts }}</td>
+              <td>{{ row.lastError ?: 'n/a' }}</td>
+              <td>{{ row.dateUpdated ?: row.dateCreated ?: 'n/a' }}</td>
+              <td>
+                <form method="post" accept-charset="UTF-8">
+                  {{ csrfInput() }}
+                  {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
+                  {{ redirectInput('agents/dashboard/security') }}
+                  <input type="hidden" name="id" value="{{ row.id }}">
+                  <button class="btn" type="submit">Replay</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>No dead-letter events.</p>
+      {% endif %}
+    </div>
+
+    <hr>
+
+    <div class="border rounded p-3" style="margin-bottom: 16px;">
       <h2 class="h4">Warnings</h2>
       <p>
         Errors: <strong>{{ securityPosture.warningCounts.errors|default(0) }}</strong>,

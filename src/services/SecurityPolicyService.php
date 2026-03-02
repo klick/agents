@@ -24,6 +24,7 @@ class SecurityPolicyService extends Component
         'control:approvals:read',
         'control:executions:read',
         'control:audit:read',
+        'webhooks:dlq:read',
     ];
     private const DEFAULT_RATE_LIMIT_PER_MINUTE = 60;
     private const DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60;

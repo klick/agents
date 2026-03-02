@@ -27,6 +27,7 @@ class ApiController extends Controller
         'control:approvals:read',
         'control:executions:read',
         'control:audit:read',
+        'webhooks:dlq:read',
     ];
     private const ERROR_INVALID_REQUEST = 'INVALID_REQUEST';
     private const ERROR_UNAUTHORIZED = 'UNAUTHORIZED';
@@ -321,6 +322,8 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/control/executions', 'requiredScopes' => ['control:executions:read']],
             ['method' => 'POST', 'path' => '/control/actions/execute', 'requiredScopes' => ['control:actions:execute'], 'optionalScopes' => ['policy.config.requiredScope']],
             ['method' => 'GET', 'path' => '/control/audit', 'requiredScopes' => ['control:audit:read']],
+            ['method' => 'GET', 'path' => '/webhooks/dlq', 'requiredScopes' => ['webhooks:dlq:read']],
+            ['method' => 'POST', 'path' => '/webhooks/dlq/replay', 'requiredScopes' => ['webhooks:dlq:replay']],
             ['method' => 'GET', 'path' => '/llms.txt', 'public' => true],
             ['method' => 'GET', 'path' => '/llms-full.txt', 'public' => true],
             ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
@@ -550,6 +553,25 @@ class ApiController extends Controller
                 ],
                 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
                 'x-required-scopes' => ['control:audit:read'],
+            ]],
+            '/webhooks/dlq' => ['get' => [
+                'summary' => 'List dead-letter webhook events',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['failed', 'queued']]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500]],
+                ],
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['webhooks:dlq:read'],
+            ]],
+            '/webhooks/dlq/replay' => ['post' => [
+                'summary' => 'Replay dead-letter webhook events',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Dead-letter event not found'],
+                ]),
+                'x-required-scopes' => ['webhooks:dlq:replay'],
             ]],
             '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
             '/llms-full.txt' => ['get' => ['summary' => 'Public llms-full.txt extended discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
@@ -888,6 +910,64 @@ class ApiController extends Controller
                 'count' => count($events),
             ],
         ]);
+    }
+
+    public function actionWebhookDlqList(): Response
+    {
+        if (($guard = $this->guardRequest('webhooks:dlq:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getWebhookService();
+        $rows = $service->getDeadLetterEvents([
+            'status' => (string)$request->getQueryParam('status', ''),
+        ], (int)$request->getQueryParam('limit', 100));
+
+        return $this->jsonResponse([
+            'data' => $rows,
+            'meta' => [
+                'count' => count($rows),
+            ],
+        ]);
+    }
+
+    public function actionWebhookDlqReplay(): Response
+    {
+        if (($guard = $this->guardRequest('webhooks:dlq:replay', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $service = Plugin::getInstance()->getWebhookService();
+        $id = (int)$request->getBodyParam('id', 0);
+        $mode = strtolower(trim((string)$request->getBodyParam('mode', '')));
+
+        try {
+            if ($mode === 'all') {
+                $limit = (int)$request->getBodyParam('limit', 25);
+                $result = $service->replayDeadLetterEvents($limit);
+                return $this->jsonResponse(['data' => $result]);
+            }
+
+            if ($id <= 0) {
+                return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, 'Provide `id` or `mode=all`.');
+            }
+
+            $event = $service->replayDeadLetterEvent($id);
+            if (!is_array($event)) {
+                return $this->errorResponse(404, self::ERROR_NOT_FOUND, 'Dead-letter event not found.');
+            }
+
+            return $this->jsonResponse(['data' => $event]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\RuntimeException $e) {
+            return $this->misconfiguredResponse($e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Webhook DLQ replay failed: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to replay dead-letter event.');
+        }
     }
 
     private function guardRequest(string $requiredScope = '', array $allowedMethods = ['GET', 'HEAD']): ?Response
@@ -1281,6 +1361,8 @@ class ApiController extends Controller
             'control:executions:read' => 'Read control action execution ledger.',
             'control:actions:execute' => 'Execute idempotent control actions.',
             'control:audit:read' => 'Read immutable control-plane audit log.',
+            'webhooks:dlq:read' => 'Read failed webhook dead-letter events.',
+            'webhooks:dlq:replay' => 'Replay failed webhook dead-letter events.',
         ];
         if (!$this->isRefundApprovalsExperimentalEnabled()) {
             foreach ($this->controlScopeKeys() as $scope) {
