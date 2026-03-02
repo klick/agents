@@ -17,6 +17,7 @@ class CredentialService extends Component
 
     private ?bool $supportsWebhookSubscriptionColumns = null;
     private ?bool $supportsExpiryColumns = null;
+    private ?bool $supportsIpAllowlistColumn = null;
 
     public function getManagedCredentialsForRuntime(array $defaultScopes): array
     {
@@ -46,6 +47,7 @@ class CredentialService extends Component
                 'tokenHash' => $tokenHash,
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
+                'ipAllowlist' => $this->decodeIpAllowlist($row),
                 'source' => 'cp',
                 'managedCredentialId' => (int)($row['id'] ?? 0),
             ];
@@ -78,6 +80,7 @@ class CredentialService extends Component
                 'tokenPrefix' => (string)($row['tokenPrefix'] ?? ''),
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
+                'ipAllowlist' => $this->decodeIpAllowlist($row),
                 'expiresAt' => $expiry['expiresAt'],
                 'expiryReminderDays' => $expiry['expiryReminderDays'],
                 'expiresInDays' => $expiry['expiresInDays'],
@@ -141,7 +144,8 @@ class CredentialService extends Component
         array $scopes,
         array $defaultScopes,
         array $webhookSubscriptions = [],
-        array $expiryPolicy = []
+        array $expiryPolicy = [],
+        array $networkPolicy = []
     ): array
     {
         if (!$this->credentialsTableExists()) {
@@ -157,6 +161,7 @@ class CredentialService extends Component
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
         $normalizedExpiryPolicy = $this->resolveCreateExpiryPolicy($expiryPolicy);
+        $normalizedIpAllowlist = $this->normalizeIpAllowlist($networkPolicy['ipAllowlist'] ?? null);
 
         $exists = (new Query())
             ->from(self::TABLE)
@@ -193,6 +198,9 @@ class CredentialService extends Component
         if ($this->supportsExpiryColumns()) {
             $insertData['expiresAt'] = $normalizedExpiryPolicy['expiresAt'];
             $insertData['expiryReminderDays'] = (int)$normalizedExpiryPolicy['expiryReminderDays'];
+        }
+        if ($this->supportsIpAllowlistColumn()) {
+            $insertData['ipAllowlist'] = $this->encodeJson($normalizedIpAllowlist);
         }
 
         Craft::$app->getDb()->createCommand()->insert(self::TABLE, $insertData)->execute();
@@ -262,7 +270,8 @@ class CredentialService extends Component
         array $scopes,
         array $defaultScopes,
         array $webhookSubscriptions = [],
-        array $expiryPolicy = []
+        array $expiryPolicy = [],
+        array $networkPolicy = []
     ): ?array
     {
         if ($id <= 0 || !$this->credentialsTableExists()) {
@@ -286,6 +295,7 @@ class CredentialService extends Component
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
         $normalizedExpiryPolicy = $this->resolveUpdateExpiryPolicy($row, $expiryPolicy);
+        $normalizedIpAllowlist = $this->resolveUpdateIpAllowlist($row, $networkPolicy['ipAllowlist'] ?? null);
         $encodedScopes = json_encode($normalizedScopes, JSON_UNESCAPED_SLASHES);
         if (!is_string($encodedScopes)) {
             $encodedScopes = '[]';
@@ -302,6 +312,9 @@ class CredentialService extends Component
         if ($this->supportsExpiryColumns()) {
             $updateData['expiresAt'] = $normalizedExpiryPolicy['expiresAt'];
             $updateData['expiryReminderDays'] = (int)$normalizedExpiryPolicy['expiryReminderDays'];
+        }
+        if ($this->supportsIpAllowlistColumn()) {
+            $updateData['ipAllowlist'] = $this->encodeJson($normalizedIpAllowlist);
         }
 
         Craft::$app->getDb()->createCommand()->update(self::TABLE, $updateData, ['id' => $id])->execute();
@@ -407,6 +420,22 @@ class CredentialService extends Component
         return $this->supportsExpiryColumns;
     }
 
+    private function supportsIpAllowlistColumn(): bool
+    {
+        if ($this->supportsIpAllowlistColumn !== null) {
+            return $this->supportsIpAllowlistColumn;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsIpAllowlistColumn = false;
+            return false;
+        }
+
+        $this->supportsIpAllowlistColumn = $schema->getColumn('ipAllowlist') !== null;
+        return $this->supportsIpAllowlistColumn;
+    }
+
     private function normalizeHandle(string $value): string
     {
         $normalized = strtolower(trim($value));
@@ -462,6 +491,15 @@ class CredentialService extends Component
             'actions' => $actions,
             'active' => !empty($resourceTypes) || !empty($actions),
         ];
+    }
+
+    private function decodeIpAllowlist(array $row): array
+    {
+        if (!$this->supportsIpAllowlistColumn()) {
+            return [];
+        }
+
+        return $this->normalizeIpAllowlist($row['ipAllowlist'] ?? null);
     }
 
     private function isCredentialExpired(array $row): bool
@@ -551,6 +589,27 @@ class CredentialService extends Component
         ];
     }
 
+    private function resolveUpdateIpAllowlist(array $row, mixed $input): array
+    {
+        if (!$this->supportsIpAllowlistColumn()) {
+            return [];
+        }
+
+        if ($input === null) {
+            return $this->decodeIpAllowlist($row);
+        }
+
+        if (is_string($input) && trim($input) === '') {
+            return [];
+        }
+
+        if (is_array($input) && empty($input)) {
+            return [];
+        }
+
+        return $this->normalizeIpAllowlist($input);
+    }
+
     private function normalizeWebhookSubscriptions(array $subscriptions): array
     {
         $resourceTypes = $this->normalizeWebhookValues($subscriptions['resourceTypes'] ?? null, self::WEBHOOK_RESOURCE_TYPES);
@@ -575,7 +634,18 @@ class CredentialService extends Component
                 $tokens[] = (string)$value;
             }
         } elseif (is_string($raw) || is_numeric($raw)) {
-            $tokens[] = (string)$raw;
+            $stringValue = trim((string)$raw);
+            $decoded = json_decode($stringValue, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $value) {
+                    if (!is_string($value) && !is_numeric($value)) {
+                        continue;
+                    }
+                    $tokens[] = (string)$value;
+                }
+            } else {
+                $tokens[] = $stringValue;
+            }
         }
 
         $parts = [];
@@ -604,6 +674,85 @@ class CredentialService extends Component
         $normalized = array_values(array_unique($normalized));
         sort($normalized);
         return $normalized;
+    }
+
+    private function normalizeIpAllowlist(mixed $raw): array
+    {
+        $tokens = [];
+        if (is_array($raw)) {
+            foreach ($raw as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } elseif (is_string($raw) || is_numeric($raw)) {
+            $tokens[] = (string)$raw;
+        }
+
+        $parts = [];
+        foreach ($tokens as $token) {
+            $chunks = preg_split('/[\s,]+/', trim($token)) ?: [];
+            foreach ($chunks as $chunk) {
+                $candidate = trim((string)$chunk);
+                if ($candidate === '') {
+                    continue;
+                }
+
+                $parts[] = $candidate;
+            }
+        }
+
+        $normalized = [];
+        foreach ($parts as $part) {
+            $cidr = $this->normalizeCidr($part);
+            if ($cidr === null) {
+                continue;
+            }
+
+            $normalized[] = $cidr;
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+        return $normalized;
+    }
+
+    private function normalizeCidr(string $raw): ?string
+    {
+        $candidate = trim($raw);
+        if ($candidate === '') {
+            return null;
+        }
+
+        if (str_contains($candidate, '/')) {
+            [$ip, $prefix] = explode('/', $candidate, 2);
+            $ip = trim($ip);
+            $prefix = trim($prefix);
+        } else {
+            $ip = $candidate;
+            $prefix = '';
+        }
+
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return null;
+        }
+
+        $isIpv6 = str_contains($ip, ':');
+        if ($prefix === '') {
+            $prefixInt = $isIpv6 ? 128 : 32;
+        } elseif (preg_match('/^\d+$/', $prefix) === 1) {
+            $prefixInt = (int)$prefix;
+        } else {
+            return null;
+        }
+
+        $maxPrefix = $isIpv6 ? 128 : 32;
+        if ($prefixInt < 0 || $prefixInt > $maxPrefix) {
+            return null;
+        }
+
+        return sprintf('%s/%d', $ip, $prefixInt);
     }
 
     private function normalizeScopes(array $scopes, array $defaultScopes): array

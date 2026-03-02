@@ -489,6 +489,9 @@ class DashboardController extends Controller
             'ttlDays' => $this->parseNullableIntegerBodyParam('credentialTtlDays'),
             'expiryReminderDays' => $this->parseNullableIntegerBodyParam('credentialExpiryReminderDays'),
         ];
+        $networkPolicy = [
+            'ipAllowlist' => $this->parseIpAllowlistInput($this->request->getBodyParam('credentialIpAllowlist')),
+        ];
 
         try {
             $result = $plugin->getCredentialService()->createManagedCredential(
@@ -497,7 +500,8 @@ class DashboardController extends Controller
                 $scopes,
                 $defaultScopes,
                 $webhookSubscriptions,
-                $expiryPolicy
+                $expiryPolicy,
+                $networkPolicy
             );
             $credential = (array)($result['credential'] ?? []);
             $this->storeRevealedCredential([
@@ -541,6 +545,9 @@ class DashboardController extends Controller
             'ttlDays' => $this->parseNullableIntegerBodyParam('credentialTtlDays'),
             'expiryReminderDays' => $this->parseNullableIntegerBodyParam('credentialExpiryReminderDays'),
         ];
+        $networkPolicy = [
+            'ipAllowlist' => $this->parseIpAllowlistInput($this->request->getBodyParam('credentialIpAllowlist')),
+        ];
 
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing API key ID.');
@@ -554,7 +561,8 @@ class DashboardController extends Controller
                 $scopes,
                 $defaultScopes,
                 $webhookSubscriptions,
-                $expiryPolicy
+                $expiryPolicy,
+                $networkPolicy
             );
             if (!is_array($credential)) {
                 $this->setFailFlash('API key not found.');
@@ -1071,6 +1079,83 @@ class DashboardController extends Controller
         $normalized = array_values(array_unique($normalized));
         sort($normalized);
         return $normalized;
+    }
+
+    private function parseIpAllowlistInput(mixed $rawInput): array
+    {
+        $tokens = [];
+        if (is_array($rawInput)) {
+            foreach ($rawInput as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } elseif (is_string($rawInput) || is_numeric($rawInput)) {
+            $tokens[] = (string)$rawInput;
+        }
+
+        $parts = [];
+        foreach ($tokens as $token) {
+            $chunks = preg_split('/[\s,]+/', trim($token)) ?: [];
+            foreach ($chunks as $chunk) {
+                $candidate = trim((string)$chunk);
+                if ($candidate === '') {
+                    continue;
+                }
+                $parts[] = $candidate;
+            }
+        }
+
+        $normalized = [];
+        foreach ($parts as $part) {
+            $cidr = $this->normalizeCidrInput($part);
+            if ($cidr === null) {
+                continue;
+            }
+            $normalized[] = $cidr;
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+        return $normalized;
+    }
+
+    private function normalizeCidrInput(string $raw): ?string
+    {
+        $candidate = trim($raw);
+        if ($candidate === '') {
+            return null;
+        }
+
+        if (str_contains($candidate, '/')) {
+            [$ip, $prefix] = explode('/', $candidate, 2);
+            $ip = trim($ip);
+            $prefix = trim($prefix);
+        } else {
+            $ip = $candidate;
+            $prefix = '';
+        }
+
+        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            return null;
+        }
+
+        $isIpv6 = str_contains($ip, ':');
+        if ($prefix === '') {
+            $prefixInt = $isIpv6 ? 128 : 32;
+        } elseif (preg_match('/^\d+$/', $prefix) === 1) {
+            $prefixInt = (int)$prefix;
+        } else {
+            return null;
+        }
+
+        $maxPrefix = $isIpv6 ? 128 : 32;
+        if ($prefixInt < 0 || $prefixInt > $maxPrefix) {
+            return null;
+        }
+
+        return sprintf('%s/%d', $ip, $prefixInt);
     }
 
     private function parseBooleanBodyParam(string $name, bool $default = false): bool

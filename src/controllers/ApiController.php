@@ -1150,6 +1150,13 @@ class ApiController extends Controller
             ];
         }
 
+        $ipAllowlist = $this->normalizeIpAllowlist($matchedCredential['ipAllowlist'] ?? []);
+        if (!empty($ipAllowlist) && !$this->isIpAllowedByCidrs($this->getClientIp(), $ipAllowlist)) {
+            return [
+                'errorResponse' => $this->unauthorizedResponse('Token is not allowed from this IP address.'),
+            ];
+        }
+
         $managedCredentialId = (int)($matchedCredential['managedCredentialId'] ?? 0);
         if ($managedCredentialId > 0) {
             try {
@@ -1209,6 +1216,7 @@ class ApiController extends Controller
                 'principalFingerprint' => $principalFingerprint,
                 'source' => (string)($credential['source'] ?? 'env'),
                 'managedCredentialId' => isset($credential['managedCredentialId']) ? (int)$credential['managedCredentialId'] : 0,
+                'ipAllowlist' => $this->normalizeIpAllowlist($credential['ipAllowlist'] ?? []),
             ];
         }
 
@@ -1365,6 +1373,150 @@ class ApiController extends Controller
     private function getClientIp(): string
     {
         return (string)(Craft::$app->getRequest()->getUserIP() ?: 'unknown');
+    }
+
+    private function normalizeIpAllowlist(mixed $raw): array
+    {
+        $tokens = [];
+        if (is_array($raw)) {
+            foreach ($raw as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } elseif (is_string($raw) || is_numeric($raw)) {
+            $stringValue = trim((string)$raw);
+            $decoded = json_decode($stringValue, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $value) {
+                    if (!is_string($value) && !is_numeric($value)) {
+                        continue;
+                    }
+                    $tokens[] = (string)$value;
+                }
+            } else {
+                $tokens[] = $stringValue;
+            }
+        }
+
+        $cidrs = [];
+        foreach ($tokens as $token) {
+            $chunks = preg_split('/[\s,]+/', trim($token)) ?: [];
+            foreach ($chunks as $chunk) {
+                $candidate = trim((string)$chunk);
+                if ($candidate === '') {
+                    continue;
+                }
+                $cidrs[] = $candidate;
+            }
+        }
+
+        $normalized = [];
+        foreach ($cidrs as $cidr) {
+            if (str_contains($cidr, '/')) {
+                [$ip, $prefixRaw] = explode('/', $cidr, 2);
+                $ip = trim($ip);
+                $prefixRaw = trim($prefixRaw);
+            } else {
+                $ip = trim($cidr);
+                $prefixRaw = '';
+            }
+
+            if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+                continue;
+            }
+
+            $isIpv6 = str_contains($ip, ':');
+            if ($prefixRaw === '') {
+                $prefix = $isIpv6 ? 128 : 32;
+            } elseif (preg_match('/^\d+$/', $prefixRaw) === 1) {
+                $prefix = (int)$prefixRaw;
+            } else {
+                continue;
+            }
+
+            $maxPrefix = $isIpv6 ? 128 : 32;
+            if ($prefix < 0 || $prefix > $maxPrefix) {
+                continue;
+            }
+
+            $normalized[] = sprintf('%s/%d', $ip, $prefix);
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+        return $normalized;
+    }
+
+    private function isIpAllowedByCidrs(string $ip, array $cidrs): bool
+    {
+        if (empty($cidrs)) {
+            return true;
+        }
+
+        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            return false;
+        }
+
+        foreach ($cidrs as $cidr) {
+            if (!is_string($cidr)) {
+                continue;
+            }
+
+            if ($this->cidrContainsIp($ip, $cidr)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function cidrContainsIp(string $ip, string $cidr): bool
+    {
+        if (!str_contains($cidr, '/')) {
+            return false;
+        }
+
+        [$network, $prefixRaw] = explode('/', $cidr, 2);
+        $network = trim($network);
+        $prefixRaw = trim($prefixRaw);
+        if (preg_match('/^\d+$/', $prefixRaw) !== 1) {
+            return false;
+        }
+
+        $prefix = (int)$prefixRaw;
+        $ipBinary = @inet_pton($ip);
+        $networkBinary = @inet_pton($network);
+        if ($ipBinary === false || $networkBinary === false) {
+            return false;
+        }
+
+        if (strlen($ipBinary) !== strlen($networkBinary)) {
+            return false;
+        }
+
+        $maxBits = strlen($networkBinary) * 8;
+        if ($prefix < 0 || $prefix > $maxBits) {
+            return false;
+        }
+
+        $fullBytes = intdiv($prefix, 8);
+        $remainingBits = $prefix % 8;
+
+        if ($fullBytes > 0 && substr($ipBinary, 0, $fullBytes) !== substr($networkBinary, 0, $fullBytes)) {
+            return false;
+        }
+
+        if ($remainingBits === 0) {
+            return true;
+        }
+
+        $mask = (0xFF << (8 - $remainingBits)) & 0xFF;
+        $ipByte = ord($ipBinary[$fullBytes]);
+        $networkByte = ord($networkBinary[$fullBytes]);
+
+        return ($ipByte & $mask) === ($networkByte & $mask);
     }
 
     private function getRouteKey(): string
