@@ -11,10 +11,36 @@ Agents provides a secure runtime layer for machine integrations on Craft and Com
 - scoped token auth with operational introspection
 - stable machine APIs for content/commerce access
 - incremental sync and signed webhook delivery
-- governed control flows (policies, approvals, execution ledger, audit)
+- governed control flows (policies, approvals, execution ledger, audit; experimental flag)
 - optional public discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`)
 
 Agents is a runtime + governance plugin; discovery docs are one feature, not the product.
+
+## Execution Model & Trust Boundary
+
+Agents is a governed API runtime. In production, runtime actions are executed through scoped API routes and policy controls, not by executing arbitrary shell commands.
+
+Trust boundary summary:
+
+- Runtime execution path: HTTP API + scoped auth + deterministic validation/error contracts.
+- Optional control path (feature-flagged): policy/approval checks + idempotent execution + audit trail.
+- CLI path: `craft agents/*` is for operator/developer workflows and diagnostics.
+- Discovery docs path: `llms.txt`, `llms-full.txt`, and `commerce.txt` are optional public discovery surfaces.
+
+The plugin does not execute agent-provided shell commands as part of production request handling.
+
+## Surface Stability
+
+| Surface | Status | Notes |
+| --- | --- | --- |
+| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
+| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
+| Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
+| Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
+| Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
+| CLI (`craft agents/*`) | Production stable (ops tooling) | Operator/dev diagnostics and automation helper surface. |
+| Discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`) | Optional stable feature | Public discovery text, not core trust boundary. |
+| Control-plane actions (`/control/*`, return-request workflows) | Experimental | Enabled only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`. |
 
 This plugin gives external/internal agents a stable interface for:
 
@@ -22,13 +48,13 @@ This plugin gives external/internal agents a stable interface for:
 - readiness summaries (`/agents/v1/readiness`)
 - auth introspection for token diagnostics (`/agents/v1/auth/whoami`)
 - product snapshot browsing (`/agents/v1/products`)
-- control policies/approvals/execution ledger/audit (`/agents/v1/control/*`)
+- control policies/approvals/execution ledger/audit (`/agents/v1/control/*`, experimental flag)
 - read-only CLI discovery commands (`craft agents/*`)
 
 The runtime includes:
 
 - read surfaces for diagnostics and automation
-- sign-and-control primitives for governed machine actions:
+- sign-and-control primitives for governed machine actions (experimental flag):
   - policy evaluation
   - approval gates
   - idempotent execution ledger
@@ -93,7 +119,7 @@ Enablement precedence:
 
 ## Support
 
-- Docs: https://github.com/klick/agents
+- Docs: https://marcusscheller.com/docs/agents/
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
 
@@ -171,6 +197,9 @@ Read/discovery endpoints:
 - `GET /entries/show` (requires exactly one of `id` or `slug`)
 - `GET /changes`
 - `GET /sections`
+- `GET /consumers/lag`
+- `POST /consumers/checkpoint`
+- `GET /schema`
 - `GET /capabilities`
 - `GET /openapi.json`
 
@@ -182,8 +211,14 @@ Control-plane endpoints (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=
 - `POST /control/approvals/request`
 - `POST /control/approvals/decide`
 - `GET /control/executions`
+- `POST /control/policy-simulate`
 - `POST /control/actions/execute`
 - `GET /control/audit`
+
+Webhook reliability endpoints:
+
+- `GET /webhooks/dlq`
+- `POST /webhooks/dlq/replay`
 
 Root-level discovery files:
 
@@ -208,8 +243,13 @@ Read scopes:
 - `entries:read_all_statuses`
 - `changes:read`
 - `sections:read`
+- `consumers:read`
+- `consumers:write`
+- `schema:read`
 - `capabilities:read`
 - `openapi:read`
+- `webhooks:dlq:read`
+- `webhooks:dlq:replay`
 - `control:policies:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:approvals:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:executions:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
@@ -221,6 +261,7 @@ Write scopes:
 - `control:approvals:request` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:approvals:decide` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:approvals:write` (legacy combined scope, backward-compatible; only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:actions:simulate` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:actions:execute` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 
 ## CLI Commands
