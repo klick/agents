@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.1 - 2026-03-03
+
+- Fixed adoption instrumentation runtime fatal by switching to the existing security posture API used across CP/runtime.
+- Fixed machine-client POST compatibility by disabling CSRF enforcement for token-authenticated API endpoints.
+- Fixed dual-approval race handling by adding optimistic concurrency guards/retries in approval decision flow.
+- Fixed stale plugin-version fallback constants in API/readiness outputs and added release-gate checks to prevent regression.
+
 ## 0.6.0 - 2026-03-03
 
 - Added guarded observability export endpoint `GET /agents/v1/metrics` (`metrics:read`) with runtime counters for auth failures, scope denials, rate-limit denials, request volume, and 5xx responses.

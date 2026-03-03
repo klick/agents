@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-03  
-Current release: `v0.6.0`
+Current release: `v0.6.1`
 
 ## Direction
 
@@ -26,7 +26,7 @@ Release outcome:
 
 - Runtime behavior is stable in production, and new integrators can reach first value quickly.
 
-## Now (`v0.6.0`)
+## Done (`v0.6.0`)
 
 Target: May 2026
 
@@ -44,8 +44,9 @@ Target: May 2026
 Release outcome:
 
 - Operators can triage incidents quickly, and product teams can see where integration adoption drops.
+- `v0.6.1` hotfix closed runtime reliability issues in adoption metrics, machine POST CSRF handling, and dual-approval race safety.
 
-## Later (`v0.7.0`)
+## Now (`v0.7.0`)
 
 Target: July 2026
 
