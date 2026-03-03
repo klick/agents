@@ -20,6 +20,17 @@
     </ol>
   </section>
 
+
+  <hr>
+
+
+  {% set controlPendingCount = controlSummary.approvalsPending|default(0) %}
+  {% set controlExpiredApprovalsCount = controlSummary.approvalsExpired|default(0) %}
+  {% set controlBlockedRunsCount = controlSummary.executionsBlocked|default(0) %}
+  {% set controlCompletedRunsCount = controlSummary.executionsSucceeded|default(0) %}
+  {% set controlActiveRulesCount = controlSummary.policies|default(0) %}
+  {% set controlActivityCount = controlSummary.auditEvents|default(0) %}
+
   <section class="border rounded p-3">
     <h2 class="h4">Now</h2>
     <p>
@@ -29,32 +40,36 @@
     </p>
 
     <div class="agents-metric-grid">
-      <div class="agents-metric">
+      <div class="agents-metric {{ controlPendingCount > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
         <div class="label">Waiting for decision</div>
-        <div class="value">{{ controlSummary.approvalsPending|default(0) }}</div>
+        <div class="value">{{ controlPendingCount }}</div>
       </div>
-      <div class="agents-metric">
+      <div class="agents-metric {{ controlExpiredApprovalsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
         <div class="label">Expired approvals</div>
-        <div class="value">{{ controlSummary.approvalsExpired|default(0) }}</div>
+        <div class="value">{{ controlExpiredApprovalsCount }}</div>
       </div>
-      <div class="agents-metric">
+      <div class="agents-metric {{ controlBlockedRunsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
         <div class="label">Runs blocked</div>
-        <div class="value">{{ controlSummary.executionsBlocked|default(0) }}</div>
+        <div class="value">{{ controlBlockedRunsCount }}</div>
       </div>
-      <div class="agents-metric">
+      <div class="agents-metric {{ controlCompletedRunsCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
         <div class="label">Runs completed</div>
-        <div class="value">{{ controlSummary.executionsSucceeded|default(0) }}</div>
+        <div class="value">{{ controlCompletedRunsCount }}</div>
       </div>
-      <div class="agents-metric">
+      <div class="agents-metric {{ controlActiveRulesCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
         <div class="label">Active rules</div>
-        <div class="value">{{ controlSummary.policies|default(0) }}</div>
+        <div class="value">{{ controlActiveRulesCount }}</div>
       </div>
-      <div class="agents-metric">
+      <div class="agents-metric {{ controlActivityCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
         <div class="label">Activity entries</div>
-        <div class="value">{{ controlSummary.auditEvents|default(0) }}</div>
+        <div class="value">{{ controlActivityCount }}</div>
       </div>
     </div>
   </section>
+
+
+  <hr>
+
 
   <section class="border rounded p-3">
     <h2 class="h4">Waiting for Decision</h2>
@@ -143,6 +158,10 @@
     {% endif %}
   </section>
 
+
+  <hr>
+
+
   <section class="border rounded p-3">
     <h2 class="h4">Runs That Need Follow-up</h2>
     {% if controlAttentionExecutions|length %}
@@ -183,6 +202,10 @@
       <p>No blocked or failed runs in this view.</p>
     {% endif %}
   </section>
+
+
+  <hr>
+
 
   <section class="border rounded p-3">
     <h2 class="h4">Create Request Manually (Fallback)</h2>
@@ -288,6 +311,10 @@
     {% endif %}
   </section>
 
+
+  <hr>
+
+
   <section class="border rounded p-3">
     <h2 class="h4">Run an Approved Action</h2>
     {% if canExecuteActions %}
@@ -369,6 +396,10 @@
       <p class="warning">You do not have permission to run actions.</p>
     {% endif %}
   </section>
+
+
+  <hr>
+
 
   <section class="border rounded p-3">
     <h2 class="h4">Policy Simulator (Dry Run)</h2>
@@ -466,6 +497,10 @@
       </details>
     {% endif %}
   </section>
+
+
+  <hr>
+
 
   <section class="border rounded p-3">
     <h2 class="h4">Rules</h2>
@@ -571,6 +606,10 @@
       <p class="warning">You do not have permission to manage rules.</p>
     {% endif %}
   </section>
+
+
+  <hr>
+
 
   <section class="border rounded p-3">
     <h2 class="h4">Activity Log</h2>

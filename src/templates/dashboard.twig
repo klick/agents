@@ -30,71 +30,89 @@
   <div class="agents-layout-stack">
     {% if activeDashboardTab == 'overview' %}
       {% set discoveryEnabledCount = (discoveryEnabled.llms ? 1 : 0) + (discoveryEnabled.llmsFull ? 1 : 0) + (discoveryEnabled.commerce ? 1 : 0) %}
+      {% set overviewReadinessScore = overviewReadiness.readinessScore|default(0) %}
+      {% set overviewWarnings = securityWarningCounts.warnings|default(0) %}
+      {% set overviewErrors = securityWarningCounts.errors|default(0) %}
+      {% set readinessMetricClass = overviewReadinessScore >= 100
+        ? 'agents-metric--good'
+        : (overviewReadinessScore >= 80 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set warningMetricClass = overviewWarnings == 0
+        ? 'agents-metric--good'
+        : (overviewWarnings <= 3 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set errorMetricClass = overviewErrors == 0
+        ? 'agents-metric--good'
+        : (overviewErrors == 1 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set discoveryDocsMetricClass = discoveryEnabledCount >= 3
+        ? 'agents-metric--good'
+        : (discoveryEnabledCount > 0 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set webhookDeliveryMetricClass = webhookEnabled
+        ? 'agents-metric--good'
+        : 'agents-metric--warn' %}
 
-      <div class="agents-two-col">
-        <section class="border rounded p-3">
-          <h2 class="h4">Runtime State</h2>
-          <p>
-            <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
-            <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
-            <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
-          </p>
-
-          <form id="agents-enabled-form" method="post" accept-charset="UTF-8">
-            {{ csrfInput() }}
-            {{ actionInput('agents/dashboard/toggle-enabled') }}
-            {{ redirectInput('agents/dashboard/overview') }}
-
-            {{ forms.lightswitchField({
-              id: 'agents-enabled-switch',
-              name: 'enabled',
-              fieldLabel: 'API availability',
-              instructions: agentsEnabledLocked
-                ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-                : 'Turn the Agents API on or off.',
-              on: agentsEnabled,
-              onLabel: false,
-              offLabel: false,
-              disabled: agentsEnabledLocked,
-            }) }}
-
-            {% if agentsEnabledLocked %}
-              <p class="warning">This is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
-            {% else %}
-              <p class="agents-subtle">Saved immediately when switched.</p>
-              <noscript>
-                <button class="btn submit" type="submit">Save</button>
-              </noscript>
-            {% endif %}
-          </form>
-        </section>
-
-        <section class="border rounded p-3">
-          <h2 class="h4">At a Glance</h2>
-          <div class="agents-metric-grid">
-            <div class="agents-metric">
-              <div class="label">Readiness score</div>
-              <div class="value">{{ overviewReadiness.readinessScore|default(0) }}/100</div>
-            </div>
-            <div class="agents-metric">
-              <div class="label">Discovery docs enabled</div>
-              <div class="value">{{ discoveryEnabledCount }}/3</div>
-            </div>
-            <div class="agents-metric">
-              <div class="label">Webhook delivery</div>
-              <div class="value">{{ webhookEnabled ? 'On' : 'Off' }}</div>
-            </div>
-            <div class="agents-metric">
-              <div class="label">Security warnings</div>
-              <div class="value">{{ securityWarningCounts.warnings|default(0) }}</div>
-            </div>
-            <div class="agents-metric">
-              <div class="label">Security errors</div>
-              <div class="value">{{ securityWarningCounts.errors|default(0) }}</div>
+      <section class="border rounded p-3">
+        <h2 class="h4">At a Glance</h2>
+        <div class="agents-metric-grid">
+          <div class="agents-metric {{ agentsEnabled ? 'agents-metric--good' : 'agents-metric--bad' }}">
+            <div class="label">Runtime state</div>
+            <div class="value" style="display: flex; align-items: center; gap: 8px;">
+              <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+              {{ agentsEnabled ? 'Enabled' : 'Disabled' }}
             </div>
           </div>
-        </section>
-      </div>
+          <div class="agents-metric {{ readinessMetricClass }}">
+            <div class="label">Readiness score</div>
+            <div class="value">{{ overviewReadinessScore }}/100</div>
+          </div>
+          <div class="agents-metric {{ discoveryDocsMetricClass }}">
+            <div class="label">Discovery docs enabled</div>
+            <div class="value">{{ discoveryEnabledCount }}/3</div>
+          </div>
+          <div class="agents-metric {{ webhookDeliveryMetricClass }}">
+            <div class="label">Webhook delivery</div>
+            <div class="value">{{ webhookEnabled ? 'On' : 'Off' }}</div>
+          </div>
+          <div class="agents-metric {{ warningMetricClass }}">
+            <div class="label">Security warnings</div>
+            <div class="value">{{ overviewWarnings }}</div>
+          </div>
+          <div class="agents-metric {{ errorMetricClass }}">
+            <div class="label">Security errors</div>
+            <div class="value">{{ overviewErrors }}</div>
+          </div>
+        </div>
+
+        <form id="agents-enabled-form" method="post" accept-charset="UTF-8" style="margin-top: 12px;">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/toggle-enabled') }}
+          {{ redirectInput('agents/dashboard/overview') }}
+
+          {{ forms.lightswitchField({
+            id: 'agents-enabled-switch',
+            name: 'enabled',
+            fieldLabel: 'API availability',
+            instructions: agentsEnabledLocked
+              ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
+              : 'Turn the Agents API on or off.',
+            on: agentsEnabled,
+            onLabel: false,
+            offLabel: false,
+            disabled: agentsEnabledLocked,
+          }) }}
+
+          {% if agentsEnabledLocked %}
+            <p class="warning">This is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
+          {% else %}
+            <p class="agents-subtle">Saved immediately when switched.</p>
+            <noscript>
+              <button class="btn submit" type="submit">Save</button>
+            </noscript>
+          {% endif %}
+        </form>
+      </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Operator Actions</h2>
@@ -112,6 +130,10 @@
         </div>
         <p class="agents-subtle">Use these entry points for day-to-day operations without jumping across multiple screens.</p>
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Entry Points</h2>
@@ -134,6 +156,10 @@
           </div>
         </div>
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Ownership Model</h2>
@@ -164,6 +190,10 @@
           </tbody>
         </table>
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Readiness Snapshot</h2>
@@ -208,31 +238,56 @@
     {% endif %}
 
     {% if activeDashboardTab == 'readiness' %}
+      {% set readinessTabScore = readinessSummary.readinessScore|default(0) %}
+      {% set readinessTabStatus = (readinessSummary.status|default('unknown'))|lower %}
+      {% set readinessTabWarnings = readinessDiagnostics.warnings|length %}
+      {% set readinessTabConsumerCount = consumerLagSummary.count|default(0) %}
+      {% set readinessTabMaxLagSeconds = consumerLagSummary.maxLagSeconds|default(0) %}
+      {% set readinessTabScoreClass = readinessTabScore >= 100
+        ? 'agents-metric--good'
+        : (readinessTabScore >= 80 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set readinessTabStatusClass = readinessTabStatus in ['ready', 'healthy', 'ok']
+        ? 'agents-metric--good'
+        : (readinessTabStatus in ['degraded', 'warning', 'warn', 'partial'] ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set readinessTabWarningsClass = readinessTabWarnings == 0
+        ? 'agents-metric--good'
+        : (readinessTabWarnings <= 3 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set readinessTabConsumerCountClass = readinessTabConsumerCount > 0
+        ? 'agents-metric--good'
+        : 'agents-metric--warn' %}
+      {% set readinessTabLagClass = readinessTabConsumerCount == 0
+        ? 'agents-metric--warn'
+        : (readinessTabMaxLagSeconds <= 60 ? 'agents-metric--good' : (readinessTabMaxLagSeconds <= 300 ? 'agents-metric--warn' : 'agents-metric--bad')) %}
+
       <section class="border rounded p-3">
         <h2 class="h4">Readiness Summary</h2>
         <div class="agents-metric-grid">
-          <div class="agents-metric">
+          <div class="agents-metric {{ readinessTabScoreClass }}">
             <div class="label">Overall score</div>
-            <div class="value">{{ readinessSummary.readinessScore|default(0) }}/100</div>
+            <div class="value">{{ readinessTabScore }}/100</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ readinessTabStatusClass }}">
             <div class="label">Status</div>
             <div class="value">{{ readinessSummary.status|default('unknown') }}</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ readinessTabWarningsClass }}">
             <div class="label">Warnings</div>
-            <div class="value">{{ readinessDiagnostics.warnings|length }}</div>
+            <div class="value">{{ readinessTabWarnings }}</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ readinessTabConsumerCountClass }}">
             <div class="label">Consumer integrations</div>
-            <div class="value">{{ consumerLagSummary.count|default(0) }}</div>
+            <div class="value">{{ readinessTabConsumerCount }}</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ readinessTabLagClass }}">
             <div class="label">Max lag</div>
-            <div class="value">{{ consumerLagSummary.maxLagSeconds|default(0) }}s</div>
+            <div class="value">{{ readinessTabMaxLagSeconds }}s</div>
           </div>
         </div>
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Score Breakdown</h2>
@@ -261,6 +316,10 @@
         </table>
       </section>
 
+
+      <hr>
+
+
       <section class="border rounded p-3">
         <h2 class="h4">Component Checks</h2>
         <div class="agents-two-col">
@@ -282,6 +341,10 @@
           </div>
         </div>
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Consumer Lag</h2>
@@ -448,6 +511,10 @@
         </ul>
       </section>
 
+
+      <hr>
+
+
       <section class="border rounded p-3">
         <details class="agents-advanced">
           <summary><strong>Discovery Docs Status (Technical JSON)</strong></summary>
@@ -457,31 +524,52 @@
     {% endif %}
 
     {% if activeDashboardTab == 'security' %}
+      {% set securityTokenRequired = securityPosture.authentication.required ?? false %}
+      {% set securityCredentialCount = securityPosture.authentication.credentialCount|default(0) %}
+      {% set securityWarnings = securityPosture.warningCounts.warnings|default(0) %}
+      {% set securityErrors = securityPosture.warningCounts.errors|default(0) %}
+      {% set securityDlqCount = webhookDeadLetters|length %}
+      {% set securityTokenRequiredClass = securityTokenRequired ? 'agents-metric--good' : 'agents-metric--bad' %}
+      {% set securityCredentialCountClass = securityCredentialCount > 0 ? 'agents-metric--good' : 'agents-metric--bad' %}
+      {% set securityWarningsClass = securityWarnings == 0
+        ? 'agents-metric--good'
+        : (securityWarnings <= 3 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set securityErrorsClass = securityErrors == 0
+        ? 'agents-metric--good'
+        : (securityErrors == 1 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set securityDlqClass = securityDlqCount == 0
+        ? 'agents-metric--good'
+        : (securityDlqCount <= 10 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+
       <section class="border rounded p-3">
         <h2 class="h4">Security Snapshot</h2>
         <div class="agents-metric-grid">
-          <div class="agents-metric">
+          <div class="agents-metric {{ securityTokenRequiredClass }}">
             <div class="label">Token required</div>
-            <div class="value">{{ securityPosture.authentication.required ? 'Yes' : 'No' }}</div>
+            <div class="value">{{ securityTokenRequired ? 'Yes' : 'No' }}</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ securityCredentialCountClass }}">
             <div class="label">Active credentials</div>
-            <div class="value">{{ securityPosture.authentication.credentialCount }}</div>
+            <div class="value">{{ securityCredentialCount }}</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ securityWarningsClass }}">
             <div class="label">Warnings</div>
-            <div class="value">{{ securityPosture.warningCounts.warnings|default(0) }}</div>
+            <div class="value">{{ securityWarnings }}</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ securityErrorsClass }}">
             <div class="label">Errors</div>
-            <div class="value">{{ securityPosture.warningCounts.errors|default(0) }}</div>
+            <div class="value">{{ securityErrors }}</div>
           </div>
-          <div class="agents-metric">
+          <div class="agents-metric {{ securityDlqClass }}">
             <div class="label">DLQ events</div>
-            <div class="value">{{ webhookDeadLetters|length }}</div>
+            <div class="value">{{ securityDlqCount }}</div>
           </div>
         </div>
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Auth and Rate Posture</h2>
@@ -516,6 +604,10 @@
           </div>
         </div>
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <h2 class="h4">Webhook Reliability</h2>
@@ -583,6 +675,10 @@
         {% endif %}
       </section>
 
+
+      <hr>
+
+
       <section class="border rounded p-3">
         <h2 class="h4">Warnings</h2>
         {% if securityPosture.warnings|length %}
@@ -595,6 +691,10 @@
           <p>No active security warnings.</p>
         {% endif %}
       </section>
+
+
+      <hr>
+
 
       <section class="border rounded p-3">
         <details class="agents-advanced">

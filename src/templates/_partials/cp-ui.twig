@@ -6,7 +6,17 @@
   }
 
   .agents-layout-stack > * + * {
+    margin-top: 0;
+  }
+
+  .agents-layout-stack > :not(hr) + :not(hr) {
     margin-top: 16px;
+  }
+
+  .agents-layout-stack > hr {
+    margin: 16px -24px;
+    border: 0;
+    border-top: 1px solid #d7dde3;
   }
 
   .agents-grid {
@@ -33,6 +43,33 @@
     border-radius: 8px;
     padding: 10px 12px;
     background: #fbfcfd;
+  }
+
+  .agents-metric--good {
+    border-color: #9fd8b5;
+    background: #f3fcf7;
+  }
+
+  .agents-metric--good .value {
+    color: #1c6e3b;
+  }
+
+  .agents-metric--warn {
+    border-color: #f2d58b;
+    background: #fffbef;
+  }
+
+  .agents-metric--warn .value {
+    color: #9a6700;
+  }
+
+  .agents-metric--bad {
+    border-color: #efb5b5;
+    background: #fff5f5;
+  }
+
+  .agents-metric--bad .value {
+    color: #b42318;
   }
 
   .agents-metric .label {
