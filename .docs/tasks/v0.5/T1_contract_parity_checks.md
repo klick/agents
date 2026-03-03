@@ -2,7 +2,7 @@
 
 depends_on: []
 track: A
-status: in_progress
+status: completed
 
 ## Objective
 

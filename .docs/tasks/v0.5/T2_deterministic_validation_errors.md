@@ -2,7 +2,7 @@
 
 depends_on: [T1]
 track: A
-status: pending
+status: completed
 
 ## Objective
 

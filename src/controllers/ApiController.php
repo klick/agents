@@ -148,6 +148,24 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $statusError = $this->validateEnumQueryParam('status', ['live', 'pending', 'disabled', 'expired', 'all', 'any']);
+        if ($statusError !== null) {
+            $errors[] = $statusError;
+        }
+        $sortError = $this->validateEnumQueryParam('sort', ['updatedAt', 'createdAt', 'title']);
+        if ($sortError !== null) {
+            $errors[] = $sortError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
         $payload = Plugin::getInstance()->getReadinessService()->getProductsSnapshot([
             'q' => $request->getQueryParam('q'),
             'status' => $request->getQueryParam('status', 'live'),
@@ -179,6 +197,20 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $lastDaysError = $this->validateIntegerQueryParam('lastDays', 0, 3650);
+        if ($lastDaysError !== null) {
+            $errors[] = $lastDaysError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
         $cursor = (string)$request->getQueryParam('cursor', '');
         $updatedSince = (string)$request->getQueryParam('updatedSince', '');
         $isIncremental = ($cursor !== '' || $updatedSince !== '');
@@ -204,6 +236,25 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawNumber = trim((string)$request->getQueryParam('number', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasNumber = $rawNumber !== '';
+        if (($hasId ? 1 : 0) + ($hasNumber ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `number`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
         $includeSensitive = $this->hasScope('orders:read_sensitive');
         $payload = Plugin::getInstance()->getReadinessService()->getOrderByIdOrNumber([
             'id' => (int)$request->getQueryParam('id', 0),
@@ -222,6 +273,20 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $statusError = $this->validateEnumQueryParam('status', ['live', 'pending', 'disabled', 'expired', 'all', 'any']);
+        if ($statusError !== null) {
+            $errors[] = $statusError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
         $requestedStatus = (string)$request->getQueryParam('status', 'live');
         $allowAllStatuses = $this->hasScope('entries:read_all_statuses');
 
@@ -249,6 +314,16 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
         $payload = Plugin::getInstance()->getReadinessService()->getChangesFeed([
             'types' => $request->getQueryParam('types', ''),
             'updatedSince' => $request->getQueryParam('updatedSince'),
@@ -276,6 +351,25 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawSlug = trim((string)$request->getQueryParam('slug', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasSlug = $rawSlug !== '';
+        if (($hasId ? 1 : 0) + ($hasSlug ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `slug`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
         $allowAllStatuses = $this->hasScope('entries:read_all_statuses');
         $payload = Plugin::getInstance()->getReadinessService()->getEntryByIdOrSlug([
             'id' => (int)$request->getQueryParam('id', 0),
@@ -304,6 +398,11 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $versionFormatError = $this->validatePatternQueryParam('version', '/^[a-zA-Z0-9._-]+$/', 'version');
+        if ($versionFormatError !== null) {
+            return $this->invalidQueryResponse([$versionFormatError]);
+        }
+
         $version = strtolower(trim((string)$request->getQueryParam('version', 'v1')));
         if ($version === '') {
             $version = 'v1';
@@ -316,6 +415,10 @@ class ApiController extends Controller
 
         $schemas = $catalogs[$version];
         $endpoint = strtolower(trim((string)$request->getQueryParam('endpoint', '')));
+        $endpointFormatError = $this->validatePatternQueryParam('endpoint', '/^[a-zA-Z0-9._-]+$/', 'endpoint');
+        if ($endpointFormatError !== null) {
+            return $this->invalidQueryResponse([$endpointFormatError]);
+        }
         if ($endpoint !== '') {
             if (!isset($schemas[$endpoint])) {
                 return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, sprintf('Unknown schema endpoint `%s` for version `%s`.', $endpoint, $version));
@@ -752,6 +855,11 @@ class ApiController extends Controller
         }
 
         $request = Craft::$app->getRequest();
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 1000);
+        if ($limitError !== null) {
+            return $this->invalidQueryResponse([$limitError]);
+        }
+
         $service = Plugin::getInstance()->getConsumerLagService();
         $rows = $service->getConsumerLag([
             'integrationKey' => (string)$request->getQueryParam('integrationKey', ''),
@@ -1918,6 +2026,186 @@ class ApiController extends Controller
         return $this->errorResponse(403, self::ERROR_FORBIDDEN, $message, [
             'requiredScope' => $requiredScope,
         ]);
+    }
+
+    private function invalidQueryResponse(array $errors): Response
+    {
+        $details = [];
+        foreach ($errors as $error) {
+            $message = trim((string)$error);
+            if ($message === '') {
+                continue;
+            }
+            $details[] = $message;
+        }
+        $details = array_values(array_unique($details));
+        $message = $details[0] ?? 'Invalid query parameters.';
+
+        return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $message, [
+            'details' => $details,
+        ]);
+    }
+
+    private function validateProjectionAndFilterQueryParams(): array
+    {
+        $request = Craft::$app->getRequest();
+        $errors = [];
+
+        $rawFields = (string)$request->getQueryParam('fields', '');
+        if (trim($rawFields) !== '') {
+            $hasField = false;
+            $tokens = preg_split('/[\s,]+/', trim($rawFields)) ?: [];
+            foreach ($tokens as $token) {
+                $field = trim((string)$token);
+                if ($field === '') {
+                    continue;
+                }
+
+                $hasField = true;
+                if (preg_match('/^[a-zA-Z0-9_.-]+$/', $field) !== 1) {
+                    $errors[] = sprintf('Invalid `fields` token `%s`; allowed pattern `[a-zA-Z0-9_.-]+`.', $field);
+                }
+            }
+
+            if (!$hasField) {
+                $errors[] = '`fields` must include at least one field path.';
+            }
+        }
+
+        $rawFilter = (string)$request->getQueryParam('filter', '');
+        if (trim($rawFilter) !== '') {
+            $hasFilter = false;
+            $tokens = preg_split('/\s*,\s*/', trim($rawFilter)) ?: [];
+            foreach ($tokens as $token) {
+                $candidate = trim((string)$token);
+                if ($candidate === '') {
+                    $errors[] = 'Invalid `filter` expression; empty segments are not allowed.';
+                    continue;
+                }
+
+                if (!str_contains($candidate, ':')) {
+                    $errors[] = sprintf('Invalid `filter` expression `%s`; expected `path:value`.', $candidate);
+                    continue;
+                }
+
+                [$path, $value] = explode(':', $candidate, 2);
+                $path = trim($path);
+                $value = trim($value);
+
+                if ($path === '' || $value === '') {
+                    $errors[] = sprintf('Invalid `filter` expression `%s`; expected non-empty `path:value`.', $candidate);
+                    continue;
+                }
+
+                if (preg_match('/^[a-zA-Z0-9_.-]+$/', $path) !== 1) {
+                    $errors[] = sprintf('Invalid `filter` path `%s`; allowed pattern `[a-zA-Z0-9_.-]+`.', $path);
+                    continue;
+                }
+
+                $hasFilter = true;
+            }
+
+            if (!$hasFilter) {
+                $errors[] = '`filter` must include at least one valid `path:value` expression.';
+            }
+        }
+
+        return $errors;
+    }
+
+    private function validateIntegerQueryParam(string $name, int $min, ?int $max): ?string
+    {
+        $request = Craft::$app->getRequest();
+        $raw = $request->getQueryParam($name, null);
+        if ($raw === null) {
+            return null;
+        }
+
+        if (is_array($raw) || is_object($raw)) {
+            return sprintf('Invalid `%s`; expected integer value.', $name);
+        }
+
+        $valueRaw = trim((string)$raw);
+        if ($valueRaw === '') {
+            return null;
+        }
+
+        if (preg_match('/^-?\d+$/', $valueRaw) !== 1) {
+            return sprintf('Invalid `%s`; expected integer value.', $name);
+        }
+
+        $value = (int)$valueRaw;
+        if ($value < $min) {
+            if ($max !== null) {
+                return sprintf('Invalid `%s`; expected integer between %d and %d.', $name, $min, $max);
+            }
+
+            return sprintf('Invalid `%s`; expected integer >= %d.', $name, $min);
+        }
+
+        if ($max !== null && $value > $max) {
+            return sprintf('Invalid `%s`; expected integer between %d and %d.', $name, $min, $max);
+        }
+
+        return null;
+    }
+
+    private function validateEnumQueryParam(string $name, array $allowedValues): ?string
+    {
+        $request = Craft::$app->getRequest();
+        $raw = $request->getQueryParam($name, null);
+        if ($raw === null) {
+            return null;
+        }
+
+        if (is_array($raw) || is_object($raw)) {
+            return sprintf('Invalid `%s`; expected scalar value.', $name);
+        }
+
+        $valueRaw = trim((string)$raw);
+        if ($valueRaw === '') {
+            return null;
+        }
+
+        $allowedMap = [];
+        foreach ($allowedValues as $allowedValue) {
+            $allowedMap[strtolower((string)$allowedValue)] = true;
+        }
+
+        if (!isset($allowedMap[strtolower($valueRaw)])) {
+            return sprintf(
+                'Invalid `%s` value `%s`. Allowed values: %s.',
+                $name,
+                $valueRaw,
+                implode(', ', $allowedValues)
+            );
+        }
+
+        return null;
+    }
+
+    private function validatePatternQueryParam(string $name, string $pattern, string $label): ?string
+    {
+        $request = Craft::$app->getRequest();
+        $raw = $request->getQueryParam($name, null);
+        if ($raw === null) {
+            return null;
+        }
+
+        if (is_array($raw) || is_object($raw)) {
+            return sprintf('Invalid `%s`; expected scalar value.', $label);
+        }
+
+        $valueRaw = trim((string)$raw);
+        if ($valueRaw === '') {
+            return null;
+        }
+
+        if (preg_match($pattern, $valueRaw) !== 1) {
+            return sprintf('Invalid `%s`; allowed characters are letters, digits, `.`, `_`, and `-`.', $label);
+        }
+
+        return null;
     }
 
     private function applyListProjectionAndFilters(array $payload, string $dataKey = 'data'): array
