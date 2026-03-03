@@ -6,12 +6,20 @@ All notable changes to this project are documented in this file.
 
 ## 0.6.1 - 2026-03-03
 
+### Added
+
+- Added release-gate protections to detect stale runtime version fallbacks before publish.
+
+### Fixed
+
 - Fixed adoption instrumentation runtime fatal by switching to the existing security posture API used across CP/runtime.
 - Fixed machine-client POST compatibility by disabling CSRF enforcement for token-authenticated API endpoints.
 - Fixed dual-approval race handling by adding optimistic concurrency guards/retries in approval decision flow.
-- Fixed stale plugin-version fallback constants in API/readiness outputs and added release-gate checks to prevent regression.
+- Fixed stale plugin-version fallback constants in API/readiness outputs.
 
 ## 0.6.0 - 2026-03-03
+
+### Added
 
 - Added guarded observability export endpoint `GET /agents/v1/metrics` (`metrics:read`) with runtime counters for auth failures, scope denials, rate-limit denials, request volume, and 5xx responses.
 - Added CP Readiness telemetry snapshot cards sourced from observability metrics, plus threshold-based runbook/alert guidance for incident triage.
