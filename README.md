@@ -117,9 +117,16 @@ Enablement precedence:
 - If `PLUGIN_AGENTS_ENABLED` is set, it overrides CP/plugin setting state.
 - If `PLUGIN_AGENTS_ENABLED` is not set, CP/plugin setting `enabled` controls runtime on/off.
 
+## Quickstart and Canonical Jobs
+
+- 30-minute first-success path: [docs/quickstart-30min.md](docs/quickstart-30min.md)
+- Canonical first agent jobs: [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
+
 ## Support
 
 - Docs: https://marcusscheller.com/docs/agents/
+- Quickstart (repo): [docs/quickstart-30min.md](docs/quickstart-30min.md)
+- Canonical jobs (repo): [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
 
