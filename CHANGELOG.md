@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.5.0 - 2026-03-03
+
+- Improved CP operations UX with clearer section grouping, full-width separators, and state color coding across overview/dashboard/control/credentials views.
+- Added API contract hardening via deterministic query validation (`400 INVALID_REQUEST` with `details`) for malformed `fields`/`filter`, enum, numeric, and identifier query paths.
+- Added adoption instrumentation endpoint `GET /agents/v1/adoption/metrics` with `adoption:read` scope for funnel, time-to-first-success, and weekly managed-credential usage signals.
+- Added canonical QA gates for API/scope/docs parity, deterministic validation regression, control/consumer surface regression, and migration safety checks; integrated into `scripts/qa/release-gate.sh`.
+- Added operator-facing adoption docs: canonical first agent jobs and a copy/paste 30-minute quickstart flow.
+
 ## 0.4.0 - 2026-03-02
 
 - Added webhook dead-letter queue persistence with guarded API replay endpoints and Control Panel replay controls.

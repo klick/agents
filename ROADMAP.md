@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-03  
-Current release: `v0.4.0`
+Current release: `v0.5.0`
 
 ## Direction
 
