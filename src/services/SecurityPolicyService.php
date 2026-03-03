@@ -13,6 +13,8 @@ class SecurityPolicyService extends Component
         'health:read',
         'readiness:read',
         'auth:read',
+        'adoption:read',
+        'metrics:read',
         'products:read',
         'orders:read',
         'entries:read',

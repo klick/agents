@@ -198,6 +198,7 @@ Read/discovery endpoints:
 - `GET /readiness`
 - `GET /auth/whoami`
 - `GET /adoption/metrics`
+- `GET /metrics`
 - `GET /products`
 - `GET /orders`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
@@ -245,6 +246,7 @@ Read scopes:
 - `readiness:read`
 - `auth:read`
 - `adoption:read`
+- `metrics:read`
 - `products:read`
 - `orders:read`
 - `orders:read_sensitive`
@@ -653,7 +655,7 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
+  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
   - If `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, optionally append control read scopes: `control:policies:read control:approvals:read control:executions:read control:audit:read`
 
 ## Secure Deployment Verification
@@ -694,7 +696,7 @@ Planned improvements include:
 
 ### Incremental Sync Contract (v0.2.0)
 
-The formal contract for checkpoint-based sync is documented in [`INCREMENTAL_SYNC_CONTRACT.md`](INCREMENTAL_SYNC_CONTRACT.md).
+The formal contract for checkpoint-based sync is documented in the public docs (`API` + `Roadmap` sections): https://marcusscheller.com/docs/agents/
 
 Highlights:
 

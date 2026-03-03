@@ -62,7 +62,7 @@ if ! grep -q "Base URL (this project):" README.md; then
   fail "README is missing the API base URL declaration"
 fi
 
-for route in "GET /health" "GET /readiness" "GET /products" "GET /capabilities" "GET /openapi.json"; do
+for route in "GET /health" "GET /readiness" "GET /adoption/metrics" "GET /metrics" "GET /products" "GET /capabilities" "GET /openapi.json"; do
   if ! grep -q "$route" README.md; then
     fail "Missing endpoint in README: $route"
   fi

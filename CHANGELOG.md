@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+- Added guarded observability export endpoint `GET /agents/v1/metrics` (`metrics:read`) with runtime counters for auth failures, scope denials, rate-limit denials, request volume, and 5xx responses.
+
 ## 0.5.0 - 2026-03-03
 
 - Improved CP operations UX with clearer section grouping, full-width separators, and state color coding across overview/dashboard/control/credentials views.

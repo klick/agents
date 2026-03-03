@@ -4,6 +4,7 @@ namespace Klick\Agents\controllers;
 
 use Craft;
 use Klick\Agents\Plugin;
+use Klick\Agents\services\ObservabilityMetricsService;
 use craft\web\Controller;
 use yii\caching\CacheInterface;
 use yii\mutex\Mutex;
@@ -17,6 +18,7 @@ class ApiController extends Controller
         'readiness:read',
         'auth:read',
         'adoption:read',
+        'metrics:read',
         'products:read',
         'orders:read',
         'entries:read',
@@ -454,6 +456,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/readiness', 'requiredScopes' => ['readiness:read']],
             ['method' => 'GET', 'path' => '/auth/whoami', 'requiredScopes' => ['auth:read']],
             ['method' => 'GET', 'path' => '/adoption/metrics', 'requiredScopes' => ['adoption:read']],
+            ['method' => 'GET', 'path' => '/metrics', 'requiredScopes' => ['metrics:read']],
             ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
             ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
@@ -541,6 +544,11 @@ class ApiController extends Controller
                 'summary' => 'Adoption instrumentation snapshot for first-success funnel and credential usage',
                 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
                 'x-required-scopes' => ['adoption:read'],
+            ]],
+            '/metrics' => ['get' => [
+                'summary' => 'Observability metrics snapshot for runtime, queue, webhook, and integration lag health',
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['metrics:read'],
             ]],
             '/products' => ['get' => [
                 'summary' => 'Product snapshot list',
@@ -862,6 +870,16 @@ class ApiController extends Controller
         }
 
         $snapshot = Plugin::getInstance()->getAdoptionMetricsService()->getSnapshot(self::DEFAULT_TOKEN_SCOPES);
+        return $this->jsonResponse($snapshot);
+    }
+
+    public function actionMetrics(): Response
+    {
+        if (($guard = $this->guardRequest('metrics:read')) !== null) {
+            return $guard;
+        }
+
+        $snapshot = Plugin::getInstance()->getObservabilityMetricsService()->getMetricsSnapshot();
         return $this->jsonResponse($snapshot);
     }
 
@@ -1288,6 +1306,8 @@ class ApiController extends Controller
             return $this->serviceDisabledResponse();
         }
 
+        $this->incrementRuntimeCounter(ObservabilityMetricsService::COUNTER_REQUESTS);
+
         $config = $this->getSecurityConfig();
 
         $preAuthIdentity = $this->buildPreAuthIdentity();
@@ -1518,6 +1538,7 @@ class ApiController extends Controller
         $this->response->headers->set('X-RateLimit-Reset', (string)$resetAt);
 
         if ($current > $limit) {
+            $this->incrementRuntimeCounter(ObservabilityMetricsService::COUNTER_RATE_LIMIT);
             $response = $this->errorResponse(429, self::ERROR_RATE_LIMIT_EXCEEDED, 'Too many requests.', [
                 'retryAfter' => $resetAt,
             ]);
@@ -1804,6 +1825,7 @@ class ApiController extends Controller
             'readiness:read' => 'Read readiness summary and score.',
             'auth:read' => 'Read authenticated caller diagnostics (`/auth/whoami`).',
             'adoption:read' => 'Read adoption instrumentation snapshot (`/adoption/metrics`).',
+            'metrics:read' => 'Read observability metrics snapshot (`/metrics`).',
             'products:read' => 'Read product snapshot endpoints.',
             'orders:read' => 'Read order metadata endpoints.',
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
@@ -2026,6 +2048,7 @@ class ApiController extends Controller
 
     private function unauthorizedResponse(string $message): Response
     {
+        $this->incrementRuntimeCounter(ObservabilityMetricsService::COUNTER_AUTH_FAILURES);
         return $this->errorResponse(401, self::ERROR_UNAUTHORIZED, $message);
     }
 
@@ -2041,6 +2064,7 @@ class ApiController extends Controller
 
     private function forbiddenResponse(string $requiredScope, string $message = 'Missing required scope.'): Response
     {
+        $this->incrementRuntimeCounter(ObservabilityMetricsService::COUNTER_FORBIDDEN);
         return $this->errorResponse(403, self::ERROR_FORBIDDEN, $message, [
             'requiredScope' => $requiredScope,
         ]);
@@ -2586,6 +2610,23 @@ class ApiController extends Controller
                         ],
                     ],
                 ],
+                'metrics.snapshot' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/metrics',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'service' => ['type' => 'string'],
+                            'generatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'format' => ['type' => 'string'],
+                            'metrics' => ['type' => 'array', 'items' => ['type' => 'object']],
+                        ],
+                    ],
+                ],
             ],
         ];
     }
@@ -2666,6 +2707,10 @@ class ApiController extends Controller
 
     private function errorResponse(int $statusCode, string $code, string $message, array $extra = []): Response
     {
+        if ($statusCode >= 500) {
+            $this->incrementRuntimeCounter(ObservabilityMetricsService::COUNTER_ERRORS_5XX);
+        }
+
         $payload = array_merge([
             'error' => $code,
             'message' => $message,
@@ -2682,6 +2727,36 @@ class ApiController extends Controller
         $response->headers->set('Cache-Control', 'no-store, private');
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Expires', '0');
+    }
+
+    private function incrementRuntimeCounter(string $cacheKey, int $delta = 1): void
+    {
+        if ($cacheKey === '' || $delta === 0) {
+            return;
+        }
+
+        $cache = Craft::$app->getCache();
+        if (!$cache instanceof CacheInterface) {
+            return;
+        }
+
+        $ttl = 60 * 60 * 24 * 30;
+        if (method_exists($cache, 'increment') && method_exists($cache, 'add')) {
+            $incremented = $cache->increment($cacheKey, $delta);
+            if ($incremented !== false) {
+                return;
+            }
+
+            if ($cache->add($cacheKey, $delta, $ttl)) {
+                return;
+            }
+
+            $cache->increment($cacheKey, $delta);
+            return;
+        }
+
+        $current = (int)($cache->get($cacheKey) ?: 0);
+        $cache->set($cacheKey, $current + $delta, $ttl);
     }
 
     private function attachRequestId(Response $response): Response
