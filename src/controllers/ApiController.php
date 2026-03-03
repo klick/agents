@@ -16,6 +16,7 @@ class ApiController extends Controller
         'health:read',
         'readiness:read',
         'auth:read',
+        'adoption:read',
         'products:read',
         'orders:read',
         'entries:read',
@@ -452,6 +453,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/health', 'requiredScopes' => ['health:read']],
             ['method' => 'GET', 'path' => '/readiness', 'requiredScopes' => ['readiness:read']],
             ['method' => 'GET', 'path' => '/auth/whoami', 'requiredScopes' => ['auth:read']],
+            ['method' => 'GET', 'path' => '/adoption/metrics', 'requiredScopes' => ['adoption:read']],
             ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
             ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
@@ -534,6 +536,11 @@ class ApiController extends Controller
                 'summary' => 'Authenticated caller diagnostics',
                 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
                 'x-required-scopes' => ['auth:read'],
+            ]],
+            '/adoption/metrics' => ['get' => [
+                'summary' => 'Adoption instrumentation snapshot for first-success funnel and credential usage',
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['adoption:read'],
             ]],
             '/products' => ['get' => [
                 'summary' => 'Product snapshot list',
@@ -846,6 +853,16 @@ class ApiController extends Controller
                 'resetAt' => $rateLimitReset > 0 ? gmdate('Y-m-d\TH:i:s\Z', $rateLimitReset) : null,
             ],
         ]);
+    }
+
+    public function actionAdoptionMetrics(): Response
+    {
+        if (($guard = $this->guardRequest('adoption:read')) !== null) {
+            return $guard;
+        }
+
+        $snapshot = Plugin::getInstance()->getAdoptionMetricsService()->getSnapshot(self::DEFAULT_TOKEN_SCOPES);
+        return $this->jsonResponse($snapshot);
     }
 
     public function actionConsumersLag(): Response
@@ -1786,6 +1803,7 @@ class ApiController extends Controller
             'health:read' => 'Read service health summary.',
             'readiness:read' => 'Read readiness summary and score.',
             'auth:read' => 'Read authenticated caller diagnostics (`/auth/whoami`).',
+            'adoption:read' => 'Read adoption instrumentation snapshot (`/adoption/metrics`).',
             'products:read' => 'Read product snapshot endpoints.',
             'orders:read' => 'Read order metadata endpoints.',
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',

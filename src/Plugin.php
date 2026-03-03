@@ -19,6 +19,7 @@ use craft\web\UrlManager;
 use craft\web\View;
 use yii\base\Event;
 use Klick\Agents\models\Settings;
+use Klick\Agents\services\AdoptionMetricsService;
 use Klick\Agents\services\ControlPlaneService;
 use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
@@ -58,6 +59,7 @@ class Plugin extends BasePlugin
             'credentialService' => CredentialService::class,
             'controlPlaneService' => ControlPlaneService::class,
             'consumerLagService' => ConsumerLagService::class,
+            'adoptionMetricsService' => AdoptionMetricsService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
@@ -158,6 +160,7 @@ class Plugin extends BasePlugin
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
+                'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics',
                 'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoint',
                 'agents/v1/consumers/lag' => 'agents/api/consumers-lag',
                 'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
@@ -227,6 +230,13 @@ class Plugin extends BasePlugin
     {
         /** @var ConsumerLagService $service */
         $service = $this->get('consumerLagService');
+        return $service;
+    }
+
+    public function getAdoptionMetricsService(): AdoptionMetricsService
+    {
+        /** @var AdoptionMetricsService $service */
+        $service = $this->get('adoptionMetricsService');
         return $service;
     }
 

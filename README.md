@@ -197,6 +197,7 @@ Read/discovery endpoints:
 - `GET /health`
 - `GET /readiness`
 - `GET /auth/whoami`
+- `GET /adoption/metrics`
 - `GET /products`
 - `GET /orders`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
@@ -243,6 +244,7 @@ Read scopes:
 - `health:read`
 - `readiness:read`
 - `auth:read`
+- `adoption:read`
 - `products:read`
 - `orders:read`
 - `orders:read_sensitive`

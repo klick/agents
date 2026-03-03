@@ -28,6 +28,7 @@ API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
 
 expect_fixed "public function actionAuthWhoami(): Response" "$API_CONTROLLER" "API exposes auth diagnostics endpoint action"
+expect_fixed "public function actionAdoptionMetrics(): Response" "$API_CONTROLLER" "API exposes adoption metrics endpoint action"
 expect_fixed "public function actionConsumersLag(): Response" "$API_CONTROLLER" "API exposes consumer lag endpoint action"
 expect_fixed "public function actionConsumersCheckpoint(): Response" "$API_CONTROLLER" "API exposes consumer checkpoint endpoint action"
 
@@ -46,11 +47,14 @@ expect_fixed "public function actionWebhookDlqReplay(): Response" "$API_CONTROLL
 
 expect_fixed "'/consumers/lag'" "$API_CONTROLLER" "OpenAPI/capabilities include consumers lag path"
 expect_fixed "'/consumers/checkpoint'" "$API_CONTROLLER" "OpenAPI/capabilities include consumers checkpoint path"
+expect_fixed "'/adoption/metrics'" "$API_CONTROLLER" "OpenAPI/capabilities include adoption metrics path"
 expect_fixed "'/control/actions/execute'" "$API_CONTROLLER" "OpenAPI/capabilities include control execute path"
 expect_fixed "'/webhooks/dlq/replay'" "$API_CONTROLLER" "OpenAPI/capabilities include webhook replay path"
+expect_fixed "adoption:read" "$API_CONTROLLER" "Adoption metrics scope is declared in API controller"
 expect_fixed "control:actions:execute" "$API_CONTROLLER" "Control execution scope is declared in API controller"
 expect_fixed "webhooks:dlq:replay" "$API_CONTROLLER" "Webhook replay scope is declared in API controller"
 
+expect_fixed "'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics'" "$PLUGIN_FILE" "Plugin registers adoption metrics route"
 expect_fixed "'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoint'" "$PLUGIN_FILE" "Plugin registers consumers checkpoint route"
 expect_fixed "'agents/v1/consumers/lag' => 'agents/api/consumers-lag'" "$PLUGIN_FILE" "Plugin registers consumers lag route"
 expect_fixed "'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list'" "$PLUGIN_FILE" "Plugin registers webhook DLQ list route"
