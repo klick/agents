@@ -258,6 +258,40 @@
       {% set readinessTabLagClass = readinessTabConsumerCount == 0
         ? 'agents-metric--warn'
         : (readinessTabMaxLagSeconds <= 60 ? 'agents-metric--good' : (readinessTabMaxLagSeconds <= 300 ? 'agents-metric--warn' : 'agents-metric--bad')) %}
+      {% set telemetryRequestsTotal = observabilitySummary.requestsTotal|default(0) %}
+      {% set telemetryAuthFailures = observabilitySummary.authFailuresTotal|default(0) %}
+      {% set telemetryForbidden = observabilitySummary.forbiddenTotal|default(0) %}
+      {% set telemetryRateLimit = observabilitySummary.rateLimitExceededTotal|default(0) %}
+      {% set telemetryErrors5xx = observabilitySummary.errors5xxTotal|default(0) %}
+      {% set telemetryQueueDepth = observabilitySummary.queueDepth|default(0) %}
+      {% set telemetryDlqFailed = observabilitySummary.webhookDlqFailed|default(0) %}
+      {% set telemetryConsumerLagMaxSeconds = observabilitySummary.consumerLagMaxSeconds|default(0) %}
+      {% set telemetryActiveCredentials7d = observabilitySummary.activeCredentials7d|default(0) %}
+      {% set telemetryRequestsClass = telemetryRequestsTotal > 0 ? 'agents-metric--good' : 'agents-metric--warn' %}
+      {% set telemetryAuthFailuresClass = telemetryAuthFailures == 0
+        ? 'agents-metric--good'
+        : (telemetryAuthFailures <= 5 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set telemetryForbiddenClass = telemetryForbidden == 0
+        ? 'agents-metric--good'
+        : (telemetryForbidden <= 5 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set telemetryRateLimitClass = telemetryRateLimit == 0
+        ? 'agents-metric--good'
+        : (telemetryRateLimit <= 10 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set telemetryErrors5xxClass = telemetryErrors5xx == 0
+        ? 'agents-metric--good'
+        : (telemetryErrors5xx <= 2 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set telemetryQueueDepthClass = telemetryQueueDepth <= 10
+        ? 'agents-metric--good'
+        : (telemetryQueueDepth <= 50 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set telemetryDlqFailedClass = telemetryDlqFailed == 0
+        ? 'agents-metric--good'
+        : (telemetryDlqFailed <= 10 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set telemetryConsumerLagClass = telemetryConsumerLagMaxSeconds <= 60
+        ? 'agents-metric--good'
+        : (telemetryConsumerLagMaxSeconds <= 300 ? 'agents-metric--warn' : 'agents-metric--bad') %}
+      {% set telemetryActiveCredentialsClass = telemetryActiveCredentials7d > 0
+        ? 'agents-metric--good'
+        : 'agents-metric--warn' %}
 
       <section class="border rounded p-3">
         <h2 class="h4">Readiness Summary</h2>
@@ -383,6 +417,102 @@
         {% else %}
           <p>No consumer checkpoint telemetry submitted yet.</p>
         {% endif %}
+      </section>
+
+
+      <hr>
+
+
+      <section class="border rounded p-3">
+        <h2 class="h4">Telemetry Snapshot</h2>
+        <p class="agents-subtle">Derived from the runtime observability surface (`GET /agents/v1/metrics`). Generated at {{ observabilitySummary.generatedAt|default('n/a') }}.</p>
+        <div class="agents-metric-grid">
+          <div class="agents-metric {{ telemetryRequestsClass }}">
+            <div class="label">Guarded requests</div>
+            <div class="value">{{ telemetryRequestsTotal }}</div>
+          </div>
+          <div class="agents-metric {{ telemetryAuthFailuresClass }}">
+            <div class="label">Auth failures</div>
+            <div class="value">{{ telemetryAuthFailures }}</div>
+          </div>
+          <div class="agents-metric {{ telemetryForbiddenClass }}">
+            <div class="label">Scope denials (403)</div>
+            <div class="value">{{ telemetryForbidden }}</div>
+          </div>
+          <div class="agents-metric {{ telemetryRateLimitClass }}">
+            <div class="label">Rate-limit denials</div>
+            <div class="value">{{ telemetryRateLimit }}</div>
+          </div>
+          <div class="agents-metric {{ telemetryErrors5xxClass }}">
+            <div class="label">Server errors (5xx)</div>
+            <div class="value">{{ telemetryErrors5xx }}</div>
+          </div>
+          <div class="agents-metric {{ telemetryQueueDepthClass }}">
+            <div class="label">Queue depth</div>
+            <div class="value">{{ telemetryQueueDepth }}</div>
+          </div>
+          <div class="agents-metric {{ telemetryDlqFailedClass }}">
+            <div class="label">DLQ failed events</div>
+            <div class="value">{{ telemetryDlqFailed }}</div>
+          </div>
+          <div class="agents-metric {{ telemetryConsumerLagClass }}">
+            <div class="label">Max consumer lag</div>
+            <div class="value">{{ telemetryConsumerLagMaxSeconds }}s</div>
+          </div>
+          <div class="agents-metric {{ telemetryActiveCredentialsClass }}">
+            <div class="label">Active credentials (7d)</div>
+            <div class="value">{{ telemetryActiveCredentials7d }}</div>
+          </div>
+        </div>
+
+        <details class="agents-advanced" style="margin-top: 8px;">
+          <summary><strong>Telemetry JSON (Technical)</strong></summary>
+          <pre class="border rounded p-3">{{ observabilitySnapshotJson }}</pre>
+        </details>
+      </section>
+
+
+      <hr>
+
+
+      <section class="border rounded p-3">
+        <h2 class="h4">Runbook & Alert Guidance</h2>
+        <table class="data fullwidth">
+          <thead>
+          <tr>
+            <th>Signal</th>
+            <th>Trigger</th>
+            <th>Primary response</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr>
+            <td>Auth failures</td>
+            <td>> 5 in a short window</td>
+            <td>Verify token source/scopes via <code>/agents/v1/auth/whoami</code>, then rotate/revoke affected keys in <strong>API Keys</strong>.</td>
+          </tr>
+          <tr>
+            <td>Rate-limit denials</td>
+            <td>> 10 in a short window</td>
+            <td>Inspect client burst behavior, add jitter/backoff, and tune <code>PLUGIN_AGENTS_RATE_LIMIT_*</code> only if sustained load is expected.</td>
+          </tr>
+          <tr>
+            <td>Server errors (5xx)</td>
+            <td>>= 1</td>
+            <td>Check Craft logs and <code>/agents/v1/readiness</code>; treat as incident if repeating.</td>
+          </tr>
+          <tr>
+            <td>Queue depth / DLQ</td>
+            <td>Queue > 50 or DLQ > 0</td>
+            <td>Replay DLQ events, verify webhook receiver health/signature checks, and confirm queue workers are processing.</td>
+          </tr>
+          <tr>
+            <td>Consumer lag</td>
+            <td>Max lag > 300s</td>
+            <td>Review stalled integration checkpoints (`/agents/v1/consumers/lag`) and re-establish checkpoint writes (`/agents/v1/consumers/checkpoint`).</td>
+          </tr>
+          </tbody>
+        </table>
       </section>
 
       {% if readinessDiagnostics.warnings|length %}

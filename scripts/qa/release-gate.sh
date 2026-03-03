@@ -67,6 +67,15 @@ for route in "GET /health" "GET /readiness" "GET /adoption/metrics" "GET /metric
     fail "Missing endpoint in README: $route"
   fi
 done
+
+if [[ ! -f "docs/observability-runbook.md" ]]; then
+  fail "Missing observability runbook: docs/observability-runbook.md"
+fi
+
+if ! grep -q "Runbook & Alert Guidance" src/templates/dashboard.twig; then
+  fail "Dashboard is missing Runbook & Alert Guidance section"
+fi
+
 pass "README documents required endpoints"
 
 echo "[9/11] Webhook contract regression check"

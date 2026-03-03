@@ -26,6 +26,8 @@ expect_fixed() {
 
 API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
+DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
+DASHBOARD_TEMPLATE="$PLUGIN_ROOT/src/templates/dashboard.twig"
 
 expect_fixed "public function actionAuthWhoami(): Response" "$API_CONTROLLER" "API exposes auth diagnostics endpoint action"
 expect_fixed "public function actionAdoptionMetrics(): Response" "$API_CONTROLLER" "API exposes adoption metrics endpoint action"
@@ -63,5 +65,8 @@ expect_fixed "'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoi
 expect_fixed "'agents/v1/consumers/lag' => 'agents/api/consumers-lag'" "$PLUGIN_FILE" "Plugin registers consumers lag route"
 expect_fixed "'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list'" "$PLUGIN_FILE" "Plugin registers webhook DLQ list route"
 expect_fixed "'agents/v1/webhooks/dlq/replay' => 'agents/api/webhook-dlq-replay'" "$PLUGIN_FILE" "Plugin registers webhook DLQ replay route"
+expect_fixed "buildObservabilitySummary" "$DASHBOARD_CONTROLLER" "Dashboard controller builds observability summary for CP telemetry"
+expect_fixed "Telemetry Snapshot" "$DASHBOARD_TEMPLATE" "Dashboard readiness view exposes telemetry snapshot section"
+expect_fixed "Runbook & Alert Guidance" "$DASHBOARD_TEMPLATE" "Dashboard readiness view exposes runbook guidance section"
 
 echo "Control/consumer regression checks completed."

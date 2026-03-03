@@ -64,6 +64,18 @@ class DashboardController extends Controller
         } catch (Throwable $e) {
             Craft::warning('Unable to load webhook DLQ events for CP: ' . $e->getMessage(), __METHOD__);
         }
+        $observabilitySnapshot = [
+            'service' => 'agents',
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'format' => 'json-metric-series',
+            'metrics' => [],
+        ];
+        try {
+            $observabilitySnapshot = $plugin->getObservabilityMetricsService()->getMetricsSnapshot();
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load observability metrics snapshot for CP: ' . $e->getMessage(), __METHOD__);
+        }
+        $observabilitySummary = $this->buildObservabilitySummary($observabilitySnapshot);
 
         return $this->renderCpTemplate('agents/dashboard', [
             'activeDashboardTab' => $activeDashboardTab,
@@ -99,6 +111,8 @@ class DashboardController extends Controller
             ],
             'consumerLagSummary' => (array)($consumerLagSnapshot['summary'] ?? []),
             'consumerLagRows' => (array)($consumerLagSnapshot['rows'] ?? []),
+            'observabilitySummary' => $observabilitySummary,
+            'observabilitySnapshotJson' => $this->prettyPrintJson($observabilitySnapshot),
             'webhookDeadLetters' => $webhookDeadLetters,
             'securityPosture' => $securityPosture,
             'securityPostureJson' => $this->prettyPrintJson($securityPosture),
@@ -1362,6 +1376,53 @@ class DashboardController extends Controller
         }
 
         return $enriched;
+    }
+
+    private function buildObservabilitySummary(array $snapshot): array
+    {
+        return [
+            'generatedAt' => (string)($snapshot['generatedAt'] ?? gmdate('Y-m-d\TH:i:s\Z')),
+            'requestsTotal' => (int)$this->resolveMetricValue($snapshot, 'agents_requests_total'),
+            'authFailuresTotal' => (int)$this->resolveMetricValue($snapshot, 'agents_auth_failures_total'),
+            'forbiddenTotal' => (int)$this->resolveMetricValue($snapshot, 'agents_forbidden_total'),
+            'rateLimitExceededTotal' => (int)$this->resolveMetricValue($snapshot, 'agents_rate_limit_exceeded_total'),
+            'errors5xxTotal' => (int)$this->resolveMetricValue($snapshot, 'agents_errors_5xx_total'),
+            'queueDepth' => (int)$this->resolveMetricValue($snapshot, 'agents_queue_depth'),
+            'webhookDlqFailed' => (int)$this->resolveMetricValue($snapshot, 'agents_webhook_dlq_failed'),
+            'consumerLagMaxSeconds' => (int)$this->resolveMetricValue($snapshot, 'agents_consumer_lag_max_seconds'),
+            'activeCredentials7d' => (int)$this->resolveMetricValue($snapshot, 'agents_adoption_active_credentials_7d'),
+        ];
+    }
+
+    private function resolveMetricValue(array $snapshot, string $name): int|float
+    {
+        $metrics = $snapshot['metrics'] ?? null;
+        if (!is_array($metrics) || $name === '') {
+            return 0;
+        }
+
+        foreach ($metrics as $metric) {
+            if (!is_array($metric)) {
+                continue;
+            }
+
+            if ((string)($metric['name'] ?? '') !== $name) {
+                continue;
+            }
+
+            $value = $metric['value'] ?? 0;
+            if (is_int($value) || is_float($value)) {
+                return $value;
+            }
+
+            if (is_string($value) && is_numeric($value)) {
+                return str_contains($value, '.') ? (float)$value : (int)$value;
+            }
+
+            return 0;
+        }
+
+        return 0;
     }
 
     private function storeRevealedCredential(array $credential): void
