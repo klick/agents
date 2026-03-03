@@ -59,18 +59,9 @@ class ApiController extends Controller
         }
     }
 
-    public function beforeAction($action): bool
-    {
-        if (is_object($action) && str_starts_with((string)$action->id, 'control-')) {
-            // Token-authenticated machine endpoints do not use session-bound CSRF tokens.
-            $this->enableCsrfValidation = false;
-        }
-
-        return parent::beforeAction($action);
-    }
-
     protected array|int|bool $allowAnonymous = true;
-    protected array|bool|int $supportsCsrfValidation = true;
+    // Token-authenticated machine endpoints do not use session-bound CSRF tokens.
+    protected array|bool|int $supportsCsrfValidation = false;
 
     public function actionLlmsTxt(): Response
     {
@@ -2772,9 +2763,14 @@ class ApiController extends Controller
             if ($version !== '') {
                 return $version;
             }
+
+            $schemaVersion = trim((string)$plugin->schemaVersion);
+            if ($schemaVersion !== '') {
+                return $schemaVersion;
+            }
         }
 
-        return '0.3.3';
+        return '0.6.0';
     }
 
     private function getRequestId(): string

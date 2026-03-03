@@ -1606,9 +1606,14 @@ class ReadinessService extends Component
             if ($version !== '') {
                 return $version;
             }
+
+             $schemaVersion = trim((string)$plugin->schemaVersion);
+             if ($schemaVersion !== '') {
+                 return $schemaVersion;
+             }
         }
 
-        return '0.3.0';
+        return '0.6.0';
     }
 
     private function formatDate(?DateTimeInterface $date): ?string

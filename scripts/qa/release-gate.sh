@@ -55,6 +55,9 @@ pass "Control and consumer regression checks pass"
 
 echo "[7/11] Migration safety check"
 "$PLUGIN_ROOT/scripts/qa/migration-safety-check.sh" >/dev/null
+if grep -Eq "return '0\\.3\\.(0|3)'" "$PLUGIN_ROOT/src/services/ReadinessService.php" "$PLUGIN_ROOT/src/controllers/ApiController.php"; then
+  fail "Stale plugin-version fallback detected in runtime services/controllers"
+fi
 pass "Migration safety checks pass"
 
 echo "[8/11] Required endpoint docs present"

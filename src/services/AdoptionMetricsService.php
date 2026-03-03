@@ -33,7 +33,7 @@ class AdoptionMetricsService extends Component
             ];
         }
 
-        $securityPosture = $plugin->getSecurityPolicyService()->getSecurityPosture();
+        $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
         $configuredCredentials = (int)($securityPosture['authentication']['credentialCount'] ?? 0);
         $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));

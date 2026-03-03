@@ -401,139 +401,121 @@ class ControlPlaneService extends Component
             return null;
         }
 
-        $existing = (new Query())
-            ->from(self::TABLE_APPROVALS)
-            ->where(['id' => $approvalId])
-            ->one();
-
-        if (!is_array($existing)) {
-            return null;
-        }
-
         $status = $this->normalizeDecisionStatus($decision);
         if ($status === null) {
             throw new \InvalidArgumentException('Decision must be `approved` or `rejected`.');
         }
 
-        $currentStatus = strtolower(trim((string)($existing['status'] ?? '')));
-        if ($currentStatus !== self::APPROVAL_STATUS_PENDING) {
-            return $this->hydrateApproval($existing);
-        }
-
-        $now = gmdate('Y-m-d H:i:s');
         $resolvedDecisionReason = $this->normalizeOptionalString($decisionReason);
         $decidedBy = $this->resolveActorId($actor);
-        $requiredApprovals = max(1, (int)($existing['requiredApprovals'] ?? 1));
-        $primaryDecider = $this->normalizeOptionalString($existing['decidedBy'] ?? null, 128);
-        $secondaryDecider = $this->normalizeOptionalString($existing['secondaryDecisionBy'] ?? null, 128);
-
-        if ($status === self::APPROVAL_STATUS_REJECTED) {
-            Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, [
-                'status' => self::APPROVAL_STATUS_REJECTED,
-                'decidedBy' => $primaryDecider ?: $decidedBy,
-                'decisionReason' => $resolvedDecisionReason,
-                'decidedAt' => $now,
-                'secondaryDecisionBy' => null,
-                'secondaryDecisionReason' => null,
-                'secondaryDecisionAt' => null,
-                'dateUpdated' => $now,
-            ], ['id' => $approvalId])->execute();
-
-            $updatedRejected = (new Query())
-                ->from(self::TABLE_APPROVALS)
-                ->where(['id' => $approvalId])
-                ->one();
-
-            if (!is_array($updatedRejected)) {
+        // Optimistic concurrency loop: prevents parallel first-approval writers
+        // from clobbering each other and allows clean promotion to second approval.
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $existing = $this->findApprovalById($approvalId);
+            if (!is_array($existing)) {
                 return null;
             }
 
-            $hydratedRejected = $this->hydrateApproval($updatedRejected);
+            $currentStatus = strtolower(trim((string)($existing['status'] ?? '')));
+            if ($currentStatus !== self::APPROVAL_STATUS_PENDING) {
+                return $this->hydrateApproval($existing);
+            }
+
+            $now = gmdate('Y-m-d H:i:s');
+            $requiredApprovals = max(1, (int)($existing['requiredApprovals'] ?? 1));
+            $primaryDecider = $this->normalizeOptionalString($existing['decidedBy'] ?? null, 128);
+            $secondaryDecider = $this->normalizeOptionalString($existing['secondaryDecisionBy'] ?? null, 128);
+            $updateData = [];
+            $updateWhere = [
+                'id' => $approvalId,
+                'status' => self::APPROVAL_STATUS_PENDING,
+            ];
+            $auditOutcome = 'success';
+            $auditSummary = sprintf('Approval `%d` marked `%s`.', $approvalId, self::APPROVAL_STATUS_APPROVED);
+            $auditMetadata = [
+                'decision' => $status,
+                'decisionReason' => $resolvedDecisionReason,
+                'requiredApprovals' => $requiredApprovals,
+            ];
+
+            if ($status === self::APPROVAL_STATUS_REJECTED) {
+                $updateData = [
+                    'status' => self::APPROVAL_STATUS_REJECTED,
+                    'decidedBy' => $primaryDecider ?: $decidedBy,
+                    'decisionReason' => $resolvedDecisionReason,
+                    'decidedAt' => $now,
+                    'secondaryDecisionBy' => null,
+                    'secondaryDecisionReason' => null,
+                    'secondaryDecisionAt' => null,
+                    'dateUpdated' => $now,
+                ];
+                $auditOutcome = 'warning';
+                $auditSummary = sprintf('Approval `%d` rejected.', $approvalId);
+            } else {
+                $updateData = [
+                    'status' => self::APPROVAL_STATUS_APPROVED,
+                    'dateUpdated' => $now,
+                ];
+
+                if ($requiredApprovals <= 1) {
+                    $updateData['decidedBy'] = $decidedBy;
+                    $updateData['decisionReason'] = $resolvedDecisionReason;
+                    $updateData['decidedAt'] = $now;
+                } elseif ($primaryDecider === null || $primaryDecider === '') {
+                    $updateData['status'] = self::APPROVAL_STATUS_PENDING;
+                    $updateData['decidedBy'] = $decidedBy;
+                    $updateData['decisionReason'] = $resolvedDecisionReason;
+                    $updateData['decidedAt'] = $now;
+                    $updateWhere['decidedBy'] = null;
+                    $updateWhere['secondaryDecisionBy'] = null;
+                    $auditOutcome = 'info';
+                    $auditSummary = sprintf('Approval `%d` recorded first approval from `%s`; awaiting second approver.', $approvalId, $decidedBy);
+                    $auditMetadata['stage'] = 'first-approval';
+                } else {
+                    if ($primaryDecider === $decidedBy || ($secondaryDecider !== null && $secondaryDecider !== '' && $secondaryDecider === $decidedBy)) {
+                        throw new \InvalidArgumentException('Second approval must be made by a different approver.');
+                    }
+
+                    $updateData['secondaryDecisionBy'] = $decidedBy;
+                    $updateData['secondaryDecisionReason'] = $resolvedDecisionReason;
+                    $updateData['secondaryDecisionAt'] = $now;
+                    $updateData['decidedAt'] = $existing['decidedAt'] ?? $now;
+                    $updateWhere['decidedBy'] = $primaryDecider;
+                    $updateWhere['secondaryDecisionBy'] = null;
+                    $auditMetadata['stage'] = 'second-approval';
+                }
+            }
+
+            $updatedRows = Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, $updateData, $updateWhere)->execute();
+            if ($updatedRows < 1) {
+                continue;
+            }
+
+            $updated = $this->findApprovalById($approvalId);
+            if (!is_array($updated)) {
+                return null;
+            }
+
+            $hydrated = $this->hydrateApproval($updated);
             $this->writeAuditEvent([
                 'category' => 'control.approval',
                 'action' => 'decision',
-                'outcome' => 'warning',
+                'outcome' => $auditOutcome,
                 'actorType' => (string)($actor['actorType'] ?? 'system'),
                 'actorId' => $decidedBy,
                 'requestId' => (string)($actor['requestId'] ?? ''),
                 'ipAddress' => (string)($actor['ipAddress'] ?? ''),
                 'entityType' => 'approval',
                 'entityId' => (string)$approvalId,
-                'summary' => sprintf('Approval `%d` rejected.', $approvalId),
-                'metadata' => [
-                    'decision' => self::APPROVAL_STATUS_REJECTED,
-                    'decisionReason' => $resolvedDecisionReason,
-                    'requiredApprovals' => $requiredApprovals,
-                ],
+                'summary' => $auditSummary,
+                'metadata' => $auditMetadata,
             ]);
 
-            return $hydratedRejected;
+            return $hydrated;
         }
 
-        $updateData = [
-            'status' => self::APPROVAL_STATUS_APPROVED,
-            'dateUpdated' => $now,
-        ];
-        $auditOutcome = 'success';
-        $auditSummary = sprintf('Approval `%d` marked `%s`.', $approvalId, self::APPROVAL_STATUS_APPROVED);
-        $auditMetadata = [
-            'decision' => self::APPROVAL_STATUS_APPROVED,
-            'decisionReason' => $resolvedDecisionReason,
-            'requiredApprovals' => $requiredApprovals,
-        ];
-
-        if ($requiredApprovals <= 1) {
-            $updateData['decidedBy'] = $decidedBy;
-            $updateData['decisionReason'] = $resolvedDecisionReason;
-            $updateData['decidedAt'] = $now;
-        } elseif ($primaryDecider === null || $primaryDecider === '') {
-            $updateData['status'] = self::APPROVAL_STATUS_PENDING;
-            $updateData['decidedBy'] = $decidedBy;
-            $updateData['decisionReason'] = $resolvedDecisionReason;
-            $updateData['decidedAt'] = $now;
-            $auditOutcome = 'info';
-            $auditSummary = sprintf('Approval `%d` recorded first approval from `%s`; awaiting second approver.', $approvalId, $decidedBy);
-            $auditMetadata['stage'] = 'first-approval';
-        } else {
-            if ($primaryDecider === $decidedBy || ($secondaryDecider !== null && $secondaryDecider !== '' && $secondaryDecider === $decidedBy)) {
-                throw new \InvalidArgumentException('Second approval must be made by a different approver.');
-            }
-
-            $updateData['secondaryDecisionBy'] = $decidedBy;
-            $updateData['secondaryDecisionReason'] = $resolvedDecisionReason;
-            $updateData['secondaryDecisionAt'] = $now;
-            $updateData['decidedAt'] = $existing['decidedAt'] ?? $now;
-            $auditMetadata['stage'] = 'second-approval';
-        }
-
-        Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, $updateData, ['id' => $approvalId])->execute();
-
-        $updated = (new Query())
-            ->from(self::TABLE_APPROVALS)
-            ->where(['id' => $approvalId])
-            ->one();
-
-        if (!is_array($updated)) {
-            return null;
-        }
-
-        $hydrated = $this->hydrateApproval($updated);
-
-        $this->writeAuditEvent([
-            'category' => 'control.approval',
-            'action' => 'decision',
-            'outcome' => $auditOutcome,
-            'actorType' => (string)($actor['actorType'] ?? 'system'),
-            'actorId' => $decidedBy,
-            'requestId' => (string)($actor['requestId'] ?? ''),
-            'ipAddress' => (string)($actor['ipAddress'] ?? ''),
-            'entityType' => 'approval',
-            'entityId' => (string)$approvalId,
-            'summary' => $auditSummary,
-            'metadata' => $auditMetadata,
-        ]);
-
-        return $hydrated;
+        $latest = $this->findApprovalById($approvalId);
+        return is_array($latest) ? $this->hydrateApproval($latest) : null;
     }
 
     public function getExecutions(array $filters = [], int $limit = 50): array
