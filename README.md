@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.5.0**
+Current plugin version: **0.6.0**
 
 ## Purpose
 
@@ -76,7 +76,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.5.0
+composer require klick/agents:^0.6.0
 php craft plugin/install agents
 ```
 

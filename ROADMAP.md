@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-03  
-Current release: `v0.5.0`
+Current release: `v0.6.0`
 
 ## Direction
 
@@ -10,7 +10,7 @@ Run two explicit tracks in parallel:
 - `Track A (70%)`: runtime reliability and operator safety
 - `Track B (30%)`: adoption and agent-facing integration UX
 
-## Now (`v0.5.0`)
+## Done (`v0.5.0`)
 
 Target: April 2026
 
@@ -26,7 +26,7 @@ Release outcome:
 
 - Runtime behavior is stable in production, and new integrators can reach first value quickly.
 
-## Next (`v0.6.0`)
+## Now (`v0.6.0`)
 
 Target: May 2026
 
