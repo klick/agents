@@ -5,19 +5,22 @@
 {% set selectedSubnavItem = "control" %}
 
 {% block content %}
-  <h1>Return Requests</h1>
-  <p class="text-sm text-muted">This page is for internal refund decisions after return intake and inspection. Customer returns can proceed as usual; this queue controls whether refunds are approved and recorded.</p>
+  {% include 'agents/_partials/cp-ui' %}
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <h1>Return Requests</h1>
+  <p class="agents-page-intro">Operate approval and execution workflows for return-related actions: triage, decide, run, and audit from one screen.</p>
+
+  <div class="agents-layout-stack">
+  <section class="border rounded p-3">
     <h2 class="h4">Flow in 3 steps</h2>
     <ol style="margin: 0 0 0 18px;">
       <li>An agent/integration creates a return request when a refund needs review.</li>
       <li>A human approves or rejects the request.</li>
       <li>An approved action is run once, with duplicate protection.</li>
     </ol>
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Now</h2>
     <p>
       <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
@@ -25,35 +28,35 @@
       <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
     </p>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px;">
-      <div class="border rounded p-2">
-        <div class="light">Waiting for decision</div>
-        <div style="font-size: 24px;"><strong>{{ controlSummary.approvalsPending|default(0) }}</strong></div>
+    <div class="agents-metric-grid">
+      <div class="agents-metric">
+        <div class="label">Waiting for decision</div>
+        <div class="value">{{ controlSummary.approvalsPending|default(0) }}</div>
       </div>
-      <div class="border rounded p-2">
-        <div class="light">Expired approvals</div>
-        <div style="font-size: 24px;"><strong>{{ controlSummary.approvalsExpired|default(0) }}</strong></div>
+      <div class="agents-metric">
+        <div class="label">Expired approvals</div>
+        <div class="value">{{ controlSummary.approvalsExpired|default(0) }}</div>
       </div>
-      <div class="border rounded p-2">
-        <div class="light">Runs blocked</div>
-        <div style="font-size: 24px;"><strong>{{ controlSummary.executionsBlocked|default(0) }}</strong></div>
+      <div class="agents-metric">
+        <div class="label">Runs blocked</div>
+        <div class="value">{{ controlSummary.executionsBlocked|default(0) }}</div>
       </div>
-      <div class="border rounded p-2">
-        <div class="light">Runs completed</div>
-        <div style="font-size: 24px;"><strong>{{ controlSummary.executionsSucceeded|default(0) }}</strong></div>
+      <div class="agents-metric">
+        <div class="label">Runs completed</div>
+        <div class="value">{{ controlSummary.executionsSucceeded|default(0) }}</div>
       </div>
-      <div class="border rounded p-2">
-        <div class="light">Active rules</div>
-        <div style="font-size: 24px;"><strong>{{ controlSummary.policies|default(0) }}</strong></div>
+      <div class="agents-metric">
+        <div class="label">Active rules</div>
+        <div class="value">{{ controlSummary.policies|default(0) }}</div>
       </div>
-      <div class="border rounded p-2">
-        <div class="light">Activity entries</div>
-        <div style="font-size: 24px;"><strong>{{ controlSummary.auditEvents|default(0) }}</strong></div>
+      <div class="agents-metric">
+        <div class="label">Activity entries</div>
+        <div class="value">{{ controlSummary.auditEvents|default(0) }}</div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Waiting for Decision</h2>
     {% if controlPendingApprovals|length %}
       <table class="data fullwidth">
@@ -138,9 +141,9 @@
     {% else %}
       <p>No requests are waiting for a decision.</p>
     {% endif %}
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Runs That Need Follow-up</h2>
     {% if controlAttentionExecutions|length %}
       <table class="data fullwidth">
@@ -179,9 +182,9 @@
     {% else %}
       <p>No blocked or failed runs in this view.</p>
     {% endif %}
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Create Request Manually (Fallback)</h2>
     <p class="light">Recommended flow: agents create requests via API. Use this form only if you need a manual fallback.</p>
 
@@ -283,9 +286,9 @@
     {% else %}
       <p class="warning">You do not have permission to create return requests.</p>
     {% endif %}
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Run an Approved Action</h2>
     {% if canExecuteActions %}
       <p class="light">This checks rule + approval requirements first and blocks invalid runs automatically.</p>
@@ -365,9 +368,9 @@
     {% else %}
       <p class="warning">You do not have permission to run actions.</p>
     {% endif %}
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Policy Simulator (Dry Run)</h2>
     <p class="light">Evaluate policy/approval outcomes without recording an execution run.</p>
 
@@ -462,9 +465,9 @@
         <pre class="border rounded p-3" style="margin-top: 8px;">{{ controlSimulationResult|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
       </details>
     {% endif %}
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Rules</h2>
 
     {% if controlPolicies|length %}
@@ -567,9 +570,9 @@
     {% else %}
       <p class="warning">You do not have permission to manage rules.</p>
     {% endif %}
-  </div>
+  </section>
 
-  <div class="border rounded p-3" style="margin-bottom: 16px;">
+  <section class="border rounded p-3">
     <h2 class="h4">Activity Log</h2>
     {% if controlAuditEvents|length %}
       <table class="data fullwidth">
@@ -602,6 +605,7 @@
       <summary><strong>Technical Data (Advanced)</strong></summary>
       <pre class="border rounded p-3" style="margin-top: 8px;">{{ controlSnapshotJson }}</pre>
     </details>
+  </section>
   </div>
 
   {% if canManageApprovals or canExecuteActions or canManagePolicies %}

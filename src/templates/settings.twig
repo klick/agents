@@ -6,109 +6,125 @@
 {% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}
 {% set llmsTxtBodySettingLocked = llmsTxtBodySettingLocked ?? false %}
 {% set commerceTxtBodySettingLocked = commerceTxtBodySettingLocked ?? false %}
-<p class="light">
-  Runtime options for API availability, discovery files, and editable discovery bodies{% if requestsFeatureEnabled %}, plus return-request fallback behavior{% endif %}.
-</p>
 
-{{ forms.lightswitchField({
-  first: true,
-  label: 'Enable Agents API',
-  instructions: agentsEnabledLocked
-    ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-    : 'Turn the Agents API and related discovery endpoints on or off.',
-  name: 'enabled',
-  on: settings.enabled ?? true,
-  onLabel: false,
-  offLabel: false,
-  disabled: agentsEnabledLocked,
-}) }}
+<section class="border rounded p-3">
+  <h2 class="h4">Runtime Switches</h2>
+  <p class="agents-subtle">Turn public surfaces on or off. Some controls may be locked by environment or config.</p>
 
-{{ forms.lightswitchField({
-  label: 'Enable llms.txt',
-  instructions: llmsTxtSettingLocked
-    ? 'Controlled by config/agents.php (`enableLlmsTxt`).'
-    : 'Serve or hide /llms.txt.',
-  name: 'enableLlmsTxt',
-  on: settings.enableLlmsTxt ?? true,
-  onLabel: false,
-  offLabel: false,
-  disabled: llmsTxtSettingLocked,
-}) }}
-
-{{ forms.lightswitchField({
-  label: 'Enable llms-full.txt',
-  instructions: llmsFullTxtSettingLocked
-    ? 'Controlled by config/agents.php (`enableLlmsFullTxt`).'
-    : 'Serve or hide /llms-full.txt as an extended discovery export.',
-  name: 'enableLlmsFullTxt',
-  on: settings.enableLlmsFullTxt ?? false,
-  onLabel: false,
-  offLabel: false,
-  disabled: llmsFullTxtSettingLocked,
-}) }}
-
-{{ forms.lightswitchField({
-  label: 'Enable commerce.txt',
-  instructions: commerceTxtSettingLocked
-    ? 'Controlled by config/agents.php (`enableCommerceTxt`).'
-    : 'Serve or hide /commerce.txt.',
-  name: 'enableCommerceTxt',
-  on: settings.enableCommerceTxt ?? true,
-  onLabel: false,
-  offLabel: false,
-  disabled: commerceTxtSettingLocked,
-}) }}
-
-{{ forms.textareaField({
-  label: 'llms.txt custom body',
-  instructions: llmsTxtBodySettingLocked
-    ? 'Controlled by config/agents.php (`llmsTxtBody`).'
-    : 'Optional. Leave blank to use generated output. If set, this body is served exactly.',
-  name: 'llmsTxtBody',
-  rows: 12,
-  class: 'code',
-  value: settings.llmsTxtBody ?? '',
-  disabled: llmsTxtBodySettingLocked,
-}) }}
-<p style="margin-top: -8px; margin-bottom: 16px;">
-  <button class="btn" type="submit" name="resetDiscoveryBodyTarget" value="llms"{% if llmsTxtBodySettingLocked %} disabled{% endif %}>
-    Reset llms.txt body to generated default
-  </button>
-</p>
-
-{{ forms.textareaField({
-  label: 'commerce.txt custom body',
-  instructions: commerceTxtBodySettingLocked
-    ? 'Controlled by config/agents.php (`commerceTxtBody`).'
-    : 'Optional. Leave blank to use generated output. If set, this body is served exactly.',
-  name: 'commerceTxtBody',
-  rows: 12,
-  class: 'code',
-  value: settings.commerceTxtBody ?? '',
-  disabled: commerceTxtBodySettingLocked,
-}) }}
-<p style="margin-top: -8px; margin-bottom: 16px;">
-  <button class="btn" type="submit" name="resetDiscoveryBodyTarget" value="commerce"{% if commerceTxtBodySettingLocked %} disabled{% endif %}>
-    Reset commerce.txt body to generated default
-  </button>
-</p>
-
-{% if requestsFeatureEnabled %}
   {{ forms.lightswitchField({
-    label: 'Allow manual return requests in Return Requests tab',
-    instructions: 'Use only as fallback. Recommended off: agents/integrations create requests, humans only approve/reject.',
-    name: 'allowCpApprovalRequests',
-    on: settings.allowCpApprovalRequests ?? false,
+    first: true,
+    label: 'Enable Agents API',
+    instructions: agentsEnabledLocked
+      ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
+      : 'Turn the Agents API and related discovery endpoints on or off.',
+    name: 'enabled',
+    on: settings.enabled ?? true,
     onLabel: false,
     offLabel: false,
+    disabled: agentsEnabledLocked,
   }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Enable llms.txt',
+    instructions: llmsTxtSettingLocked
+      ? 'Controlled by config/agents.php (`enableLlmsTxt`).'
+      : 'Serve or hide /llms.txt.',
+    name: 'enableLlmsTxt',
+    on: settings.enableLlmsTxt ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: llmsTxtSettingLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Enable llms-full.txt',
+    instructions: llmsFullTxtSettingLocked
+      ? 'Controlled by config/agents.php (`enableLlmsFullTxt`).'
+      : 'Serve or hide /llms-full.txt as an extended discovery export.',
+    name: 'enableLlmsFullTxt',
+    on: settings.enableLlmsFullTxt ?? false,
+    onLabel: false,
+    offLabel: false,
+    disabled: llmsFullTxtSettingLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Enable commerce.txt',
+    instructions: commerceTxtSettingLocked
+      ? 'Controlled by config/agents.php (`enableCommerceTxt`).'
+      : 'Serve or hide /commerce.txt.',
+    name: 'enableCommerceTxt',
+    on: settings.enableCommerceTxt ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: commerceTxtSettingLocked,
+  }) }}
+</section>
+
+<section class="border rounded p-3">
+  <h2 class="h4">Discovery Body Overrides</h2>
+  <p class="agents-subtle">Use custom bodies only when you need fixed text output instead of generated content.</p>
+
+  {{ forms.textareaField({
+    label: 'llms.txt custom body',
+    instructions: llmsTxtBodySettingLocked
+      ? 'Controlled by config/agents.php (`llmsTxtBody`).'
+      : 'Optional. Leave blank to use generated output. If set, this body is served exactly.',
+    name: 'llmsTxtBody',
+    rows: 12,
+    class: 'code',
+    value: settings.llmsTxtBody ?? '',
+    disabled: llmsTxtBodySettingLocked,
+  }) }}
+  <p style="margin-top: -8px; margin-bottom: 16px;">
+    <button class="btn" type="submit" name="resetDiscoveryBodyTarget" value="llms"{% if llmsTxtBodySettingLocked %} disabled{% endif %}>
+      Reset llms.txt body to generated default
+    </button>
+  </p>
+
+  {{ forms.textareaField({
+    label: 'commerce.txt custom body',
+    instructions: commerceTxtBodySettingLocked
+      ? 'Controlled by config/agents.php (`commerceTxtBody`).'
+      : 'Optional. Leave blank to use generated output. If set, this body is served exactly.',
+    name: 'commerceTxtBody',
+    rows: 12,
+    class: 'code',
+    value: settings.commerceTxtBody ?? '',
+    disabled: commerceTxtBodySettingLocked,
+  }) }}
+  <p style="margin-top: -8px;">
+    <button class="btn" type="submit" name="resetDiscoveryBodyTarget" value="commerce"{% if commerceTxtBodySettingLocked %} disabled{% endif %}>
+      Reset commerce.txt body to generated default
+    </button>
+  </p>
+</section>
+
+{% if requestsFeatureEnabled %}
+  <section class="border rounded p-3">
+    <h2 class="h4">Manual Fallback</h2>
+    <p class="agents-subtle">Keep this off for agent-first workflows. Enable only if operators must create requests manually.</p>
+
+    {{ forms.lightswitchField({
+      first: true,
+      label: 'Allow manual return requests in Return Requests tab',
+      instructions: 'Fallback only. Recommended: agents/integrations create requests, humans only approve/reject.',
+      name: 'allowCpApprovalRequests',
+      on: settings.allowCpApprovalRequests ?? false,
+      onLabel: false,
+      offLabel: false,
+    }) }}
+  </section>
 {% endif %}
 
-{% if agentsEnabledLocked %}
-  <p class="warning">`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
+{% if agentsEnabledLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
+  <section class="border rounded p-3 warning">
+    <h2 class="h4">Configuration Locks</h2>
+    {% if agentsEnabledLocked %}
+      <p>`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
+    {% endif %}
+    {% if llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
+      <p>Some discovery settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
+    {% endif %}
+  </section>
 {% endif %}
-{% if llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
-  <p class="warning">Some discovery settings are controlled by `config/agents.php` and cannot be changed in CP.</p>
-{% endif %}
-
-<p><a href="{{ url('agents/dashboard/overview') }}">Back to Dashboard</a></p>

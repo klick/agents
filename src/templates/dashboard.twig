@@ -14,554 +14,594 @@
 {% endfor %}
 {% set selectedTab = activeDashboardTab %}
 {% set dashboardHeading = tabs[selectedTab].label ?? 'Dashboard' %}
+{% set tabIntroByKey = {
+  overview: 'Operate the runtime, verify what is enabled, and jump straight to the right place for each change.',
+  readiness: 'Review health signals, lag telemetry, and warnings before integrations or releases.',
+  discovery: 'Manage discovery document freshness and quickly inspect what external agents can read.',
+  security: 'Monitor auth posture, webhook reliability, and security warnings in one place.'
+} %}
 
 {% block content %}
+  {% include 'agents/_partials/cp-ui' %}
+
   <h1>{{ dashboardHeading }}</h1>
+  <p class="agents-page-intro">{{ tabIntroByKey[activeDashboardTab] ?? 'Operator dashboard for governed runtime workflows.' }}</p>
 
-  {% if activeDashboardTab == 'overview' %}
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Service State</h2>
-      <p>
-        <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
-        <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
-        <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
-      </p>
-      <form id="agents-enabled-form" method="post" accept-charset="UTF-8">
-        {{ csrfInput() }}
-        {{ actionInput('agents/dashboard/toggle-enabled') }}
-        {{ redirectInput('agents/dashboard/overview') }}
+  <div class="agents-layout-stack">
+    {% if activeDashboardTab == 'overview' %}
+      {% set discoveryEnabledCount = (discoveryEnabled.llms ? 1 : 0) + (discoveryEnabled.llmsFull ? 1 : 0) + (discoveryEnabled.commerce ? 1 : 0) %}
 
-        {{ forms.lightswitchField({
-          id: 'agents-enabled-switch',
-          name: 'enabled',
-          fieldLabel: 'API availability',
-          instructions: agentsEnabledLocked
-            ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-            : 'Turn the Agents API on or off.',
-          on: agentsEnabled,
-          onLabel: false,
-          offLabel: false,
-          disabled: agentsEnabledLocked,
-        }) }}
+      <div class="agents-two-col">
+        <section class="border rounded p-3">
+          <h2 class="h4">Runtime State</h2>
+          <p>
+            <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
+            <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
+            <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
+          </p>
 
-        {% if agentsEnabledLocked %}
-          <p class="warning">This is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
-        {% else %}
-          <p class="text-sm text-muted">Saved immediately when switched.</p>
-          <noscript>
-            <button class="btn submit" type="submit">Save</button>
-          </noscript>
-        {% endif %}
-      </form>
-    </div>
+          <form id="agents-enabled-form" method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/toggle-enabled') }}
+            {{ redirectInput('agents/dashboard/overview') }}
 
-    <hr>
+            {{ forms.lightswitchField({
+              id: 'agents-enabled-switch',
+              name: 'enabled',
+              fieldLabel: 'API availability',
+              instructions: agentsEnabledLocked
+                ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
+                : 'Turn the Agents API on or off.',
+              on: agentsEnabled,
+              onLabel: false,
+              offLabel: false,
+              disabled: agentsEnabledLocked,
+            }) }}
 
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Quick Actions</h2>
-      <form method="post" accept-charset="UTF-8" style="margin-bottom: 8px;">
-        {{ csrfInput() }}
-        {{ actionInput('agents/dashboard/prewarm-discovery') }}
-        {{ redirectInput('agents/dashboard/discovery') }}
-        <input type="hidden" name="target" value="all">
-        <button class="btn submit" type="submit">Refresh Discovery Cache (All)</button>
-      </form>
-      <p><a href="{{ url('agents/dashboard/discovery') }}">Open Discovery Docs for document-specific refresh and cache clear</a></p>
-    </div>
+            {% if agentsEnabledLocked %}
+              <p class="warning">This is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
+            {% else %}
+              <p class="agents-subtle">Saved immediately when switched.</p>
+              <noscript>
+                <button class="btn submit" type="submit">Save</button>
+              </noscript>
+            {% endif %}
+          </form>
+        </section>
 
-    <hr>
+        <section class="border rounded p-3">
+          <h2 class="h4">At a Glance</h2>
+          <div class="agents-metric-grid">
+            <div class="agents-metric">
+              <div class="label">Readiness score</div>
+              <div class="value">{{ overviewReadiness.readinessScore|default(0) }}/100</div>
+            </div>
+            <div class="agents-metric">
+              <div class="label">Discovery docs enabled</div>
+              <div class="value">{{ discoveryEnabledCount }}/3</div>
+            </div>
+            <div class="agents-metric">
+              <div class="label">Webhook delivery</div>
+              <div class="value">{{ webhookEnabled ? 'On' : 'Off' }}</div>
+            </div>
+            <div class="agents-metric">
+              <div class="label">Security warnings</div>
+              <div class="value">{{ securityWarningCounts.warnings|default(0) }}</div>
+            </div>
+            <div class="agents-metric">
+              <div class="label">Security errors</div>
+              <div class="value">{{ securityWarningCounts.errors|default(0) }}</div>
+            </div>
+          </div>
+        </section>
+      </div>
 
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Feature Status</h2>
-      <ul>
-        <li><code>llms.txt</code>: <strong>{{ discoveryEnabled.llms ? 'enabled' : 'disabled' }}</strong></li>
-        <li><code>llms-full.txt</code>: <strong>{{ discoveryEnabled.llmsFull ? 'enabled' : 'disabled' }}</strong></li>
-        <li><code>commerce.txt</code>: <strong>{{ discoveryEnabled.commerce ? 'enabled' : 'disabled' }}</strong></li>
-        <li>Webhook delivery: <strong>{{ webhookEnabled ? 'enabled' : 'disabled' }}</strong></li>
-        <li>Security warnings: <strong>{{ securityWarningCounts.warnings|default(0) }}</strong></li>
-        <li>Security errors: <strong>{{ securityWarningCounts.errors|default(0) }}</strong></li>
-      </ul>
-    </div>
+      <section class="border rounded p-3">
+        <h2 class="h4">Operator Actions</h2>
+        <div class="agents-actions" style="margin-bottom: 10px;">
+          <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/prewarm-discovery') }}
+            {{ redirectInput('agents/dashboard/discovery') }}
+            <input type="hidden" name="target" value="all">
+            <button class="btn submit" type="submit">Refresh Discovery Cache</button>
+          </form>
+          <a class="btn" href="{{ url('agents/settings') }}">Open Settings</a>
+          <a class="btn" href="{{ url('agents/credentials') }}">Open API Keys</a>
+          <a class="btn" href="{{ url('agents/dashboard/security') }}">Open Security</a>
+        </div>
+        <p class="agents-subtle">Use these entry points for day-to-day operations without jumping across multiple screens.</p>
+      </section>
 
-    <hr>
+      <section class="border rounded p-3">
+        <h2 class="h4">Entry Points</h2>
+        <div class="agents-two-col">
+          <div>
+            <span class="agents-kicker">API Endpoints</span>
+            <ul class="agents-link-list">
+              {% for endpoint in apiEndpoints %}
+                <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div>
+            <span class="agents-kicker">Discovery Docs</span>
+            <ul class="agents-link-list">
+              {% for endpoint in discoveryEndpoints %}
+                <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </section>
 
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Quick Links</h2>
-      <p><strong>API endpoints</strong></p>
-      <ul>
-        {% for endpoint in apiEndpoints %}
-          <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
-        {% endfor %}
-      </ul>
-      <p><strong>Discovery docs</strong></p>
-      <ul>
-        {% for endpoint in discoveryEndpoints %}
-          <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Where to change what</h2>
-      <table class="data fullwidth">
-        <thead>
-        <tr>
-          <th>Area</th>
-          <th>Primary place</th>
-          <th>Notes</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr>
-          <td>Service on/off</td>
-          <td>CP</td>
-          <td>Can be env-locked with <code>PLUGIN_AGENTS_ENABLED</code>.</td>
-        </tr>
-        <tr>
-          <td>Discovery content</td>
-          <td>CP Settings + <code>config/agents.php</code></td>
-          <td>Use CP custom body fields for direct edits; config keys can lock/override those values.</td>
-        </tr>
-        <tr>
-          <td>Auth and API keys</td>
-          <td>CP + <code>.env</code></td>
-          <td>Use API Keys tab for managed rotate/revoke; env keys remain supported.</td>
-        </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3">
-      <h2 class="h4">Readiness Snapshot</h2>
-      <p>Status: <strong>{{ overviewReadiness.status|default('unknown') }}</strong></p>
-      <p>Score: <strong>{{ overviewReadiness.readinessScore|default(0) }}</strong> / 100</p>
-      <details>
-        <summary><strong>Technical JSON</strong></summary>
-        <pre class="border rounded p-3" style="margin-top: 8px;">{{ overviewReadinessJson }}</pre>
-      </details>
-    </div>
-
-    {% if not agentsEnabledLocked %}
-      {% js %}
-        (() => {
-          const form = document.getElementById('agents-enabled-form');
-          if (!form) {
-            return;
-          }
-          const switchButton = form.querySelector('button.lightswitch');
-          const valueInput = form.querySelector('input[name="enabled"]');
-          if (!switchButton || !valueInput) {
-            return;
-          }
-
-          let previousValue = valueInput.value;
-          switchButton.addEventListener('click', () => {
-            window.requestAnimationFrame(() => {
-              if (valueInput.value === previousValue) {
-                return;
-              }
-              previousValue = valueInput.value;
-              if (typeof form.requestSubmit === 'function') {
-                form.requestSubmit();
-              } else {
-                form.submit();
-              }
-            });
-          });
-        })();
-      {% endjs %}
-    {% endif %}
-  {% endif %}
-
-  {% if activeDashboardTab == 'readiness' %}
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Score Breakdown</h2>
-      <table class="data fullwidth">
-        <thead>
-        <tr>
-          <th>Check</th>
-          <th>Weight</th>
-          <th>Result</th>
-          <th>Score</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for criterion in readinessDiagnostics.breakdown %}
-          <tr>
-            <td>{{ criterion.label }}</td>
-            <td>{{ criterion.weight }}</td>
-            <td>
-              <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
-              {{ criterion.passed ? 'pass' : 'needs attention' }}
-            </td>
-            <td>{{ criterion.score }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Component Checks</h2>
-      <p><strong>System components</strong></p>
-      <ul>
-        {% for key, value in readinessDiagnostics.componentChecks.systemComponents %}
-          <li>{{ key }}: <strong>{{ value ? 'ok' : 'unavailable' }}</strong></li>
-        {% endfor %}
-      </ul>
-      <p><strong>Plugin checks</strong></p>
-      <ul>
-        {% for key, value in readinessDiagnostics.componentChecks.enabledPlugins %}
-          <li>{{ key }}: <strong>{{ value ? 'enabled' : 'disabled' }}</strong></li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Consumer Lag</h2>
-      <p>
-        Integrations tracked: <strong>{{ consumerLagSummary.count|default(0) }}</strong>,
-        healthy: <strong>{{ consumerLagSummary.healthy|default(0) }}</strong>,
-        warning: <strong>{{ consumerLagSummary.warning|default(0) }}</strong>,
-        critical: <strong>{{ consumerLagSummary.critical|default(0) }}</strong>,
-        max lag: <strong>{{ consumerLagSummary.maxLagSeconds|default(0) }}s</strong>
-      </p>
-
-      {% if consumerLagRows|length %}
+      <section class="border rounded p-3">
+        <h2 class="h4">Ownership Model</h2>
         <table class="data fullwidth">
           <thead>
           <tr>
-            <th>Integration</th>
-            <th>Resource</th>
-            <th>Checkpoint</th>
-            <th>Lag</th>
-            <th>Bucket</th>
+            <th>Area</th>
+            <th>Primary place</th>
+            <th>Notes</th>
           </tr>
           </thead>
           <tbody>
-          {% for row in consumerLagRows|slice(0, 10) %}
-            <tr>
-              <td><code>{{ row.integrationKey }}</code></td>
-              <td><code>{{ row.resourceType }}</code></td>
-              <td>{{ row.checkpointAt ?: 'n/a' }}</td>
-              <td>{{ row.lagSeconds }}s</td>
-              <td><strong>{{ row.lagBucket }}</strong></td>
-            </tr>
-          {% endfor %}
+          <tr>
+            <td>Service on/off</td>
+            <td>CP</td>
+            <td>Can be env-locked with <code>PLUGIN_AGENTS_ENABLED</code>.</td>
+          </tr>
+          <tr>
+            <td>Discovery content</td>
+            <td>CP Settings + <code>config/agents.php</code></td>
+            <td>Use CP custom body fields for direct edits; config keys can lock/override those values.</td>
+          </tr>
+          <tr>
+            <td>Auth and API keys</td>
+            <td>CP + <code>.env</code></td>
+            <td>Use API Keys tab for managed rotate/revoke; env keys remain supported.</td>
+          </tr>
           </tbody>
         </table>
-        {% if consumerLagRows|length > 10 %}
-          <p class="light">Showing top 10 highest lag rows.</p>
-        {% endif %}
-      {% else %}
-        <p>No consumer checkpoint telemetry submitted yet.</p>
+      </section>
+
+      <section class="border rounded p-3">
+        <h2 class="h4">Readiness Snapshot</h2>
+        <p>Status: <strong>{{ overviewReadiness.status|default('unknown') }}</strong></p>
+        <p>Score: <strong>{{ overviewReadiness.readinessScore|default(0) }}</strong> / 100</p>
+        <details class="agents-advanced">
+          <summary><strong>Technical JSON</strong></summary>
+          <pre class="border rounded p-3">{{ overviewReadinessJson }}</pre>
+        </details>
+      </section>
+
+      {% if not agentsEnabledLocked %}
+        {% js %}
+          (() => {
+            const form = document.getElementById('agents-enabled-form');
+            if (!form) {
+              return;
+            }
+            const switchButton = form.querySelector('button.lightswitch');
+            const valueInput = form.querySelector('input[name="enabled"]');
+            if (!switchButton || !valueInput) {
+              return;
+            }
+
+            let previousValue = valueInput.value;
+            switchButton.addEventListener('click', () => {
+              window.requestAnimationFrame(() => {
+                if (valueInput.value === previousValue) {
+                  return;
+                }
+                previousValue = valueInput.value;
+                if (typeof form.requestSubmit === 'function') {
+                  form.requestSubmit();
+                } else {
+                  form.submit();
+                }
+              });
+            });
+          })();
+        {% endjs %}
       {% endif %}
-    </div>
-
-    <hr>
-
-    {% if readinessDiagnostics.warnings|length %}
-      <div class="border rounded p-3 warning" style="margin-bottom: 16px;">
-        <h2 class="h4">Warnings</h2>
-        <ul>
-          {% for warning in readinessDiagnostics.warnings %}
-            <li>{{ warning }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-      <hr>
     {% endif %}
 
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <details>
-        <summary><strong>Health Data (Technical JSON)</strong></summary>
-        <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessHealthJson }}</pre>
-      </details>
-    </div>
+    {% if activeDashboardTab == 'readiness' %}
+      <section class="border rounded p-3">
+        <h2 class="h4">Readiness Summary</h2>
+        <div class="agents-metric-grid">
+          <div class="agents-metric">
+            <div class="label">Overall score</div>
+            <div class="value">{{ readinessSummary.readinessScore|default(0) }}/100</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">Status</div>
+            <div class="value">{{ readinessSummary.status|default('unknown') }}</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">Warnings</div>
+            <div class="value">{{ readinessDiagnostics.warnings|length }}</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">Consumer integrations</div>
+            <div class="value">{{ consumerLagSummary.count|default(0) }}</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">Max lag</div>
+            <div class="value">{{ consumerLagSummary.maxLagSeconds|default(0) }}s</div>
+          </div>
+        </div>
+      </section>
 
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <details>
-        <summary><strong>Readiness Data (Technical JSON)</strong></summary>
-        <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessSummaryJson }}</pre>
-      </details>
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3">
-      <details>
-        <summary><strong>Diagnostics (Technical JSON)</strong></summary>
-        <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessDiagnosticsJson }}</pre>
-      </details>
-    </div>
-  {% endif %}
-
-  {% if activeDashboardTab == 'discovery' %}
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Quick Actions</h2>
-      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-        <form method="post" accept-charset="UTF-8">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/prewarm-discovery') }}
-          {{ redirectInput('agents/dashboard/discovery') }}
-          <input type="hidden" name="target" value="all">
-          <button class="btn submit" type="submit">Refresh All</button>
-        </form>
-        <form method="post" accept-charset="UTF-8">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/prewarm-discovery') }}
-          {{ redirectInput('agents/dashboard/discovery') }}
-          <input type="hidden" name="target" value="llms">
-          <button class="btn" type="submit">Refresh llms.txt</button>
-        </form>
-        <form method="post" accept-charset="UTF-8">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/prewarm-discovery') }}
-          {{ redirectInput('agents/dashboard/discovery') }}
-          <input type="hidden" name="target" value="llms-full">
-          <button class="btn" type="submit">Refresh llms-full.txt</button>
-        </form>
-        <form method="post" accept-charset="UTF-8">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/prewarm-discovery') }}
-          {{ redirectInput('agents/dashboard/discovery') }}
-          <input type="hidden" name="target" value="commerce">
-          <button class="btn" type="submit">Refresh commerce.txt</button>
-        </form>
-        <form method="post" accept-charset="UTF-8">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/clear-discovery-cache') }}
-          {{ redirectInput('agents/dashboard/discovery') }}
-          <button class="btn" type="submit">Clear cache</button>
-        </form>
-      </div>
-      <p class="text-sm text-muted">These actions refresh discovery files and cache state after content/config changes.</p>
-    </div>
-
-    <hr>
-
-    {% for key, document in discoveryStatus.documents %}
-      {% if not loop.first %}
-        <hr>
-      {% endif %}
-      <div class="border rounded p-3" style="margin-bottom: 16px;">
-        <h2 class="h4">{{ document.name }}</h2>
-        <p>
-          <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
-          <strong>{{ document.enabled ? 'Enabled' : 'Disabled' }}</strong>
-        </p>
-        <table class="data fullwidth" style="margin-bottom: 8px;">
+      <section class="border rounded p-3">
+        <h2 class="h4">Score Breakdown</h2>
+        <table class="data fullwidth">
+          <thead>
+          <tr>
+            <th>Check</th>
+            <th>Weight</th>
+            <th>Result</th>
+            <th>Score</th>
+          </tr>
+          </thead>
           <tbody>
-          <tr>
-            <th style="border-bottom: 1px solid #e5e7eb;">URL</th>
-            <td style="border-bottom: 1px solid #e5e7eb;"><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td>
-          </tr>
-          <tr>
-            <th>Last Modified</th>
-            <td>{{ document.lastModified ?: 'n/a' }}</td>
-          </tr>
+          {% for criterion in readinessDiagnostics.breakdown %}
+            <tr>
+              <td>{{ criterion.label }}</td>
+              <td>{{ criterion.weight }}</td>
+              <td>
+                <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
+                {{ criterion.passed ? 'pass' : 'needs attention' }}
+              </td>
+              <td>{{ criterion.score }}</td>
+            </tr>
+          {% endfor %}
           </tbody>
         </table>
+      </section>
 
-        <h3>Preview</h3>
-        <pre class="rounded p-3" style="border: 1px solid #d1d5db; background: #f9fafb; padding: 12px;"><code style="background: transparent; color: inherit;">{{ document.preview ?: '# Disabled' }}</code></pre>
+      <section class="border rounded p-3">
+        <h2 class="h4">Component Checks</h2>
+        <div class="agents-two-col">
+          <div>
+            <span class="agents-kicker">System components</span>
+            <ul class="agents-link-list">
+              {% for key, value in readinessDiagnostics.componentChecks.systemComponents %}
+                <li>{{ key }}: <strong>{{ value ? 'ok' : 'unavailable' }}</strong></li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div>
+            <span class="agents-kicker">Plugin checks</span>
+            <ul class="agents-link-list">
+              {% for key, value in readinessDiagnostics.componentChecks.enabledPlugins %}
+                <li>{{ key }}: <strong>{{ value ? 'enabled' : 'disabled' }}</strong></li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </section>
 
-        <details style="margin-top: 10px;">
-          <summary><strong>Details</strong></summary>
-          <table class="data fullwidth" style="margin-top: 8px;">
+      <section class="border rounded p-3">
+        <h2 class="h4">Consumer Lag</h2>
+        <p class="agents-subtle">
+          Healthy: <strong>{{ consumerLagSummary.healthy|default(0) }}</strong>,
+          warning: <strong>{{ consumerLagSummary.warning|default(0) }}</strong>,
+          critical: <strong>{{ consumerLagSummary.critical|default(0) }}</strong>.
+        </p>
+
+        {% if consumerLagRows|length %}
+          <table class="data fullwidth">
+            <thead>
+            <tr>
+              <th>Integration</th>
+              <th>Resource</th>
+              <th>Checkpoint</th>
+              <th>Lag</th>
+              <th>Bucket</th>
+            </tr>
+            </thead>
             <tbody>
-            <tr>
-              <th style="border-bottom: 1px solid #e5e7eb;">Path</th>
-              <td style="border-bottom: 1px solid #e5e7eb;"><code>{{ document.path }}</code></td>
-            </tr>
-            <tr>
-              <th style="border-bottom: 1px solid #e5e7eb;">Cache TTL</th>
-              <td style="border-bottom: 1px solid #e5e7eb;">{{ document.cacheTtlSeconds }} seconds</td>
-            </tr>
-            <tr>
-              <th style="border-bottom: 1px solid #e5e7eb;">ETag</th>
-              <td style="border-bottom: 1px solid #e5e7eb;">{{ document.etag ?: 'n/a' }}</td>
-            </tr>
-            <tr>
-              <th style="border-bottom: 1px solid #e5e7eb;">Bytes</th>
-              <td style="border-bottom: 1px solid #e5e7eb;">{{ document.bytes }}</td>
-            </tr>
-            <tr>
-              <th>Lines</th>
-              <td>{{ document.lineCount }}</td>
-            </tr>
+            {% for row in consumerLagRows|slice(0, 10) %}
+              <tr>
+                <td><code>{{ row.integrationKey }}</code></td>
+                <td><code>{{ row.resourceType }}</code></td>
+                <td>{{ row.checkpointAt ?: 'n/a' }}</td>
+                <td>{{ row.lagSeconds }}s</td>
+                <td><strong>{{ row.lagBucket }}</strong></td>
+              </tr>
+            {% endfor %}
             </tbody>
           </table>
+          {% if consumerLagRows|length > 10 %}
+            <p class="agents-subtle">Showing top 10 highest lag rows.</p>
+          {% endif %}
+        {% else %}
+          <p>No consumer checkpoint telemetry submitted yet.</p>
+        {% endif %}
+      </section>
+
+      {% if readinessDiagnostics.warnings|length %}
+        <section class="border rounded p-3 warning">
+          <h2 class="h4">Warnings</h2>
+          <ul class="agents-link-list">
+            {% for warning in readinessDiagnostics.warnings %}
+              <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+
+      <section class="border rounded p-3">
+        <h2 class="h4">Advanced Diagnostics</h2>
+        <details class="agents-advanced" style="margin-bottom: 8px;">
+          <summary><strong>Health Data (Technical JSON)</strong></summary>
+          <pre class="border rounded p-3">{{ readinessHealthJson }}</pre>
         </details>
-      </div>
-    {% endfor %}
+        <details class="agents-advanced" style="margin-bottom: 8px;">
+          <summary><strong>Readiness Data (Technical JSON)</strong></summary>
+          <pre class="border rounded p-3">{{ readinessSummaryJson }}</pre>
+        </details>
+        <details class="agents-advanced">
+          <summary><strong>Diagnostics (Technical JSON)</strong></summary>
+          <pre class="border rounded p-3">{{ readinessDiagnosticsJson }}</pre>
+        </details>
+      </section>
+    {% endif %}
 
-    <hr>
+    {% if activeDashboardTab == 'discovery' %}
+      <section class="border rounded p-3">
+        <h2 class="h4">Quick Actions</h2>
+        <div class="agents-actions" style="margin-bottom: 8px;">
+          <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/prewarm-discovery') }}
+            {{ redirectInput('agents/dashboard/discovery') }}
+            <input type="hidden" name="target" value="all">
+            <button class="btn submit" type="submit">Refresh All</button>
+          </form>
+          <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/prewarm-discovery') }}
+            {{ redirectInput('agents/dashboard/discovery') }}
+            <input type="hidden" name="target" value="llms">
+            <button class="btn" type="submit">Refresh llms.txt</button>
+          </form>
+          <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/prewarm-discovery') }}
+            {{ redirectInput('agents/dashboard/discovery') }}
+            <input type="hidden" name="target" value="llms-full">
+            <button class="btn" type="submit">Refresh llms-full.txt</button>
+          </form>
+          <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/prewarm-discovery') }}
+            {{ redirectInput('agents/dashboard/discovery') }}
+            <input type="hidden" name="target" value="commerce">
+            <button class="btn" type="submit">Refresh commerce.txt</button>
+          </form>
+          <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/clear-discovery-cache') }}
+            {{ redirectInput('agents/dashboard/discovery') }}
+            <button class="btn" type="submit">Clear cache</button>
+          </form>
+        </div>
+        <p class="agents-subtle">Refresh cache after content or settings changes.</p>
+      </section>
 
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Where to change what</h2>
-      <ul>
-        <li>Use Settings tab custom body fields to edit <code>llms.txt</code> and <code>commerce.txt</code>.</li>
-        <li>Use <code>config/agents.php</code> when you need environment-level overrides or lock-state control.</li>
-        <li>Use this Discovery Docs tab for cache refresh/clear and status checks.</li>
-        <li>Do not edit secrets in CP.</li>
-      </ul>
-    </div>
+      <div class="agents-grid">
+        {% for key, document in discoveryStatus.documents %}
+          <section class="border rounded p-3">
+            <h2 class="h4">{{ document.name }}</h2>
+            <p>
+              <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
+              <strong>{{ document.enabled ? 'Enabled' : 'Disabled' }}</strong>
+              <span class="agents-subtle">({{ document.path }})</span>
+            </p>
 
-    <hr>
+            <table class="data fullwidth" style="margin-bottom: 8px;">
+              <tbody>
+              <tr>
+                <th>URL</th>
+                <td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td>
+              </tr>
+              <tr>
+                <th>Last Modified</th>
+                <td>{{ document.lastModified ?: 'n/a' }}</td>
+              </tr>
+              <tr>
+                <th>Cache TTL</th>
+                <td>{{ document.cacheTtlSeconds }} seconds</td>
+              </tr>
+              </tbody>
+            </table>
 
-    <div class="border rounded p-3">
-      <details>
-        <summary><strong>Discovery Docs Status (Technical JSON)</strong></summary>
-        <pre class="border rounded p-3" style="margin-top: 8px;">{{ discoveryStatusJson }}</pre>
-      </details>
-    </div>
-  {% endif %}
+            <details class="agents-advanced" style="margin-bottom: 8px;">
+              <summary><strong>Preview</strong></summary>
+              <pre class="rounded p-3" style="border: 1px solid #d1d5db; background: #f9fafb;"><code style="background: transparent; color: inherit;">{{ document.preview ?: '# Disabled' }}</code></pre>
+            </details>
 
-  {% if activeDashboardTab == 'security' %}
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Authentication</h2>
-      <ul>
-        <li>Token required: <strong>{{ securityPosture.authentication.required ? 'yes' : 'no' }}</strong></li>
-        <li>Configured requirement: <strong>{{ securityPosture.authentication.requestedRequireToken ? 'yes' : 'no' }}</strong></li>
-        <li>Forced in production: <strong>{{ securityPosture.authentication.tokenRequirementForcedInProd ? 'yes' : 'no' }}</strong></li>
-        <li>Allow query-token auth: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
-        <li>Fail in production when token missing: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
-        <li>Total active credentials: <strong>{{ securityPosture.authentication.credentialCount }}</strong></li>
-        <li>Env credentials: <strong>{{ securityPosture.authentication.envCredentialCount|default(0) }}</strong></li>
-        <li>Managed CP credentials: <strong>{{ securityPosture.authentication.managedCredentialCount|default(0) }}</strong></li>
-        <li>Credential IDs: <strong>{{ securityPosture.authentication.credentialIds|join(', ') ?: 'none' }}</strong></li>
-      </ul>
-      <p><strong>Default token scopes</strong></p>
-      <ul>
-        {% for scope in securityPosture.authentication.tokenScopes %}
-          <li>{{ scope }}</li>
+            <details class="agents-advanced">
+              <summary><strong>Details</strong></summary>
+              <table class="data fullwidth" style="margin-top: 8px;">
+                <tbody>
+                <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
+                <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
+                <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
+                </tbody>
+              </table>
+            </details>
+          </section>
         {% endfor %}
-      </ul>
-    </div>
+      </div>
 
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Rate Limit and Privacy</h2>
-      <ul>
-        <li>Rate limit: <strong>{{ securityPosture.rateLimit.perMinute }}</strong> requests / {{ securityPosture.rateLimit.windowSeconds }}s</li>
-        <li>Email redaction: <strong>{{ securityPosture.privacy.redactEmail ? 'enabled' : 'disabled' }}</strong></li>
-      </ul>
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Webhook</h2>
-      <ul>
-        <li>Webhook enabled: <strong>{{ securityPosture.webhook.enabled ? 'yes' : 'no' }}</strong></li>
-        <li>Webhook URL configured: <strong>{{ securityPosture.webhook.urlConfigured ? 'yes' : 'no' }}</strong></li>
-        <li>Webhook secret configured: <strong>{{ securityPosture.webhook.secretConfigured ? 'yes' : 'no' }}</strong></li>
-        <li>Destination host: <strong>{{ securityPosture.webhook.destinationHost ?: 'n/a' }}</strong></li>
-        <li>Timeout seconds: <strong>{{ securityPosture.webhook.timeoutSeconds }}</strong></li>
-        <li>Max attempts: <strong>{{ securityPosture.webhook.maxAttempts }}</strong></li>
-      </ul>
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Webhook Dead-Letter Queue</h2>
-      <p class="light">Final webhook delivery failures are captured here for replay.</p>
-
-      <form method="post" accept-charset="UTF-8" style="margin-bottom: 10px;">
-        {{ csrfInput() }}
-        {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-        {{ redirectInput('agents/dashboard/security') }}
-        <input type="hidden" name="mode" value="all">
-        <input type="hidden" name="limit" value="25">
-        <button class="btn" type="submit">Replay up to 25 failed events</button>
-      </form>
-
-      {% if webhookDeadLetters|length %}
-        <table class="data fullwidth">
-          <thead>
-          <tr>
-            <th>ID</th>
-            <th>Event</th>
-            <th>Status</th>
-            <th>Attempts</th>
-            <th>Last Error</th>
-            <th>Updated</th>
-            <th>Replay</th>
-          </tr>
-          </thead>
-          <tbody>
-          {% for row in webhookDeadLetters %}
-            <tr>
-              <td>#{{ row.id }}</td>
-              <td>
-                <code>{{ row.eventId }}</code><br>
-                <span class="light">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }} {{ row.action ? '(' ~ row.action ~ ')' : '' }}</span>
-              </td>
-              <td><strong>{{ row.status }}</strong></td>
-              <td>{{ row.attempts }}</td>
-              <td>{{ row.lastError ?: 'n/a' }}</td>
-              <td>{{ row.dateUpdated ?: row.dateCreated ?: 'n/a' }}</td>
-              <td>
-                <form method="post" accept-charset="UTF-8">
-                  {{ csrfInput() }}
-                  {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-                  {{ redirectInput('agents/dashboard/security') }}
-                  <input type="hidden" name="id" value="{{ row.id }}">
-                  <button class="btn" type="submit">Replay</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p>No dead-letter events.</p>
-      {% endif %}
-    </div>
-
-    <hr>
-
-    <div class="border rounded p-3" style="margin-bottom: 16px;">
-      <h2 class="h4">Warnings</h2>
-      <p>
-        Errors: <strong>{{ securityPosture.warningCounts.errors|default(0) }}</strong>,
-        warnings: <strong>{{ securityPosture.warningCounts.warnings|default(0) }}</strong>
-      </p>
-      {% if securityPosture.warnings|length %}
-        <ul>
-          {% for warning in securityPosture.warnings %}
-            <li>
-              <strong>[{{ warning.level|upper }}]</strong>
-              {{ warning.message }}
-            </li>
-          {% endfor %}
+      <section class="border rounded p-3">
+        <h2 class="h4">Editing Path</h2>
+        <ul class="agents-link-list">
+          <li>Use <strong>Settings</strong> for custom body edits to <code>llms.txt</code> and <code>commerce.txt</code>.</li>
+          <li>Use <code>config/agents.php</code> when you need environment-level overrides/lock-state.</li>
+          <li>Use this tab for refresh and verification only.</li>
+          <li>Do not place secrets in discovery documents.</li>
         </ul>
-      {% else %}
-        <p>No active security warnings.</p>
-      {% endif %}
-    </div>
+      </section>
 
-    <hr>
+      <section class="border rounded p-3">
+        <details class="agents-advanced">
+          <summary><strong>Discovery Docs Status (Technical JSON)</strong></summary>
+          <pre class="border rounded p-3">{{ discoveryStatusJson }}</pre>
+        </details>
+      </section>
+    {% endif %}
 
-    <div class="border rounded p-3">
-      <details>
-        <summary><strong>Security Data (Technical JSON)</strong></summary>
-        <pre class="border rounded p-3" style="margin-top: 8px;">{{ securityPostureJson }}</pre>
-      </details>
-    </div>
-  {% endif %}
+    {% if activeDashboardTab == 'security' %}
+      <section class="border rounded p-3">
+        <h2 class="h4">Security Snapshot</h2>
+        <div class="agents-metric-grid">
+          <div class="agents-metric">
+            <div class="label">Token required</div>
+            <div class="value">{{ securityPosture.authentication.required ? 'Yes' : 'No' }}</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">Active credentials</div>
+            <div class="value">{{ securityPosture.authentication.credentialCount }}</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">Warnings</div>
+            <div class="value">{{ securityPosture.warningCounts.warnings|default(0) }}</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">Errors</div>
+            <div class="value">{{ securityPosture.warningCounts.errors|default(0) }}</div>
+          </div>
+          <div class="agents-metric">
+            <div class="label">DLQ events</div>
+            <div class="value">{{ webhookDeadLetters|length }}</div>
+          </div>
+        </div>
+      </section>
 
+      <section class="border rounded p-3">
+        <h2 class="h4">Auth and Rate Posture</h2>
+        <div class="agents-two-col">
+          <div>
+            <span class="agents-kicker">Authentication</span>
+            <ul class="agents-link-list">
+              <li>Token required: <strong>{{ securityPosture.authentication.required ? 'yes' : 'no' }}</strong></li>
+              <li>Configured requirement: <strong>{{ securityPosture.authentication.requestedRequireToken ? 'yes' : 'no' }}</strong></li>
+              <li>Forced in production: <strong>{{ securityPosture.authentication.tokenRequirementForcedInProd ? 'yes' : 'no' }}</strong></li>
+              <li>Allow query-token auth: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
+              <li>Fail in production when token missing: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
+              <li>Env credentials: <strong>{{ securityPosture.authentication.envCredentialCount|default(0) }}</strong></li>
+              <li>Managed CP credentials: <strong>{{ securityPosture.authentication.managedCredentialCount|default(0) }}</strong></li>
+            </ul>
+          </div>
+          <div>
+            <span class="agents-kicker">Rate limit and privacy</span>
+            <ul class="agents-link-list">
+              <li>Rate limit: <strong>{{ securityPosture.rateLimit.perMinute }}</strong> requests / {{ securityPosture.rateLimit.windowSeconds }}s</li>
+              <li>Email redaction: <strong>{{ securityPosture.privacy.redactEmail ? 'enabled' : 'disabled' }}</strong></li>
+              <li>Default scopes listed in runtime policy</li>
+            </ul>
+            <details class="agents-advanced" style="margin-top: 8px;">
+              <summary><strong>Default token scopes</strong></summary>
+              <ul class="agents-link-list" style="margin-top: 8px;">
+                {% for scope in securityPosture.authentication.tokenScopes %}
+                  <li>{{ scope }}</li>
+                {% endfor %}
+              </ul>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="border rounded p-3">
+        <h2 class="h4">Webhook Reliability</h2>
+        <ul class="agents-link-list" style="margin-bottom: 12px;">
+          <li>Webhook enabled: <strong>{{ securityPosture.webhook.enabled ? 'yes' : 'no' }}</strong></li>
+          <li>Webhook URL configured: <strong>{{ securityPosture.webhook.urlConfigured ? 'yes' : 'no' }}</strong></li>
+          <li>Webhook secret configured: <strong>{{ securityPosture.webhook.secretConfigured ? 'yes' : 'no' }}</strong></li>
+          <li>Destination host: <strong>{{ securityPosture.webhook.destinationHost ?: 'n/a' }}</strong></li>
+          <li>Timeout seconds: <strong>{{ securityPosture.webhook.timeoutSeconds }}</strong></li>
+          <li>Max attempts: <strong>{{ securityPosture.webhook.maxAttempts }}</strong></li>
+        </ul>
+
+        <h3 class="h5">Dead-Letter Queue</h3>
+        <p class="agents-subtle">Final delivery failures are stored here and can be replayed.</p>
+
+        <form method="post" accept-charset="UTF-8" style="margin-bottom: 10px;">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
+          {{ redirectInput('agents/dashboard/security') }}
+          <input type="hidden" name="mode" value="all">
+          <input type="hidden" name="limit" value="25">
+          <button class="btn" type="submit">Replay up to 25 failed events</button>
+        </form>
+
+        {% if webhookDeadLetters|length %}
+          <table class="data fullwidth">
+            <thead>
+            <tr>
+              <th>ID</th>
+              <th>Event</th>
+              <th>Status</th>
+              <th>Attempts</th>
+              <th>Last Error</th>
+              <th>Updated</th>
+              <th>Replay</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in webhookDeadLetters %}
+              <tr>
+                <td>#{{ row.id }}</td>
+                <td>
+                  <code>{{ row.eventId }}</code><br>
+                  <span class="light">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }} {{ row.action ? '(' ~ row.action ~ ')' : '' }}</span>
+                </td>
+                <td><strong>{{ row.status }}</strong></td>
+                <td>{{ row.attempts }}</td>
+                <td>{{ row.lastError ?: 'n/a' }}</td>
+                <td>{{ row.dateUpdated ?: row.dateCreated ?: 'n/a' }}</td>
+                <td>
+                  <form method="post" accept-charset="UTF-8">
+                    {{ csrfInput() }}
+                    {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
+                    {{ redirectInput('agents/dashboard/security') }}
+                    <input type="hidden" name="id" value="{{ row.id }}">
+                    <button class="btn" type="submit">Replay</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p>No dead-letter events.</p>
+        {% endif %}
+      </section>
+
+      <section class="border rounded p-3">
+        <h2 class="h4">Warnings</h2>
+        {% if securityPosture.warnings|length %}
+          <ul class="agents-link-list">
+            {% for warning in securityPosture.warnings %}
+              <li><strong>[{{ warning.level|upper }}]</strong> {{ warning.message }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>No active security warnings.</p>
+        {% endif %}
+      </section>
+
+      <section class="border rounded p-3">
+        <details class="agents-advanced">
+          <summary><strong>Security Data (Technical JSON)</strong></summary>
+          <pre class="border rounded p-3">{{ securityPostureJson }}</pre>
+        </details>
+      </section>
+    {% endif %}
+  </div>
 {% endblock %}
