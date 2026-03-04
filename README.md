@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.8.0**
+Current plugin version: **0.8.1**
 
 ## Purpose
 
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.8.0
+composer require klick/agents:^0.8.1
 php craft plugin/install agents
 ```
 
@@ -392,12 +392,17 @@ Identifier notes for show commands:
 - `limit` (1..200, default 50)
 - `cursor` (opaque cursor; legacy pagination + incremental continuation)
 - `updatedSince` (RFC3339 timestamp bootstrap for incremental mode, for example `2026-02-24T12:00:00Z`)
+- `lowStock` (`1|0|true|false|yes|no|on|off`; when true returns only products at/below threshold in full-sync mode)
+- `lowStockThreshold` (integer >= 0, default `10`, used with `lowStock=true`)
+- Product response items include aggregated inventory fields: `hasUnlimitedStock`, `totalStock`
+- `lowStock` cannot be combined with incremental sync (`cursor`/`updatedSince`)
 
 ### Variants endpoint parameters
 
 - `/variants`: `status` (`live|pending|disabled|expired|all`), `q`, `sku`, `productId`, `limit` (1..200)
 - `/variants` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
 - `/variants/show`: exactly one of `id` or `sku`; optional `productId`
+- `/variants` list and `/variants/show` include inventory fields: `stock`, `hasUnlimitedStock`, `isAvailable`
 
 ### Subscriptions endpoint parameters
 

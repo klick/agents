@@ -167,10 +167,20 @@ class ApiController extends Controller
         if ($sortError !== null) {
             $errors[] = $sortError;
         }
+        $lowStockError = $this->validateBooleanQueryParam('lowStock');
+        if ($lowStockError !== null) {
+            $errors[] = $lowStockError;
+        }
+        $lowStockThresholdError = $this->validateIntegerQueryParam('lowStockThreshold', 0, 1000000);
+        if ($lowStockThresholdError !== null) {
+            $errors[] = $lowStockThresholdError;
+        }
         $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
         if (!empty($errors)) {
             return $this->invalidQueryResponse($errors);
         }
+
+        $lowStock = $this->parseBooleanQueryParam('lowStock', false);
 
         $payload = Plugin::getInstance()->getReadinessService()->getProductsSnapshot([
             'q' => $request->getQueryParam('q'),
@@ -179,6 +189,8 @@ class ApiController extends Controller
             'limit' => (int)$request->getQueryParam('limit', 50),
             'cursor' => $request->getQueryParam('cursor'),
             'updatedSince' => $request->getQueryParam('updatedSince'),
+            'lowStock' => $lowStock,
+            'lowStockThreshold' => (int)$request->getQueryParam('lowStockThreshold', 10),
         ]);
 
         $errors = $payload['page']['errors'] ?? [];
@@ -1434,6 +1446,8 @@ class ApiController extends Controller
                     ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
                     ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                     ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'lowStock', 'schema' => ['type' => 'boolean'], 'description' => 'When true, only products at or below the low-stock threshold are returned (full sync mode only).'],
+                    ['in' => 'query', 'name' => 'lowStockThreshold', 'schema' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 1000000], 'description' => 'Low-stock threshold used when `lowStock=true`. Default: 10.'],
                     ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
                     ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
                 ],
@@ -3546,6 +3560,54 @@ class ApiController extends Controller
         return null;
     }
 
+    private function validateBooleanQueryParam(string $name): ?string
+    {
+        $request = Craft::$app->getRequest();
+        $raw = $request->getQueryParam($name, null);
+        if ($raw === null) {
+            return null;
+        }
+
+        if (is_array($raw) || is_object($raw)) {
+            return sprintf('Invalid `%s`; expected boolean value.', $name);
+        }
+
+        if (is_bool($raw)) {
+            return null;
+        }
+
+        $valueRaw = strtolower(trim((string)$raw));
+        if ($valueRaw === '') {
+            return null;
+        }
+
+        if (!in_array($valueRaw, ['1', '0', 'true', 'false', 'yes', 'no', 'on', 'off'], true)) {
+            return sprintf('Invalid `%s`; expected boolean value (`1|0|true|false|yes|no|on|off`).', $name);
+        }
+
+        return null;
+    }
+
+    private function parseBooleanQueryParam(string $name, bool $default = false): bool
+    {
+        $request = Craft::$app->getRequest();
+        $raw = $request->getQueryParam($name, null);
+        if ($raw === null) {
+            return $default;
+        }
+
+        if (is_bool($raw)) {
+            return $raw;
+        }
+
+        $valueRaw = strtolower(trim((string)$raw));
+        if ($valueRaw === '') {
+            return $default;
+        }
+
+        return in_array($valueRaw, ['1', 'true', 'yes', 'on'], true);
+    }
+
     private function validateEnumQueryParam(string $name, array $allowedValues): ?string
     {
         $request = Craft::$app->getRequest();
@@ -3849,6 +3911,8 @@ class ApiController extends Controller
                             'limit' => ['type' => 'integer'],
                             'cursor' => ['type' => 'string'],
                             'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'lowStock' => ['type' => 'boolean'],
+                            'lowStockThreshold' => ['type' => 'integer'],
                             'fields' => ['type' => 'string'],
                             'filter' => ['type' => 'string'],
                         ],
@@ -3866,6 +3930,8 @@ class ApiController extends Controller
                                         'slug' => ['type' => 'string'],
                                         'status' => ['type' => 'string'],
                                         'updatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                                        'hasUnlimitedStock' => ['type' => 'boolean'],
+                                        'totalStock' => ['type' => 'integer'],
                                     ],
                                 ],
                             ],
@@ -3893,7 +3959,23 @@ class ApiController extends Controller
                     'response' => [
                         'type' => 'object',
                         'properties' => [
-                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'data' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'id' => ['type' => 'integer'],
+                                        'productId' => ['type' => 'integer'],
+                                        'sku' => ['type' => 'string'],
+                                        'title' => ['type' => 'string'],
+                                        'status' => ['type' => 'string'],
+                                        'stock' => ['type' => 'integer'],
+                                        'hasUnlimitedStock' => ['type' => 'boolean'],
+                                        'isAvailable' => ['type' => 'boolean'],
+                                        'updatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                                    ],
+                                ],
+                            ],
                             'meta' => ['type' => 'object'],
                             'page' => ['type' => 'object'],
                         ],
@@ -4642,7 +4724,7 @@ class ApiController extends Controller
             }
         }
 
-        return '0.8.0';
+        return '0.8.1';
     }
 
     private function getRequestId(): string

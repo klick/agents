@@ -143,6 +143,8 @@ class ReadinessService extends Component
         $query = trim((string)($params['q'] ?? ''));
         $sort = $this->normalizeSort((string)($params['sort'] ?? 'updatedAt'));
         $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $lowStock = (bool)($params['lowStock'] ?? false);
+        $lowStockThreshold = $this->normalizeLowStockThreshold((int)($params['lowStockThreshold'] ?? 10));
 
         $decodedCursor = $this->decodeCursorPayload($cursor);
         $hasIncrementalCursor = is_array($decodedCursor) && (($decodedCursor['mode'] ?? '') === 'incremental');
@@ -198,6 +200,22 @@ class ReadinessService extends Component
             $offset = $this->parseCursor($cursor);
         }
 
+        if ($isIncremental && $lowStock) {
+            return [
+                'data' => [],
+                'page' => [
+                    'nextCursor' => null,
+                    'limit' => $limit,
+                    'count' => 0,
+                    'hasMore' => false,
+                    'syncMode' => 'incremental',
+                    'updatedSince' => $isIncremental ? $this->formatDate($updatedSince) : null,
+                    'snapshotEnd' => $isIncremental ? $this->formatDate($snapshotEnd) : null,
+                    'errors' => ['`lowStock` is not supported when using incremental sync (`cursor`/`updatedSince`).'],
+                ],
+            ];
+        }
+
         if (!class_exists(Product::class)) {
             return [
                 'data' => [],
@@ -214,9 +232,7 @@ class ReadinessService extends Component
             ];
         }
 
-        $queryBuilder = Product::find()
-            ->offset($offset)
-            ->limit($limit + 1);
+        $queryBuilder = Product::find();
 
         if ($status !== 'all') {
             $queryBuilder->status($status);
@@ -227,32 +243,70 @@ class ReadinessService extends Component
         }
 
         if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
             $queryBuilder->orderBy($this->buildIncrementalSort());
             $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } elseif ($lowStock) {
+            $queryBuilder->orderBy($this->buildSort($sort));
+            $queryBuilder->limit(null);
         } else {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
             $queryBuilder->orderBy($this->buildSort($sort));
         }
 
-        $products = $queryBuilder->all();
-        $totalReturned = min(count($products), $limit);
-        $nextOffset = $offset + $totalReturned;
-        $hasMore = count($products) > $limit;
-
         $data = [];
-        foreach (array_slice($products, 0, $limit) as $product) {
-            $productType = $product->type;
-            $url = UrlHelper::siteUrl('products/' . $product->uri);
+        $totalReturned = 0;
+        $nextOffset = $offset;
+        $hasMore = false;
 
-            $data[] = [
-                'id' => (int)$product->id,
-                'title' => $product->title,
-                'slug' => $product->slug,
-                'uri' => $product->uri,
-                'type' => $productType?->handle ?? null,
-                'status' => $product->getStatus() ?? null,
-                'updatedAt' => $product->dateUpdated?->format('Y-m-d\\TH:i:s\\Z'),
-                'url' => $url,
-            ];
+        if ($lowStock) {
+            $lowStockMatched = 0;
+            foreach ($queryBuilder->each() as $product) {
+                if (!$product instanceof Product) {
+                    continue;
+                }
+
+                $stock = $this->extractProductStock($product);
+                $isLowStock = !$stock['hasUnlimitedStock'] && $stock['totalStock'] <= $lowStockThreshold;
+                if (!$isLowStock) {
+                    continue;
+                }
+
+                if ($lowStockMatched < $offset) {
+                    $lowStockMatched++;
+                    continue;
+                }
+
+                $data[] = $this->mapProductSnapshot($product, $stock['totalStock'], $stock['hasUnlimitedStock']);
+                if (count($data) > $limit) {
+                    break;
+                }
+            }
+
+            $totalReturned = min(count($data), $limit);
+            $hasMore = count($data) > $limit;
+            $nextOffset = $offset + $totalReturned;
+            if ($hasMore) {
+                $data = array_slice($data, 0, $limit);
+            }
+        } else {
+            $products = $queryBuilder->all();
+            $totalReturned = min(count($products), $limit);
+            $nextOffset = $offset + $totalReturned;
+            $hasMore = count($products) > $limit;
+
+            foreach (array_slice($products, 0, $limit) as $product) {
+                if (!$product instanceof Product) {
+                    continue;
+                }
+
+                $stock = $this->extractProductStock($product);
+                $data[] = $this->mapProductSnapshot($product, $stock['totalStock'], $stock['hasUnlimitedStock']);
+            }
         }
 
         return [
@@ -3974,6 +4028,25 @@ class ReadinessService extends Component
         return base64_encode(json_encode(['offset' => $offset]));
     }
 
+    private function mapProductSnapshot(Product $product, int $totalStock, bool $hasUnlimitedStock): array
+    {
+        $productType = $product->type;
+        $url = UrlHelper::siteUrl('products/' . $product->uri);
+
+        return [
+            'id' => (int)$product->id,
+            'title' => (string)$product->title,
+            'slug' => (string)$product->slug,
+            'uri' => (string)$product->uri,
+            'type' => $productType?->handle ?? null,
+            'status' => $product->getStatus() ?? null,
+            'updatedAt' => $this->formatDate($product->dateUpdated),
+            'url' => $url,
+            'hasUnlimitedStock' => $hasUnlimitedStock,
+            'totalStock' => $hasUnlimitedStock ? null : $totalStock,
+        ];
+    }
+
     private function mapProductForCli(Product $product, int $totalStock, bool $hasUnlimitedStock): array
     {
         $typeHandle = $product->type?->handle ?? null;
@@ -4036,6 +4109,9 @@ class ReadinessService extends Component
             'dateCreated' => $this->formatDate($variant->dateCreated ?? null),
             'updatedAt' => $this->formatDate($variant->dateUpdated ?? null),
             'url' => $url,
+            'stock' => $variant->stock === null ? null : (int)$variant->stock,
+            'hasUnlimitedStock' => (bool)($variant->hasUnlimitedStock ?? false),
+            'isAvailable' => method_exists($variant, 'getIsAvailable') ? (bool)$variant->getIsAvailable() : null,
         ];
 
         if ($product !== null) {
@@ -4052,11 +4128,8 @@ class ReadinessService extends Component
         }
 
         $data['price'] = $variant->price === null ? null : (float)$variant->price;
-        $data['stock'] = $variant->stock === null ? null : (int)$variant->stock;
-        $data['hasUnlimitedStock'] = (bool)($variant->hasUnlimitedStock ?? false);
         $data['minQty'] = $variant->minQty === null ? null : (int)$variant->minQty;
         $data['maxQty'] = $variant->maxQty === null ? null : (int)$variant->maxQty;
-        $data['isAvailable'] = method_exists($variant, 'getIsAvailable') ? (bool)$variant->getIsAvailable() : null;
         $data['isPromotable'] = method_exists($variant, 'getIsPromotable') ? (bool)$variant->getIsPromotable() : null;
         $data['weight'] = $variant->weight === null ? null : (float)$variant->weight;
         $data['length'] = $variant->length === null ? null : (float)$variant->length;
@@ -4576,7 +4649,7 @@ class ReadinessService extends Component
              }
         }
 
-        return '0.8.0';
+        return '0.8.1';
     }
 
     private function formatDate(?DateTimeInterface $date): ?string
