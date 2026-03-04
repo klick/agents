@@ -24,6 +24,9 @@ class ApiController extends Controller
         'orders:read',
         'entries:read',
         'assets:read',
+        'categories:read',
+        'tags:read',
+        'globalsets:read',
         'changes:read',
         'sections:read',
         'users:read',
@@ -454,6 +457,213 @@ class ApiController extends Controller
         return $this->respondWithPayload($payload, true, 'Asset not found.');
     }
 
+    public function actionCategories(): Response
+    {
+        if (($guard = $this->guardRequest('categories:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $groupError = $this->validatePatternQueryParam('group', '/^[a-zA-Z0-9_-]+$/', 'group');
+        if ($groupError !== null) {
+            $errors[] = $groupError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getCategoriesList([
+            'q' => $request->getQueryParam('q'),
+            'group' => $request->getQueryParam('group', ''),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionCategoryShow(): Response
+    {
+        if (($guard = $this->guardRequest('categories:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawSlug = trim((string)$request->getQueryParam('slug', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+        $groupError = $this->validatePatternQueryParam('group', '/^[a-zA-Z0-9_-]+$/', 'group');
+        if ($groupError !== null) {
+            $errors[] = $groupError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasSlug = $rawSlug !== '';
+        if (($hasId ? 1 : 0) + ($hasSlug ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `slug`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getCategoryByIdOrSlug([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'slug' => (string)$request->getQueryParam('slug', ''),
+            'group' => (string)$request->getQueryParam('group', ''),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Category not found.');
+    }
+
+    public function actionTags(): Response
+    {
+        if (($guard = $this->guardRequest('tags:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $groupError = $this->validatePatternQueryParam('group', '/^[a-zA-Z0-9_-]+$/', 'group');
+        if ($groupError !== null) {
+            $errors[] = $groupError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getTagsList([
+            'q' => $request->getQueryParam('q'),
+            'group' => $request->getQueryParam('group', ''),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionTagShow(): Response
+    {
+        if (($guard = $this->guardRequest('tags:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawSlug = trim((string)$request->getQueryParam('slug', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+        $groupError = $this->validatePatternQueryParam('group', '/^[a-zA-Z0-9_-]+$/', 'group');
+        if ($groupError !== null) {
+            $errors[] = $groupError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasSlug = $rawSlug !== '';
+        if (($hasId ? 1 : 0) + ($hasSlug ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `slug`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getTagByIdOrSlug([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'slug' => (string)$request->getQueryParam('slug', ''),
+            'group' => (string)$request->getQueryParam('group', ''),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Tag not found.');
+    }
+
+    public function actionGlobalSets(): Response
+    {
+        if (($guard = $this->guardRequest('globalsets:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getGlobalSetsList([
+            'q' => $request->getQueryParam('q'),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionGlobalSetShow(): Response
+    {
+        if (($guard = $this->guardRequest('globalsets:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawHandle = trim((string)$request->getQueryParam('handle', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+        $handleError = $this->validatePatternQueryParam('handle', '/^[a-zA-Z0-9_-]+$/', 'handle');
+        if ($handleError !== null) {
+            $errors[] = $handleError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasHandle = $rawHandle !== '';
+        if (($hasId ? 1 : 0) + ($hasHandle ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `handle`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getGlobalSetByIdOrHandle([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'handle' => (string)$request->getQueryParam('handle', ''),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Global set not found.');
+    }
+
     public function actionSections(): Response
     {
         if (($guard = $this->guardRequest('sections:read')) !== null) {
@@ -616,6 +826,12 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/entries/show', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
             ['method' => 'GET', 'path' => '/assets', 'requiredScopes' => ['assets:read']],
             ['method' => 'GET', 'path' => '/assets/show', 'requiredScopes' => ['assets:read']],
+            ['method' => 'GET', 'path' => '/categories', 'requiredScopes' => ['categories:read']],
+            ['method' => 'GET', 'path' => '/categories/show', 'requiredScopes' => ['categories:read']],
+            ['method' => 'GET', 'path' => '/tags', 'requiredScopes' => ['tags:read']],
+            ['method' => 'GET', 'path' => '/tags/show', 'requiredScopes' => ['tags:read']],
+            ['method' => 'GET', 'path' => '/global-sets', 'requiredScopes' => ['globalsets:read']],
+            ['method' => 'GET', 'path' => '/global-sets/show', 'requiredScopes' => ['globalsets:read']],
             ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
             ['method' => 'GET', 'path' => '/users', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
@@ -852,6 +1068,97 @@ class ApiController extends Controller
                     '404' => ['description' => 'Not found'],
                 ]),
                 'x-required-scopes' => ['assets:read'],
+            ]],
+            '/categories' => ['get' => [
+                'summary' => 'Category list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'group', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['categories:read'],
+            ]],
+            '/categories/show' => ['get' => [
+                'summary' => 'Single category by id or slug',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'slug', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'group', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['categories:read'],
+            ]],
+            '/tags' => ['get' => [
+                'summary' => 'Tag list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'group', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['tags:read'],
+            ]],
+            '/tags/show' => ['get' => [
+                'summary' => 'Single tag by id or slug',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'slug', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'group', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['tags:read'],
+            ]],
+            '/global-sets' => ['get' => [
+                'summary' => 'Global set list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['globalsets:read'],
+            ]],
+            '/global-sets/show' => ['get' => [
+                'summary' => 'Single global set by id or handle',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'handle', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['globalsets:read'],
             ]],
             '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
             '/users' => ['get' => [
@@ -2097,6 +2404,9 @@ class ApiController extends Controller
             'entries:read' => 'Read live content entry endpoints.',
             'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
             'assets:read' => 'Read asset list and lookup endpoints.',
+            'categories:read' => 'Read category list and lookup endpoints.',
+            'tags:read' => 'Read tag list and lookup endpoints.',
+            'globalsets:read' => 'Read global set list and lookup endpoints.',
             'changes:read' => 'Read unified cross-resource incremental changes feed.',
             'sections:read' => 'Read section list endpoint.',
             'users:read' => 'Read user list and lookup endpoints.',
@@ -2906,6 +3216,133 @@ class ApiController extends Controller
                             'id' => ['type' => 'integer'],
                             'filename' => ['type' => 'string'],
                             'volume' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'categories.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/categories',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'q' => ['type' => 'string'],
+                            'group' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'categories.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/categories/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'slug' => ['type' => 'string'],
+                            'group' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'tags.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/tags',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'q' => ['type' => 'string'],
+                            'group' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'tags.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/tags/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'slug' => ['type' => 'string'],
+                            'group' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'globalsets.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/global-sets',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'q' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'globalsets.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/global-sets/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'handle' => ['type' => 'string'],
                         ],
                     ],
                     'response' => [

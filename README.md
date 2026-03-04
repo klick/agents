@@ -33,7 +33,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 
 | Surface | Status | Notes |
 | --- | --- | --- |
-| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/assets*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
+| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
 | Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
@@ -211,6 +211,12 @@ Read/discovery endpoints:
 - `GET /entries/show` (requires exactly one of `id` or `slug`)
 - `GET /assets`
 - `GET /assets/show` (requires exactly one of `id` or `filename`; optional `volume` filter)
+- `GET /categories`
+- `GET /categories/show` (requires exactly one of `id` or `slug`; optional `group` filter)
+- `GET /tags`
+- `GET /tags/show` (requires exactly one of `id` or `slug`; optional `group` filter)
+- `GET /global-sets`
+- `GET /global-sets/show` (requires exactly one of `id` or `handle`)
 - `GET /users` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `GET /users/show` (requires exactly one of `id` or `username`; only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `GET /changes`
@@ -263,6 +269,9 @@ Read scopes:
 - `entries:read`
 - `entries:read_all_statuses`
 - `assets:read`
+- `categories:read`
+- `tags:read`
+- `globalsets:read`
 - `changes:read`
 - `sections:read`
 - `users:read` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)

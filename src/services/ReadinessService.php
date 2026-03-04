@@ -9,7 +9,10 @@ use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use craft\commerce\elements\Product;
 use craft\elements\Asset;
+use craft\elements\Category;
 use craft\elements\Entry;
+use craft\elements\GlobalSet;
+use craft\elements\Tag;
 use craft\elements\User;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -1028,6 +1031,477 @@ class ReadinessService extends Component
         ];
     }
 
+    public function getCategoriesList(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $group = trim((string)($params['group'] ?? ''));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'search' => $search !== '' ? $search : null,
+            'group' => $group !== '' ? $group : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'categories');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Category::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+        if ($group !== '' && method_exists($queryBuilder, 'group')) {
+            $queryBuilder->group($group);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $categories = $queryBuilder->all();
+        $returnedCategories = $isIncremental ? array_slice($categories, 0, $limit) : $categories;
+        $hasMore = $isIncremental && count($categories) > $limit;
+        $nextOffset = $offset + count($returnedCategories);
+
+        $data = [];
+        foreach ($returnedCategories as $category) {
+            if (!$category instanceof Category) {
+                continue;
+            }
+            $data[] = $this->mapCategory($category, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'categories', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getCategoryByIdOrSlug(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $slug = trim((string)($params['slug'] ?? ''));
+        $group = trim((string)($params['group'] ?? ''));
+        $hasId = $id > 0;
+        $hasSlug = $slug !== '';
+
+        if (($hasId ? 1 : 0) + ($hasSlug ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --slug.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Category::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } else {
+            $queryBuilder->slug($slug);
+        }
+        if ($group !== '' && method_exists($queryBuilder, 'group')) {
+            $queryBuilder->group($group);
+        }
+
+        $category = $queryBuilder->one();
+        if (!$category instanceof Category) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapCategory($category, true),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getTagsList(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $group = trim((string)($params['group'] ?? ''));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'search' => $search !== '' ? $search : null,
+            'group' => $group !== '' ? $group : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'tags');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Tag::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+        if ($group !== '' && method_exists($queryBuilder, 'group')) {
+            $queryBuilder->group($group);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $tags = $queryBuilder->all();
+        $returnedTags = $isIncremental ? array_slice($tags, 0, $limit) : $tags;
+        $hasMore = $isIncremental && count($tags) > $limit;
+        $nextOffset = $offset + count($returnedTags);
+
+        $data = [];
+        foreach ($returnedTags as $tag) {
+            if (!$tag instanceof Tag) {
+                continue;
+            }
+            $data[] = $this->mapTag($tag, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'tags', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getTagByIdOrSlug(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $slug = trim((string)($params['slug'] ?? ''));
+        $group = trim((string)($params['group'] ?? ''));
+        $hasId = $id > 0;
+        $hasSlug = $slug !== '';
+
+        if (($hasId ? 1 : 0) + ($hasSlug ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --slug.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Tag::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } else {
+            $queryBuilder->slug($slug);
+        }
+        if ($group !== '' && method_exists($queryBuilder, 'group')) {
+            $queryBuilder->group($group);
+        }
+
+        $tag = $queryBuilder->one();
+        if (!$tag instanceof Tag) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapTag($tag, true),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getGlobalSetsList(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'search' => $search !== '' ? $search : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'globalsets');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = GlobalSet::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $globalSets = $queryBuilder->all();
+        $returnedGlobalSets = $isIncremental ? array_slice($globalSets, 0, $limit) : $globalSets;
+        $hasMore = $isIncremental && count($globalSets) > $limit;
+        $nextOffset = $offset + count($returnedGlobalSets);
+
+        $data = [];
+        foreach ($returnedGlobalSets as $globalSet) {
+            if (!$globalSet instanceof GlobalSet) {
+                continue;
+            }
+            $data[] = $this->mapGlobalSet($globalSet, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'globalsets', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getGlobalSetByIdOrHandle(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $handle = trim((string)($params['handle'] ?? ''));
+        $hasId = $id > 0;
+        $hasHandle = $handle !== '';
+
+        if (($hasId ? 1 : 0) + ($hasHandle ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --handle.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = GlobalSet::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } else {
+            $queryBuilder->handle($handle);
+        }
+
+        $globalSet = $queryBuilder->one();
+        if (!$globalSet instanceof GlobalSet) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapGlobalSet($globalSet, true),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
     public function getUsersList(array $params): array
     {
         $status = $this->normalizeUserStatus((string)($params['status'] ?? 'active'));
@@ -1987,6 +2461,92 @@ class ReadinessService extends Component
         $data['dateUpdated'] = $this->formatDate($asset->dateUpdated);
         $data['height'] = $asset->getHeight();
         $data['width'] = $asset->getWidth();
+
+        return $data;
+    }
+
+    private function mapCategory(Category $category, bool $detailed): array
+    {
+        $groupHandle = null;
+        try {
+            $groupHandle = $category->getGroup()->handle ?? null;
+        } catch (\Throwable) {
+            $groupHandle = null;
+        }
+
+        $data = [
+            'id' => (int)$category->id,
+            'title' => (string)$category->title,
+            'slug' => (string)$category->slug,
+            'uri' => (string)$category->uri,
+            'group' => $groupHandle,
+            'status' => $category->getStatus() ?? null,
+            'updatedAt' => $this->formatDate($category->dateUpdated),
+            'url' => $category->getUrl(),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['dateCreated'] = $this->formatDate($category->dateCreated);
+        $data['dateUpdated'] = $this->formatDate($category->dateUpdated);
+        $data['enabled'] = (bool)$category->enabled;
+        $data['groupId'] = $category->groupId === null ? null : (int)$category->groupId;
+
+        return $data;
+    }
+
+    private function mapTag(Tag $tag, bool $detailed): array
+    {
+        $groupHandle = null;
+        try {
+            $groupHandle = $tag->getGroup()->handle ?? null;
+        } catch (\Throwable) {
+            $groupHandle = null;
+        }
+
+        $data = [
+            'id' => (int)$tag->id,
+            'title' => (string)$tag->title,
+            'slug' => (string)$tag->slug,
+            'uri' => (string)$tag->uri,
+            'group' => $groupHandle,
+            'status' => $tag->getStatus() ?? null,
+            'updatedAt' => $this->formatDate($tag->dateUpdated),
+            'url' => $tag->getUrl(),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['dateCreated'] = $this->formatDate($tag->dateCreated);
+        $data['dateUpdated'] = $this->formatDate($tag->dateUpdated);
+        $data['enabled'] = (bool)$tag->enabled;
+        $data['groupId'] = $tag->groupId === null ? null : (int)$tag->groupId;
+
+        return $data;
+    }
+
+    private function mapGlobalSet(GlobalSet $globalSet, bool $detailed): array
+    {
+        $data = [
+            'id' => (int)$globalSet->id,
+            'name' => (string)($globalSet->name ?? ''),
+            'handle' => (string)($globalSet->handle ?? ''),
+            'status' => $globalSet->getStatus() ?? null,
+            'updatedAt' => $this->formatDate($globalSet->dateUpdated),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['dateCreated'] = $this->formatDate($globalSet->dateCreated);
+        $data['dateUpdated'] = $this->formatDate($globalSet->dateUpdated);
+        $data['sortOrder'] = $globalSet->sortOrder === null ? null : (int)$globalSet->sortOrder;
+        $data['enabled'] = (bool)$globalSet->enabled;
 
         return $data;
     }
