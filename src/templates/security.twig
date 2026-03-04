@@ -15,6 +15,12 @@
       <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
     </p>
     <p>Environment: <strong>{{ securityPosture.environment|default('unknown') }}</strong></p>
+    <p>Environment profile: <strong>{{ securityPosture.profile.name|default('unknown') }}</strong> (source: {{ securityPosture.profile.source|default('unknown') }})</p>
+    <p>Profile defaults applied: <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></p>
+    <p>Effective policy version: <strong>{{ securityPosture.profile.effectivePolicyVersion|default('n/a') }}</strong></p>
+    {% if securityPosture.profile.defaultsAppliedFields|length %}
+      <p class="text-sm text-muted">Profile default fields: {{ securityPosture.profile.defaultsAppliedFields|join(', ') }}</p>
+    {% endif %}
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">

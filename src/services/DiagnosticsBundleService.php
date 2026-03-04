@@ -48,6 +48,13 @@ class DiagnosticsBundleService extends Component
             $collectionErrors,
             [
                 'environment' => 'unknown',
+                'profile' => [
+                    'name' => 'local',
+                    'source' => 'inferred',
+                    'defaultsApplied' => false,
+                    'defaultsAppliedFields' => [],
+                    'effectivePolicyVersion' => '',
+                ],
                 'authentication' => [],
                 'rateLimit' => [],
                 'privacy' => [],
@@ -173,6 +180,10 @@ class DiagnosticsBundleService extends Component
                 'enabled' => (bool)($plugin->getAgentsEnabledState()['enabled'] ?? false),
                 'enabledSource' => (string)($plugin->getAgentsEnabledState()['source'] ?? 'unknown'),
                 'environment' => (string)($securityPosture['environment'] ?? 'unknown'),
+                'environmentProfile' => (string)($securityPosture['profile']['name'] ?? ''),
+                'environmentProfileSource' => (string)($securityPosture['profile']['source'] ?? ''),
+                'profileDefaultsApplied' => (bool)($securityPosture['profile']['defaultsApplied'] ?? false),
+                'effectivePolicyVersion' => (string)($securityPosture['profile']['effectivePolicyVersion'] ?? ''),
                 'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
             ],
             'checks' => $checks,
@@ -253,6 +264,11 @@ class DiagnosticsBundleService extends Component
 
         $details = [
             'environment' => (string)($config['environment'] ?? ''),
+            'environmentProfile' => (string)($config['environmentProfile'] ?? ''),
+            'environmentProfileSource' => (string)($config['environmentProfileSource'] ?? ''),
+            'profileDefaultsApplied' => (bool)($config['profileDefaultsApplied'] ?? false),
+            'profileDefaultsAppliedFields' => array_values((array)($config['profileDefaultsAppliedFields'] ?? [])),
+            'effectivePolicyVersion' => (string)($config['effectivePolicyVersion'] ?? ''),
             'requireToken' => (bool)($config['requireToken'] ?? true),
             'allowQueryToken' => (bool)($config['allowQueryToken'] ?? false),
             'credentialCount' => count((array)($config['credentials'] ?? [])),

@@ -32,15 +32,31 @@ class ReadinessService extends Component
 
     public function getHealthSummary(): array
     {
+        $plugin = Plugin::getInstance();
+        $securityConfig = [];
+        if ($plugin !== null) {
+            try {
+                $securityConfig = $plugin->getSecurityPolicyService()->getRuntimeConfig();
+            } catch (\Throwable $e) {
+                Craft::warning('Unable to load runtime security config for health summary: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+
+        $environment = (string)($securityConfig['environment'] ?? (App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT') ?: ''));
+
         return [
             'status' => 'ok',
             'service' => 'agents',
             'pluginVersion' => $this->resolvePluginVersion(),
-            'environment' => App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT'),
+            'environment' => $environment,
+            'environmentProfile' => (string)($securityConfig['environmentProfile'] ?? ''),
+            'environmentProfileSource' => (string)($securityConfig['environmentProfileSource'] ?? ''),
+            'profileDefaultsApplied' => (bool)($securityConfig['profileDefaultsApplied'] ?? false),
+            'effectivePolicyVersion' => (string)($securityConfig['effectivePolicyVersion'] ?? ''),
             'timezone' => date_default_timezone_get(),
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             'enabledPlugins' => [
-                'commerce' => Plugin::getInstance()?->isCommercePluginEnabled() ?? false,
+                'commerce' => $plugin?->isCommercePluginEnabled() ?? false,
             ],
             'systemComponents' => [
                 'db' => (bool)Craft::$app->getDb(),
@@ -4649,7 +4665,7 @@ class ReadinessService extends Component
              }
         }
 
-        return '0.8.1';
+        return '0.8.5';
     }
 
     private function formatDate(?DateTimeInterface $date): ?string

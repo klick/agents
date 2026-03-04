@@ -601,6 +601,26 @@
 
 
       <section class="border rounded p-3">
+        <h2 class="h4">Environment Profile</h2>
+        <ul class="agents-link-list">
+          <li>Environment: <strong>{{ securityPosture.environment|default('unknown') }}</strong></li>
+          <li>Profile: <strong>{{ securityPosture.profile.name|default('unknown') }}</strong></li>
+          <li>Profile source: <strong>{{ securityPosture.profile.source|default('unknown') }}</strong></li>
+          <li>Profile defaults applied: <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></li>
+          <li>Effective policy version: <strong>{{ securityPosture.profile.effectivePolicyVersion|default('n/a') }}</strong></li>
+        </ul>
+        {% if securityPosture.profile.defaultsAppliedFields|length %}
+          <p class="agents-subtle" style="margin-top: 8px;">
+            Profile default fields: <strong>{{ securityPosture.profile.defaultsAppliedFields|join(', ') }}</strong>
+          </p>
+        {% endif %}
+      </section>
+
+
+      <hr>
+
+
+      <section class="border rounded p-3">
         <h2 class="h4">Auth and Rate Posture</h2>
         <div class="agents-two-col">
           <div>

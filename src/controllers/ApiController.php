@@ -1261,6 +1261,7 @@ class ApiController extends Controller
         if (!isset($catalogs[$version]) || !is_array($catalogs[$version])) {
             return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, sprintf('Unsupported schema version `%s`.', $version));
         }
+        $runtimeProfile = $this->buildRuntimeProfileMetadata($this->getSecurityConfig());
 
         $schemas = $catalogs[$version];
         $endpoint = strtolower(trim((string)$request->getQueryParam('endpoint', '')));
@@ -1276,6 +1277,7 @@ class ApiController extends Controller
             return $this->jsonResponse([
                 'version' => $version,
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'runtimeProfile' => $runtimeProfile,
                 'endpoint' => $endpoint,
                 'schema' => $schemas[$endpoint],
             ]);
@@ -1284,6 +1286,7 @@ class ApiController extends Controller
         return $this->jsonResponse([
             'version' => $version,
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'runtimeProfile' => $runtimeProfile,
             'count' => count($schemas),
             'schemas' => $schemas,
         ]);
@@ -1381,6 +1384,7 @@ class ApiController extends Controller
                 '/capabilities' => '/agents/v1/capabilities',
                 '/openapi.json' => '/agents/v1/openapi.json',
             ],
+            'runtimeProfile' => $this->buildRuntimeProfileMetadata($config),
             'requestIdHeader' => 'X-Request-Id',
             'authentication' => $this->buildCapabilitiesAuthentication($config),
             'authorization' => [
@@ -2065,6 +2069,7 @@ class ApiController extends Controller
                 '/capabilities' => '/agents/v1/capabilities',
                 '/openapi.json' => '/agents/v1/openapi.json',
             ],
+            'x-runtime-profile' => $this->buildRuntimeProfileMetadata($config),
             'paths' => $paths,
             'components' => [
                 'securitySchemes' => $this->buildOpenApiSecuritySchemes($config),
@@ -3309,6 +3314,11 @@ class ApiController extends Controller
             'failOnMissingTokenInProd' => (bool)$config['failOnMissingTokenInProd'],
             'tokenConfigured' => !empty($config['credentials']),
             'credentialCount' => count($config['credentials']),
+            'environment' => (string)($config['environment'] ?? ''),
+            'environmentProfile' => (string)($config['environmentProfile'] ?? ''),
+            'environmentProfileSource' => (string)($config['environmentProfileSource'] ?? ''),
+            'profileDefaultsApplied' => (bool)($config['profileDefaultsApplied'] ?? false),
+            'effectivePolicyVersion' => (string)($config['effectivePolicyVersion'] ?? ''),
             'methods' => [],
         ];
 
@@ -3323,6 +3333,18 @@ class ApiController extends Controller
         }
 
         return $auth;
+    }
+
+    private function buildRuntimeProfileMetadata(array $config): array
+    {
+        return [
+            'environment' => (string)($config['environment'] ?? ''),
+            'environmentProfile' => (string)($config['environmentProfile'] ?? ''),
+            'environmentProfileSource' => (string)($config['environmentProfileSource'] ?? ''),
+            'profileDefaultsApplied' => (bool)($config['profileDefaultsApplied'] ?? false),
+            'profileDefaultsAppliedFields' => array_values((array)($config['profileDefaultsAppliedFields'] ?? [])),
+            'effectivePolicyVersion' => (string)($config['effectivePolicyVersion'] ?? ''),
+        ];
     }
 
     private function buildOpenApiSecuritySchemes(array $config): array
@@ -4521,7 +4543,10 @@ class ApiController extends Controller
                         'type' => 'object',
                         'properties' => [
                             'version' => ['type' => 'string'],
+                            'runtimeProfile' => ['type' => 'object'],
                             'count' => ['type' => 'integer'],
+                            'endpoint' => ['type' => 'string'],
+                            'schema' => ['type' => 'object'],
                             'schemas' => ['type' => 'object'],
                         ],
                     ],
@@ -4724,7 +4749,7 @@ class ApiController extends Controller
             }
         }
 
-        return '0.8.1';
+        return '0.8.5';
     }
 
     private function getRequestId(): string

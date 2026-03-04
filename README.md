@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.8.1**
+Current plugin version: **0.8.5**
 
 ## Purpose
 
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.8.1
+composer require klick/agents:^0.8.5
 php craft plugin/install agents
 ```
 
@@ -94,6 +94,7 @@ Recommended local workflow:
 
 Environment variables:
 
+- `PLUGIN_AGENTS_ENV_PROFILE` (optional: `local|test|staging|production`; used for runtime default profile selection)
 - `PLUGIN_AGENTS_ENABLED` (`true`/`false`)
 - `PLUGIN_AGENTS_API_TOKEN` (required when token enforcement is enabled)
 - `PLUGIN_AGENTS_API_CREDENTIALS` (JSON credential set with optional per-credential scopes)
@@ -114,6 +115,21 @@ Environment variables:
 - `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL` (default: `false`; enables refund-approval/control surfaces)
 
 These are documented in `.env.example`.
+
+Environment profile defaults (only when explicit env vars are unset):
+
+| Profile | Rate limit/min | Webhook max attempts | Webhook timeout |
+| --- | --- | --- | --- |
+| `local` | `300` | `2` | `5s` |
+| `test` | `300` | `2` | `5s` |
+| `staging` | `120` | `3` | `5s` |
+| `production` | `60` | `3` | `5s` |
+
+Profile precedence for runtime security knobs:
+
+1. explicit env var (`PLUGIN_AGENTS_*`)
+2. profile default (`PLUGIN_AGENTS_ENV_PROFILE` or inferred from `ENVIRONMENT`/`CRAFT_ENVIRONMENT`)
+3. legacy hardcoded fallback
 
 Enablement precedence:
 
@@ -140,6 +156,7 @@ Enablement precedence:
 By default, v1 routes require token-based access (`PLUGIN_AGENTS_REQUIRE_TOKEN=true`).
 Fail-closed behavior in production is enabled by default (`PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD=true`).
 If `PLUGIN_AGENTS_REQUIRE_TOKEN=false` is set in production, the plugin will still enforce token auth unless `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=true` is explicitly enabled.
+Health/readiness/capabilities/schema responses include environment profile metadata (`environmentProfile`, `environmentProfileSource`, `profileDefaultsApplied`, `effectivePolicyVersion`) for posture introspection.
 
 Credential sources:
 

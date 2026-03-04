@@ -9,6 +9,7 @@ use Klick\Agents\Plugin;
 
 class SecurityPolicyService extends Component
 {
+    private const EFFECTIVE_POLICY_VERSION = 'env-profile-v1';
     private const DEFAULT_TOKEN_SCOPES = [
         'health:read',
         'readiness:read',
@@ -46,6 +47,52 @@ class SecurityPolicyService extends Component
     private const DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60;
     private const DEFAULT_WEBHOOK_TIMEOUT_SECONDS = 5;
     private const DEFAULT_WEBHOOK_MAX_ATTEMPTS = 3;
+    private const PROFILE_DEFAULTS = [
+        'local' => [
+            'requireToken' => true,
+            'allowInsecureNoTokenInProd' => false,
+            'allowQueryToken' => false,
+            'failOnMissingTokenInProd' => true,
+            'redactEmail' => true,
+            'rateLimitPerMinute' => 300,
+            'rateLimitWindowSeconds' => 60,
+            'webhookTimeoutSeconds' => 5,
+            'webhookMaxAttempts' => 2,
+        ],
+        'test' => [
+            'requireToken' => true,
+            'allowInsecureNoTokenInProd' => false,
+            'allowQueryToken' => false,
+            'failOnMissingTokenInProd' => true,
+            'redactEmail' => true,
+            'rateLimitPerMinute' => 300,
+            'rateLimitWindowSeconds' => 60,
+            'webhookTimeoutSeconds' => 5,
+            'webhookMaxAttempts' => 2,
+        ],
+        'staging' => [
+            'requireToken' => true,
+            'allowInsecureNoTokenInProd' => false,
+            'allowQueryToken' => false,
+            'failOnMissingTokenInProd' => true,
+            'redactEmail' => true,
+            'rateLimitPerMinute' => 120,
+            'rateLimitWindowSeconds' => 60,
+            'webhookTimeoutSeconds' => 5,
+            'webhookMaxAttempts' => 3,
+        ],
+        'production' => [
+            'requireToken' => true,
+            'allowInsecureNoTokenInProd' => false,
+            'allowQueryToken' => false,
+            'failOnMissingTokenInProd' => true,
+            'redactEmail' => true,
+            'rateLimitPerMinute' => 60,
+            'rateLimitWindowSeconds' => 60,
+            'webhookTimeoutSeconds' => 5,
+            'webhookMaxAttempts' => 3,
+        ],
+    ];
 
     private ?array $runtimeConfig = null;
 
@@ -56,32 +103,49 @@ class SecurityPolicyService extends Component
         }
 
         $environment = strtolower((string)(App::env('ENVIRONMENT') ?: App::env('CRAFT_ENVIRONMENT') ?: 'production'));
+        if ($environment === '') {
+            $environment = 'production';
+        }
         $isProduction = in_array($environment, ['prod', 'production'], true);
+        $profileResolution = $this->resolveEnvironmentProfile($environment);
+        $environmentProfile = (string)$profileResolution['profile'];
+        $profileDefaults = self::PROFILE_DEFAULTS[$environmentProfile] ?? self::PROFILE_DEFAULTS['production'];
+        $profileDefaultsAppliedFields = [];
 
-        $requestedRequireToken = App::parseBooleanEnv('$PLUGIN_AGENTS_REQUIRE_TOKEN');
-        if ($requestedRequireToken === null) {
-            $requestedRequireToken = true;
-        }
+        $requestedRequireToken = $this->resolveBooleanRuntimeSetting(
+            'PLUGIN_AGENTS_REQUIRE_TOKEN',
+            (bool)$profileDefaults['requireToken'],
+            'requireToken',
+            $profileDefaultsAppliedFields
+        );
 
-        $allowInsecureNoTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD');
-        if ($allowInsecureNoTokenInProd === null) {
-            $allowInsecureNoTokenInProd = false;
-        }
+        $allowInsecureNoTokenInProd = $this->resolveBooleanRuntimeSetting(
+            'PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD',
+            (bool)$profileDefaults['allowInsecureNoTokenInProd'],
+            'allowInsecureNoTokenInProd',
+            $profileDefaultsAppliedFields
+        );
 
-        $allowQueryToken = App::parseBooleanEnv('$PLUGIN_AGENTS_ALLOW_QUERY_TOKEN');
-        if ($allowQueryToken === null) {
-            $allowQueryToken = false;
-        }
+        $allowQueryToken = $this->resolveBooleanRuntimeSetting(
+            'PLUGIN_AGENTS_ALLOW_QUERY_TOKEN',
+            (bool)$profileDefaults['allowQueryToken'],
+            'allowQueryToken',
+            $profileDefaultsAppliedFields
+        );
 
-        $failOnMissingTokenInProd = App::parseBooleanEnv('$PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD');
-        if ($failOnMissingTokenInProd === null) {
-            $failOnMissingTokenInProd = true;
-        }
+        $failOnMissingTokenInProd = $this->resolveBooleanRuntimeSetting(
+            'PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD',
+            (bool)$profileDefaults['failOnMissingTokenInProd'],
+            'failOnMissingTokenInProd',
+            $profileDefaultsAppliedFields
+        );
 
-        $redactEmail = App::parseBooleanEnv('$PLUGIN_AGENTS_REDACT_EMAIL');
-        if ($redactEmail === null) {
-            $redactEmail = true;
-        }
+        $redactEmail = $this->resolveBooleanRuntimeSetting(
+            'PLUGIN_AGENTS_REDACT_EMAIL',
+            (bool)$profileDefaults['redactEmail'],
+            'redactEmail',
+            $profileDefaultsAppliedFields
+        );
 
         $tokenScopes = $this->parseScopes((string)App::env('PLUGIN_AGENTS_TOKEN_SCOPES'));
         if (empty($tokenScopes)) {
@@ -130,33 +194,55 @@ class SecurityPolicyService extends Component
             }
         }
 
-        $rateLimitPerMinute = (int)App::env('PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE');
-        if ($rateLimitPerMinute <= 0) {
-            $rateLimitPerMinute = self::DEFAULT_RATE_LIMIT_PER_MINUTE;
-        }
+        $rateLimitPerMinute = $this->resolvePositiveIntegerRuntimeSetting(
+            'PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE',
+            (int)$profileDefaults['rateLimitPerMinute'],
+            self::DEFAULT_RATE_LIMIT_PER_MINUTE,
+            'rateLimitPerMinute',
+            $profileDefaultsAppliedFields
+        );
 
-        $rateLimitWindowSeconds = (int)App::env('PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS');
-        if ($rateLimitWindowSeconds <= 0) {
-            $rateLimitWindowSeconds = self::DEFAULT_RATE_LIMIT_WINDOW_SECONDS;
-        }
+        $rateLimitWindowSeconds = $this->resolvePositiveIntegerRuntimeSetting(
+            'PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS',
+            (int)$profileDefaults['rateLimitWindowSeconds'],
+            self::DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+            'rateLimitWindowSeconds',
+            $profileDefaultsAppliedFields
+        );
 
         $webhookUrl = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_URL'));
         $webhookSecret = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_SECRET'));
-        $webhookTimeoutSeconds = (int)App::env('PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS');
-        if ($webhookTimeoutSeconds <= 0) {
-            $webhookTimeoutSeconds = self::DEFAULT_WEBHOOK_TIMEOUT_SECONDS;
-        }
+        $webhookTimeoutSeconds = $this->resolvePositiveIntegerRuntimeSetting(
+            'PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS',
+            (int)$profileDefaults['webhookTimeoutSeconds'],
+            self::DEFAULT_WEBHOOK_TIMEOUT_SECONDS,
+            'webhookTimeoutSeconds',
+            $profileDefaultsAppliedFields
+        );
         $webhookTimeoutSeconds = min($webhookTimeoutSeconds, 60);
 
-        $webhookMaxAttempts = (int)App::env('PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS');
-        if ($webhookMaxAttempts <= 0) {
-            $webhookMaxAttempts = self::DEFAULT_WEBHOOK_MAX_ATTEMPTS;
-        }
+        $webhookMaxAttempts = $this->resolvePositiveIntegerRuntimeSetting(
+            'PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS',
+            (int)$profileDefaults['webhookMaxAttempts'],
+            self::DEFAULT_WEBHOOK_MAX_ATTEMPTS,
+            'webhookMaxAttempts',
+            $profileDefaultsAppliedFields
+        );
         $webhookMaxAttempts = min($webhookMaxAttempts, 10);
+
+        $profileDefaultsAppliedFields = array_values(array_unique($profileDefaultsAppliedFields));
+        sort($profileDefaultsAppliedFields);
 
         $this->runtimeConfig = [
             'environment' => $environment,
             'isProduction' => $isProduction,
+            'environmentProfile' => $environmentProfile,
+            'environmentProfileSource' => (string)$profileResolution['source'],
+            'environmentProfileProvided' => $profileResolution['provided'],
+            'environmentProfileInvalid' => (bool)$profileResolution['invalid'],
+            'profileDefaultsApplied' => !empty($profileDefaultsAppliedFields),
+            'profileDefaultsAppliedFields' => $profileDefaultsAppliedFields,
+            'effectivePolicyVersion' => self::EFFECTIVE_POLICY_VERSION,
             'requestedRequireToken' => $requestedRequireToken,
             'requireToken' => $requireToken,
             'allowInsecureNoTokenInProd' => $allowInsecureNoTokenInProd,
@@ -192,6 +278,18 @@ class SecurityPolicyService extends Component
             $warnings[] = [
                 'level' => 'warning',
                 'message' => 'Agents credential set (`PLUGIN_AGENTS_API_CREDENTIALS`) is present but could not be parsed as a non-empty JSON array/object.',
+            ];
+        }
+
+        if ((bool)($config['environmentProfileInvalid'] ?? false)) {
+            $provided = trim((string)($config['environmentProfileProvided'] ?? ''));
+            $warnings[] = [
+                'level' => 'warning',
+                'message' => sprintf(
+                    'Invalid `PLUGIN_AGENTS_ENV_PROFILE` value `%s`; falling back to `%s` profile defaults.',
+                    $provided !== '' ? $provided : 'unknown',
+                    (string)($config['environmentProfile'] ?? 'local')
+                ),
             ];
         }
 
@@ -276,6 +374,13 @@ class SecurityPolicyService extends Component
 
         return [
             'environment' => $config['environment'],
+            'profile' => [
+                'name' => (string)($config['environmentProfile'] ?? 'local'),
+                'source' => (string)($config['environmentProfileSource'] ?? 'inferred'),
+                'defaultsApplied' => (bool)($config['profileDefaultsApplied'] ?? false),
+                'defaultsAppliedFields' => array_values((array)($config['profileDefaultsAppliedFields'] ?? [])),
+                'effectivePolicyVersion' => (string)($config['effectivePolicyVersion'] ?? self::EFFECTIVE_POLICY_VERSION),
+            ],
             'authentication' => [
                 'required' => (bool)$config['requireToken'],
                 'requestedRequireToken' => (bool)$config['requestedRequireToken'],
@@ -309,6 +414,94 @@ class SecurityPolicyService extends Component
                 'errors' => $errorCount,
             ],
         ];
+    }
+
+    private function resolveBooleanRuntimeSetting(
+        string $envVar,
+        bool $profileDefault,
+        string $field,
+        array &$profileDefaultsAppliedFields
+    ): bool {
+        $resolved = App::parseBooleanEnv('$' . $envVar);
+        if ($resolved !== null) {
+            return (bool)$resolved;
+        }
+
+        $profileDefaultsAppliedFields[] = $field;
+        return $profileDefault;
+    }
+
+    private function resolvePositiveIntegerRuntimeSetting(
+        string $envVar,
+        int $profileDefault,
+        int $fallbackDefault,
+        string $field,
+        array &$profileDefaultsAppliedFields
+    ): int {
+        $raw = App::env($envVar);
+        $value = is_numeric($raw) ? (int)$raw : 0;
+        if ($value > 0) {
+            return $value;
+        }
+
+        $profileDefaultsAppliedFields[] = $field;
+        if ($profileDefault > 0) {
+            return $profileDefault;
+        }
+
+        return $fallbackDefault;
+    }
+
+    private function resolveEnvironmentProfile(string $environment): array
+    {
+        $provided = trim((string)App::env('PLUGIN_AGENTS_ENV_PROFILE'));
+        if ($provided === '') {
+            return [
+                'profile' => $this->inferEnvironmentProfile($environment),
+                'source' => 'inferred',
+                'provided' => null,
+                'invalid' => false,
+            ];
+        }
+
+        $normalized = $this->normalizeEnvironmentProfile($provided);
+        if ($normalized !== null) {
+            return [
+                'profile' => $normalized,
+                'source' => 'env',
+                'provided' => $provided,
+                'invalid' => false,
+            ];
+        }
+
+        return [
+            'profile' => 'local',
+            'source' => 'env',
+            'provided' => $provided,
+            'invalid' => true,
+        ];
+    }
+
+    private function inferEnvironmentProfile(string $environment): string
+    {
+        $normalized = $this->normalizeEnvironmentProfile($environment);
+        if ($normalized !== null) {
+            return $normalized;
+        }
+
+        return 'local';
+    }
+
+    private function normalizeEnvironmentProfile(string $profile): ?string
+    {
+        $normalized = strtolower(trim($profile));
+        return match ($normalized) {
+            'prod', 'production' => 'production',
+            'stage', 'staging' => 'staging',
+            'test', 'testing', 'ci' => 'test',
+            'local', 'dev', 'development' => 'local',
+            default => null,
+        };
     }
 
     private function parseScopes(string $raw): array
