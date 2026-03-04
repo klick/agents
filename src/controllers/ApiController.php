@@ -1628,7 +1628,7 @@ class ApiController extends Controller
             '/changes' => ['get' => [
                 'summary' => 'Unified incremental changes feed',
                 'parameters' => [
-                    ['in' => 'query', 'name' => 'types', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated list: products,orders,entries'],
+                    ['in' => 'query', 'name' => 'types', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated list: products,variants,subscriptions,transfers,donations,orders,entries,assets,categories,tags,globalsets,addresses,contentblocks,users'],
                     ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
                     ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
                     ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],

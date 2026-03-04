@@ -1496,27 +1496,25 @@ class ReadinessService extends Component
         $errors = [];
 
         foreach ($types as $type) {
-            if ($type === 'products') {
-                $error = $this->appendProductChanges($changes, $updatedSince, $snapshotEnd);
-                if ($error !== null) {
-                    $errors[] = $error;
-                }
-                continue;
-            }
-
-            if ($type === 'orders') {
-                $error = $this->appendOrderChanges($changes, $updatedSince, $snapshotEnd);
-                if ($error !== null) {
-                    $errors[] = $error;
-                }
-                continue;
-            }
-
-            if ($type === 'entries') {
-                $error = $this->appendEntryChanges($changes, $updatedSince, $snapshotEnd);
-                if ($error !== null) {
-                    $errors[] = $error;
-                }
+            $error = match ($type) {
+                'products' => $this->appendProductChanges($changes, $updatedSince, $snapshotEnd),
+                'variants' => $this->appendVariantChanges($changes, $updatedSince, $snapshotEnd),
+                'subscriptions' => $this->appendSubscriptionChanges($changes, $updatedSince, $snapshotEnd),
+                'transfers' => $this->appendTransferChanges($changes, $updatedSince, $snapshotEnd),
+                'donations' => $this->appendDonationChanges($changes, $updatedSince, $snapshotEnd),
+                'orders' => $this->appendOrderChanges($changes, $updatedSince, $snapshotEnd),
+                'entries' => $this->appendEntryChanges($changes, $updatedSince, $snapshotEnd),
+                'assets' => $this->appendAssetChanges($changes, $updatedSince, $snapshotEnd),
+                'categories' => $this->appendCategoryChanges($changes, $updatedSince, $snapshotEnd),
+                'tags' => $this->appendTagChanges($changes, $updatedSince, $snapshotEnd),
+                'globalsets' => $this->appendGlobalSetChanges($changes, $updatedSince, $snapshotEnd),
+                'addresses' => $this->appendAddressChanges($changes, $updatedSince, $snapshotEnd),
+                'contentblocks' => $this->appendContentBlockChanges($changes, $updatedSince, $snapshotEnd),
+                'users' => $this->appendUserChanges($changes, $updatedSince, $snapshotEnd),
+                default => null,
+            };
+            if ($error !== null) {
+                $errors[] = $error;
             }
         }
 
@@ -2886,14 +2884,55 @@ class ReadinessService extends Component
 
     private function normalizeChangeTypes(mixed $rawTypes): array
     {
-        $canonical = ['products', 'orders', 'entries'];
+        $canonical = [
+            'products',
+            'variants',
+            'subscriptions',
+            'transfers',
+            'donations',
+            'orders',
+            'entries',
+            'assets',
+            'categories',
+            'tags',
+            'globalsets',
+            'addresses',
+            'contentblocks',
+            'users',
+        ];
         $aliases = [
             'product' => 'products',
             'products' => 'products',
+            'variant' => 'variants',
+            'variants' => 'variants',
+            'subscription' => 'subscriptions',
+            'subscriptions' => 'subscriptions',
+            'transfer' => 'transfers',
+            'transfers' => 'transfers',
+            'donation' => 'donations',
+            'donations' => 'donations',
             'order' => 'orders',
             'orders' => 'orders',
             'entry' => 'entries',
             'entries' => 'entries',
+            'asset' => 'assets',
+            'assets' => 'assets',
+            'category' => 'categories',
+            'categories' => 'categories',
+            'tag' => 'tags',
+            'tags' => 'tags',
+            'globalset' => 'globalsets',
+            'globalsets' => 'globalsets',
+            'global-set' => 'globalsets',
+            'global-sets' => 'globalsets',
+            'address' => 'addresses',
+            'addresses' => 'addresses',
+            'contentblock' => 'contentblocks',
+            'contentblocks' => 'contentblocks',
+            'content-block' => 'contentblocks',
+            'content-blocks' => 'contentblocks',
+            'user' => 'users',
+            'users' => 'users',
         ];
 
         $tokens = [];
@@ -2936,8 +2975,9 @@ class ReadinessService extends Component
             return [
                 'types' => [],
                 'error' => sprintf(
-                    'Invalid `types` value(s): %s. Allowed values: products, orders, entries.',
-                    implode(', ', array_values(array_unique($invalid)))
+                    'Invalid `types` value(s): %s. Allowed values: %s.',
+                    implode(', ', array_values(array_unique($invalid))),
+                    implode(', ', $canonical)
                 ),
             ];
         }
@@ -3121,6 +3161,526 @@ class ReadinessService extends Component
                 (string)$entry->id,
                 'deleted',
                 $entry->dateDeleted ?? $entry->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendVariantChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Variant::class)) {
+            return 'Commerce plugin is unavailable for variant changes.';
+        }
+
+        $updatedQuery = Variant::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $variant) {
+            if (!$variant instanceof Variant) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'variant',
+                (string)$variant->id,
+                $this->resolveChangeAction($variant->dateCreated, $variant->dateUpdated),
+                $variant->dateUpdated,
+                $this->mapVariant($variant, false)
+            );
+        }
+
+        $deletedQuery = Variant::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $variant) {
+            if (!$variant instanceof Variant) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'variant',
+                (string)$variant->id,
+                'deleted',
+                $variant->dateDeleted ?? $variant->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendSubscriptionChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Subscription::class)) {
+            return 'Commerce plugin is unavailable for subscription changes.';
+        }
+
+        $updatedQuery = Subscription::find()
+            ->orderBy($this->buildIncrementalSort());
+        if (method_exists($updatedQuery, 'anyStatus')) {
+            $updatedQuery->anyStatus();
+        } else {
+            $updatedQuery->status(null);
+        }
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $subscription) {
+            if (!$subscription instanceof Subscription) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'subscription',
+                (string)$subscription->id,
+                $this->resolveChangeAction($subscription->dateCreated, $subscription->dateUpdated),
+                $subscription->dateUpdated,
+                $this->mapSubscription($subscription, false)
+            );
+        }
+
+        $deletedQuery = Subscription::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        if (method_exists($deletedQuery, 'anyStatus')) {
+            $deletedQuery->anyStatus();
+        } else {
+            $deletedQuery->status(null);
+        }
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $subscription) {
+            if (!$subscription instanceof Subscription) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'subscription',
+                (string)$subscription->id,
+                'deleted',
+                $subscription->dateDeleted ?? $subscription->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendTransferChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Transfer::class)) {
+            return 'Commerce plugin is unavailable for transfer changes.';
+        }
+
+        $updatedQuery = Transfer::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $transfer) {
+            if (!$transfer instanceof Transfer) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'transfer',
+                (string)$transfer->id,
+                $this->resolveChangeAction($transfer->dateCreated, $transfer->dateUpdated),
+                $transfer->dateUpdated,
+                $this->mapTransfer($transfer, false)
+            );
+        }
+
+        $deletedQuery = Transfer::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $transfer) {
+            if (!$transfer instanceof Transfer) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'transfer',
+                (string)$transfer->id,
+                'deleted',
+                $transfer->dateDeleted ?? $transfer->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendDonationChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        if (!class_exists(Donation::class)) {
+            return 'Commerce plugin is unavailable for donation changes.';
+        }
+
+        $updatedQuery = Donation::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $donation) {
+            if (!$donation instanceof Donation) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'donation',
+                (string)$donation->id,
+                $this->resolveChangeAction($donation->dateCreated, $donation->dateUpdated),
+                $donation->dateUpdated,
+                $this->mapDonation($donation, false)
+            );
+        }
+
+        $deletedQuery = Donation::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $donation) {
+            if (!$donation instanceof Donation) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'donation',
+                (string)$donation->id,
+                'deleted',
+                $donation->dateDeleted ?? $donation->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendAssetChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = Asset::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $asset) {
+            if (!$asset instanceof Asset) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'asset',
+                (string)$asset->id,
+                $this->resolveChangeAction($asset->dateCreated, $asset->dateUpdated),
+                $asset->dateUpdated,
+                $this->mapAsset($asset, false)
+            );
+        }
+
+        $deletedQuery = Asset::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $asset) {
+            if (!$asset instanceof Asset) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'asset',
+                (string)$asset->id,
+                'deleted',
+                $asset->dateDeleted ?? $asset->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendCategoryChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = Category::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $category) {
+            if (!$category instanceof Category) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'category',
+                (string)$category->id,
+                $this->resolveChangeAction($category->dateCreated, $category->dateUpdated),
+                $category->dateUpdated,
+                $this->mapCategory($category, false)
+            );
+        }
+
+        $deletedQuery = Category::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $category) {
+            if (!$category instanceof Category) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'category',
+                (string)$category->id,
+                'deleted',
+                $category->dateDeleted ?? $category->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendTagChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = Tag::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $tag) {
+            if (!$tag instanceof Tag) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'tag',
+                (string)$tag->id,
+                $this->resolveChangeAction($tag->dateCreated, $tag->dateUpdated),
+                $tag->dateUpdated,
+                $this->mapTag($tag, false)
+            );
+        }
+
+        $deletedQuery = Tag::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $tag) {
+            if (!$tag instanceof Tag) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'tag',
+                (string)$tag->id,
+                'deleted',
+                $tag->dateDeleted ?? $tag->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendGlobalSetChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = GlobalSet::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $globalSet) {
+            if (!$globalSet instanceof GlobalSet) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'globalset',
+                (string)$globalSet->id,
+                $this->resolveChangeAction($globalSet->dateCreated, $globalSet->dateUpdated),
+                $globalSet->dateUpdated,
+                $this->mapGlobalSet($globalSet, false)
+            );
+        }
+
+        $deletedQuery = GlobalSet::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $globalSet) {
+            if (!$globalSet instanceof GlobalSet) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'globalset',
+                (string)$globalSet->id,
+                'deleted',
+                $globalSet->dateDeleted ?? $globalSet->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendAddressChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = Address::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $address) {
+            if (!$address instanceof Address) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'address',
+                (string)$address->id,
+                $this->resolveChangeAction($address->dateCreated, $address->dateUpdated),
+                $address->dateUpdated,
+                $this->mapAddress($address, false, false, true)
+            );
+        }
+
+        $deletedQuery = Address::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $address) {
+            if (!$address instanceof Address) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'address',
+                (string)$address->id,
+                'deleted',
+                $address->dateDeleted ?? $address->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendContentBlockChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = ContentBlock::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $block) {
+            if (!$block instanceof ContentBlock) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'contentblock',
+                (string)$block->id,
+                $this->resolveChangeAction($block->dateCreated, $block->dateUpdated),
+                $block->dateUpdated,
+                $this->mapContentBlock($block, false)
+            );
+        }
+
+        $deletedQuery = ContentBlock::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $block) {
+            if (!$block instanceof ContentBlock) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'contentblock',
+                (string)$block->id,
+                'deleted',
+                $block->dateDeleted ?? $block->dateUpdated,
+                null
+            );
+        }
+
+        return null;
+    }
+
+    private function appendUserChanges(array &$changes, ?DateTimeImmutable $updatedSince, ?DateTimeImmutable $snapshotEnd): ?string
+    {
+        $updatedQuery = User::find()
+            ->status(null)
+            ->orderBy($this->buildIncrementalSort());
+        $this->applyDateUpdatedWindow($updatedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($updatedQuery->all() as $user) {
+            if (!$user instanceof User) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'user',
+                (string)$user->id,
+                $this->resolveChangeAction($user->dateCreated, $user->dateUpdated),
+                $user->dateUpdated,
+                $this->mapUser($user, false, false, true)
+            );
+        }
+
+        $deletedQuery = User::find()
+            ->trashed()
+            ->orderBy(['elements.dateDeleted' => SORT_ASC, 'elements.id' => SORT_ASC]);
+        $this->applyDateDeletedWindow($deletedQuery, $updatedSince, $snapshotEnd);
+
+        foreach ($deletedQuery->all() as $user) {
+            if (!$user instanceof User) {
+                continue;
+            }
+
+            $this->appendChangeItem(
+                $changes,
+                'user',
+                (string)$user->id,
+                'deleted',
+                $user->dateDeleted ?? $user->dateUpdated,
                 null
             );
         }

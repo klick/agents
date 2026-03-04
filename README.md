@@ -443,9 +443,9 @@ Identifier notes for show commands:
 
 ### Changes endpoint parameters
 
-- `/changes`: `types` (optional comma list: `products,orders,entries`), `updatedSince` (RFC3339 bootstrap), `cursor` (opaque continuation), `limit` (1..200)
+- `/changes`: `types` (optional comma list: `products,variants,subscriptions,transfers,donations,orders,entries,assets,categories,tags,globalsets,addresses,contentblocks,users`), `updatedSince` (RFC3339 bootstrap), `cursor` (opaque continuation), `limit` (1..200)
 - `/changes` returns normalized `data[]` items with:
-  - `resourceType` (`product|order|entry`)
+  - `resourceType` (`product|variant|subscription|transfer|donation|order|entry|asset|category|tag|globalset|address|contentblock|user`)
   - `resourceId` (string)
   - `action` (`created|updated|deleted`)
   - `updatedAt` (RFC3339 UTC)
