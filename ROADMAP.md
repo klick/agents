@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-04  
-Current release: `v0.6.2`
+Current release: `v0.7.0`
 
 ## Direction
 
@@ -47,7 +47,7 @@ Release outcome:
 - `v0.6.1` hotfix closed runtime reliability issues in adoption metrics, machine POST CSRF handling, and dual-approval race safety.
 - `v0.6.2` corrected release-version metadata/tag alignment for plugin store ingestion.
 
-## Now (`v0.7.0`)
+## Done (`v0.7.0`)
 
 Target: July 2026
 
@@ -62,6 +62,17 @@ Target: July 2026
 Release outcome:
 
 - Faster support resolution and repeatable onboarding from first call to production patterns.
+
+## Now (`v0.8.0`)
+
+Target: August 2026
+
+- Improve integrator DX with schema/OpenAPI-based templates.
+- Publish reference automations for the canonical jobs (with tested sample payloads).
+
+Release outcome:
+
+- Faster integration delivery from initial setup to reusable production automation patterns.
 
 ## Success Checks
 
