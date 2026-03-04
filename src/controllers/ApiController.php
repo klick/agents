@@ -23,6 +23,7 @@ class ApiController extends Controller
         'products:read',
         'orders:read',
         'entries:read',
+        'assets:read',
         'changes:read',
         'sections:read',
         'users:read',
@@ -377,6 +378,82 @@ class ApiController extends Controller
         return $this->respondWithPayload($payload, true, 'Entry not found.');
     }
 
+    public function actionAssets(): Response
+    {
+        if (($guard = $this->guardRequest('assets:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $volumeError = $this->validatePatternQueryParam('volume', '/^[a-zA-Z0-9_-]+$/', 'volume');
+        if ($volumeError !== null) {
+            $errors[] = $volumeError;
+        }
+        $kindError = $this->validatePatternQueryParam('kind', '/^[a-zA-Z0-9_-]+$/', 'kind');
+        if ($kindError !== null) {
+            $errors[] = $kindError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getAssetsList([
+            'q' => $request->getQueryParam('q'),
+            'volume' => $request->getQueryParam('volume', ''),
+            'kind' => $request->getQueryParam('kind', ''),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionAssetShow(): Response
+    {
+        if (($guard = $this->guardRequest('assets:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawFilename = trim((string)$request->getQueryParam('filename', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+        $volumeError = $this->validatePatternQueryParam('volume', '/^[a-zA-Z0-9_-]+$/', 'volume');
+        if ($volumeError !== null) {
+            $errors[] = $volumeError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasFilename = $rawFilename !== '';
+        if (($hasId ? 1 : 0) + ($hasFilename ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `filename`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getAssetByIdOrFilename([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'filename' => (string)$request->getQueryParam('filename', ''),
+            'volume' => (string)$request->getQueryParam('volume', ''),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Asset not found.');
+    }
+
     public function actionSections(): Response
     {
         if (($guard = $this->guardRequest('sections:read')) !== null) {
@@ -537,6 +614,8 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/entries', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
             ['method' => 'GET', 'path' => '/entries/show', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
+            ['method' => 'GET', 'path' => '/assets', 'requiredScopes' => ['assets:read']],
+            ['method' => 'GET', 'path' => '/assets/show', 'requiredScopes' => ['assets:read']],
             ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
             ['method' => 'GET', 'path' => '/users', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
@@ -741,6 +820,38 @@ class ApiController extends Controller
                 ]),
                 'x-required-scopes' => ['entries:read'],
                 'x-optional-scopes' => ['entries:read_all_statuses'],
+            ]],
+            '/assets' => ['get' => [
+                'summary' => 'Asset list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'volume', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'kind', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['assets:read'],
+            ]],
+            '/assets/show' => ['get' => [
+                'summary' => 'Single asset by id or filename',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'filename', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'volume', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['assets:read'],
             ]],
             '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
             '/users' => ['get' => [
@@ -1985,6 +2096,7 @@ class ApiController extends Controller
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
             'entries:read' => 'Read live content entry endpoints.',
             'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
+            'assets:read' => 'Read asset list and lookup endpoints.',
             'changes:read' => 'Read unified cross-resource incremental changes feed.',
             'sections:read' => 'Read section list endpoint.',
             'users:read' => 'Read user list and lookup endpoints.',
@@ -2757,6 +2869,50 @@ class ApiController extends Controller
                             'data' => ['type' => 'array', 'items' => ['type' => 'object']],
                             'meta' => ['type' => 'object'],
                             'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'assets.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/assets',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'q' => ['type' => 'string'],
+                            'volume' => ['type' => 'string'],
+                            'kind' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'assets.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/assets/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'filename' => ['type' => 'string'],
+                            'volume' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
                         ],
                     ],
                 ],

@@ -158,6 +158,8 @@ class Plugin extends BasePlugin
                 'agents/v1/orders/show' => 'agents/api/order-show',
                 'agents/v1/entries' => 'agents/api/entries',
                 'agents/v1/entries/show' => 'agents/api/entry-show',
+                'agents/v1/assets' => 'agents/api/assets',
+                'agents/v1/assets/show' => 'agents/api/asset-show',
                 'agents/v1/users' => 'agents/api/users',
                 'agents/v1/users/show' => 'agents/api/user-show',
                 'agents/v1/changes' => 'agents/api/changes',

@@ -8,6 +8,7 @@ use craft\commerce\elements\Order;
 use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use craft\commerce\elements\Product;
+use craft\elements\Asset;
 use craft\elements\Entry;
 use craft\elements\User;
 use DateTimeImmutable;
@@ -855,6 +856,173 @@ class ReadinessService extends Component
             'data' => $data,
             'meta' => [
                 'count' => count($data),
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getAssetsList(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $volume = trim((string)($params['volume'] ?? ''));
+        $kind = trim((string)($params['kind'] ?? ''));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'search' => $search !== '' ? $search : null,
+            'volume' => $volume !== '' ? $volume : null,
+            'kind' => $kind !== '' ? $kind : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'assets');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Asset::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+
+        if ($volume !== '' && method_exists($queryBuilder, 'volume')) {
+            $queryBuilder->volume($volume);
+        }
+        if ($kind !== '' && method_exists($queryBuilder, 'kind')) {
+            $queryBuilder->kind($kind);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $assets = $queryBuilder->all();
+        $returnedAssets = $isIncremental ? array_slice($assets, 0, $limit) : $assets;
+        $hasMore = $isIncremental && count($assets) > $limit;
+        $nextOffset = $offset + count($returnedAssets);
+
+        $data = [];
+        foreach ($returnedAssets as $asset) {
+            if (!$asset instanceof Asset) {
+                continue;
+            }
+            $data[] = $this->mapAsset($asset, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'assets', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getAssetByIdOrFilename(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $filename = trim((string)($params['filename'] ?? ''));
+        $volume = trim((string)($params['volume'] ?? ''));
+        $hasId = $id > 0;
+        $hasFilename = $filename !== '';
+
+        if (($hasId ? 1 : 0) + ($hasFilename ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --filename.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Asset::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } else {
+            $queryBuilder->filename($filename);
+        }
+
+        if ($volume !== '' && method_exists($queryBuilder, 'volume')) {
+            $queryBuilder->volume($volume);
+        }
+
+        $asset = $queryBuilder->one();
+        if (!$asset instanceof Asset) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapAsset($asset, true),
+            'meta' => [
+                'count' => 1,
                 'errors' => [],
             ],
         ];
@@ -1780,6 +1948,45 @@ class ReadinessService extends Component
         $data['dateUpdated'] = $this->formatDate($entry->dateUpdated);
         $data['authorId'] = $entry->authorId ? (int)$entry->authorId : null;
         $data['enabled'] = (bool)$entry->enabled;
+
+        return $data;
+    }
+
+    private function mapAsset(Asset $asset, bool $detailed): array
+    {
+        $volumeHandle = null;
+        try {
+            $volumeHandle = $asset->getVolume()->handle ?? null;
+        } catch (\Throwable) {
+            $volumeHandle = null;
+        }
+
+        $data = [
+            'id' => (int)$asset->id,
+            'title' => (string)$asset->title,
+            'filename' => $asset->getFilename(),
+            'kind' => $asset->kind ? (string)$asset->kind : null,
+            'mimeType' => $asset->getMimeType(),
+            'size' => $asset->size === null ? null : (int)$asset->size,
+            'volume' => $volumeHandle,
+            'folderId' => $asset->folderId === null ? null : (int)$asset->folderId,
+            'uploaderId' => $asset->uploaderId === null ? null : (int)$asset->uploaderId,
+            'status' => $asset->getStatus() ?? null,
+            'updatedAt' => $this->formatDate($asset->dateUpdated),
+            'url' => $asset->getUrl(),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['alt'] = $asset->alt ? (string)$asset->alt : null;
+        $data['extension'] = $asset->getExtension();
+        $data['dateModified'] = $this->formatDate($asset->dateModified);
+        $data['dateCreated'] = $this->formatDate($asset->dateCreated);
+        $data['dateUpdated'] = $this->formatDate($asset->dateUpdated);
+        $data['height'] = $asset->getHeight();
+        $data['width'] = $asset->getWidth();
 
         return $data;
     }
