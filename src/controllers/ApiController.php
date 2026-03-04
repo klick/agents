@@ -22,6 +22,9 @@ class ApiController extends Controller
         'diagnostics:read',
         'products:read',
         'variants:read',
+        'subscriptions:read',
+        'transfers:read',
+        'donations:read',
         'orders:read',
         'entries:read',
         'assets:read',
@@ -268,6 +271,216 @@ class ApiController extends Controller
         ]);
 
         return $this->respondWithPayload($payload, true, 'Variant not found.');
+    }
+
+    public function actionSubscriptions(): Response
+    {
+        if (($guard = $this->guardRequest('subscriptions:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $userIdError = $this->validateIntegerQueryParam('userId', 1, null);
+        if ($userIdError !== null) {
+            $errors[] = $userIdError;
+        }
+        $planIdError = $this->validateIntegerQueryParam('planId', 1, null);
+        if ($planIdError !== null) {
+            $errors[] = $planIdError;
+        }
+        $statusError = $this->validateEnumQueryParam('status', ['active', 'expired', 'suspended', 'canceled', 'all', 'any']);
+        if ($statusError !== null) {
+            $errors[] = $statusError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getSubscriptionsList([
+            'status' => $request->getQueryParam('status', 'active'),
+            'q' => $request->getQueryParam('q', ''),
+            'reference' => $request->getQueryParam('reference', ''),
+            'userId' => (int)$request->getQueryParam('userId', 0),
+            'planId' => (int)$request->getQueryParam('planId', 0),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionSubscriptionShow(): Response
+    {
+        if (($guard = $this->guardRequest('subscriptions:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawReference = trim((string)$request->getQueryParam('reference', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasReference = $rawReference !== '';
+        if (($hasId ? 1 : 0) + ($hasReference ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `reference`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getSubscriptionByIdOrReference([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'reference' => (string)$request->getQueryParam('reference', ''),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Subscription not found.');
+    }
+
+    public function actionTransfers(): Response
+    {
+        if (($guard = $this->guardRequest('transfers:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $originError = $this->validateIntegerQueryParam('originLocationId', 1, null);
+        if ($originError !== null) {
+            $errors[] = $originError;
+        }
+        $destinationError = $this->validateIntegerQueryParam('destinationLocationId', 1, null);
+        if ($destinationError !== null) {
+            $errors[] = $destinationError;
+        }
+        $statusError = $this->validatePatternQueryParam('status', '/^[a-zA-Z0-9_-]+$/', 'status');
+        if ($statusError !== null) {
+            $errors[] = $statusError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getTransfersList([
+            'status' => $request->getQueryParam('status', 'all'),
+            'q' => $request->getQueryParam('q', ''),
+            'originLocationId' => (int)$request->getQueryParam('originLocationId', 0),
+            'destinationLocationId' => (int)$request->getQueryParam('destinationLocationId', 0),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionTransferShow(): Response
+    {
+        if (($guard = $this->guardRequest('transfers:read')) !== null) {
+            return $guard;
+        }
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            return $this->invalidQueryResponse([$idError]);
+        }
+
+        $request = Craft::$app->getRequest();
+        $id = (int)$request->getQueryParam('id', 0);
+        if ($id <= 0) {
+            return $this->invalidQueryResponse(['Provide `id` with a positive integer value.']);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getTransferById([
+            'id' => $id,
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Transfer not found.');
+    }
+
+    public function actionDonations(): Response
+    {
+        if (($guard = $this->guardRequest('donations:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $statusError = $this->validateEnumQueryParam('status', ['live', 'pending', 'disabled', 'expired', 'all', 'any']);
+        if ($statusError !== null) {
+            $errors[] = $statusError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getDonationsList([
+            'status' => $request->getQueryParam('status', 'live'),
+            'q' => $request->getQueryParam('q', ''),
+            'sku' => $request->getQueryParam('sku', ''),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionDonationShow(): Response
+    {
+        if (($guard = $this->guardRequest('donations:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawSku = trim((string)$request->getQueryParam('sku', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasSku = $rawSku !== '';
+        if (($hasId ? 1 : 0) + ($hasSku ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `sku`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getDonationByIdOrSku([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'sku' => (string)$request->getQueryParam('sku', ''),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Donation not found.');
     }
 
     public function actionOrders(): Response
@@ -1082,6 +1295,12 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
             ['method' => 'GET', 'path' => '/variants', 'requiredScopes' => ['variants:read']],
             ['method' => 'GET', 'path' => '/variants/show', 'requiredScopes' => ['variants:read']],
+            ['method' => 'GET', 'path' => '/subscriptions', 'requiredScopes' => ['subscriptions:read']],
+            ['method' => 'GET', 'path' => '/subscriptions/show', 'requiredScopes' => ['subscriptions:read']],
+            ['method' => 'GET', 'path' => '/transfers', 'requiredScopes' => ['transfers:read']],
+            ['method' => 'GET', 'path' => '/transfers/show', 'requiredScopes' => ['transfers:read']],
+            ['method' => 'GET', 'path' => '/donations', 'requiredScopes' => ['donations:read']],
+            ['method' => 'GET', 'path' => '/donations/show', 'requiredScopes' => ['donations:read']],
             ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/entries', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
@@ -1256,6 +1475,101 @@ class ApiController extends Controller
                     '404' => ['description' => 'Not found'],
                 ]),
                 'x-required-scopes' => ['variants:read'],
+            ]],
+            '/subscriptions' => ['get' => [
+                'summary' => 'Subscription list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['active', 'expired', 'suspended', 'canceled', 'all']]],
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'reference', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'userId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'planId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['subscriptions:read'],
+            ]],
+            '/subscriptions/show' => ['get' => [
+                'summary' => 'Single subscription by id or reference',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'reference', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['subscriptions:read'],
+            ]],
+            '/transfers' => ['get' => [
+                'summary' => 'Transfer list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'originLocationId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'destinationLocationId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['transfers:read'],
+            ]],
+            '/transfers/show' => ['get' => [
+                'summary' => 'Single transfer by id',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['transfers:read'],
+            ]],
+            '/donations' => ['get' => [
+                'summary' => 'Donation list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['live', 'pending', 'disabled', 'expired', 'all']]],
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'sku', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['donations:read'],
+            ]],
+            '/donations/show' => ['get' => [
+                'summary' => 'Single donation by id or sku',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'sku', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['donations:read'],
             ]],
             '/orders' => ['get' => [
                 'summary' => 'Order list',
@@ -2785,6 +3099,9 @@ class ApiController extends Controller
             'diagnostics:read' => 'Read one-click diagnostics support bundle (`/diagnostics/bundle`).',
             'products:read' => 'Read product snapshot endpoints.',
             'variants:read' => 'Read variant list and lookup endpoints.',
+            'subscriptions:read' => 'Read subscription list and lookup endpoints.',
+            'transfers:read' => 'Read transfer list and lookup endpoints.',
+            'donations:read' => 'Read donation list and lookup endpoints.',
             'orders:read' => 'Read order metadata endpoints.',
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
             'entries:read' => 'Read live content entry endpoints.',
@@ -3591,6 +3908,137 @@ class ApiController extends Controller
                             'id' => ['type' => 'integer'],
                             'sku' => ['type' => 'string'],
                             'productId' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'subscriptions.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/subscriptions',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'q' => ['type' => 'string'],
+                            'reference' => ['type' => 'string'],
+                            'userId' => ['type' => 'integer'],
+                            'planId' => ['type' => 'integer'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'subscriptions.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/subscriptions/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'reference' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'transfers.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/transfers',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'q' => ['type' => 'string'],
+                            'originLocationId' => ['type' => 'integer'],
+                            'destinationLocationId' => ['type' => 'integer'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'transfers.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/transfers/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'donations.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/donations',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'q' => ['type' => 'string'],
+                            'sku' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'donations.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/donations/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'sku' => ['type' => 'string'],
                         ],
                     ],
                     'response' => [

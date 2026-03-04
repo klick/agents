@@ -33,7 +33,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 
 | Surface | Status | Notes |
 | --- | --- | --- |
-| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
+| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
 | Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
@@ -208,6 +208,12 @@ Read/discovery endpoints:
 - `GET /products`
 - `GET /variants`
 - `GET /variants/show` (requires exactly one of `id` or `sku`; optional `productId`)
+- `GET /subscriptions`
+- `GET /subscriptions/show` (requires exactly one of `id` or `reference`)
+- `GET /transfers`
+- `GET /transfers/show` (requires `id`)
+- `GET /donations`
+- `GET /donations/show` (requires exactly one of `id` or `sku`)
 - `GET /orders`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
 - `GET /entries`
@@ -272,6 +278,9 @@ Read scopes:
 - `diagnostics:read`
 - `products:read`
 - `variants:read`
+- `subscriptions:read`
+- `transfers:read`
+- `donations:read`
 - `orders:read`
 - `orders:read_sensitive`
 - `entries:read`
@@ -389,6 +398,24 @@ Identifier notes for show commands:
 - `/variants`: `status` (`live|pending|disabled|expired|all`), `q`, `sku`, `productId`, `limit` (1..200)
 - `/variants` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
 - `/variants/show`: exactly one of `id` or `sku`; optional `productId`
+
+### Subscriptions endpoint parameters
+
+- `/subscriptions`: `status` (`active|expired|suspended|canceled|all`), `q`, `reference`, `userId`, `planId`, `limit` (1..200)
+- `/subscriptions` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
+- `/subscriptions/show`: exactly one of `id` or `reference`
+
+### Transfers endpoint parameters
+
+- `/transfers`: `status`, `q`, `originLocationId`, `destinationLocationId`, `limit` (1..200)
+- `/transfers` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
+- `/transfers/show`: `id`
+
+### Donations endpoint parameters
+
+- `/donations`: `status` (`live|pending|disabled|expired|all`), `q`, `sku`, `limit` (1..200)
+- `/donations` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
+- `/donations/show`: exactly one of `id` or `sku`
 
 ### Orders endpoint parameters
 

@@ -4,7 +4,10 @@ namespace Klick\Agents\services;
 
 use Craft;
 use craft\base\Component;
+use craft\commerce\elements\Donation;
 use craft\commerce\elements\Order;
+use craft\commerce\elements\Subscription;
+use craft\commerce\elements\Transfer;
 use craft\commerce\elements\Variant;
 use craft\helpers\App;
 use craft\helpers\UrlHelper;
@@ -533,6 +536,576 @@ class ReadinessService extends Component
 
         return [
             'data' => $this->mapVariant($variant, true),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getSubscriptionsList(array $params): array
+    {
+        $status = strtolower(trim((string)($params['status'] ?? 'active')));
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $reference = trim((string)($params['reference'] ?? ''));
+        $userId = (int)($params['userId'] ?? 0);
+        $planId = (int)($params['planId'] ?? 0);
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+        $filters = [
+            'status' => $status !== '' ? $status : 'all',
+            'search' => $search !== '' ? $search : null,
+            'reference' => $reference !== '' ? $reference : null,
+            'userId' => $userId > 0 ? $userId : null,
+            'planId' => $planId > 0 ? $planId : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if (!class_exists(Subscription::class)) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'filters' => $filters,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'subscriptions');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Subscription::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+
+        if ($status === '' || $status === 'all' || $status === 'any') {
+            if (method_exists($queryBuilder, 'anyStatus')) {
+                $queryBuilder->anyStatus();
+            } else {
+                $queryBuilder->status(null);
+            }
+        } elseif (method_exists($queryBuilder, 'status')) {
+            $queryBuilder->status($status);
+        }
+        if ($userId > 0 && method_exists($queryBuilder, 'userId')) {
+            $queryBuilder->userId($userId);
+        }
+        if ($planId > 0 && method_exists($queryBuilder, 'planId')) {
+            $queryBuilder->planId($planId);
+        }
+        if ($reference !== '' && method_exists($queryBuilder, 'reference')) {
+            $queryBuilder->reference($reference);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $subscriptions = $queryBuilder->all();
+        $returnedSubscriptions = $isIncremental ? array_slice($subscriptions, 0, $limit) : $subscriptions;
+        $hasMore = $isIncremental && count($subscriptions) > $limit;
+        $nextOffset = $offset + count($returnedSubscriptions);
+
+        $data = [];
+        foreach ($returnedSubscriptions as $subscription) {
+            if (!$subscription instanceof Subscription) {
+                continue;
+            }
+            $data[] = $this->mapSubscription($subscription, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'subscriptions', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getSubscriptionByIdOrReference(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $reference = trim((string)($params['reference'] ?? ''));
+        $hasId = $id > 0;
+        $hasReference = $reference !== '';
+
+        if (($hasId ? 1 : 0) + ($hasReference ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --reference.'],
+                ],
+            ];
+        }
+
+        if (!class_exists(Subscription::class)) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Subscription::find()->limit(1);
+        if (method_exists($queryBuilder, 'anyStatus')) {
+            $queryBuilder->anyStatus();
+        } else {
+            $queryBuilder->status(null);
+        }
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } elseif (method_exists($queryBuilder, 'reference')) {
+            $queryBuilder->reference($reference);
+        } else {
+            $queryBuilder->search($reference);
+        }
+
+        $subscription = $queryBuilder->one();
+        if (!$subscription instanceof Subscription) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapSubscription($subscription, true),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getTransfersList(array $params): array
+    {
+        $status = strtolower(trim((string)($params['status'] ?? 'all')));
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $originLocationId = (int)($params['originLocationId'] ?? 0);
+        $destinationLocationId = (int)($params['destinationLocationId'] ?? 0);
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+        $filters = [
+            'status' => $status !== '' ? $status : 'all',
+            'search' => $search !== '' ? $search : null,
+            'originLocationId' => $originLocationId > 0 ? $originLocationId : null,
+            'destinationLocationId' => $destinationLocationId > 0 ? $destinationLocationId : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if (!class_exists(Transfer::class)) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'filters' => $filters,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'transfers');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Transfer::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+
+        if ($status !== '' && $status !== 'all' && $status !== 'any' && method_exists($queryBuilder, 'transferStatus')) {
+            $queryBuilder->transferStatus($status);
+        }
+        if ($originLocationId > 0 && method_exists($queryBuilder, 'originLocation')) {
+            $queryBuilder->originLocation($originLocationId);
+        }
+        if ($destinationLocationId > 0 && method_exists($queryBuilder, 'destinationLocation')) {
+            $queryBuilder->destinationLocation($destinationLocationId);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $transfers = $queryBuilder->all();
+        $returnedTransfers = $isIncremental ? array_slice($transfers, 0, $limit) : $transfers;
+        $hasMore = $isIncremental && count($transfers) > $limit;
+        $nextOffset = $offset + count($returnedTransfers);
+
+        $data = [];
+        foreach ($returnedTransfers as $transfer) {
+            if (!$transfer instanceof Transfer) {
+                continue;
+            }
+            $data[] = $this->mapTransfer($transfer, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'transfers', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getTransferById(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        if ($id <= 0) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide `--id` with a positive integer value.'],
+                ],
+            ];
+        }
+
+        if (!class_exists(Transfer::class)) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Transfer::find()->status(null)->limit(1);
+        $queryBuilder->id($id);
+
+        $transfer = $queryBuilder->one();
+        if (!$transfer instanceof Transfer) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapTransfer($transfer, true),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getDonationsList(array $params): array
+    {
+        $status = $this->normalizeStatus((string)($params['status'] ?? 'live'));
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $sku = trim((string)($params['sku'] ?? ''));
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+        $filters = [
+            'status' => $status,
+            'search' => $search !== '' ? $search : null,
+            'sku' => $sku !== '' ? $sku : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if (!class_exists(Donation::class)) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'filters' => $filters,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'donations');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Donation::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+
+        if ($status === 'all') {
+            $queryBuilder->status(null);
+        } else {
+            $queryBuilder->status($status);
+        }
+        if ($sku !== '' && method_exists($queryBuilder, 'sku')) {
+            $queryBuilder->sku($sku);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $donations = $queryBuilder->all();
+        $returnedDonations = $isIncremental ? array_slice($donations, 0, $limit) : $donations;
+        $hasMore = $isIncremental && count($donations) > $limit;
+        $nextOffset = $offset + count($returnedDonations);
+
+        $data = [];
+        foreach ($returnedDonations as $donation) {
+            if (!$donation instanceof Donation) {
+                continue;
+            }
+            $data[] = $this->mapDonation($donation, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'donations', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getDonationByIdOrSku(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $sku = trim((string)($params['sku'] ?? ''));
+        $hasId = $id > 0;
+        $hasSku = $sku !== '';
+
+        if (($hasId ? 1 : 0) + ($hasSku ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --sku.'],
+                ],
+            ];
+        }
+
+        if (!class_exists(Donation::class)) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Donation::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } elseif (method_exists($queryBuilder, 'sku')) {
+            $queryBuilder->sku($sku);
+        } else {
+            $queryBuilder->search($sku);
+        }
+
+        $donation = $queryBuilder->one();
+        if (!$donation instanceof Donation) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapDonation($donation, true),
             'meta' => [
                 'count' => 1,
                 'errors' => [],
@@ -2929,6 +3502,138 @@ class ReadinessService extends Component
         $data['length'] = $variant->length === null ? null : (float)$variant->length;
         $data['width'] = $variant->width === null ? null : (float)$variant->width;
         $data['height'] = $variant->height === null ? null : (float)$variant->height;
+
+        return $data;
+    }
+
+    private function mapSubscription(Subscription $subscription, bool $detailed): array
+    {
+        $status = method_exists($subscription, 'getStatus') ? $subscription->getStatus() : null;
+        $data = [
+            'id' => (int)$subscription->id,
+            'reference' => (string)($subscription->reference ?? ''),
+            'status' => $status,
+            'userId' => $subscription->userId === null ? null : (int)$subscription->userId,
+            'planId' => $subscription->planId === null ? null : (int)$subscription->planId,
+            'gatewayId' => $subscription->gatewayId === null ? null : (int)$subscription->gatewayId,
+            'orderId' => $subscription->orderId === null ? null : (int)$subscription->orderId,
+            'dateCreated' => $this->formatDate($subscription->dateCreated ?? null),
+            'updatedAt' => $this->formatDate($subscription->dateUpdated ?? null),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $nextPaymentDate = $subscription->nextPaymentDate ?? null;
+        $data['nextPaymentDate'] = $nextPaymentDate instanceof DateTimeInterface
+            ? $this->formatDate($nextPaymentDate)
+            : (is_string($nextPaymentDate) && $nextPaymentDate !== '' ? $nextPaymentDate : null);
+        $data['isCanceled'] = (bool)($subscription->isCanceled ?? false);
+        $data['isSuspended'] = (bool)($subscription->isSuspended ?? false);
+        $data['isExpired'] = (bool)($subscription->isExpired ?? false);
+        $data['onTrial'] = (bool)($subscription->isOnTrial ?? false);
+
+        $plan = method_exists($subscription, 'getPlan') ? $subscription->getPlan() : null;
+        if ($plan !== null) {
+            $data['plan'] = [
+                'id' => (int)($plan->id ?? 0),
+                'name' => (string)($plan->name ?? ''),
+                'handle' => (string)($plan->handle ?? ''),
+            ];
+        }
+
+        $subscriber = method_exists($subscription, 'getSubscriber') ? $subscription->getSubscriber() : null;
+        if ($subscriber !== null) {
+            $data['subscriber'] = [
+                'id' => (int)($subscriber->id ?? 0),
+                'username' => (string)($subscriber->username ?? ''),
+            ];
+        }
+
+        return $data;
+    }
+
+    private function mapTransfer(Transfer $transfer, bool $detailed): array
+    {
+        $transferStatus = $transfer->transferStatus ?? null;
+        if (is_object($transferStatus) && isset($transferStatus->value)) {
+            $transferStatus = $transferStatus->value;
+        } elseif (!is_string($transferStatus) && !is_numeric($transferStatus)) {
+            $transferStatus = null;
+        }
+
+        $data = [
+            'id' => (int)$transfer->id,
+            'label' => (string)$transfer,
+            'status' => $transferStatus === null ? null : (string)$transferStatus,
+            'originLocationId' => $transfer->originLocationId === null ? null : (int)$transfer->originLocationId,
+            'destinationLocationId' => $transfer->destinationLocationId === null ? null : (int)$transfer->destinationLocationId,
+            'dateCreated' => $this->formatDate($transfer->dateCreated ?? null),
+            'updatedAt' => $this->formatDate($transfer->dateUpdated ?? null),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $originLocation = method_exists($transfer, 'getOriginLocation') ? $transfer->getOriginLocation() : null;
+        if ($originLocation !== null) {
+            $data['originLocation'] = [
+                'id' => (int)($originLocation->id ?? 0),
+                'name' => method_exists($originLocation, 'getUiLabel')
+                    ? (string)$originLocation->getUiLabel()
+                    : (string)($originLocation->name ?? ''),
+            ];
+        }
+
+        $destinationLocation = method_exists($transfer, 'getDestinationLocation') ? $transfer->getDestinationLocation() : null;
+        if ($destinationLocation !== null) {
+            $data['destinationLocation'] = [
+                'id' => (int)($destinationLocation->id ?? 0),
+                'name' => method_exists($destinationLocation, 'getUiLabel')
+                    ? (string)$destinationLocation->getUiLabel()
+                    : (string)($destinationLocation->name ?? ''),
+            ];
+        }
+
+        if (method_exists($transfer, 'getDetails')) {
+            $details = $transfer->getDetails();
+            if (is_array($details)) {
+                $data['detailsCount'] = count($details);
+            }
+        }
+
+        return $data;
+    }
+
+    private function mapDonation(Donation $donation, bool $detailed): array
+    {
+        $status = method_exists($donation, 'getStatus') ? $donation->getStatus() : null;
+        $url = method_exists($donation, 'getUrl') ? $donation->getUrl() : null;
+
+        $data = [
+            'id' => (int)$donation->id,
+            'sku' => (string)($donation->sku ?? ''),
+            'title' => (string)($donation->title ?? ''),
+            'status' => $status,
+            'enabled' => (bool)($donation->enabled ?? false),
+            'availableForPurchase' => (bool)($donation->availableForPurchase ?? false),
+            'dateCreated' => $this->formatDate($donation->dateCreated ?? null),
+            'updatedAt' => $this->formatDate($donation->dateUpdated ?? null),
+            'url' => $url,
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['price'] = $donation->price === null ? null : (float)$donation->price;
+        $data['salePrice'] = $donation->salePrice === null ? null : (float)$donation->salePrice;
+        $data['promotable'] = (bool)($donation->promotable ?? false);
+        $data['freeShipping'] = (bool)($donation->freeShipping ?? false);
+        $data['taxCategoryId'] = $donation->taxCategoryId === null ? null : (int)$donation->taxCategoryId;
+        $data['shippingCategoryId'] = $donation->shippingCategoryId === null ? null : (int)$donation->shippingCategoryId;
 
         return $data;
     }
