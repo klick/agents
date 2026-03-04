@@ -8,8 +8,10 @@ use craft\commerce\elements\Order;
 use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use craft\commerce\elements\Product;
+use craft\elements\Address;
 use craft\elements\Asset;
 use craft\elements\Category;
+use craft\elements\ContentBlock;
 use craft\elements\Entry;
 use craft\elements\GlobalSet;
 use craft\elements\Tag;
@@ -1502,6 +1504,351 @@ class ReadinessService extends Component
         ];
     }
 
+    public function getAddressesList(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $ownerId = (int)($params['ownerId'] ?? 0);
+        $countryCode = strtoupper(trim((string)($params['countryCode'] ?? '')));
+        $postalCode = trim((string)($params['postalCode'] ?? ''));
+        $includeSensitive = (bool)($params['includeSensitive'] ?? false);
+        $redactSensitive = (bool)($params['redactSensitive'] ?? false);
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'search' => $search !== '' ? $search : null,
+            'ownerId' => $ownerId > 0 ? $ownerId : null,
+            'countryCode' => $countryCode !== '' ? $countryCode : null,
+            'postalCode' => $postalCode !== '' ? $postalCode : null,
+            'limit' => $limit,
+            'includeSensitive' => $includeSensitive,
+            'redactSensitive' => $redactSensitive,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'addresses');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Address::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+        if ($ownerId > 0 && method_exists($queryBuilder, 'ownerId')) {
+            $queryBuilder->ownerId($ownerId);
+        }
+        if ($countryCode !== '' && method_exists($queryBuilder, 'countryCode')) {
+            $queryBuilder->countryCode($countryCode);
+        }
+        if ($postalCode !== '' && method_exists($queryBuilder, 'postalCode')) {
+            $queryBuilder->postalCode($postalCode);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $addresses = $queryBuilder->all();
+        $returnedAddresses = $isIncremental ? array_slice($addresses, 0, $limit) : $addresses;
+        $hasMore = $isIncremental && count($addresses) > $limit;
+        $nextOffset = $offset + count($returnedAddresses);
+
+        $data = [];
+        foreach ($returnedAddresses as $address) {
+            if (!$address instanceof Address) {
+                continue;
+            }
+            $data[] = $this->mapAddress($address, false, $includeSensitive, $redactSensitive);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'addresses', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getAddressByIdOrUid(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $uid = trim((string)($params['uid'] ?? ''));
+        $ownerId = (int)($params['ownerId'] ?? 0);
+        $includeSensitive = (bool)($params['includeSensitive'] ?? false);
+        $redactSensitive = (bool)($params['redactSensitive'] ?? false);
+        $hasId = $id > 0;
+        $hasUid = $uid !== '';
+
+        if (($hasId ? 1 : 0) + ($hasUid ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --uid.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Address::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } else {
+            $queryBuilder->uid($uid);
+        }
+        if ($ownerId > 0 && method_exists($queryBuilder, 'ownerId')) {
+            $queryBuilder->ownerId($ownerId);
+        }
+
+        $address = $queryBuilder->one();
+        if (!$address instanceof Address) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapAddress($address, true, $includeSensitive, $redactSensitive),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getContentBlocksList(array $params): array
+    {
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $ownerId = (int)($params['ownerId'] ?? 0);
+        $fieldId = (int)($params['fieldId'] ?? 0);
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'search' => $search !== '' ? $search : null,
+            'ownerId' => $ownerId > 0 ? $ownerId : null,
+            'fieldId' => $fieldId > 0 ? $fieldId : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'contentblocks');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = ContentBlock::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+        if ($ownerId > 0 && method_exists($queryBuilder, 'ownerId')) {
+            $queryBuilder->ownerId($ownerId);
+        }
+        if ($fieldId > 0 && method_exists($queryBuilder, 'fieldId')) {
+            $queryBuilder->fieldId($fieldId);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $blocks = $queryBuilder->all();
+        $returnedBlocks = $isIncremental ? array_slice($blocks, 0, $limit) : $blocks;
+        $hasMore = $isIncremental && count($blocks) > $limit;
+        $nextOffset = $offset + count($returnedBlocks);
+
+        $data = [];
+        foreach ($returnedBlocks as $block) {
+            if (!$block instanceof ContentBlock) {
+                continue;
+            }
+            $data[] = $this->mapContentBlock($block, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'contentblocks', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getContentBlockByIdOrUid(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $uid = trim((string)($params['uid'] ?? ''));
+        $ownerId = (int)($params['ownerId'] ?? 0);
+        $fieldId = (int)($params['fieldId'] ?? 0);
+        $hasId = $id > 0;
+        $hasUid = $uid !== '';
+
+        if (($hasId ? 1 : 0) + ($hasUid ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --uid.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = ContentBlock::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } else {
+            $queryBuilder->uid($uid);
+        }
+        if ($ownerId > 0 && method_exists($queryBuilder, 'ownerId')) {
+            $queryBuilder->ownerId($ownerId);
+        }
+        if ($fieldId > 0 && method_exists($queryBuilder, 'fieldId')) {
+            $queryBuilder->fieldId($fieldId);
+        }
+
+        $block = $queryBuilder->one();
+        if (!$block instanceof ContentBlock) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapContentBlock($block, true),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
     public function getUsersList(array $params): array
     {
         $status = $this->normalizeUserStatus((string)($params['status'] ?? 'active'));
@@ -2547,6 +2894,103 @@ class ReadinessService extends Component
         $data['dateUpdated'] = $this->formatDate($globalSet->dateUpdated);
         $data['sortOrder'] = $globalSet->sortOrder === null ? null : (int)$globalSet->sortOrder;
         $data['enabled'] = (bool)$globalSet->enabled;
+
+        return $data;
+    }
+
+    private function mapAddress(Address $address, bool $detailed, bool $includeSensitive, bool $redactSensitive): array
+    {
+        $sensitiveRedacted = !$includeSensitive && $redactSensitive;
+
+        $data = [
+            'id' => (int)$address->id,
+            'title' => (string)$address->title,
+            'countryCode' => $address->getCountryCode(),
+            'status' => $address->getStatus() ?? null,
+            'ownerId' => $address->getOwnerId(),
+            'updatedAt' => $this->formatDate($address->dateUpdated),
+            'sensitiveRedacted' => $sensitiveRedacted,
+        ];
+
+        if ($sensitiveRedacted) {
+            $data['fullName'] = null;
+            $data['organization'] = null;
+            $data['postalCode'] = null;
+            $data['locality'] = null;
+            $data['administrativeArea'] = null;
+        } else {
+            $data['fullName'] = $address->fullName ? (string)$address->fullName : null;
+            $data['organization'] = $address->organization ? (string)$address->organization : null;
+            $data['postalCode'] = $address->getPostalCode();
+            $data['locality'] = $address->locality ? (string)$address->locality : null;
+            $data['administrativeArea'] = $address->administrativeArea ? (string)$address->administrativeArea : null;
+        }
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['dateCreated'] = $this->formatDate($address->dateCreated);
+        $data['dateUpdated'] = $this->formatDate($address->dateUpdated);
+        $data['fieldId'] = $address->fieldId === null ? null : (int)$address->fieldId;
+        $data['primaryOwnerId'] = $address->getPrimaryOwnerId();
+        $data['sortOrder'] = $address->sortOrder === null ? null : (int)$address->sortOrder;
+
+        if ($sensitiveRedacted) {
+            $data['firstName'] = null;
+            $data['lastName'] = null;
+            $data['organizationTaxId'] = null;
+            $data['addressLine1'] = null;
+            $data['addressLine2'] = null;
+            $data['addressLine3'] = null;
+            $data['dependentLocality'] = null;
+            $data['sortingCode'] = null;
+            $data['latitude'] = null;
+            $data['longitude'] = null;
+        } else {
+            $data['firstName'] = $address->firstName ? (string)$address->firstName : null;
+            $data['lastName'] = $address->lastName ? (string)$address->lastName : null;
+            $data['organizationTaxId'] = $address->organizationTaxId ? (string)$address->organizationTaxId : null;
+            $data['addressLine1'] = $address->addressLine1 ? (string)$address->addressLine1 : null;
+            $data['addressLine2'] = $address->addressLine2 ? (string)$address->addressLine2 : null;
+            $data['addressLine3'] = $address->addressLine3 ? (string)$address->addressLine3 : null;
+            $data['dependentLocality'] = $address->dependentLocality ? (string)$address->dependentLocality : null;
+            $data['sortingCode'] = $address->sortingCode ? (string)$address->sortingCode : null;
+            $data['latitude'] = $address->latitude ? (string)$address->latitude : null;
+            $data['longitude'] = $address->longitude ? (string)$address->longitude : null;
+        }
+
+        return $data;
+    }
+
+    private function mapContentBlock(ContentBlock $block, bool $detailed): array
+    {
+        $fieldHandle = null;
+        try {
+            $fieldHandle = $block->getField()?->handle ?? null;
+        } catch (\Throwable) {
+            $fieldHandle = null;
+        }
+
+        $data = [
+            'id' => (int)$block->id,
+            'title' => (string)$block->title,
+            'fieldId' => $block->fieldId === null ? null : (int)$block->fieldId,
+            'field' => $fieldHandle,
+            'ownerId' => $block->getOwnerId(),
+            'primaryOwnerId' => $block->getPrimaryOwnerId(),
+            'sortOrder' => $block->sortOrder === null ? null : (int)$block->sortOrder,
+            'status' => $block->getStatus() ?? null,
+            'updatedAt' => $this->formatDate($block->dateUpdated),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['dateCreated'] = $this->formatDate($block->dateCreated);
+        $data['dateUpdated'] = $this->formatDate($block->dateUpdated);
+        $data['enabled'] = (bool)$block->enabled;
 
         return $data;
     }

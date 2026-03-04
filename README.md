@@ -33,7 +33,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 
 | Surface | Status | Notes |
 | --- | --- | --- |
-| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
+| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
 | Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
@@ -103,6 +103,7 @@ Environment variables:
 - `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD` (default: `true`)
 - `PLUGIN_AGENTS_TOKEN_SCOPES` (comma/space list, default scoped read set)
 - `PLUGIN_AGENTS_ENABLE_USERS_API` (default: `false`; enables `/users` endpoints)
+- `PLUGIN_AGENTS_ENABLE_ADDRESSES_API` (default: `false`; enables `/addresses` endpoints)
 - `PLUGIN_AGENTS_REDACT_EMAIL` (default: `true`, applied when sensitive scope is missing)
 - `PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE` (default: `60`)
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
@@ -217,6 +218,10 @@ Read/discovery endpoints:
 - `GET /tags/show` (requires exactly one of `id` or `slug`; optional `group` filter)
 - `GET /global-sets`
 - `GET /global-sets/show` (requires exactly one of `id` or `handle`)
+- `GET /addresses` (only when `PLUGIN_AGENTS_ENABLE_ADDRESSES_API=true`)
+- `GET /addresses/show` (requires exactly one of `id` or `uid`; optional `ownerId`; only when `PLUGIN_AGENTS_ENABLE_ADDRESSES_API=true`)
+- `GET /content-blocks`
+- `GET /content-blocks/show` (requires exactly one of `id` or `uid`; optional `ownerId` and `fieldId`)
 - `GET /users` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `GET /users/show` (requires exactly one of `id` or `username`; only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `GET /changes`
@@ -272,6 +277,9 @@ Read scopes:
 - `categories:read`
 - `tags:read`
 - `globalsets:read`
+- `addresses:read` (only when `PLUGIN_AGENTS_ENABLE_ADDRESSES_API=true`)
+- `addresses:read_sensitive` (only when `PLUGIN_AGENTS_ENABLE_ADDRESSES_API=true`)
+- `contentblocks:read`
 - `changes:read`
 - `sections:read`
 - `users:read` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
@@ -384,6 +392,18 @@ Identifier notes for show commands:
 - `/entries`: `section`, `type`, `status`, `search` (or `q`), `limit` (1..200)
 - `/entries` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
 - `/entries/show`: exactly one of `id` or `slug`; optional `section` when using `slug`
+
+### Addresses endpoint parameters
+
+- `/addresses`: `q`, `ownerId`, `countryCode`, `postalCode`, `limit` (1..200)
+- `/addresses` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
+- `/addresses/show`: exactly one of `id` or `uid`; optional `ownerId`
+
+### Content Blocks endpoint parameters
+
+- `/content-blocks`: `q`, `ownerId`, `fieldId`, `limit` (1..200)
+- `/content-blocks` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
+- `/content-blocks/show`: exactly one of `id` or `uid`; optional `ownerId`, `fieldId`
 
 ### Changes endpoint parameters
 

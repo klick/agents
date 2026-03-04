@@ -27,6 +27,8 @@ class ApiController extends Controller
         'categories:read',
         'tags:read',
         'globalsets:read',
+        'addresses:read',
+        'contentblocks:read',
         'changes:read',
         'sections:read',
         'users:read',
@@ -664,6 +666,186 @@ class ApiController extends Controller
         return $this->respondWithPayload($payload, true, 'Global set not found.');
     }
 
+    public function actionAddresses(): Response
+    {
+        if (($guard = $this->guardAddressesApiEnabled()) !== null) {
+            return $guard;
+        }
+
+        if (($guard = $this->guardRequest('addresses:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $ownerIdError = $this->validateIntegerQueryParam('ownerId', 1, null);
+        if ($ownerIdError !== null) {
+            $errors[] = $ownerIdError;
+        }
+        $countryCodeError = $this->validatePatternQueryParam('countryCode', '/^[a-zA-Z]{2}$/', 'countryCode');
+        if ($countryCodeError !== null) {
+            $errors[] = $countryCodeError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $includeSensitive = $this->hasScope('addresses:read_sensitive');
+        $payload = Plugin::getInstance()->getReadinessService()->getAddressesList([
+            'q' => $request->getQueryParam('q'),
+            'ownerId' => (int)$request->getQueryParam('ownerId', 0),
+            'countryCode' => (string)$request->getQueryParam('countryCode', ''),
+            'postalCode' => (string)$request->getQueryParam('postalCode', ''),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+            'includeSensitive' => $includeSensitive,
+            'redactSensitive' => !$includeSensitive && $this->shouldRedactEmail(),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionAddressShow(): Response
+    {
+        if (($guard = $this->guardAddressesApiEnabled()) !== null) {
+            return $guard;
+        }
+
+        if (($guard = $this->guardRequest('addresses:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawUid = trim((string)$request->getQueryParam('uid', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+        $ownerIdError = $this->validateIntegerQueryParam('ownerId', 1, null);
+        if ($ownerIdError !== null) {
+            $errors[] = $ownerIdError;
+        }
+        $uidError = $this->validatePatternQueryParam('uid', '/^[a-zA-Z0-9-]+$/', 'uid');
+        if ($uidError !== null) {
+            $errors[] = $uidError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasUid = $rawUid !== '';
+        if (($hasId ? 1 : 0) + ($hasUid ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `uid`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $includeSensitive = $this->hasScope('addresses:read_sensitive');
+        $payload = Plugin::getInstance()->getReadinessService()->getAddressByIdOrUid([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'uid' => (string)$request->getQueryParam('uid', ''),
+            'ownerId' => (int)$request->getQueryParam('ownerId', 0),
+            'includeSensitive' => $includeSensitive,
+            'redactSensitive' => !$includeSensitive && $this->shouldRedactEmail(),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Address not found.');
+    }
+
+    public function actionContentBlocks(): Response
+    {
+        if (($guard = $this->guardRequest('contentblocks:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $ownerIdError = $this->validateIntegerQueryParam('ownerId', 1, null);
+        if ($ownerIdError !== null) {
+            $errors[] = $ownerIdError;
+        }
+        $fieldIdError = $this->validateIntegerQueryParam('fieldId', 1, null);
+        if ($fieldIdError !== null) {
+            $errors[] = $fieldIdError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getContentBlocksList([
+            'q' => $request->getQueryParam('q'),
+            'ownerId' => (int)$request->getQueryParam('ownerId', 0),
+            'fieldId' => (int)$request->getQueryParam('fieldId', 0),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionContentBlockShow(): Response
+    {
+        if (($guard = $this->guardRequest('contentblocks:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawUid = trim((string)$request->getQueryParam('uid', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+        $ownerIdError = $this->validateIntegerQueryParam('ownerId', 1, null);
+        if ($ownerIdError !== null) {
+            $errors[] = $ownerIdError;
+        }
+        $fieldIdError = $this->validateIntegerQueryParam('fieldId', 1, null);
+        if ($fieldIdError !== null) {
+            $errors[] = $fieldIdError;
+        }
+        $uidError = $this->validatePatternQueryParam('uid', '/^[a-zA-Z0-9-]+$/', 'uid');
+        if ($uidError !== null) {
+            $errors[] = $uidError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasUid = $rawUid !== '';
+        if (($hasId ? 1 : 0) + ($hasUid ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `uid`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getContentBlockByIdOrUid([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'uid' => (string)$request->getQueryParam('uid', ''),
+            'ownerId' => (int)$request->getQueryParam('ownerId', 0),
+            'fieldId' => (int)$request->getQueryParam('fieldId', 0),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Content block not found.');
+    }
+
     public function actionSections(): Response
     {
         if (($guard = $this->guardRequest('sections:read')) !== null) {
@@ -832,6 +1014,10 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/tags/show', 'requiredScopes' => ['tags:read']],
             ['method' => 'GET', 'path' => '/global-sets', 'requiredScopes' => ['globalsets:read']],
             ['method' => 'GET', 'path' => '/global-sets/show', 'requiredScopes' => ['globalsets:read']],
+            ['method' => 'GET', 'path' => '/addresses', 'requiredScopes' => ['addresses:read'], 'optionalScopes' => ['addresses:read_sensitive']],
+            ['method' => 'GET', 'path' => '/addresses/show', 'requiredScopes' => ['addresses:read'], 'optionalScopes' => ['addresses:read_sensitive']],
+            ['method' => 'GET', 'path' => '/content-blocks', 'requiredScopes' => ['contentblocks:read']],
+            ['method' => 'GET', 'path' => '/content-blocks/show', 'requiredScopes' => ['contentblocks:read']],
             ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
             ['method' => 'GET', 'path' => '/users', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
@@ -866,6 +1052,12 @@ class ApiController extends Controller
             $endpoints = array_values(array_filter(
                 $endpoints,
                 static fn(array $endpoint): bool => !str_starts_with((string)($endpoint['path'] ?? ''), '/users')
+            ));
+        }
+        if (!$this->isAddressesApiEnabled()) {
+            $endpoints = array_values(array_filter(
+                $endpoints,
+                static fn(array $endpoint): bool => !str_starts_with((string)($endpoint['path'] ?? ''), '/addresses')
             ));
         }
 
@@ -1160,6 +1352,75 @@ class ApiController extends Controller
                 ]),
                 'x-required-scopes' => ['globalsets:read'],
             ]],
+            '/addresses' => ['get' => [
+                'summary' => 'Address list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'ownerId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'countryCode', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'postalCode', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Endpoint not available'],
+                ]),
+                'x-required-scopes' => ['addresses:read'],
+                'x-optional-scopes' => ['addresses:read_sensitive'],
+            ]],
+            '/addresses/show' => ['get' => [
+                'summary' => 'Single address by id or uid',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'uid', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'ownerId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found or endpoint unavailable'],
+                ]),
+                'x-required-scopes' => ['addresses:read'],
+                'x-optional-scopes' => ['addresses:read_sensitive'],
+            ]],
+            '/content-blocks' => ['get' => [
+                'summary' => 'Content block list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'ownerId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'fieldId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['contentblocks:read'],
+            ]],
+            '/content-blocks/show' => ['get' => [
+                'summary' => 'Single content block by id or uid',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'uid', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'ownerId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'fieldId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['contentblocks:read'],
+            ]],
             '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
             '/users' => ['get' => [
                 'summary' => 'User list',
@@ -1339,6 +1600,11 @@ class ApiController extends Controller
         }
         if (!$this->isUsersApiEnabled()) {
             foreach ($this->usersOpenApiPaths() as $path) {
+                unset($paths[$path]);
+            }
+        }
+        if (!$this->isAddressesApiEnabled()) {
+            foreach ($this->addressesOpenApiPaths() as $path) {
                 unset($paths[$path]);
             }
         }
@@ -2375,6 +2641,12 @@ class ApiController extends Controller
                 fn(string $scope): bool => !in_array($scope, $this->userScopeKeys(), true)
             ));
         }
+        if (!$this->isAddressesApiEnabled()) {
+            $normalized = array_values(array_filter(
+                $normalized,
+                fn(string $scope): bool => !in_array($scope, $this->addressesScopeKeys(), true)
+            ));
+        }
         sort($normalized);
         return $normalized;
     }
@@ -2407,6 +2679,9 @@ class ApiController extends Controller
             'categories:read' => 'Read category list and lookup endpoints.',
             'tags:read' => 'Read tag list and lookup endpoints.',
             'globalsets:read' => 'Read global set list and lookup endpoints.',
+            'addresses:read' => 'Read address list and lookup endpoints.',
+            'addresses:read_sensitive' => 'Unredacted address PII detail fields.',
+            'contentblocks:read' => 'Read content block list and lookup endpoints.',
             'changes:read' => 'Read unified cross-resource incremental changes feed.',
             'sections:read' => 'Read section list endpoint.',
             'users:read' => 'Read user list and lookup endpoints.',
@@ -2439,6 +2714,11 @@ class ApiController extends Controller
                 unset($scopes[$scope]);
             }
         }
+        if (!$this->isAddressesApiEnabled()) {
+            foreach ($this->addressesScopeKeys() as $scope) {
+                unset($scopes[$scope]);
+            }
+        }
 
         return $scopes;
     }
@@ -2453,6 +2733,11 @@ class ApiController extends Controller
         return Plugin::getInstance()->isUsersApiEnabled();
     }
 
+    private function isAddressesApiEnabled(): bool
+    {
+        return Plugin::getInstance()->isAddressesApiEnabled();
+    }
+
     private function guardRefundApprovalsExperimentalEnabled(): ?Response
     {
         if ($this->isRefundApprovalsExperimentalEnabled()) {
@@ -2465,6 +2750,15 @@ class ApiController extends Controller
     private function guardUsersApiEnabled(): ?Response
     {
         if ($this->isUsersApiEnabled()) {
+            return null;
+        }
+
+        return $this->errorResponse(404, self::ERROR_NOT_FOUND, 'Endpoint is not available.');
+    }
+
+    private function guardAddressesApiEnabled(): ?Response
+    {
+        if ($this->isAddressesApiEnabled()) {
             return null;
         }
 
@@ -2494,6 +2788,14 @@ class ApiController extends Controller
         ];
     }
 
+    private function addressesOpenApiPaths(): array
+    {
+        return [
+            '/addresses',
+            '/addresses/show',
+        ];
+    }
+
     private function controlScopeKeys(): array
     {
         return [
@@ -2515,6 +2817,14 @@ class ApiController extends Controller
         return [
             'users:read',
             'users:read_sensitive',
+        ];
+    }
+
+    private function addressesScopeKeys(): array
+    {
+        return [
+            'addresses:read',
+            'addresses:read_sensitive',
         ];
     }
 
@@ -3353,6 +3663,96 @@ class ApiController extends Controller
                         ],
                     ],
                 ],
+                'addresses.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/addresses',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'q' => ['type' => 'string'],
+                            'ownerId' => ['type' => 'integer'],
+                            'countryCode' => ['type' => 'string'],
+                            'postalCode' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'addresses.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/addresses/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'uid' => ['type' => 'string'],
+                            'ownerId' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'contentblocks.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/content-blocks',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'q' => ['type' => 'string'],
+                            'ownerId' => ['type' => 'integer'],
+                            'fieldId' => ['type' => 'integer'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'contentblocks.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/content-blocks/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'uid' => ['type' => 'string'],
+                            'ownerId' => ['type' => 'integer'],
+                            'fieldId' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
                 'users.list' => [
                     'method' => 'GET',
                     'path' => '/agents/v1/users',
@@ -3479,6 +3879,9 @@ class ApiController extends Controller
 
         if (!$this->isUsersApiEnabled()) {
             unset($catalogs['v1']['users.list'], $catalogs['v1']['users.show']);
+        }
+        if (!$this->isAddressesApiEnabled()) {
+            unset($catalogs['v1']['addresses.list'], $catalogs['v1']['addresses.show']);
         }
 
         return $catalogs;

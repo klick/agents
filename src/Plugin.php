@@ -166,6 +166,10 @@ class Plugin extends BasePlugin
                 'agents/v1/tags/show' => 'agents/api/tag-show',
                 'agents/v1/global-sets' => 'agents/api/global-sets',
                 'agents/v1/global-sets/show' => 'agents/api/global-set-show',
+                'agents/v1/addresses' => 'agents/api/addresses',
+                'agents/v1/addresses/show' => 'agents/api/address-show',
+                'agents/v1/content-blocks' => 'agents/api/content-blocks',
+                'agents/v1/content-blocks/show' => 'agents/api/content-block-show',
                 'agents/v1/users' => 'agents/api/users',
                 'agents/v1/users/show' => 'agents/api/user-show',
                 'agents/v1/changes' => 'agents/api/changes',
@@ -321,6 +325,11 @@ class Plugin extends BasePlugin
     public function isUsersApiEnabled(): bool
     {
         return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_ENABLE_USERS_API');
+    }
+
+    public function isAddressesApiEnabled(): bool
+    {
+        return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_ENABLE_ADDRESSES_API');
     }
 
     protected function createSettingsModel(): ?Model

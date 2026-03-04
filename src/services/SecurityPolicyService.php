@@ -23,6 +23,8 @@ class SecurityPolicyService extends Component
         'categories:read',
         'tags:read',
         'globalsets:read',
+        'addresses:read',
+        'contentblocks:read',
         'changes:read',
         'sections:read',
         'users:read',
