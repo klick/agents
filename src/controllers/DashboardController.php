@@ -423,6 +423,31 @@ class DashboardController extends Controller
         return $this->redirectToPostedUrl(null, 'agents/dashboard/discovery');
     }
 
+    public function actionDownloadDiagnosticsBundle(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        try {
+            $bundle = Plugin::getInstance()->getDiagnosticsBundleService()->getBundle([
+                'source' => 'cp',
+            ]);
+            $encoded = json_encode($bundle, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            if (!is_string($encoded)) {
+                throw new \RuntimeException('Unable to encode diagnostics bundle as JSON.');
+            }
+
+            $filename = sprintf('agents-diagnostics-%s.json', gmdate('Ymd-His'));
+            return Craft::$app->getResponse()->sendContentAsFile($encoded . "\n", $filename, [
+                'mimeType' => 'application/json',
+            ]);
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to generate diagnostics bundle: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
+    }
+
     public function actionClearDiscoveryCache(): Response
     {
         $this->requirePostRequest();
@@ -960,6 +985,7 @@ class DashboardController extends Controller
         $endpoints = [
             $apiBasePath . '/health',
             $apiBasePath . '/readiness',
+            $apiBasePath . '/diagnostics/bundle',
             $apiBasePath . '/products',
             $apiBasePath . '/orders',
             $apiBasePath . '/entries',

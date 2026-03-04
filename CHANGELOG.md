@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Added one-click diagnostics bundle foundation across API (`GET /agents/v1/diagnostics/bundle`), CP download flow, and CLI (`craft agents/diagnostics-bundle`).
+- Added `diagnostics:read` scope and contract metadata updates across capabilities/OpenAPI/schema/readme docs.
+
 ## 0.6.2 - 2026-03-04
 
 ### Fixed

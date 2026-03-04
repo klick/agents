@@ -47,6 +47,7 @@ This plugin gives external/internal agents a stable interface for:
 - health checks for automation (`/agents/v1/health`)
 - readiness summaries (`/agents/v1/readiness`)
 - auth introspection for token diagnostics (`/agents/v1/auth/whoami`)
+- one-click diagnostics bundle (`/agents/v1/diagnostics/bundle`)
 - product snapshot browsing (`/agents/v1/products`)
 - control policies/approvals/execution ledger/audit (`/agents/v1/control/*`, experimental flag)
 - read-only CLI discovery commands (`craft agents/*`)
@@ -201,6 +202,7 @@ Read/discovery endpoints:
 - `GET /auth/whoami`
 - `GET /adoption/metrics`
 - `GET /metrics`
+- `GET /diagnostics/bundle`
 - `GET /products`
 - `GET /orders`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
@@ -249,6 +251,7 @@ Read scopes:
 - `auth:read`
 - `adoption:read`
 - `metrics:read`
+- `diagnostics:read`
 - `products:read`
 - `orders:read`
 - `orders:read_sensitive`
@@ -291,6 +294,7 @@ Craft-native command routes:
 - `craft agents/auth-check`
 - `craft agents/discovery-check`
 - `craft agents/readiness-check`
+- `craft agents/diagnostics-bundle`
 - `craft agents/smoke`
 
 Examples:
@@ -329,9 +333,10 @@ php craft agents/discovery-prewarm --target=llms-full --json=1
 php craft agents/auth-check
 php craft agents/auth-check --strict=1 --json=1
 
-# Discovery/readiness/smoke checks
+# Discovery/readiness/diagnostics/smoke checks
 php craft agents/discovery-check --json=1
 php craft agents/readiness-check --json=1
+php craft agents/diagnostics-bundle --json=1
 php craft agents/smoke --json=1
 ```
 
@@ -657,7 +662,7 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
+  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read diagnostics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
   - If `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, optionally append control read scopes: `control:policies:read control:approvals:read control:executions:read control:audit:read`
 
 ## Secure Deployment Verification

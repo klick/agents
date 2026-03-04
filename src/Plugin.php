@@ -23,6 +23,7 @@ use Klick\Agents\services\AdoptionMetricsService;
 use Klick\Agents\services\ControlPlaneService;
 use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
+use Klick\Agents\services\DiagnosticsBundleService;
 use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
@@ -62,6 +63,7 @@ class Plugin extends BasePlugin
             'consumerLagService' => ConsumerLagService::class,
             'adoptionMetricsService' => AdoptionMetricsService::class,
             'observabilityMetricsService' => ObservabilityMetricsService::class,
+            'diagnosticsBundleService' => DiagnosticsBundleService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
@@ -164,6 +166,7 @@ class Plugin extends BasePlugin
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
                 'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics',
                 'agents/v1/metrics' => 'agents/api/metrics',
+                'agents/v1/diagnostics/bundle' => 'agents/api/diagnostics-bundle',
                 'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoint',
                 'agents/v1/consumers/lag' => 'agents/api/consumers-lag',
                 'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
@@ -247,6 +250,13 @@ class Plugin extends BasePlugin
     {
         /** @var ObservabilityMetricsService $service */
         $service = $this->get('observabilityMetricsService');
+        return $service;
+    }
+
+    public function getDiagnosticsBundleService(): DiagnosticsBundleService
+    {
+        /** @var DiagnosticsBundleService $service */
+        $service = $this->get('diagnosticsBundleService');
         return $service;
     }
 

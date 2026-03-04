@@ -19,6 +19,7 @@ class ApiController extends Controller
         'auth:read',
         'adoption:read',
         'metrics:read',
+        'diagnostics:read',
         'products:read',
         'orders:read',
         'entries:read',
@@ -448,6 +449,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/auth/whoami', 'requiredScopes' => ['auth:read']],
             ['method' => 'GET', 'path' => '/adoption/metrics', 'requiredScopes' => ['adoption:read']],
             ['method' => 'GET', 'path' => '/metrics', 'requiredScopes' => ['metrics:read']],
+            ['method' => 'GET', 'path' => '/diagnostics/bundle', 'requiredScopes' => ['diagnostics:read']],
             ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
             ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
@@ -510,6 +512,7 @@ class ApiController extends Controller
                 'agents/auth-check',
                 'agents/discovery-check',
                 'agents/readiness-check',
+                'agents/diagnostics-bundle',
                 'agents/smoke',
             ],
         ]);
@@ -540,6 +543,11 @@ class ApiController extends Controller
                 'summary' => 'Observability metrics snapshot for runtime, queue, webhook, and integration lag health',
                 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
                 'x-required-scopes' => ['metrics:read'],
+            ]],
+            '/diagnostics/bundle' => ['get' => [
+                'summary' => 'One-click diagnostics bundle for support and operations triage',
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['diagnostics:read'],
             ]],
             '/products' => ['get' => [
                 'summary' => 'Product snapshot list',
@@ -872,6 +880,25 @@ class ApiController extends Controller
 
         $snapshot = Plugin::getInstance()->getObservabilityMetricsService()->getMetricsSnapshot();
         return $this->jsonResponse($snapshot);
+    }
+
+    public function actionDiagnosticsBundle(): Response
+    {
+        if (($guard = $this->guardRequest('diagnostics:read')) !== null) {
+            return $guard;
+        }
+
+        try {
+            $bundle = Plugin::getInstance()->getDiagnosticsBundleService()->getBundle([
+                'source' => 'api',
+                'requestId' => $this->getRequestId(),
+            ]);
+        } catch (\Throwable $e) {
+            Craft::error('Unable to generate diagnostics bundle: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to build diagnostics bundle.');
+        }
+
+        return $this->jsonResponse($bundle);
     }
 
     public function actionConsumersLag(): Response
@@ -1817,6 +1844,7 @@ class ApiController extends Controller
             'auth:read' => 'Read authenticated caller diagnostics (`/auth/whoami`).',
             'adoption:read' => 'Read adoption instrumentation snapshot (`/adoption/metrics`).',
             'metrics:read' => 'Read observability metrics snapshot (`/metrics`).',
+            'diagnostics:read' => 'Read one-click diagnostics support bundle (`/diagnostics/bundle`).',
             'products:read' => 'Read product snapshot endpoints.',
             'orders:read' => 'Read order metadata endpoints.',
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
@@ -2615,6 +2643,26 @@ class ApiController extends Controller
                             'generatedAt' => ['type' => 'string', 'format' => 'date-time'],
                             'format' => ['type' => 'string'],
                             'metrics' => ['type' => 'array', 'items' => ['type' => 'object']],
+                        ],
+                    ],
+                ],
+                'diagnostics.bundle' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/diagnostics/bundle',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'service' => ['type' => 'string'],
+                            'type' => ['type' => 'string'],
+                            'version' => ['type' => 'string'],
+                            'generatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'summary' => ['type' => 'object'],
+                            'checks' => ['type' => 'object'],
+                            'snapshots' => ['type' => 'object'],
                         ],
                     ],
                 ],

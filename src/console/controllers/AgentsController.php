@@ -44,7 +44,7 @@ class AgentsController extends Controller
             'entry-show' => array_merge($options, ['resourceId', 'slug', 'section', 'json']),
             'section-list' => array_merge($options, ['json']),
             'discovery-prewarm' => array_merge($options, ['target', 'json']),
-            'auth-check', 'discovery-check', 'readiness-check', 'smoke' => array_merge($options, ['json', 'strict']),
+            'auth-check', 'discovery-check', 'readiness-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
         };
     }
@@ -490,6 +490,46 @@ class AgentsController extends Controller
         ];
 
         return $this->emitCheckResult('smoke', $summary, $errors, $warnings);
+    }
+
+    public function actionDiagnosticsBundle(): int
+    {
+        $bundle = Plugin::getInstance()->getDiagnosticsBundleService()->getBundle([
+            'source' => 'cli',
+        ]);
+
+        $checkSummary = (array)($bundle['summary']['checks'] ?? []);
+        $errorsTotal = (int)($checkSummary['errorsTotal'] ?? 0);
+        $warningsTotal = (int)($checkSummary['warningsTotal'] ?? 0);
+
+        $ok = $errorsTotal === 0 && (!$this->strict || $warningsTotal === 0);
+        $status = $ok ? 'ok' : 'failed';
+
+        if ($this->json) {
+            $payload = [
+                'command' => 'diagnostics-bundle',
+                'status' => $status,
+                'strict' => (bool)$this->strict,
+                'errorsTotal' => $errorsTotal,
+                'warningsTotal' => $warningsTotal,
+                'bundle' => $bundle,
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            ];
+            $this->emitJson($payload);
+            return $ok ? ExitCode::OK : ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $this->stdout("Command: diagnostics-bundle\n");
+        $this->stdout(sprintf("Status: %s\n", $status));
+        if ($this->strict) {
+            $this->stdout("Mode: strict\n");
+        }
+        $this->stdout(sprintf("Checks failed: %d\n", (int)($checkSummary['checksFailed'] ?? 0)));
+        $this->stdout(sprintf("Errors: %d\n", $errorsTotal));
+        $this->stdout(sprintf("Warnings: %d\n", $warningsTotal));
+        $this->stdout("Use --json=1 to print the full diagnostics artifact.\n");
+
+        return $ok ? ExitCode::OK : ExitCode::UNSPECIFIED_ERROR;
     }
 
     private function emitJson(array $payload): int

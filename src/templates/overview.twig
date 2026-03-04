@@ -2,11 +2,10 @@
 
 {% set title = "Agents Overview" %}
 {% set selectedSubnavItem = "overview" %}
-{% import "_includes/forms" as forms %}
 
 {% block content %}
   <h1>Overview</h1>
-  <p class="text-sm text-muted">Turn the API on/off and jump to key endpoints and operational checks.</p>
+  <p class="text-sm text-muted">Review service status and jump to key endpoints and operational checks.</p>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Service State</h2>
@@ -15,33 +14,7 @@
       <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
       <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
     </p>
-    <form id="agents-enabled-form" method="post" accept-charset="UTF-8">
-      {{ csrfInput() }}
-      {{ actionInput('agents/dashboard/toggle-enabled') }}
-      {{ redirectInput('agents/overview') }}
-
-      {{ forms.lightswitchField({
-        id: 'agents-enabled-switch',
-        name: 'enabled',
-        fieldLabel: 'API availability',
-        instructions: agentsEnabledLocked
-          ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-          : 'Turn the Agents API on or off.',
-        on: agentsEnabled,
-        onLabel: false,
-        offLabel: false,
-        disabled: agentsEnabledLocked,
-      }) }}
-
-      {% if agentsEnabledLocked %}
-        <p class="warning">This is locked by <code>PLUGIN_AGENTS_ENABLED</code>.</p>
-      {% else %}
-        <p class="text-sm text-muted">Saved immediately when switched.</p>
-        <noscript>
-          <button class="btn submit" type="submit">Save</button>
-        </noscript>
-      {% endif %}
-    </form>
+    <p class="text-sm text-muted">Runtime state can be changed in Settings.</p>
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
@@ -123,36 +96,5 @@
       <pre class="border rounded p-3" style="margin-top: 8px;">{{ readinessJson }}</pre>
     </details>
   </div>
-
-  {% if not agentsEnabledLocked %}
-    {% js %}
-      (() => {
-        const form = document.getElementById('agents-enabled-form');
-        if (!form) {
-          return;
-        }
-        const switchButton = form.querySelector('button.lightswitch');
-        const valueInput = form.querySelector('input[name="enabled"]');
-        if (!switchButton || !valueInput) {
-          return;
-        }
-
-        let previousValue = valueInput.value;
-        switchButton.addEventListener('click', () => {
-          window.requestAnimationFrame(() => {
-            if (valueInput.value === previousValue) {
-              return;
-            }
-            previousValue = valueInput.value;
-            if (typeof form.requestSubmit === 'function') {
-              form.requestSubmit();
-            } else {
-              form.submit();
-            }
-          });
-        });
-      })();
-    {% endjs %}
-  {% endif %}
 
 {% endblock %}
