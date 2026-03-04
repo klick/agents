@@ -13,6 +13,7 @@ class DiscoveryTxtService extends Component
     private const CACHE_KEY_LLMS = 'agents:discovery:llms:v1';
     private const CACHE_KEY_LLMS_FULL = 'agents:discovery:llms-full:v1';
     private const CACHE_KEY_COMMERCE = 'agents:discovery:commerce:v1';
+    private const PUBLIC_AGENT_HANDBOOK_URL = 'https://marcusscheller.com/docs/agents/agent-handbook.md';
 
     public function getLlmsTxtDocument(): ?array
     {
@@ -254,6 +255,7 @@ class DiscoveryTxtService extends Component
             $lines[] = '- Entries API: ' . $this->toAbsoluteUrl('/agents/v1/entries?status=live&limit=50') . ' (auth required, scope: entries:read)';
             $lines[] = '- Discovery alias: ' . $this->toAbsoluteUrl('/capabilities') . ' (alias of /agents/v1/capabilities)';
             $lines[] = '- OpenAPI alias: ' . $this->toAbsoluteUrl('/openapi.json') . ' (alias of /agents/v1/openapi.json)';
+            $lines[] = '- Agent Handbook (Markdown): ' . self::PUBLIC_AGENT_HANDBOOK_URL . ' (vendor docs)';
         }
 
         foreach ($this->normalizeLinks($settings->llmsLinks, 'Link') as $link) {
@@ -338,6 +340,7 @@ class DiscoveryTxtService extends Component
             '- commerce.txt: ' . $this->toAbsoluteUrl('/commerce.txt'),
             '- Capabilities alias: ' . $this->toAbsoluteUrl('/capabilities'),
             '- OpenAPI alias: ' . $this->toAbsoluteUrl('/openapi.json'),
+            '- Agent Handbook (Markdown): ' . self::PUBLIC_AGENT_HANDBOOK_URL,
             '',
             '## Agents API',
             '- OpenAPI: ' . $this->toAbsoluteUrl('/agents/v1/openapi.json') . ' (auth required, scope: openapi:read)',
