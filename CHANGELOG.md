@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.2 - 2026-03-04
+
+### Fixed
+
+- Fixed release metadata alignment by publishing a fresh immutable patch version after the previous `v0.6.1` tag pointed at a pre-bump commit.
+- Fixed plugin-version fallback constants in API/readiness telemetry to match the current release.
+
 ## 0.6.1 - 2026-03-03
 
 ### Added

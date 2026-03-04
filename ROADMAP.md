@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-03  
-Current release: `v0.6.1`
+Date: 2026-03-04  
+Current release: `v0.6.2`
 
 ## Direction
 
@@ -45,6 +45,7 @@ Release outcome:
 
 - Operators can triage incidents quickly, and product teams can see where integration adoption drops.
 - `v0.6.1` hotfix closed runtime reliability issues in adoption metrics, machine POST CSRF handling, and dual-approval race safety.
+- `v0.6.2` corrected release-version metadata/tag alignment for plugin store ingestion.
 
 ## Now (`v0.7.0`)
 

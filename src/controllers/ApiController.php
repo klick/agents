@@ -2770,7 +2770,7 @@ class ApiController extends Controller
             }
         }
 
-        return '0.6.0';
+        return '0.6.2';
     }
 
     private function getRequestId(): string
