@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-04  
-Current release: `v0.7.0`
+Current release: `v0.8.0`
 
 ## Direction
 
@@ -63,9 +63,22 @@ Release outcome:
 
 - Faster support resolution and repeatable onboarding from first call to production patterns.
 
-## Now (`v0.8.0`)
+## Done (`v0.8.0`)
 
 Target: August 2026
+
+- Expand Craft-native read coverage across remaining element families (users/assets/categories/tags/global sets/addresses/content blocks).
+- Expand Commerce read coverage with variants, subscriptions, transfers, and donations surfaces.
+- Extend unified incremental changes feed coverage across newly exposed resources.
+- Publish canonical agent-handbook discovery link in `llms` discovery outputs.
+
+Release outcome:
+
+- Integrations can access a materially wider runtime surface with consistent sync semantics and discovery hints.
+
+## Now (`v0.9.0`)
+
+Target: September 2026
 
 - Improve integrator DX with schema/OpenAPI-based templates.
 - Publish reference automations for the canonical jobs (with tested sample payloads).
@@ -76,7 +89,7 @@ Release outcome:
 
 ## Success Checks
 
-- Support escalations reduced by at least `30%` by end of `v0.7.0` cycle.
+- Support escalations reduced by at least `30%` by end of `v0.8.0` cycle.
 - Time-to-triage for integration incidents below `15` minutes.
 - Critical-path regression coverage at or above `90%`.
 - Median time-to-first-successful integration action below `30` minutes.

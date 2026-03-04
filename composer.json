@@ -3,7 +3,7 @@
   "description": "Secure, governed agent runtime for Craft: scoped APIs, sync, webhooks, and approvals.",
   "type": "craft-plugin",
   "homepage": "https://github.com/klick/agents",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "proprietary",
   "keywords": [
     "craft",

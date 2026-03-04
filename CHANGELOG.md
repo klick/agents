@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.8.0 - 2026-03-04
+
+### Added
+
+- Added read APIs for additional Craft and Commerce resources: users (flag-gated), assets, categories, tags, global sets, addresses (flag-gated), content blocks, variants, subscriptions, transfers, and donations.
+- Expanded `GET /agents/v1/changes` coverage to include newly exposed resources for broader incremental-sync parity.
+- Added canonical agent handbook link exposure in discovery outputs (`/llms.txt`, `/llms-full.txt`).
+
 ## 0.7.0 - 2026-03-04
 
 ### Added
