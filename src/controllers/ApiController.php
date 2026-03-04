@@ -21,6 +21,7 @@ class ApiController extends Controller
         'metrics:read',
         'diagnostics:read',
         'products:read',
+        'variants:read',
         'orders:read',
         'entries:read',
         'assets:read',
@@ -190,6 +191,83 @@ class ApiController extends Controller
 
         $payload = $this->applyListProjectionAndFilters($payload);
         return $this->jsonResponse($payload);
+    }
+
+    public function actionVariants(): Response
+    {
+        if (($guard = $this->guardRequest('variants:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $productIdError = $this->validateIntegerQueryParam('productId', 1, null);
+        if ($productIdError !== null) {
+            $errors[] = $productIdError;
+        }
+        $statusError = $this->validateEnumQueryParam('status', ['live', 'pending', 'disabled', 'expired', 'all', 'any']);
+        if ($statusError !== null) {
+            $errors[] = $statusError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getVariantsList([
+            'status' => $request->getQueryParam('status', 'live'),
+            'q' => $request->getQueryParam('q', ''),
+            'sku' => $request->getQueryParam('sku', ''),
+            'productId' => (int)$request->getQueryParam('productId', 0),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionVariantShow(): Response
+    {
+        if (($guard = $this->guardRequest('variants:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawSku = trim((string)$request->getQueryParam('sku', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+        $productIdError = $this->validateIntegerQueryParam('productId', 1, null);
+        if ($productIdError !== null) {
+            $errors[] = $productIdError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasSku = $rawSku !== '';
+        if (($hasId ? 1 : 0) + ($hasSku ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `sku`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $payload = Plugin::getInstance()->getReadinessService()->getVariantByIdOrSku([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'sku' => (string)$request->getQueryParam('sku', ''),
+            'productId' => (int)$request->getQueryParam('productId', 0),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'Variant not found.');
     }
 
     public function actionOrders(): Response
@@ -1002,6 +1080,8 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/metrics', 'requiredScopes' => ['metrics:read']],
             ['method' => 'GET', 'path' => '/diagnostics/bundle', 'requiredScopes' => ['diagnostics:read']],
             ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
+            ['method' => 'GET', 'path' => '/variants', 'requiredScopes' => ['variants:read']],
+            ['method' => 'GET', 'path' => '/variants/show', 'requiredScopes' => ['variants:read']],
             ['method' => 'GET', 'path' => '/orders', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/orders/show', 'requiredScopes' => ['orders:read'], 'optionalScopes' => ['orders:read_sensitive']],
             ['method' => 'GET', 'path' => '/entries', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
@@ -1143,6 +1223,39 @@ class ApiController extends Controller
                     '400' => ['description' => 'Invalid request (e.g. malformed cursor/updatedSince).'],
                 ]),
                 'x-required-scopes' => ['products:read'],
+            ]],
+            '/variants' => ['get' => [
+                'summary' => 'Variant list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['live', 'pending', 'disabled', 'expired', 'all']]],
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'sku', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'productId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['variants:read'],
+            ]],
+            '/variants/show' => ['get' => [
+                'summary' => 'Single variant by id or sku',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'sku', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'productId', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found'],
+                ]),
+                'x-required-scopes' => ['variants:read'],
             ]],
             '/orders' => ['get' => [
                 'summary' => 'Order list',
@@ -2671,6 +2784,7 @@ class ApiController extends Controller
             'metrics:read' => 'Read observability metrics snapshot (`/metrics`).',
             'diagnostics:read' => 'Read one-click diagnostics support bundle (`/diagnostics/bundle`).',
             'products:read' => 'Read product snapshot endpoints.',
+            'variants:read' => 'Read variant list and lookup endpoints.',
             'orders:read' => 'Read order metadata endpoints.',
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
             'entries:read' => 'Read live content entry endpoints.',
@@ -3439,6 +3553,51 @@ class ApiController extends Controller
                                 ],
                             ],
                             'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'variants.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/variants',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'q' => ['type' => 'string'],
+                            'sku' => ['type' => 'string'],
+                            'productId' => ['type' => 'integer'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'variants.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/variants/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'sku' => ['type' => 'string'],
+                            'productId' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
                         ],
                     ],
                 ],

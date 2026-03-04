@@ -33,7 +33,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 
 | Surface | Status | Notes |
 | --- | --- | --- |
-| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
+| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
 | Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
@@ -206,6 +206,8 @@ Read/discovery endpoints:
 - `GET /metrics`
 - `GET /diagnostics/bundle`
 - `GET /products`
+- `GET /variants`
+- `GET /variants/show` (requires exactly one of `id` or `sku`; optional `productId`)
 - `GET /orders`
 - `GET /orders/show` (requires exactly one of `id` or `number`)
 - `GET /entries`
@@ -269,6 +271,7 @@ Read scopes:
 - `metrics:read`
 - `diagnostics:read`
 - `products:read`
+- `variants:read`
 - `orders:read`
 - `orders:read_sensitive`
 - `entries:read`
@@ -380,6 +383,12 @@ Identifier notes for show commands:
 - `limit` (1..200, default 50)
 - `cursor` (opaque cursor; legacy pagination + incremental continuation)
 - `updatedSince` (RFC3339 timestamp bootstrap for incremental mode, for example `2026-02-24T12:00:00Z`)
+
+### Variants endpoint parameters
+
+- `/variants`: `status` (`live|pending|disabled|expired|all`), `q`, `sku`, `productId`, `limit` (1..200)
+- `/variants` incremental: `cursor` (opaque), `updatedSince` (RFC3339)
+- `/variants/show`: exactly one of `id` or `sku`; optional `productId`
 
 ### Orders endpoint parameters
 

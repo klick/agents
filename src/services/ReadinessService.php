@@ -5,6 +5,7 @@ namespace Klick\Agents\services;
 use Craft;
 use craft\base\Component;
 use craft\commerce\elements\Order;
+use craft\commerce\elements\Variant;
 use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use craft\commerce\elements\Product;
@@ -339,6 +340,201 @@ class ReadinessService extends Component
                     'lowStockThreshold' => $lowStockThreshold,
                     'limit' => $limit,
                 ],
+                'errors' => [],
+            ],
+        ];
+    }
+
+    public function getVariantsList(array $params): array
+    {
+        $status = $this->normalizeStatus((string)($params['status'] ?? 'live'));
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $sku = trim((string)($params['sku'] ?? ''));
+        $productId = (int)($params['productId'] ?? 0);
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+        $filters = [
+            'status' => $status,
+            'search' => $search !== '' ? $search : null,
+            'sku' => $sku !== '' ? $sku : null,
+            'productId' => $productId > 0 ? $productId : null,
+            'limit' => $limit,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if (!class_exists(Variant::class)) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'filters' => $filters,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'variants');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = Variant::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+
+        if ($status === 'all') {
+            $queryBuilder->status(null);
+        } else {
+            $queryBuilder->status($status);
+        }
+        if ($productId > 0 && method_exists($queryBuilder, 'productId')) {
+            $queryBuilder->productId($productId);
+        }
+        if ($sku !== '' && method_exists($queryBuilder, 'sku')) {
+            $queryBuilder->sku($sku);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $variants = $queryBuilder->all();
+        $returnedVariants = $isIncremental ? array_slice($variants, 0, $limit) : $variants;
+        $hasMore = $isIncremental && count($variants) > $limit;
+        $nextOffset = $offset + count($returnedVariants);
+
+        $data = [];
+        foreach ($returnedVariants as $variant) {
+            if (!$variant instanceof Variant) {
+                continue;
+            }
+            $data[] = $this->mapVariant($variant, false);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'variants', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getVariantByIdOrSku(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $sku = trim((string)($params['sku'] ?? ''));
+        $productId = (int)($params['productId'] ?? 0);
+        $hasId = $id > 0;
+        $hasSku = $sku !== '';
+
+        if (($hasId ? 1 : 0) + ($hasSku ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --sku.'],
+                ],
+            ];
+        }
+
+        if (!class_exists(Variant::class)) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Commerce plugin is unavailable.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = Variant::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } elseif (method_exists($queryBuilder, 'sku')) {
+            $queryBuilder->sku($sku);
+        } else {
+            $queryBuilder->search($sku);
+        }
+        if ($productId > 0 && method_exists($queryBuilder, 'productId')) {
+            $queryBuilder->productId($productId);
+        }
+
+        $variant = $queryBuilder->one();
+        if (!$variant instanceof Variant) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapVariant($variant, true),
+            'meta' => [
+                'count' => 1,
                 'errors' => [],
             ],
         ];
@@ -2688,6 +2884,53 @@ class ReadinessService extends Component
             'totalStock' => $totalStock,
             'hasUnlimitedStock' => $hasUnlimitedStock,
         ];
+    }
+
+    private function mapVariant(Variant $variant, bool $detailed): array
+    {
+        $status = method_exists($variant, 'getStatus') ? $variant->getStatus() : null;
+        $url = method_exists($variant, 'getUrl') ? $variant->getUrl() : null;
+        $product = method_exists($variant, 'getProduct') ? $variant->getProduct() : null;
+
+        $data = [
+            'id' => (int)$variant->id,
+            'productId' => $variant->productId === null ? null : (int)$variant->productId,
+            'sku' => (string)($variant->sku ?? ''),
+            'title' => (string)($variant->title ?? ''),
+            'status' => $status,
+            'isDefault' => (bool)($variant->isDefault ?? false),
+            'enabled' => (bool)($variant->enabled ?? false),
+            'dateCreated' => $this->formatDate($variant->dateCreated ?? null),
+            'updatedAt' => $this->formatDate($variant->dateUpdated ?? null),
+            'url' => $url,
+        ];
+
+        if ($product !== null) {
+            $data['product'] = [
+                'id' => (int)($product->id ?? 0),
+                'title' => (string)($product->title ?? ''),
+                'slug' => (string)($product->slug ?? ''),
+                'type' => $product->type?->handle ?? null,
+            ];
+        }
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $data['price'] = $variant->price === null ? null : (float)$variant->price;
+        $data['stock'] = $variant->stock === null ? null : (int)$variant->stock;
+        $data['hasUnlimitedStock'] = (bool)($variant->hasUnlimitedStock ?? false);
+        $data['minQty'] = $variant->minQty === null ? null : (int)$variant->minQty;
+        $data['maxQty'] = $variant->maxQty === null ? null : (int)$variant->maxQty;
+        $data['isAvailable'] = method_exists($variant, 'getIsAvailable') ? (bool)$variant->getIsAvailable() : null;
+        $data['isPromotable'] = method_exists($variant, 'getIsPromotable') ? (bool)$variant->getIsPromotable() : null;
+        $data['weight'] = $variant->weight === null ? null : (float)$variant->weight;
+        $data['length'] = $variant->length === null ? null : (float)$variant->length;
+        $data['width'] = $variant->width === null ? null : (float)$variant->width;
+        $data['height'] = $variant->height === null ? null : (float)$variant->height;
+
+        return $data;
     }
 
     private function mapOrder(Order $order, bool $detailed, bool $includeSensitive, bool $redactEmail): array

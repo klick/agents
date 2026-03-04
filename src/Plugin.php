@@ -154,6 +154,8 @@ class Plugin extends BasePlugin
                 'agents/v1/health' => 'agents/api/health',
                 'agents/v1/readiness' => 'agents/api/readiness',
                 'agents/v1/products' => 'agents/api/products',
+                'agents/v1/variants' => 'agents/api/variants',
+                'agents/v1/variants/show' => 'agents/api/variant-show',
                 'agents/v1/orders' => 'agents/api/orders',
                 'agents/v1/orders/show' => 'agents/api/order-show',
                 'agents/v1/entries' => 'agents/api/entries',
