@@ -158,6 +158,8 @@ class Plugin extends BasePlugin
                 'agents/v1/orders/show' => 'agents/api/order-show',
                 'agents/v1/entries' => 'agents/api/entries',
                 'agents/v1/entries/show' => 'agents/api/entry-show',
+                'agents/v1/users' => 'agents/api/users',
+                'agents/v1/users/show' => 'agents/api/user-show',
                 'agents/v1/changes' => 'agents/api/changes',
                 'agents/v1/sections' => 'agents/api/sections',
                 'agents/v1/schema' => 'agents/api/schema',
@@ -306,6 +308,11 @@ class Plugin extends BasePlugin
     public function isRefundApprovalsExperimentalEnabled(): bool
     {
         return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL');
+    }
+
+    public function isUsersApiEnabled(): bool
+    {
+        return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_ENABLE_USERS_API');
     }
 
     protected function createSettingsModel(): ?Model

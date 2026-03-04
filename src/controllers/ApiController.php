@@ -25,6 +25,7 @@ class ApiController extends Controller
         'entries:read',
         'changes:read',
         'sections:read',
+        'users:read',
         'consumers:read',
         'schema:read',
         'capabilities:read',
@@ -386,6 +387,87 @@ class ApiController extends Controller
         return $this->respondWithPayload($payload);
     }
 
+    public function actionUsers(): Response
+    {
+        if (($guard = $this->guardUsersApiEnabled()) !== null) {
+            return $guard;
+        }
+
+        if (($guard = $this->guardRequest('users:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $statusError = $this->validateEnumQueryParam('status', ['active', 'inactive', 'pending', 'suspended', 'locked', 'credentialed', 'all', 'any']);
+        if ($statusError !== null) {
+            $errors[] = $statusError;
+        }
+        $errors = array_merge($errors, $this->validateProjectionAndFilterQueryParams());
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $includeSensitive = $this->hasScope('users:read_sensitive');
+        $payload = Plugin::getInstance()->getReadinessService()->getUsersList([
+            'status' => $request->getQueryParam('status', 'active'),
+            'group' => $request->getQueryParam('group', ''),
+            'q' => $request->getQueryParam('q', ''),
+            'limit' => (int)$request->getQueryParam('limit', 50),
+            'cursor' => $request->getQueryParam('cursor'),
+            'updatedSince' => $request->getQueryParam('updatedSince'),
+            'includeSensitive' => $includeSensitive,
+            'redactEmail' => !$includeSensitive && $this->shouldRedactEmail(),
+        ]);
+
+        return $this->respondWithPayload($this->applyListProjectionAndFilters($payload));
+    }
+
+    public function actionUserShow(): Response
+    {
+        if (($guard = $this->guardUsersApiEnabled()) !== null) {
+            return $guard;
+        }
+
+        if (($guard = $this->guardRequest('users:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $rawId = trim((string)$request->getQueryParam('id', ''));
+        $rawUsername = trim((string)$request->getQueryParam('username', ''));
+        $errors = [];
+
+        $idError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($idError !== null) {
+            $errors[] = $idError;
+        }
+
+        $hasId = $rawId !== '';
+        $hasUsername = $rawUsername !== '';
+        if (($hasId ? 1 : 0) + ($hasUsername ? 1 : 0) !== 1) {
+            $errors[] = 'Provide exactly one identifier: `id` or `username`.';
+        }
+
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $includeSensitive = $this->hasScope('users:read_sensitive');
+        $payload = Plugin::getInstance()->getReadinessService()->getUserByIdOrUsername([
+            'id' => (int)$request->getQueryParam('id', 0),
+            'username' => (string)$request->getQueryParam('username', ''),
+            'includeSensitive' => $includeSensitive,
+            'redactEmail' => !$includeSensitive && $this->shouldRedactEmail(),
+        ]);
+
+        return $this->respondWithPayload($payload, true, 'User not found.');
+    }
+
     public function actionSchema(): Response
     {
         if (($guard = $this->guardRequest('schema:read')) !== null) {
@@ -457,6 +539,8 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/entries/show', 'requiredScopes' => ['entries:read'], 'optionalScopes' => ['entries:read_all_statuses']],
             ['method' => 'GET', 'path' => '/changes', 'requiredScopes' => ['changes:read']],
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
+            ['method' => 'GET', 'path' => '/users', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
+            ['method' => 'GET', 'path' => '/users/show', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
             ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read']],
             ['method' => 'POST', 'path' => '/consumers/checkpoint', 'requiredScopes' => ['consumers:write']],
             ['method' => 'GET', 'path' => '/schema', 'requiredScopes' => ['schema:read']],
@@ -481,6 +565,12 @@ class ApiController extends Controller
             $endpoints = array_values(array_filter(
                 $endpoints,
                 static fn(array $endpoint): bool => !str_starts_with((string)($endpoint['path'] ?? ''), '/control/')
+            ));
+        }
+        if (!$this->isUsersApiEnabled()) {
+            $endpoints = array_values(array_filter(
+                $endpoints,
+                static fn(array $endpoint): bool => !str_starts_with((string)($endpoint['path'] ?? ''), '/users')
             ));
         }
 
@@ -653,6 +743,40 @@ class ApiController extends Controller
                 'x-optional-scopes' => ['entries:read_all_statuses'],
             ]],
             '/sections' => ['get' => ['summary' => 'Section list', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['sections:read']]],
+            '/users' => ['get' => [
+                'summary' => 'User list',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'status', 'schema' => ['type' => 'string', 'enum' => ['active', 'inactive', 'pending', 'suspended', 'locked', 'credentialed', 'all']]],
+                    ['in' => 'query', 'name' => 'group', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'q', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200]],
+                    ['in' => 'query', 'name' => 'cursor', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'updatedSince', 'schema' => ['type' => 'string', 'format' => 'date-time']],
+                    ['in' => 'query', 'name' => 'fields', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated projection list (supports dot-paths).'],
+                    ['in' => 'query', 'name' => 'filter', 'schema' => ['type' => 'string'], 'description' => 'Optional comma-separated `path:value` filters. Use `~value` for contains and `*` wildcard.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Endpoint not available'],
+                ]),
+                'x-required-scopes' => ['users:read'],
+                'x-optional-scopes' => ['users:read_sensitive'],
+            ]],
+            '/users/show' => ['get' => [
+                'summary' => 'Single user by id or username',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                    ['in' => 'query', 'name' => 'username', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '404' => ['description' => 'Not found or endpoint unavailable'],
+                ]),
+                'x-required-scopes' => ['users:read'],
+                'x-optional-scopes' => ['users:read_sensitive'],
+            ]],
             '/consumers/lag' => ['get' => [
                 'summary' => 'List consumer checkpoint lag by integration/resource',
                 'parameters' => [
@@ -792,6 +916,11 @@ class ApiController extends Controller
         ];
         if (!$this->isRefundApprovalsExperimentalEnabled()) {
             foreach ($this->controlOpenApiPaths() as $path) {
+                unset($paths[$path]);
+            }
+        }
+        if (!$this->isUsersApiEnabled()) {
+            foreach ($this->usersOpenApiPaths() as $path) {
                 unset($paths[$path]);
             }
         }
@@ -1822,6 +1951,12 @@ class ApiController extends Controller
                 static fn(string $scope): bool => !str_starts_with($scope, 'control:')
             ));
         }
+        if (!$this->isUsersApiEnabled()) {
+            $normalized = array_values(array_filter(
+                $normalized,
+                fn(string $scope): bool => !in_array($scope, $this->userScopeKeys(), true)
+            ));
+        }
         sort($normalized);
         return $normalized;
     }
@@ -1852,6 +1987,8 @@ class ApiController extends Controller
             'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
             'changes:read' => 'Read unified cross-resource incremental changes feed.',
             'sections:read' => 'Read section list endpoint.',
+            'users:read' => 'Read user list and lookup endpoints.',
+            'users:read_sensitive' => 'Unredacted user email/profile detail fields.',
             'consumers:read' => 'Read per-integration consumer lag/checkpoint status.',
             'consumers:write' => 'Record per-integration consumer checkpoints for lag tracking.',
             'schema:read' => 'Read machine-readable endpoint schemas for a specific version.',
@@ -1875,6 +2012,11 @@ class ApiController extends Controller
                 unset($scopes[$scope]);
             }
         }
+        if (!$this->isUsersApiEnabled()) {
+            foreach ($this->userScopeKeys() as $scope) {
+                unset($scopes[$scope]);
+            }
+        }
 
         return $scopes;
     }
@@ -1884,9 +2026,23 @@ class ApiController extends Controller
         return Plugin::getInstance()->isRefundApprovalsExperimentalEnabled();
     }
 
+    private function isUsersApiEnabled(): bool
+    {
+        return Plugin::getInstance()->isUsersApiEnabled();
+    }
+
     private function guardRefundApprovalsExperimentalEnabled(): ?Response
     {
         if ($this->isRefundApprovalsExperimentalEnabled()) {
+            return null;
+        }
+
+        return $this->errorResponse(404, self::ERROR_NOT_FOUND, 'Endpoint is not available.');
+    }
+
+    private function guardUsersApiEnabled(): ?Response
+    {
+        if ($this->isUsersApiEnabled()) {
             return null;
         }
 
@@ -1908,6 +2064,14 @@ class ApiController extends Controller
         ];
     }
 
+    private function usersOpenApiPaths(): array
+    {
+        return [
+            '/users',
+            '/users/show',
+        ];
+    }
+
     private function controlScopeKeys(): array
     {
         return [
@@ -1921,6 +2085,14 @@ class ApiController extends Controller
             'control:actions:simulate',
             'control:actions:execute',
             'control:audit:read',
+        ];
+    }
+
+    private function userScopeKeys(): array
+    {
+        return [
+            'users:read',
+            'users:read_sensitive',
         ];
     }
 
@@ -2500,7 +2672,7 @@ class ApiController extends Controller
 
     private function versionedSchemaCatalogs(): array
     {
-        return [
+        $catalogs = [
             'v1' => [
                 'products.list' => [
                     'method' => 'GET',
@@ -2588,6 +2760,49 @@ class ApiController extends Controller
                         ],
                     ],
                 ],
+                'users.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/users',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'group' => ['type' => 'string'],
+                            'q' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'fields' => ['type' => 'string'],
+                            'filter' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                            'page' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'users.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/users/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'username' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
                 'changes.feed' => [
                     'method' => 'GET',
                     'path' => '/agents/v1/changes',
@@ -2668,6 +2883,12 @@ class ApiController extends Controller
                 ],
             ],
         ];
+
+        if (!$this->isUsersApiEnabled()) {
+            unset($catalogs['v1']['users.list'], $catalogs['v1']['users.show']);
+        }
+
+        return $catalogs;
     }
 
     private function respondWithPayload(array $payload, bool $expectSingle = false, string $notFoundMessage = 'Resource not found.'): Response

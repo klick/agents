@@ -9,6 +9,7 @@ use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use craft\commerce\elements\Product;
 use craft\elements\Entry;
+use craft\elements\User;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Klick\Agents\Plugin;
@@ -859,6 +860,176 @@ class ReadinessService extends Component
         ];
     }
 
+    public function getUsersList(array $params): array
+    {
+        $status = $this->normalizeUserStatus((string)($params['status'] ?? 'active'));
+        $limit = $this->normalizeLimit((int)($params['limit'] ?? 50));
+        $search = trim((string)($params['search'] ?? $params['q'] ?? ''));
+        $group = trim((string)($params['group'] ?? ''));
+        $includeSensitive = (bool)($params['includeSensitive'] ?? false);
+        $redactEmail = (bool)($params['redactEmail'] ?? false);
+        $cursor = trim((string)($params['cursor'] ?? ''));
+        $updatedSinceRaw = trim((string)($params['updatedSince'] ?? ''));
+        $isIncremental = ($cursor !== '' || $updatedSinceRaw !== '');
+        $offset = 0;
+        $updatedSince = null;
+        $snapshotEnd = null;
+
+        $filters = [
+            'status' => $status,
+            'search' => $search !== '' ? $search : null,
+            'group' => $group !== '' ? $group : null,
+            'limit' => $limit,
+            'includeSensitive' => $includeSensitive,
+            'redactEmail' => $redactEmail,
+            'syncMode' => $isIncremental ? 'incremental' : 'full',
+            'updatedSince' => $isIncremental ? ($updatedSinceRaw !== '' ? $updatedSinceRaw : null) : null,
+        ];
+
+        if ($isIncremental) {
+            if ($cursor !== '') {
+                $cursorState = $this->parseIncrementalCursor($cursor, 'users');
+                if (!empty($cursorState['errors'])) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => $cursorState['errors'],
+                        ],
+                    ];
+                }
+
+                $offset = (int)$cursorState['offset'];
+                $updatedSince = $cursorState['updatedSince'];
+                $snapshotEnd = $cursorState['snapshotEnd'];
+            } else {
+                $updatedSinceState = $this->parseUpdatedSince($updatedSinceRaw);
+                if ($updatedSinceState['error'] !== null) {
+                    return [
+                        'data' => [],
+                        'meta' => [
+                            'count' => 0,
+                            'filters' => $filters,
+                            'errors' => [$updatedSinceState['error']],
+                        ],
+                    ];
+                }
+
+                $updatedSince = $updatedSinceState['value'];
+                $snapshotEnd = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            }
+
+            $filters['updatedSince'] = $this->formatDate($updatedSince);
+        }
+
+        $queryBuilder = User::find()
+            ->orderBy($isIncremental ? $this->buildIncrementalSort() : ['elements.dateUpdated' => SORT_DESC, 'elements.id' => SORT_DESC]);
+
+        if ($status === 'all') {
+            $queryBuilder->status(null);
+        } else {
+            $queryBuilder->status($status);
+        }
+        if ($group !== '' && method_exists($queryBuilder, 'group')) {
+            $queryBuilder->group($group);
+        }
+        if ($search !== '') {
+            $queryBuilder->search($search);
+        }
+
+        if ($isIncremental) {
+            $queryBuilder
+                ->offset($offset)
+                ->limit($limit + 1);
+            $this->applyDateUpdatedWindow($queryBuilder, $updatedSince, $snapshotEnd);
+        } else {
+            $queryBuilder->limit($limit);
+        }
+
+        $users = $queryBuilder->all();
+        $returnedUsers = $isIncremental ? array_slice($users, 0, $limit) : $users;
+        $hasMore = $isIncremental && count($users) > $limit;
+        $nextOffset = $offset + count($returnedUsers);
+
+        $data = [];
+        foreach ($returnedUsers as $user) {
+            if (!$user instanceof User) {
+                continue;
+            }
+            $data[] = $this->mapUser($user, false, $includeSensitive, $redactEmail);
+        }
+
+        $payload = [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'filters' => $filters,
+                'errors' => [],
+            ],
+        ];
+
+        if ($isIncremental) {
+            $payload['page'] = [
+                'nextCursor' => $hasMore ? $this->buildIncrementalCursor($nextOffset, 'users', $updatedSince, $snapshotEnd) : null,
+                'limit' => $limit,
+                'count' => count($data),
+                'hasMore' => $hasMore,
+                'syncMode' => 'incremental',
+                'updatedSince' => $this->formatDate($updatedSince),
+                'snapshotEnd' => $this->formatDate($snapshotEnd),
+            ];
+        }
+
+        return $payload;
+    }
+
+    public function getUserByIdOrUsername(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $username = trim((string)($params['username'] ?? ''));
+        $includeSensitive = (bool)($params['includeSensitive'] ?? false);
+        $redactEmail = (bool)($params['redactEmail'] ?? false);
+        $hasId = $id > 0;
+        $hasUsername = $username !== '';
+
+        if (($hasId ? 1 : 0) + ($hasUsername ? 1 : 0) !== 1) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => ['Provide exactly one identifier: --id or --username.'],
+                ],
+            ];
+        }
+
+        $queryBuilder = User::find()->status(null)->limit(1);
+        if ($hasId) {
+            $queryBuilder->id($id);
+        } else {
+            $queryBuilder->username($username);
+        }
+
+        $user = $queryBuilder->one();
+        if (!$user instanceof User) {
+            return [
+                'data' => null,
+                'meta' => [
+                    'count' => 0,
+                    'errors' => [],
+                ],
+            ];
+        }
+
+        return [
+            'data' => $this->mapUser($user, true, $includeSensitive, $redactEmail),
+            'meta' => [
+                'count' => 1,
+                'errors' => [],
+            ],
+        ];
+    }
+
     private function calculateReadinessScore(): int
     {
         $score = 0;
@@ -894,6 +1065,21 @@ class ReadinessService extends Component
             'title' => 'title',
             'createdat' => 'createdAt',
             default => 'updatedAt',
+        };
+    }
+
+    private function normalizeUserStatus(string $status): string
+    {
+        $status = strtolower(trim($status));
+        return match ($status) {
+            '', 'active' => 'active',
+            'inactive' => 'inactive',
+            'pending' => 'pending',
+            'suspended' => 'suspended',
+            'locked' => 'locked',
+            'credentialed' => 'credentialed',
+            'all', 'any' => 'all',
+            default => 'active',
         };
     }
 
@@ -1594,6 +1780,64 @@ class ReadinessService extends Component
         $data['dateUpdated'] = $this->formatDate($entry->dateUpdated);
         $data['authorId'] = $entry->authorId ? (int)$entry->authorId : null;
         $data['enabled'] = (bool)$entry->enabled;
+
+        return $data;
+    }
+
+    private function mapUser(User $user, bool $detailed, bool $includeSensitive, bool $redactEmail): array
+    {
+        $email = $user->email ? (string)$user->email : null;
+        $emailRedacted = false;
+        if (!$includeSensitive && $redactEmail) {
+            $email = null;
+            $emailRedacted = true;
+        }
+
+        $data = [
+            'id' => (int)$user->id,
+            'username' => $user->username ? (string)$user->username : null,
+            'status' => $user->getStatus(),
+            'admin' => (bool)$user->admin,
+            'active' => (bool)$user->active,
+            'email' => $email,
+            'emailRedacted' => $emailRedacted,
+            'updatedAt' => $this->formatDate($user->dateUpdated),
+        ];
+
+        if (!$detailed) {
+            return $data;
+        }
+
+        $groupHandles = [];
+        foreach ($user->getGroups() as $group) {
+            $handle = trim((string)($group->handle ?? ''));
+            if ($handle === '') {
+                continue;
+            }
+            $groupHandles[] = $handle;
+        }
+        $groupHandles = array_values(array_unique($groupHandles));
+        sort($groupHandles);
+
+        $data['dateCreated'] = $this->formatDate($user->dateCreated);
+        $data['dateUpdated'] = $this->formatDate($user->dateUpdated);
+        $data['lastLoginDate'] = $this->formatDate($user->lastLoginDate);
+        $data['pending'] = (bool)$user->pending;
+        $data['suspended'] = (bool)$user->suspended;
+        $data['locked'] = (bool)$user->locked;
+        $data['credentialed'] = (bool)$user->getIsCredentialed();
+        $data['groupHandles'] = $groupHandles;
+        if ($includeSensitive) {
+            $data['firstName'] = $user->firstName ? (string)$user->firstName : null;
+            $data['lastName'] = $user->lastName ? (string)$user->lastName : null;
+            $data['friendlyName'] = $user->getFriendlyName();
+            $data['unverifiedEmail'] = $user->unverifiedEmail ? (string)$user->unverifiedEmail : null;
+        } else {
+            $data['firstName'] = null;
+            $data['lastName'] = null;
+            $data['friendlyName'] = null;
+            $data['unverifiedEmail'] = null;
+        }
 
         return $data;
     }

@@ -33,7 +33,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 
 | Surface | Status | Notes |
 | --- | --- | --- |
-| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
+| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/orders*`, `/entries*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
 | Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
@@ -102,6 +102,7 @@ Environment variables:
 - `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN` (default: `false`)
 - `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD` (default: `true`)
 - `PLUGIN_AGENTS_TOKEN_SCOPES` (comma/space list, default scoped read set)
+- `PLUGIN_AGENTS_ENABLE_USERS_API` (default: `false`; enables `/users` endpoints)
 - `PLUGIN_AGENTS_REDACT_EMAIL` (default: `true`, applied when sensitive scope is missing)
 - `PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE` (default: `60`)
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
@@ -208,6 +209,8 @@ Read/discovery endpoints:
 - `GET /orders/show` (requires exactly one of `id` or `number`)
 - `GET /entries`
 - `GET /entries/show` (requires exactly one of `id` or `slug`)
+- `GET /users` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
+- `GET /users/show` (requires exactly one of `id` or `username`; only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `GET /changes`
 - `GET /sections`
 - `GET /consumers/lag`
@@ -259,6 +262,8 @@ Read scopes:
 - `entries:read_all_statuses`
 - `changes:read`
 - `sections:read`
+- `users:read` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
+- `users:read_sensitive` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `consumers:read`
 - `consumers:write`
 - `schema:read`
