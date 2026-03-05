@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.8.7 - 2026-03-05
+
+### Changed
+
+- Reordered Control Panel subnavigation to place `Agents` directly below `Dashboard` for faster operator access.
+
 ## 0.8.6 - 2026-03-05
 
 ### Added
