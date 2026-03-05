@@ -8,6 +8,7 @@ class Settings extends Model
 {
     public bool $enabled = true;
     public bool $allowCpApprovalRequests = false;
+    public bool $enableCredentialUsageIndicator = true;
     public bool $enableLlmsTxt = true;
     public bool $enableLlmsFullTxt = false;
     public bool $enableCommerceTxt = true;
@@ -28,7 +29,7 @@ class Settings extends Model
     public function rules(): array
     {
         return [
-            [['enabled', 'allowCpApprovalRequests', 'enableLlmsTxt', 'enableLlmsFullTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
+            [['enabled', 'allowCpApprovalRequests', 'enableCredentialUsageIndicator', 'enableLlmsTxt', 'enableLlmsFullTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
             [['llmsTxtCacheTtl', 'commerceTxtCacheTtl'], 'integer', 'min' => 0, 'max' => 604800],
             [['llmsTxtBody', 'llmsSiteSummary', 'commerceTxtBody', 'commerceSummary', 'commerceCatalogUrl'], 'string'],
             [['llmsLinks', 'commercePolicyUrls', 'commerceSupport', 'commerceAttributes'], 'safe'],

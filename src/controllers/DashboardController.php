@@ -228,6 +228,7 @@ class DashboardController extends Controller
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
+            'credentialUsageIndicatorSettingLocked' => (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false),
             'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
             'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
             'commerceTxtSettingLocked' => (bool)($settingsOverrides['enableCommerceTxt'] ?? false),
@@ -269,15 +270,66 @@ class DashboardController extends Controller
         return $this->renderCpTemplate('agents/credentials', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
+            'credentialUsageIndicatorEnabled' => (bool)$this->getSettingsModel()->enableCredentialUsageIndicator,
             'securityPosture' => $posture,
             'managedCredentials' => $managedCredentials,
             'credentialExpirySummary' => $credentialExpirySummary,
             'defaultScopes' => $defaultScopes,
             'revealedCredential' => $this->pullRevealedCredential(),
             'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
+            'canPauseCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
             'canRotateCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_ROTATE),
             'canRevokeCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_REVOKE),
             'canDeleteCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_DELETE),
+        ]);
+    }
+
+    public function actionCredentialUsagePulse(): Response
+    {
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+        $this->requireAcceptsJson();
+
+        if (!$this->request->getIsGet()) {
+            $response = $this->asJson([
+                'ok' => false,
+                'error' => 'METHOD_NOT_ALLOWED',
+                'message' => 'Use GET.',
+            ]);
+            $response->setStatusCode(405);
+            return $response;
+        }
+
+        if (!(bool)$this->getSettingsModel()->enableCredentialUsageIndicator) {
+            return $this->asJson([
+                'ok' => true,
+                'serverNow' => (int)floor(microtime(true) * 1000),
+                'events' => [],
+            ]);
+        }
+
+        $rawCredentialIds = $this->request->getQueryParam(
+            'credentialIds',
+            $this->request->getQueryParam('credentialIds[]', [])
+        );
+        $credentialIds = $this->parseIntegerIdsInput($rawCredentialIds);
+
+        $sinceRaw = $this->request->getQueryParam('since', null);
+        $sinceMs = null;
+        if ($sinceRaw !== null) {
+            $sinceCandidate = trim((string)$sinceRaw);
+            if ($sinceCandidate !== '' && is_numeric($sinceCandidate)) {
+                $sinceMs = max(0, (int)$sinceCandidate);
+            }
+        }
+
+        $events = Plugin::getInstance()
+            ->getCredentialService()
+            ->getCredentialUsagePulseSnapshot($credentialIds, $sinceMs);
+
+        return $this->asJson([
+            'ok' => true,
+            'serverNow' => (int)floor(microtime(true) * 1000),
+            'events' => $events,
         ]);
     }
 
@@ -327,6 +379,7 @@ class DashboardController extends Controller
         $llmsLocked = (bool)($settingsOverrides['enableLlmsTxt'] ?? false);
         $llmsFullLocked = (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false);
         $commerceLocked = (bool)($settingsOverrides['enableCommerceTxt'] ?? false);
+        $credentialUsageIndicatorLocked = (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false);
         $llmsBodyLocked = (bool)($settingsOverrides['llmsTxtBody'] ?? false);
         $commerceBodyLocked = (bool)($settingsOverrides['commerceTxtBody'] ?? false);
 
@@ -337,6 +390,9 @@ class DashboardController extends Controller
         $settingsData['allowCpApprovalRequests'] = $plugin->isRefundApprovalsExperimentalEnabled()
             ? $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests)
             : false;
+        $settingsData['enableCredentialUsageIndicator'] = $credentialUsageIndicatorLocked
+            ? (bool)$settings->enableCredentialUsageIndicator
+            : $this->parseBooleanBodyParam('enableCredentialUsageIndicator', (bool)$settings->enableCredentialUsageIndicator);
         $settingsData['enableLlmsTxt'] = $llmsLocked
             ? (bool)$settings->enableLlmsTxt
             : $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
@@ -380,6 +436,9 @@ class DashboardController extends Controller
         }
         if ($commerceLocked) {
             $notes[] = '`enableCommerceTxt` is controlled by `config/agents.php`.';
+        }
+        if ($credentialUsageIndicatorLocked) {
+            $notes[] = '`enableCredentialUsageIndicator` is controlled by `config/agents.php`.';
         }
         if ($llmsBodyLocked) {
             $notes[] = '`llmsTxtBody` is controlled by `config/agents.php`.';
@@ -515,6 +574,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $handle = (string)$this->request->getBodyParam('credentialHandle', '');
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $token = (string)$this->request->getBodyParam('credentialToken', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
         $webhookSubscriptions = [
             'resourceTypes' => $this->parseWebhookDimensionInput(
@@ -538,6 +598,7 @@ class DashboardController extends Controller
             $result = $plugin->getCredentialService()->createManagedCredential(
                 $handle,
                 $displayName,
+                $token,
                 $scopes,
                 $defaultScopes,
                 $webhookSubscriptions,
@@ -552,11 +613,11 @@ class DashboardController extends Controller
                 'action' => 'created',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('API key `%s` created. Copy the token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Agent `%s` created. Copy the API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to create API key: ' . $e->getMessage());
+            $this->setFailFlash('Unable to create agent: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -591,7 +652,7 @@ class DashboardController extends Controller
         ];
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing API key ID.');
+            $this->setFailFlash('Missing agent ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
@@ -606,13 +667,13 @@ class DashboardController extends Controller
                 $networkPolicy
             );
             if (!is_array($credential)) {
-                $this->setFailFlash('API key not found.');
+                $this->setFailFlash('Agent not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
-            $this->setSuccessFlash(sprintf('API key `%s` updated.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Agent `%s` updated.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to update API key: ' . $e->getMessage());
+            $this->setFailFlash('Unable to update agent: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -628,14 +689,14 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing API key ID.');
+            $this->setFailFlash('Missing agent ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
-                $this->setFailFlash('API key not found.');
+                $this->setFailFlash('Agent not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
@@ -647,9 +708,9 @@ class DashboardController extends Controller
                 'action' => 'rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('API key `%s` rotated. Copy the new token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Agent `%s` rotated. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to rotate API key: ' . $e->getMessage());
+            $this->setFailFlash('Unable to rotate agent token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -662,19 +723,69 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing API key ID.');
+            $this->setFailFlash('Missing agent ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $revoked = Plugin::getInstance()->getCredentialService()->revokeManagedCredential($credentialId);
             if (!$revoked) {
-                $this->setFailFlash('API key not found.');
+                $this->setFailFlash('Agent not found.');
             } else {
-                $this->setSuccessFlash('API key revoked.');
+                $this->setSuccessFlash('Agent token revoked.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to revoke API key: ' . $e->getMessage());
+            $this->setFailFlash('Unable to revoke agent token: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/credentials');
+    }
+
+    public function actionPauseCredential(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
+
+        $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        if ($credentialId <= 0) {
+            $this->setFailFlash('Missing agent ID.');
+            return $this->redirectToPostedUrl(null, 'agents/credentials');
+        }
+
+        try {
+            $paused = Plugin::getInstance()->getCredentialService()->pauseManagedCredential($credentialId);
+            if (!$paused) {
+                $this->setFailFlash('Agent could not be paused. It may be revoked, already paused, or migrations are not up to date.');
+            } else {
+                $this->setSuccessFlash('Agent paused.');
+            }
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to pause agent: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/credentials');
+    }
+
+    public function actionResumeCredential(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
+
+        $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        if ($credentialId <= 0) {
+            $this->setFailFlash('Missing agent ID.');
+            return $this->redirectToPostedUrl(null, 'agents/credentials');
+        }
+
+        try {
+            $resumed = Plugin::getInstance()->getCredentialService()->resumeManagedCredential($credentialId);
+            if (!$resumed) {
+                $this->setFailFlash('Agent could not be resumed. It may be revoked or migrations are not up to date.');
+            } else {
+                $this->setSuccessFlash('Agent resumed.');
+            }
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to resume agent: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -690,14 +801,14 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing API key ID.');
+            $this->setFailFlash('Missing agent ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
-                $this->setFailFlash('API key not found.');
+                $this->setFailFlash('Agent not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
@@ -709,9 +820,9 @@ class DashboardController extends Controller
                 'action' => 'revoked and rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('API key `%s` revoked and rotated. Old token is now invalid. Copy the new token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Agent `%s` revoked and rotated. Old token is now invalid. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to revoke and rotate API key: ' . $e->getMessage());
+            $this->setFailFlash('Unable to revoke and rotate agent token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -724,19 +835,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing API key ID.');
+            $this->setFailFlash('Missing agent ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $deleted = Plugin::getInstance()->getCredentialService()->deleteManagedCredential($credentialId);
             if (!$deleted) {
-                $this->setFailFlash('API key not found.');
+                $this->setFailFlash('Agent not found.');
             } else {
-                $this->setSuccessFlash('API key deleted.');
+                $this->setSuccessFlash('Agent deleted.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to delete API key: ' . $e->getMessage());
+            $this->setFailFlash('Unable to delete agent: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -1217,6 +1328,48 @@ class DashboardController extends Controller
         return $normalized;
     }
 
+    private function parseIntegerIdsInput(mixed $rawInput): array
+    {
+        $tokens = [];
+        if (is_array($rawInput)) {
+            foreach ($rawInput as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } elseif (is_string($rawInput) || is_numeric($rawInput)) {
+            $tokens[] = (string)$rawInput;
+        }
+
+        $parts = [];
+        foreach ($tokens as $token) {
+            $chunks = preg_split('/[\s,]+/', trim($token)) ?: [];
+            foreach ($chunks as $chunk) {
+                $value = trim((string)$chunk);
+                if ($value !== '') {
+                    $parts[] = $value;
+                }
+            }
+        }
+
+        $ids = [];
+        foreach ($parts as $part) {
+            if (!preg_match('/^\d+$/', $part)) {
+                continue;
+            }
+
+            $id = (int)$part;
+            if ($id <= 0 || in_array($id, $ids, true)) {
+                continue;
+            }
+
+            $ids[] = $id;
+        }
+
+        return $ids;
+    }
+
     private function normalizeCidrInput(string $raw): ?string
     {
         $candidate = trim($raw);
@@ -1306,6 +1459,7 @@ class DashboardController extends Controller
         }
 
         return [
+            'enableCredentialUsageIndicator' => array_key_exists('enableCredentialUsageIndicator', $config),
             'enableLlmsTxt' => array_key_exists('enableLlmsTxt', $config),
             'enableLlmsFullTxt' => array_key_exists('enableLlmsFullTxt', $config),
             'enableCommerceTxt' => array_key_exists('enableCommerceTxt', $config),

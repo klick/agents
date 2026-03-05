@@ -95,33 +95,6 @@
         <p class="agents-subtle">Runs auth/discovery/readiness/smoke checks and exports a support artifact for support handoff.</p>
       </section>
 
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Entry Points</h2>
-        <div class="agents-two-col">
-          <div>
-            <span class="agents-kicker">API Endpoints</span>
-            <ul class="agents-link-list">
-              {% for endpoint in apiEndpoints %}
-                <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
-              {% endfor %}
-            </ul>
-          </div>
-          <div>
-            <span class="agents-kicker">Discovery Docs</span>
-            <ul class="agents-link-list">
-              {% for endpoint in discoveryEndpoints %}
-                <li><a href="{{ endpoint }}" target="_blank" rel="noopener">{{ endpoint }}</a></li>
-              {% endfor %}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-
       <hr>
 
 
@@ -388,7 +361,7 @@
           <tr>
             <td>Auth failures</td>
             <td>> 5 in a short window</td>
-            <td>Verify token source/scopes via <code>/agents/v1/auth/whoami</code>, then rotate/revoke affected keys in <strong>API Keys</strong>.</td>
+            <td>Verify token source/scopes via <code>/agents/v1/auth/whoami</code>, then rotate/revoke affected keys in <strong>Agents</strong>.</td>
           </tr>
           <tr>
             <td>Rate-limit denials</td>

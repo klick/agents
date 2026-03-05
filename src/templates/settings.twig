@@ -4,6 +4,7 @@
 {% set llmsTxtSettingLocked = llmsTxtSettingLocked ?? false %}
 {% set llmsFullTxtSettingLocked = llmsFullTxtSettingLocked ?? false %}
 {% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}
+{% set credentialUsageIndicatorSettingLocked = credentialUsageIndicatorSettingLocked ?? false %}
 {% set llmsTxtBodySettingLocked = llmsTxtBodySettingLocked ?? false %}
 {% set commerceTxtBodySettingLocked = commerceTxtBodySettingLocked ?? false %}
 
@@ -22,6 +23,18 @@
     onLabel: false,
     offLabel: false,
     disabled: agentsEnabledLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Enable live usage indicator on Agent cards',
+    instructions: credentialUsageIndicatorSettingLocked
+      ? 'Controlled by config/agents.php (`enableCredentialUsageIndicator`).'
+      : 'Show temporary yellow activity color on an Agent card dot when that key is used.',
+    name: 'enableCredentialUsageIndicator',
+    on: settings.enableCredentialUsageIndicator ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: credentialUsageIndicatorSettingLocked,
   }) }}
 
   {{ forms.lightswitchField({
@@ -121,11 +134,14 @@
   </section>
 {% endif %}
 
-{% if agentsEnabledLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
+{% if agentsEnabledLocked or credentialUsageIndicatorSettingLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
   <section class="border rounded p-3 warning">
     <h2 class="h4">Configuration Locks</h2>
     {% if agentsEnabledLocked %}
       <p>`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
+    {% endif %}
+    {% if credentialUsageIndicatorSettingLocked %}
+      <p>`enableCredentialUsageIndicator` is controlled by <code>config/agents.php</code>.</p>
     {% endif %}
     {% if llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
       <p>Some discovery settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>

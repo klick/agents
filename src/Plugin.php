@@ -107,7 +107,7 @@ class Plugin extends BasePlugin
             'url' => 'agents/settings',
         ];
         $subnav['credentials'] = [
-            'label' => 'API Keys',
+            'label' => 'Agents',
             'url' => 'agents/credentials',
         ];
         $item['subnav'] = $subnav;
@@ -475,22 +475,22 @@ class Plugin extends BasePlugin
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
             function(RegisterUserPermissionsEvent $event): void {
                 $event->permissions[] = [
-                    'heading' => 'Agents Credentials',
+                    'heading' => 'Agents Access',
                     'permissions' => [
                         self::PERMISSION_CREDENTIALS_VIEW => [
-                            'label' => 'View managed credentials tab',
+                            'label' => 'View managed agents tab',
                         ],
                         self::PERMISSION_CREDENTIALS_MANAGE => [
-                            'label' => 'Create and edit managed credentials',
+                            'label' => 'Create and edit managed agents',
                         ],
                         self::PERMISSION_CREDENTIALS_ROTATE => [
-                            'label' => 'Rotate managed credential tokens',
+                            'label' => 'Rotate managed agent tokens',
                         ],
                         self::PERMISSION_CREDENTIALS_REVOKE => [
-                            'label' => 'Revoke managed credentials',
+                            'label' => 'Revoke managed agent tokens',
                         ],
                         self::PERMISSION_CREDENTIALS_DELETE => [
-                            'label' => 'Delete managed credentials',
+                            'label' => 'Delete managed agents',
                         ],
                     ],
                 ];

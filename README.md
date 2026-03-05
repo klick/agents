@@ -162,7 +162,7 @@ Credential sources:
 
 - `PLUGIN_AGENTS_API_CREDENTIALS` (strict JSON credential objects with per-credential scopes)
 - `PLUGIN_AGENTS_API_TOKEN` (legacy single-token fallback)
-- Control Panel managed credentials (API Keys tab: create/edit scopes/rotate/revoke/delete with last-used metadata)
+- Control Panel managed credentials (Agents tab: create/edit/pause/resume/rotate/revoke/delete with last-used metadata)
 
 Managed credentials are stored in plugin DB tables and participate in runtime auth alongside env credentials.
 
@@ -663,7 +663,7 @@ return [
 - `Agents` section now uses 3 primary subnav views by default:
   - `agents/dashboard/overview` (`Dashboard`)
   - `agents/settings` (`Settings`)
-  - `agents/credentials` (`API Keys`)
+  - `agents/credentials` (`Agents`)
 - Optional experimental subnav view (enabled via `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
   - `agents/control` (`Return Requests`)
 - Dashboard includes top tabs:
@@ -704,9 +704,9 @@ return [
   - optional manual fallback can be enabled in Settings (`allowCpApprovalRequests`)
   - rule-aware execution guardrails (disabled rule blocks, approval linkage checks)
   - immutable audit trail with optional advanced snapshot JSON
-- API Keys:
-  - managed credential lifecycle (create/edit scopes/rotate/revoke/delete)
-  - one-time token reveal on create/rotate
+- Agents:
+  - managed credential lifecycle (create/edit/pause/resume/rotate/revoke/delete)
+  - one-time API token reveal on create/rotate
 
 ## CP rollout regression checklist
 

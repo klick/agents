@@ -10,14 +10,20 @@ use yii\db\Query;
 class CredentialService extends Component
 {
     private const TABLE = '{{%agents_credentials}}';
-    private const TOKEN_RANDOM_BYTES = 24;
+    private const TOKEN_RANDOM_SEGMENT_LENGTH = 18;
+    private const TOKEN_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     private const DEFAULT_EXPIRY_REMINDER_DAYS = 7;
     private const WEBHOOK_RESOURCE_TYPES = ['entry', 'order', 'product'];
     private const WEBHOOK_ACTIONS = ['created', 'updated', 'deleted'];
+    private const USAGE_PULSE_CACHE_KEY_PREFIX = 'agents:credentials:pulse:v1:';
+    private const USAGE_PULSE_TTL_SECONDS = 15;
+    private const USAGE_PULSE_READ_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+    private const USAGE_PULSE_WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
     private ?bool $supportsWebhookSubscriptionColumns = null;
     private ?bool $supportsExpiryColumns = null;
     private ?bool $supportsIpAllowlistColumn = null;
+    private ?bool $supportsPauseColumn = null;
 
     public function getManagedCredentialsForRuntime(array $defaultScopes): array
     {
@@ -25,15 +31,23 @@ class CredentialService extends Component
             return [];
         }
 
-        $rows = (new Query())
+        $query = (new Query())
             ->from(self::TABLE)
-            ->where(['revokedAt' => null])
+            ->where(['revokedAt' => null]);
+        if ($this->supportsPauseColumn()) {
+            $query->andWhere(['pausedAt' => null]);
+        }
+
+        $rows = $query
             ->orderBy(['handle' => SORT_ASC])
             ->all();
 
         $credentials = [];
         foreach ($rows as $row) {
             if ($this->isCredentialExpired($row)) {
+                continue;
+            }
+            if ($this->isCredentialPaused($row)) {
                 continue;
             }
 
@@ -73,6 +87,8 @@ class CredentialService extends Component
         $credentials = [];
         foreach ($rows as $row) {
             $expiry = $this->decodeExpiryPolicy($row);
+            $isRevoked = !empty($row['revokedAt']);
+            $isPaused = $this->isCredentialPaused($row);
             $credentials[] = [
                 'id' => (int)($row['id'] ?? 0),
                 'handle' => (string)($row['handle'] ?? ''),
@@ -86,8 +102,11 @@ class CredentialService extends Component
                 'expiresInDays' => $expiry['expiresInDays'],
                 'expiryStatus' => $expiry['status'],
                 'expiryPolicy' => $expiry,
-                'revoked' => !empty($row['revokedAt']),
+                'mode' => $this->resolveCredentialMode($isRevoked, $isPaused, $expiry),
+                'revoked' => $isRevoked,
                 'revokedAt' => $this->toIso8601($row['revokedAt'] ?? null),
+                'paused' => $isPaused,
+                'pausedAt' => $this->toIso8601($row['pausedAt'] ?? null),
                 'rotatedAt' => $this->toIso8601($row['rotatedAt'] ?? null),
                 'lastUsedAt' => $this->toIso8601($row['lastUsedAt'] ?? null),
                 'lastUsedIp' => $this->normalizeOptionalString($row['lastUsedIp'] ?? null),
@@ -106,9 +125,14 @@ class CredentialService extends Component
             return [];
         }
 
-        $rows = (new Query())
+        $query = (new Query())
             ->from(self::TABLE)
-            ->where(['revokedAt' => null])
+            ->where(['revokedAt' => null]);
+        if ($this->supportsPauseColumn()) {
+            $query->andWhere(['pausedAt' => null]);
+        }
+
+        $rows = $query
             ->orderBy(['handle' => SORT_ASC])
             ->all();
 
@@ -119,6 +143,9 @@ class CredentialService extends Component
             }
 
             if ($this->isCredentialExpired($row)) {
+                continue;
+            }
+            if ($this->isCredentialPaused($row)) {
                 continue;
             }
 
@@ -141,6 +168,7 @@ class CredentialService extends Component
     public function createManagedCredential(
         string $handle,
         string $displayName,
+        string $rawToken,
         array $scopes,
         array $defaultScopes,
         array $webhookSubscriptions = [],
@@ -171,10 +199,21 @@ class CredentialService extends Component
             throw new \InvalidArgumentException(sprintf('Credential `%s` already exists.', $normalizedHandle));
         }
 
-        $token = $this->generateToken($normalizedHandle);
+        $token = $this->normalizeProvidedToken($rawToken);
+        if ($token === '') {
+            $token = $this->generateToken($normalizedHandle);
+        }
         $tokenHash = hash('sha256', $token);
         $tokenPrefix = substr($token, 0, 12);
         $now = gmdate('Y-m-d H:i:s');
+
+        $tokenHashExists = (new Query())
+            ->from(self::TABLE)
+            ->where(['tokenHash' => $tokenHash])
+            ->exists();
+        if ($tokenHashExists) {
+            throw new \InvalidArgumentException('API token already exists. Generate a new token and try again.');
+        }
 
         $insertData = [
             'handle' => $normalizedHandle,
@@ -191,6 +230,9 @@ class CredentialService extends Component
             'dateUpdated' => $now,
             'uid' => StringHelper::UUID(),
         ];
+        if ($this->supportsPauseColumn()) {
+            $insertData['pausedAt'] = null;
+        }
         if ($this->supportsWebhookSubscriptionColumns()) {
             $insertData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
             $insertData['webhookActions'] = $this->encodeJson($normalizedWebhookSubscriptions['actions']);
@@ -235,13 +277,18 @@ class CredentialService extends Component
         $tokenPrefix = substr($token, 0, 12);
         $now = gmdate('Y-m-d H:i:s');
 
-        Craft::$app->getDb()->createCommand()->update(self::TABLE, [
+        $updateData = [
             'tokenHash' => $tokenHash,
             'tokenPrefix' => $tokenPrefix,
             'rotatedAt' => $now,
             'revokedAt' => null,
             'dateUpdated' => $now,
-        ], ['id' => $id])->execute();
+        ];
+        if ($this->supportsPauseColumn()) {
+            $updateData['pausedAt'] = null;
+        }
+
+        Craft::$app->getDb()->createCommand()->update(self::TABLE, $updateData, ['id' => $id])->execute();
 
         return [
             'token' => $token,
@@ -256,12 +303,92 @@ class CredentialService extends Component
         }
 
         $now = gmdate('Y-m-d H:i:s');
-        $updated = Craft::$app->getDb()->createCommand()->update(self::TABLE, [
+        $updateData = [
             'revokedAt' => $now,
+            'dateUpdated' => $now,
+        ];
+        if ($this->supportsPauseColumn()) {
+            $updateData['pausedAt'] = null;
+        }
+
+        $updated = Craft::$app->getDb()->createCommand()->update(self::TABLE, $updateData, ['id' => $id])->execute();
+
+        return $updated > 0;
+    }
+
+    public function pauseManagedCredential(int $id): bool
+    {
+        if ($id <= 0 || !$this->credentialsTableExists() || !$this->supportsPauseColumn()) {
+            return false;
+        }
+
+        $row = (new Query())
+            ->from(self::TABLE)
+            ->where(['id' => $id])
+            ->one();
+        if (!is_array($row)) {
+            return false;
+        }
+        if ($this->isCredentialRevoked($row)) {
+            return false;
+        }
+
+        $now = gmdate('Y-m-d H:i:s');
+        $updated = Craft::$app->getDb()->createCommand()->update(self::TABLE, [
+            'pausedAt' => $now,
             'dateUpdated' => $now,
         ], ['id' => $id])->execute();
 
-        return $updated > 0;
+        if ($updated > 0) {
+            return true;
+        }
+
+        $fresh = (new Query())
+            ->from(self::TABLE)
+            ->where(['id' => $id])
+            ->one();
+        if (!is_array($fresh) || $this->isCredentialRevoked($fresh)) {
+            return false;
+        }
+
+        return $this->isCredentialPaused($fresh);
+    }
+
+    public function resumeManagedCredential(int $id): bool
+    {
+        if ($id <= 0 || !$this->credentialsTableExists() || !$this->supportsPauseColumn()) {
+            return false;
+        }
+
+        $row = (new Query())
+            ->from(self::TABLE)
+            ->where(['id' => $id])
+            ->one();
+        if (!is_array($row)) {
+            return false;
+        }
+        if ($this->isCredentialRevoked($row)) {
+            return false;
+        }
+
+        $updated = Craft::$app->getDb()->createCommand()->update(self::TABLE, [
+            'pausedAt' => null,
+            'dateUpdated' => gmdate('Y-m-d H:i:s'),
+        ], ['id' => $id])->execute();
+
+        if ($updated > 0) {
+            return true;
+        }
+
+        $fresh = (new Query())
+            ->from(self::TABLE)
+            ->where(['id' => $id])
+            ->one();
+        if (!is_array($fresh) || $this->isCredentialRevoked($fresh)) {
+            return false;
+        }
+
+        return !$this->isCredentialPaused($fresh);
     }
 
     public function updateManagedCredential(
@@ -335,7 +462,7 @@ class CredentialService extends Component
         return $deleted > 0;
     }
 
-    public function recordCredentialUse(int $id, string $authMethod, string $ip): void
+    public function recordCredentialUse(int $id, string $authMethod, string $ip, string $requestMethod = ''): void
     {
         if ($id <= 0 || !$this->credentialsTableExists()) {
             return;
@@ -353,6 +480,54 @@ class CredentialService extends Component
             'lastAuthMethod' => $sanitizedAuthMethod !== '' ? $sanitizedAuthMethod : 'unknown',
             'dateUpdated' => gmdate('Y-m-d H:i:s'),
         ], ['id' => $id])->execute();
+
+        $this->recordCredentialPulse($id, $requestMethod);
+    }
+
+    public function getCredentialUsagePulseSnapshot(array $credentialIds, ?int $sinceMs = null): array
+    {
+        $normalizedIds = [];
+        foreach ($credentialIds as $rawId) {
+            $id = (int)$rawId;
+            if ($id <= 0 || in_array($id, $normalizedIds, true)) {
+                continue;
+            }
+            $normalizedIds[] = $id;
+        }
+
+        if (empty($normalizedIds)) {
+            return [];
+        }
+
+        $events = [];
+        $cache = Craft::$app->getCache();
+        foreach ($normalizedIds as $id) {
+            $key = $this->credentialPulseCacheKey($id);
+            $payload = $cache->get($key);
+            if (!is_array($payload)) {
+                continue;
+            }
+
+            $lastSeenAt = isset($payload['lastSeenAt']) ? (int)$payload['lastSeenAt'] : 0;
+            if ($lastSeenAt <= 0) {
+                continue;
+            }
+            if ($sinceMs !== null && $sinceMs > 0 && $lastSeenAt <= $sinceMs) {
+                continue;
+            }
+
+            $operation = strtolower(trim((string)($payload['op'] ?? 'read')));
+            if (!in_array($operation, ['read', 'write'], true)) {
+                $operation = 'read';
+            }
+
+            $events[(string)$id] = [
+                'lastSeenAt' => $lastSeenAt,
+                'op' => $operation,
+            ];
+        }
+
+        return $events;
     }
 
     private function getManagedCredentialByHandle(string $handle, array $defaultScopes): ?array
@@ -436,6 +611,22 @@ class CredentialService extends Component
         return $this->supportsIpAllowlistColumn;
     }
 
+    private function supportsPauseColumn(): bool
+    {
+        if ($this->supportsPauseColumn !== null) {
+            return $this->supportsPauseColumn;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsPauseColumn = false;
+            return false;
+        }
+
+        $this->supportsPauseColumn = $schema->getColumn('pausedAt') !== null;
+        return $this->supportsPauseColumn;
+    }
+
     private function normalizeHandle(string $value): string
     {
         $normalized = strtolower(trim($value));
@@ -453,6 +644,20 @@ class CredentialService extends Component
             $name = substr($name, 0, 255);
         }
         return $name;
+    }
+
+    private function normalizeProvidedToken(string $value): string
+    {
+        $token = trim($value);
+        if ($token === '') {
+            return '';
+        }
+
+        if (!preg_match('/^[A-Za-z0-9:_\\-.]+$/', $token)) {
+            throw new \InvalidArgumentException('API token may only contain letters, digits, colon, underscore, dash, and period.');
+        }
+
+        return $token;
     }
 
     private function decodeScopes(string $raw): array
@@ -506,6 +711,82 @@ class CredentialService extends Component
     {
         $expiry = $this->decodeExpiryPolicy($row);
         return (bool)($expiry['isExpired'] ?? false);
+    }
+
+    private function isCredentialPaused(array $row): bool
+    {
+        if (!$this->supportsPauseColumn()) {
+            return false;
+        }
+
+        return $this->normalizeDateString($row['pausedAt'] ?? null) !== null;
+    }
+
+    private function isCredentialRevoked(array $row): bool
+    {
+        $value = $row['revokedAt'] ?? null;
+        if (!is_string($value) && !is_numeric($value)) {
+            return false;
+        }
+
+        return trim((string)$value) !== '';
+    }
+
+    private function recordCredentialPulse(int $id, string $requestMethod): void
+    {
+        if ($id <= 0) {
+            return;
+        }
+
+        $payload = [
+            'lastSeenAt' => (int)floor(microtime(true) * 1000),
+            'op' => $this->resolvePulseOperation($requestMethod),
+        ];
+
+        Craft::$app->getCache()->set(
+            $this->credentialPulseCacheKey($id),
+            $payload,
+            self::USAGE_PULSE_TTL_SECONDS
+        );
+    }
+
+    private function resolvePulseOperation(string $requestMethod): string
+    {
+        $method = strtoupper(trim($requestMethod));
+        if (in_array($method, self::USAGE_PULSE_WRITE_METHODS, true)) {
+            return 'write';
+        }
+        if (in_array($method, self::USAGE_PULSE_READ_METHODS, true)) {
+            return 'read';
+        }
+
+        return 'read';
+    }
+
+    private function credentialPulseCacheKey(int $id): string
+    {
+        return self::USAGE_PULSE_CACHE_KEY_PREFIX . $id;
+    }
+
+    private function resolveCredentialMode(bool $isRevoked, bool $isPaused, array $expiryPolicy): string
+    {
+        if ($isRevoked) {
+            return 'revoked';
+        }
+
+        if ((bool)($expiryPolicy['isExpired'] ?? false)) {
+            return 'expired';
+        }
+
+        if ($isPaused) {
+            return 'paused';
+        }
+
+        if ((bool)($expiryPolicy['isExpiringSoon'] ?? false)) {
+            return 'expiring_soon';
+        }
+
+        return 'active';
     }
 
     private function decodeExpiryPolicy(array $row): array
@@ -866,15 +1147,55 @@ class CredentialService extends Component
 
     private function generateToken(string $handle): string
     {
-        $prefix = preg_replace('/[^a-z0-9]+/', '', strtolower($handle)) ?: 'credential';
-        $prefix = substr($prefix, 0, 10);
-
-        try {
-            $random = bin2hex(random_bytes(self::TOKEN_RANDOM_BYTES));
-        } catch (\Throwable) {
-            $random = sha1(uniqid('', true) . microtime(true));
+        $prefixSource = trim($handle);
+        if (method_exists(StringHelper::class, 'toKebabCase')) {
+            $prefix = (string)StringHelper::toKebabCase($prefixSource);
+        } elseif (method_exists(StringHelper::class, 'toHandle')) {
+            $prefix = (string)StringHelper::toHandle($prefixSource);
+        } else {
+            $prefix = strtolower($prefixSource);
         }
 
-        return sprintf('agt_%s_%s', $prefix, $random);
+        $prefix = strtolower($prefix);
+        $prefix = preg_replace('/[_\s]+/', '-', $prefix) ?: '';
+        $prefix = preg_replace('/[^a-z0-9-]+/', '-', $prefix) ?: '';
+        $prefix = preg_replace('/-+/', '-', $prefix) ?: '';
+        $prefix = trim($prefix, '-');
+        if ($prefix === '') {
+            $prefix = 'agent';
+        }
+
+        return sprintf('%s-%s', $prefix, $this->generateRandomTokenSegment(self::TOKEN_RANDOM_SEGMENT_LENGTH));
+    }
+
+    private function generateRandomTokenSegment(int $length): string
+    {
+        if ($length <= 0) {
+            return '';
+        }
+
+        $alphabet = self::TOKEN_ALPHABET;
+        $alphabetLength = strlen($alphabet);
+        if ($alphabetLength <= 0) {
+            return str_repeat('a', $length);
+        }
+
+        $bytes = '';
+        try {
+            $bytes = random_bytes($length);
+        } catch (\Throwable) {
+            $seed = sha1(uniqid('', true) . microtime(true));
+            while (strlen($bytes) < $length) {
+                $seed = sha1($seed . microtime(true));
+                $bytes .= $seed;
+            }
+        }
+
+        $token = '';
+        for ($i = 0; $i < $length; $i++) {
+            $token .= $alphabet[ord($bytes[$i]) % $alphabetLength];
+        }
+
+        return $token;
     }
 }

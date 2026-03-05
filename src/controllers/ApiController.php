@@ -2693,7 +2693,8 @@ class ApiController extends Controller
                 Plugin::getInstance()->getCredentialService()->recordCredentialUse(
                     $managedCredentialId,
                     (string)($providedToken['source'] ?? 'unknown'),
-                    $this->getClientIp()
+                    $this->getClientIp(),
+                    (string)Craft::$app->getRequest()->getMethod()
                 );
             } catch (\Throwable $e) {
                 Craft::warning('Unable to update managed credential last-used metadata: ' . $e->getMessage(), __METHOD__);

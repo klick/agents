@@ -19,7 +19,7 @@ Trigger:
 Actions:
 
 1. Inspect token scope/identity with `GET /agents/v1/auth/whoami`.
-2. Rotate or revoke compromised/invalid keys in `Agents -> API Keys`.
+2. Rotate or revoke compromised/invalid keys in `Agents -> Agents`.
 3. Confirm caller token transport (`Authorization` or `X-Agents-Token`) is correct.
 
 ### Rate-limit denials
