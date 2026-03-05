@@ -102,13 +102,13 @@ class Plugin extends BasePlugin
                 'url' => 'agents/control',
             ];
         }
-        $subnav['settings'] = [
-            'label' => 'Settings',
-            'url' => 'agents/settings',
-        ];
         $subnav['credentials'] = [
             'label' => 'Agents',
             'url' => 'agents/credentials',
+        ];
+        $subnav['settings'] = [
+            'label' => 'Settings',
+            'url' => 'agents/settings',
         ];
         $item['subnav'] = $subnav;
 
