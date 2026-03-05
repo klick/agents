@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.8.6 - 2026-03-05
+
+### Added
+
+- Added CP runtime setting `enableCredentialUsageIndicator` to toggle live per-agent usage activity indicators on the Agents cards.
+- Added managed-agent pause state persistence (`pausedAt`) with migration `m260305_110000_add_credential_pause_column`.
+- Added pause/resume lifecycle actions for managed agents in CP and runtime credential filtering.
+
+### Changed
+
+- Reworked the CP `Agents` view from API-key table workflows to card-based agent management with inline create/edit flows.
+- Renamed CP navigation and permission copy from API-key terminology to agent terminology.
+- Extended managed credential usage tracking to classify read/write operations for activity-state UI feedback.
+
+### Fixed
+
+- Fixed pause/resume action reliability across upgraded installs by handling missing pause-column scenarios safely.
+- Fixed live usage indicator behavior to respect settings while still allowing explicit debug simulation via query params.
+
 ## 0.8.5 - 2026-03-04
 
 ### Added
