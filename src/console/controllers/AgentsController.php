@@ -23,6 +23,7 @@ class AgentsController extends Controller
     public string $slug = '';
     public string $section = '';
     public string $type = '';
+    public string $templateId = '';
     public string $target = 'all';
     public bool $strict = false;
 
@@ -43,6 +44,7 @@ class AgentsController extends Controller
             'entry-list' => array_merge($options, ['section', 'type', 'status', 'search', 'limit', 'json']),
             'entry-show' => array_merge($options, ['resourceId', 'slug', 'section', 'json']),
             'section-list' => array_merge($options, ['json']),
+            'template-catalog' => array_merge($options, ['templateId', 'json']),
             'discovery-prewarm' => array_merge($options, ['target', 'json']),
             'auth-check', 'discovery-check', 'readiness-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
@@ -55,6 +57,7 @@ class AgentsController extends Controller
             'q' => 'search',
             'j' => 'json',
             'i' => 'resourceId',
+            't' => 'templateId',
         ];
     }
 
@@ -530,6 +533,67 @@ class AgentsController extends Controller
         $this->stdout("Use --json=1 to print the full diagnostics artifact.\n");
 
         return $ok ? ExitCode::OK : ExitCode::UNSPECIFIED_ERROR;
+    }
+
+    public function actionTemplateCatalog(): int
+    {
+        $service = Plugin::getInstance()->getTemplateCatalogService();
+        $templateId = strtolower(trim($this->templateId));
+
+        if ($templateId !== '') {
+            $template = $service->getTemplateById($templateId, '/agents/v1');
+            if ($template === null) {
+                $this->stderr(sprintf("Unknown template: %s\n", $templateId));
+                return ExitCode::UNSPECIFIED_ERROR;
+            }
+
+            $payload = [
+                'version' => Plugin::getInstance()->getVersion(),
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'template' => $template,
+            ];
+
+            if ($this->json) {
+                return $this->emitJson($payload);
+            }
+
+            $this->stdout(sprintf("Template: %s\n", (string)($template['displayName'] ?? $template['id'] ?? 'template')));
+            $this->stdout(sprintf("ID: %s\n", (string)($template['id'] ?? '')));
+            $this->stdout(sprintf("Intent: %s\n", (string)($template['intent'] ?? '')));
+            $this->stdout("Required scopes:\n");
+            foreach ((array)($template['requiredScopes'] ?? []) as $scope) {
+                $this->stdout(sprintf("- %s\n", (string)$scope));
+            }
+            $this->stdout("Endpoint sequence:\n");
+            foreach ((array)($template['endpointSequence'] ?? []) as $step) {
+                $this->stdout(sprintf(
+                    "- %s %s (schema endpoint: %s)\n",
+                    (string)($step['method'] ?? 'GET'),
+                    (string)($step['path'] ?? ''),
+                    (string)($step['schemaEndpoint'] ?? '')
+                ));
+            }
+
+            return ExitCode::OK;
+        }
+
+        $catalog = $service->getCatalog('/agents/v1');
+
+        if ($this->json) {
+            return $this->emitJson($catalog);
+        }
+
+        $this->stdout(sprintf("Templates: %d\n", (int)($catalog['count'] ?? 0)));
+        foreach ((array)($catalog['templates'] ?? []) as $template) {
+            $this->stdout(sprintf(
+                "- %s (%s)\n",
+                (string)($template['id'] ?? ''),
+                (string)($template['displayName'] ?? '')
+            ));
+        }
+        $this->stdout("Use --template-id=<id> for detailed output.\n");
+
+        return ExitCode::OK;
     }
 
     private function emitJson(array $payload): int

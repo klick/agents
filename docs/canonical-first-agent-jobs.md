@@ -7,10 +7,13 @@ These are the three recommended first jobs for new integrations.
 - Agents plugin enabled.
 - API token/credential configured.
 - Base URL set (for example `https://example.test/agents/v1`).
+- Template catalog available via `GET /agents/v1/templates` (`templates:read`).
 
 ## Job 1: Catalog + Content Sync Loop
 
 Purpose: keep a downstream index current with products and content entries.
+
+Template id: `catalog-sync-loop`
 
 Required scopes:
 
@@ -54,6 +57,8 @@ Checkpoint payload example:
 
 Purpose: retrieve order and content context for support workflows.
 
+Template id: `support-context-lookup`
+
 Required scopes:
 
 - `auth:read`
@@ -78,6 +83,8 @@ curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/entries?section=sup
 ## Job 3: Governed Return/Refund Approval Run
 
 Purpose: execute a high-risk action only after policy and approval checks.
+
+Template id: `governed-return-approval-run`
 
 This flow requires `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`.
 

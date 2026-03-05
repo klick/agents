@@ -1,0 +1,11 @@
+{
+  "actionType": "return.request",
+  "actionRef": "RET-100045",
+  "approvalId": 123,
+  "idempotencyKey": "return-ret-100045-v1",
+  "payload": {
+    "orderNumber": "A1B2C3D4",
+    "amount": 49.9,
+    "currency": "GBP"
+  }
+}

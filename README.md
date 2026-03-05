@@ -34,7 +34,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
-| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
+| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/templates`, `/schema`) | Production stable | Checkpoint/lag and schema/template contract surfaces for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
 | Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
@@ -140,6 +140,7 @@ Enablement precedence:
 
 - 30-minute first-success path: [docs/quickstart-30min.md](docs/quickstart-30min.md)
 - Canonical first agent jobs: [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
+- Schema/OpenAPI-based reference automations: [docs/reference-automations.md](docs/reference-automations.md)
 - Observability runbook and alert thresholds: [docs/observability-runbook.md](docs/observability-runbook.md)
 
 ## Support
@@ -147,6 +148,7 @@ Enablement precedence:
 - Docs: https://marcusscheller.com/docs/agents/
 - Quickstart (repo): [docs/quickstart-30min.md](docs/quickstart-30min.md)
 - Canonical jobs (repo): [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
+- Reference automations (repo): [docs/reference-automations.md](docs/reference-automations.md)
 - Observability runbook (repo): [docs/observability-runbook.md](docs/observability-runbook.md)
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
@@ -253,6 +255,7 @@ Read/discovery endpoints:
 - `GET /sections`
 - `GET /consumers/lag`
 - `POST /consumers/checkpoint`
+- `GET /templates`
 - `GET /schema`
 - `GET /capabilities`
 - `GET /openapi.json`
@@ -315,6 +318,7 @@ Read scopes:
 - `users:read_sensitive` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `consumers:read`
 - `consumers:write`
+- `templates:read`
 - `schema:read`
 - `capabilities:read`
 - `openapi:read`
@@ -348,6 +352,7 @@ Craft-native command routes:
 - `craft agents/auth-check`
 - `craft agents/discovery-check`
 - `craft agents/readiness-check`
+- `craft agents/template-catalog`
 - `craft agents/diagnostics-bundle`
 - `craft agents/smoke`
 
@@ -390,6 +395,8 @@ php craft agents/auth-check --strict=1 --json=1
 # Discovery/readiness/diagnostics/smoke checks
 php craft agents/discovery-check --json=1
 php craft agents/readiness-check --json=1
+php craft agents/template-catalog --json=1
+php craft agents/template-catalog --template-id=catalog-sync-loop
 php craft agents/diagnostics-bundle --json=1
 php craft agents/smoke --json=1
 ```
@@ -662,8 +669,8 @@ return [
 
 - `Agents` section now uses 3 primary subnav views by default:
   - `agents/dashboard/overview` (`Dashboard`)
-  - `agents/settings` (`Settings`)
   - `agents/credentials` (`Agents`)
+  - `agents/settings` (`Settings`)
 - Optional experimental subnav view (enabled via `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
   - `agents/control` (`Return Requests`)
 - Dashboard includes top tabs:

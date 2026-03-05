@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Added canonical template catalog service with API endpoint `GET /agents/v1/templates` (`templates:read`) and CLI command `craft agents/template-catalog`.
+- Added schema/OpenAPI-linked reference automation docs and JSON fixtures for the three canonical first jobs.
+- Added dedicated regression check (`scripts/qa/reference-automations-regression-check.sh`) and integrated it into the release gate.
+
+### Changed
+
+- Extended capability/openapi/schema contracts to advertise and describe template catalog usage for integrators.
+
 ## 0.8.7 - 2026-03-05
 
 ### Changed

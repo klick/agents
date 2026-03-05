@@ -37,6 +37,7 @@ class ApiController extends Controller
         'sections:read',
         'users:read',
         'consumers:read',
+        'templates:read',
         'schema:read',
         'capabilities:read',
         'openapi:read',
@@ -1240,6 +1241,32 @@ class ApiController extends Controller
         return $this->respondWithPayload($payload, true, 'User not found.');
     }
 
+    public function actionTemplates(): Response
+    {
+        if (($guard = $this->guardRequest('templates:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $templateId = strtolower(trim((string)$request->getQueryParam('id', '')));
+        $service = Plugin::getInstance()->getTemplateCatalogService();
+
+        if ($templateId !== '') {
+            $template = $service->getTemplateById($templateId, '/agents/v1');
+            if ($template === null) {
+                return $this->errorResponse(404, self::ERROR_NOT_FOUND, sprintf('Unknown template `%s`.', $templateId));
+            }
+
+            return $this->jsonResponse([
+                'version' => $this->resolvePluginVersion(),
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'template' => $template,
+            ]);
+        }
+
+        return $this->jsonResponse($service->getCatalog('/agents/v1'));
+    }
+
     public function actionSchema(): Response
     {
         if (($guard = $this->guardRequest('schema:read')) !== null) {
@@ -1338,6 +1365,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/users/show', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
             ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read']],
             ['method' => 'POST', 'path' => '/consumers/checkpoint', 'requiredScopes' => ['consumers:write']],
+            ['method' => 'GET', 'path' => '/templates', 'requiredScopes' => ['templates:read']],
             ['method' => 'GET', 'path' => '/schema', 'requiredScopes' => ['schema:read']],
             ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
             ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
@@ -1404,6 +1432,7 @@ class ApiController extends Controller
                 'agents/auth-check',
                 'agents/discovery-check',
                 'agents/readiness-check',
+                'agents/template-catalog',
                 'agents/diagnostics-bundle',
                 'agents/smoke',
             ],
@@ -1919,6 +1948,17 @@ class ApiController extends Controller
                     '400' => ['description' => 'Invalid request'],
                 ]),
                 'x-required-scopes' => ['consumers:write'],
+            ]],
+            '/templates' => ['get' => [
+                'summary' => 'Canonical integration templates derived from schema/openapi contracts',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'string'], 'description' => 'Optional template id to return a single template.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '404' => ['description' => 'Unknown template id'],
+                ]),
+                'x-required-scopes' => ['templates:read'],
             ]],
             '/schema' => ['get' => [
                 'summary' => 'Versioned machine-readable endpoint schemas',
@@ -3139,6 +3179,7 @@ class ApiController extends Controller
             'users:read_sensitive' => 'Unredacted user email/profile detail fields.',
             'consumers:read' => 'Read per-integration consumer lag/checkpoint status.',
             'consumers:write' => 'Record per-integration consumer checkpoints for lag tracking.',
+            'templates:read' => 'Read canonical integration templates derived from schema/openapi contracts.',
             'schema:read' => 'Read machine-readable endpoint schemas for a specific version.',
             'capabilities:read' => 'Read capabilities descriptor endpoint.',
             'openapi:read' => 'Read OpenAPI descriptor endpoint.',
@@ -4178,6 +4219,24 @@ class ApiController extends Controller
                         ],
                     ],
                 ],
+                'orders.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/orders/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'number' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
                 'entries.list' => [
                     'method' => 'GET',
                     'path' => '/agents/v1/entries',
@@ -4508,6 +4567,45 @@ class ApiController extends Controller
                         ],
                     ],
                 ],
+                'auth.whoami' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/auth/whoami',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'service' => ['type' => 'string'],
+                            'version' => ['type' => 'string'],
+                            'principal' => ['type' => 'object'],
+                            'authorization' => ['type' => 'object'],
+                            'runtimeProfile' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'consumers.checkpoint' => [
+                    'method' => 'POST',
+                    'path' => '/agents/v1/consumers/checkpoint',
+                    'body' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'integrationKey' => ['type' => 'string'],
+                            'resourceType' => ['type' => 'string'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'checkpointAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'metadata' => ['type' => 'object'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
                 'changes.feed' => [
                     'method' => 'GET',
                     'path' => '/agents/v1/changes',
@@ -4549,6 +4647,126 @@ class ApiController extends Controller
                             'endpoint' => ['type' => 'string'],
                             'schema' => ['type' => 'object'],
                             'schemas' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'templates.catalog' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/templates',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'service' => ['type' => 'string'],
+                            'version' => ['type' => 'string'],
+                            'generatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'basePath' => ['type' => 'string'],
+                            'contracts' => ['type' => 'object'],
+                            'count' => ['type' => 'integer'],
+                            'templates' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'template' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'control.approvals.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/control/approvals',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'actionType' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'control.approvals.request' => [
+                    'method' => 'POST',
+                    'path' => '/agents/v1/control/approvals/request',
+                    'body' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'actionType' => ['type' => 'string'],
+                            'actionRef' => ['type' => 'string'],
+                            'reason' => ['type' => 'string'],
+                            'metadata' => ['type' => 'object'],
+                            'payload' => ['type' => 'object'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'control.approvals.decide' => [
+                    'method' => 'POST',
+                    'path' => '/agents/v1/control/approvals/decide',
+                    'body' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'approvalId' => ['type' => 'integer'],
+                            'decision' => ['type' => 'string'],
+                            'decisionReason' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'control.actions.execute' => [
+                    'method' => 'POST',
+                    'path' => '/agents/v1/control/actions/execute',
+                    'body' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'actionType' => ['type' => 'string'],
+                            'actionRef' => ['type' => 'string'],
+                            'approvalId' => ['type' => 'integer'],
+                            'idempotencyKey' => ['type' => 'string'],
+                            'payload' => ['type' => 'object'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'control.executions.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/control/executions',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'actionType' => ['type' => 'string'],
+                            'limit' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
                         ],
                     ],
                 ],
@@ -4597,6 +4815,15 @@ class ApiController extends Controller
         }
         if (!$this->isAddressesApiEnabled()) {
             unset($catalogs['v1']['addresses.list'], $catalogs['v1']['addresses.show']);
+        }
+        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+            unset(
+                $catalogs['v1']['control.approvals.list'],
+                $catalogs['v1']['control.approvals.request'],
+                $catalogs['v1']['control.approvals.decide'],
+                $catalogs['v1']['control.actions.execute'],
+                $catalogs['v1']['control.executions.list']
+            );
         }
 
         return $catalogs;
