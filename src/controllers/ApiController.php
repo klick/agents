@@ -75,7 +75,7 @@ class ApiController extends Controller
 
     protected array|int|bool $allowAnonymous = true;
     // Token-authenticated machine endpoints do not use session-bound CSRF tokens.
-    protected array|bool|int $supportsCsrfValidation = false;
+    public $enableCsrfValidation = false;
 
     public function actionLlmsTxt(): Response
     {
