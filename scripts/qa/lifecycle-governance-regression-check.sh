@@ -22,6 +22,15 @@ expect_fixed() {
   grep -qF "$needle" "$file" || fail "$label"
 }
 
+expect_not_fixed() {
+  local needle="$1"
+  local file="$2"
+  local label="$3"
+  if grep -qF "$needle" "$file"; then
+    fail "$label"
+  fi
+}
+
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
 API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
 CLI_CONTROLLER="$PLUGIN_ROOT/src/console/controllers/AgentsController.php"
@@ -53,8 +62,8 @@ expect_fixed "\$plugin->getLifecycleGovernanceService()->getSnapshot()" "$DASHBO
 expect_fixed "'lifecycleSummary' => \$lifecycleSummary" "$DASHBOARD_CONTROLLER" "Dashboard lifecycle summary payload missing"
 expect_fixed "'lifecycleByCredentialId' => \$lifecycleByCredentialId" "$DASHBOARD_CONTROLLER" "Dashboard per-agent lifecycle payload missing"
 
-expect_fixed "Lifecycle Governance" "$CREDENTIALS_TEMPLATE" "Credentials CP lifecycle summary section missing"
-expect_fixed "agents-lifecycle-inline" "$CREDENTIALS_TEMPLATE" "Credentials CP per-agent lifecycle warning block missing"
+expect_not_fixed "Lifecycle Governance" "$CREDENTIALS_TEMPLATE" "Credentials CP lifecycle summary section should be hidden"
+expect_not_fixed "agents-lifecycle-inline" "$CREDENTIALS_TEMPLATE" "Credentials CP per-agent lifecycle warning block should be hidden"
 
 expect_fixed "GET /lifecycle" "$README_FILE" "README lifecycle endpoint missing"
 expect_fixed "lifecycle:read" "$README_FILE" "README lifecycle scope missing"
