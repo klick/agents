@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-05  
-Current release: `v0.8.7`
+Date: 2026-03-06  
+Current release: `v0.9.0`
 
 ## Direction
 
@@ -76,16 +76,20 @@ Release outcome:
 
 - Integrations can access a materially wider runtime surface with consistent sync semantics and discovery hints.
 
-## Now (`v0.9.0`)
+## Done (`v0.9.0`)
 
 Target: September 2026
 
-- Improve integrator DX with schema/OpenAPI-based templates.
-- Publish reference automations for the canonical jobs (with tested sample payloads).
+- Shipped schema/OpenAPI-based integration templates for canonical jobs.
+- Shipped three tested reference automations with fixture payloads.
+- Shipped copy/paste agent starter packs (`curl`, `javascript`, `python`) for onboarding.
+- Expanded operator reliability pack with threshold defaults, triage signals, and richer diagnostics bundle snapshots.
+- Shipped lifecycle governance controls: ownership metadata mapping, expiry/rotation reminders, and stale-key warnings.
+- Removed Return Requests CP surface (tab/routes/forms/permissions) from public operator UX; kept internal control-plane internals feature-flagged for future adapter-based execution.
 
 Release outcome:
 
-- Faster integration delivery from initial setup to reusable production automation patterns.
+- Integrators can move from first call to production patterns faster, and operators get clearer reliability/lifecycle posture without exposing unfinished return workflows.
 
 ## Success Checks
 

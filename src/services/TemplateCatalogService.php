@@ -165,6 +165,6 @@ class TemplateCatalogService extends Component
             }
         }
 
-        return '0.8.7';
+        return '0.9.0';
     }
 }
