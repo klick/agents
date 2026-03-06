@@ -27,6 +27,7 @@ use Klick\Agents\services\DiagnosticsBundleService;
 use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
+use Klick\Agents\services\ReliabilitySignalService;
 use Klick\Agents\services\SecurityPolicyService;
 use Klick\Agents\services\StarterPackService;
 use Klick\Agents\services\TemplateCatalogService;
@@ -65,6 +66,7 @@ class Plugin extends BasePlugin
             'consumerLagService' => ConsumerLagService::class,
             'adoptionMetricsService' => AdoptionMetricsService::class,
             'observabilityMetricsService' => ObservabilityMetricsService::class,
+            'reliabilitySignalService' => ReliabilitySignalService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
             'templateCatalogService' => TemplateCatalogService::class,
             'starterPackService' => StarterPackService::class,
@@ -278,6 +280,13 @@ class Plugin extends BasePlugin
     {
         /** @var ObservabilityMetricsService $service */
         $service = $this->get('observabilityMetricsService');
+        return $service;
+    }
+
+    public function getReliabilitySignalService(): ReliabilitySignalService
+    {
+        /** @var ReliabilitySignalService $service */
+        $service = $this->get('reliabilitySignalService');
         return $service;
     }
 

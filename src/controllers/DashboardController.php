@@ -1560,6 +1560,19 @@ class DashboardController extends Controller
 
     private function buildObservabilitySummary(array $snapshot): array
     {
+        $reliability = (array)($snapshot['reliability'] ?? []);
+        if (empty($reliability)) {
+            $plugin = Plugin::getInstance();
+            if ($plugin !== null) {
+                try {
+                    $reliability = $plugin->getReliabilitySignalService()->evaluateSnapshot($snapshot);
+                } catch (Throwable) {
+                    $reliability = [];
+                }
+            }
+        }
+        $reliabilitySummary = (array)($reliability['summary'] ?? []);
+
         return [
             'generatedAt' => (string)($snapshot['generatedAt'] ?? gmdate('Y-m-d\TH:i:s\Z')),
             'requestsTotal' => (int)$this->resolveMetricValue($snapshot, 'agents_requests_total'),
@@ -1571,6 +1584,13 @@ class DashboardController extends Controller
             'webhookDlqFailed' => (int)$this->resolveMetricValue($snapshot, 'agents_webhook_dlq_failed'),
             'consumerLagMaxSeconds' => (int)$this->resolveMetricValue($snapshot, 'agents_consumer_lag_max_seconds'),
             'activeCredentials7d' => (int)$this->resolveMetricValue($snapshot, 'agents_adoption_active_credentials_7d'),
+            'reliabilityStatus' => (string)($reliability['status'] ?? 'ok'),
+            'reliabilityThresholdsVersion' => (string)($reliability['thresholdsVersion'] ?? ''),
+            'reliabilitySignalsWarn' => (int)($reliabilitySummary['signalsWarn'] ?? 0),
+            'reliabilitySignalsCritical' => (int)($reliabilitySummary['signalsCritical'] ?? 0),
+            'reliabilitySignalsEvaluated' => (int)($reliabilitySummary['signalsEvaluated'] ?? 0),
+            'reliabilityTopSignals' => array_values(array_slice((array)($reliability['topSignals'] ?? []), 0, 5)),
+            'reliabilitySignals' => array_values((array)($reliability['signals'] ?? [])),
         ];
     }
 

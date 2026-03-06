@@ -91,11 +91,16 @@ class ObservabilityMetricsService extends Component
             'Managed credentials active in last 7 days.'
         );
 
+        $reliability = $plugin->getReliabilitySignalService()->evaluateMetricSeries($metrics, [
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+        ]);
+
         return [
             'service' => 'agents',
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             'format' => 'json-metric-series',
             'metrics' => $metrics,
+            'reliability' => $reliability,
             'meta' => [
                 'counterBackend' => 'cache',
                 'counterResetBehavior' => 'cache-clear-or-expiry',

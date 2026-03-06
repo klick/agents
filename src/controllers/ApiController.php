@@ -1459,6 +1459,7 @@ class ApiController extends Controller
                 'agents/auth-check',
                 'agents/discovery-check',
                 'agents/readiness-check',
+                'agents/reliability-check',
                 'agents/template-catalog',
                 'agents/starter-packs',
                 'agents/diagnostics-bundle',

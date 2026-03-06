@@ -139,6 +139,11 @@
       {% set telemetryDlqFailed = observabilitySummary.webhookDlqFailed|default(0) %}
       {% set telemetryConsumerLagMaxSeconds = observabilitySummary.consumerLagMaxSeconds|default(0) %}
       {% set telemetryActiveCredentials7d = observabilitySummary.activeCredentials7d|default(0) %}
+      {% set reliabilityStatus = (observabilitySummary.reliabilityStatus|default('ok'))|lower %}
+      {% set reliabilitySignalsWarn = observabilitySummary.reliabilitySignalsWarn|default(0) %}
+      {% set reliabilitySignalsCritical = observabilitySummary.reliabilitySignalsCritical|default(0) %}
+      {% set reliabilitySignalsEvaluated = observabilitySummary.reliabilitySignalsEvaluated|default(0) %}
+      {% set reliabilityTopSignals = observabilitySummary.reliabilityTopSignals|default([]) %}
       {% set telemetryRequestsClass = telemetryRequestsTotal > 0 ? 'agents-metric--good' : 'agents-metric--warn' %}
       {% set telemetryAuthFailuresClass = telemetryAuthFailures == 0
         ? 'agents-metric--good'
@@ -164,6 +169,9 @@
       {% set telemetryActiveCredentialsClass = telemetryActiveCredentials7d > 0
         ? 'agents-metric--good'
         : 'agents-metric--warn' %}
+      {% set reliabilityStatusClass = reliabilityStatus == 'critical'
+        ? 'agents-metric--bad'
+        : (reliabilityStatus == 'warn' ? 'agents-metric--warn' : 'agents-metric--good') %}
 
       <section class="border rounded p-3">
         <h2 class="h4">Readiness Summary</h2>
@@ -189,6 +197,61 @@
             <div class="value">{{ readinessTabMaxLagSeconds }}s</div>
           </div>
         </div>
+      </section>
+
+
+      <hr>
+
+
+      <section class="border rounded p-3">
+        <h2 class="h4">Needs Attention Now</h2>
+        <div class="agents-metric-grid">
+          <div class="agents-metric {{ reliabilityStatusClass }}">
+            <div class="label">Reliability status</div>
+            <div class="value">{{ reliabilityStatus|upper }}</div>
+          </div>
+          <div class="agents-metric {{ reliabilitySignalsCritical > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
+            <div class="label">Critical signals</div>
+            <div class="value">{{ reliabilitySignalsCritical }}</div>
+          </div>
+          <div class="agents-metric {{ reliabilitySignalsWarn > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
+            <div class="label">Warning signals</div>
+            <div class="value">{{ reliabilitySignalsWarn }}</div>
+          </div>
+          <div class="agents-metric {{ reliabilitySignalsEvaluated > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
+            <div class="label">Signals evaluated</div>
+            <div class="value">{{ reliabilitySignalsEvaluated }}</div>
+          </div>
+        </div>
+
+        {% if reliabilityTopSignals|length %}
+          <table class="data fullwidth" style="margin-top: 12px;">
+            <thead>
+            <tr>
+              <th>Signal</th>
+              <th>Current</th>
+              <th>Trigger</th>
+              <th>Primary response</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for signal in reliabilityTopSignals %}
+              {% set signalThresholdLabel = signal.comparator ~ ' ' ~ (signal.severity == 'critical' ? signal.criticalThreshold : signal.warnThreshold) %}
+              <tr>
+                <td>
+                  <strong>{{ signal.label }}</strong><br>
+                  <span class="agents-subtle">{{ signal.severity|upper }}</span>
+                </td>
+                <td>{{ signal.value }}{% if signal.unit %} {{ signal.unit }}{% endif %}</td>
+                <td><code>{{ signalThresholdLabel }}</code></td>
+                <td>{{ signal.primaryResponse ?: 'Check observability runbook.' }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="agents-subtle" style="margin-top: 10px;">No warning or critical reliability signals detected.</p>
+        {% endif %}
       </section>
 
 
@@ -358,31 +421,17 @@
           </tr>
           </thead>
           <tbody>
-          <tr>
-            <td>Auth failures</td>
-            <td>> 5 in a short window</td>
-            <td>Verify token source/scopes via <code>/agents/v1/auth/whoami</code>, then rotate/revoke affected keys in <strong>Agents</strong>.</td>
-          </tr>
-          <tr>
-            <td>Rate-limit denials</td>
-            <td>> 10 in a short window</td>
-            <td>Inspect client burst behavior, add jitter/backoff, and tune <code>PLUGIN_AGENTS_RATE_LIMIT_*</code> only if sustained load is expected.</td>
-          </tr>
-          <tr>
-            <td>Server errors (5xx)</td>
-            <td>>= 1</td>
-            <td>Check Craft logs and <code>/agents/v1/readiness</code>; treat as incident if repeating.</td>
-          </tr>
-          <tr>
-            <td>Queue depth / DLQ</td>
-            <td>Queue > 50 or DLQ > 0</td>
-            <td>Replay DLQ events, verify webhook receiver health/signature checks, and confirm queue workers are processing.</td>
-          </tr>
-          <tr>
-            <td>Consumer lag</td>
-            <td>Max lag > 300s</td>
-            <td>Review stalled integration checkpoints (`/agents/v1/consumers/lag`) and re-establish checkpoint writes (`/agents/v1/consumers/checkpoint`).</td>
-          </tr>
+          {% for signal in observabilitySummary.reliabilitySignals|default([]) %}
+            <tr>
+              <td>{{ signal.label ?: signal.id }}</td>
+              <td>Warn: <code>{{ signal.comparator }} {{ signal.warnThreshold }}</code><br>Critical: <code>{{ signal.comparator }} {{ signal.criticalThreshold }}</code></td>
+              <td>{{ signal.primaryResponse ?: 'See observability runbook.' }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="3">No reliability threshold catalog available.</td>
+            </tr>
+          {% endfor %}
           </tbody>
         </table>
       </section>

@@ -47,7 +47,7 @@ class AgentsController extends Controller
             'template-catalog' => array_merge($options, ['templateId', 'json']),
             'starter-packs' => array_merge($options, ['templateId', 'json']),
             'discovery-prewarm' => array_merge($options, ['target', 'json']),
-            'auth-check', 'discovery-check', 'readiness-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
+            'auth-check', 'discovery-check', 'readiness-check', 'reliability-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
         };
     }
@@ -494,6 +494,48 @@ class AgentsController extends Controller
         ];
 
         return $this->emitCheckResult('smoke', $summary, $errors, $warnings);
+    }
+
+    public function actionReliabilityCheck(): int
+    {
+        $snapshot = Plugin::getInstance()->getObservabilityMetricsService()->getMetricsSnapshot();
+        $reliability = Plugin::getInstance()->getReliabilitySignalService()->evaluateSnapshot($snapshot);
+
+        $errors = [];
+        $warnings = [];
+
+        foreach ((array)($reliability['signals'] ?? []) as $signal) {
+            if (!is_array($signal)) {
+                continue;
+            }
+            $label = (string)($signal['label'] ?? $signal['id'] ?? 'signal');
+            $severity = strtolower(trim((string)($signal['severity'] ?? 'ok')));
+            $value = (string)($signal['value'] ?? '0');
+            $triggerValue = $severity === 'critical'
+                ? (string)($signal['criticalThreshold'] ?? '0')
+                : (string)($signal['warnThreshold'] ?? '0');
+            $comparator = (string)($signal['comparator'] ?? '>');
+            $message = sprintf(
+                '%s is %s (value=%s, trigger=%s %s).',
+                $label,
+                $severity,
+                $value,
+                $comparator,
+                $triggerValue
+            );
+            if ($severity === 'critical') {
+                $errors[] = $message;
+            } elseif ($severity === 'warn') {
+                $warnings[] = $message;
+            }
+        }
+
+        return $this->emitCheckResult('reliability-check', [
+            'generatedAt' => (string)($reliability['generatedAt'] ?? gmdate('Y-m-d\TH:i:s\Z')),
+            'status' => (string)($reliability['status'] ?? 'ok'),
+            'summary' => (array)($reliability['summary'] ?? []),
+            'topSignals' => (array)($reliability['topSignals'] ?? []),
+        ], $errors, $warnings);
     }
 
     public function actionDiagnosticsBundle(): int

@@ -355,6 +355,7 @@ Craft-native command routes:
 - `craft agents/auth-check`
 - `craft agents/discovery-check`
 - `craft agents/readiness-check`
+- `craft agents/reliability-check`
 - `craft agents/template-catalog`
 - `craft agents/starter-packs`
 - `craft agents/diagnostics-bundle`
@@ -399,6 +400,8 @@ php craft agents/auth-check --strict=1 --json=1
 # Discovery/readiness/diagnostics/smoke checks
 php craft agents/discovery-check --json=1
 php craft agents/readiness-check --json=1
+php craft agents/reliability-check --json=1
+php craft agents/reliability-check --strict=1 --json=1
 php craft agents/template-catalog --json=1
 php craft agents/template-catalog --template-id=catalog-sync-loop
 php craft agents/starter-packs --json=1

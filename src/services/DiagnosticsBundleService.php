@@ -121,6 +121,24 @@ class DiagnosticsBundleService extends Component
                 'metrics' => [],
             ]
         );
+        $reliabilitySnapshot = $this->capture(
+            'reliability.signals',
+            fn(): array => $plugin->getReliabilitySignalService()->evaluateSnapshot((array)$observabilitySnapshot),
+            $collectionErrors,
+            [
+                'status' => 'ok',
+                'thresholdsVersion' => 'reliability-thresholds-v1',
+                'generatedAt' => $generatedAt,
+                'summary' => [
+                    'signalsEvaluated' => 0,
+                    'signalsWarn' => 0,
+                    'signalsCritical' => 0,
+                    'signalsOk' => 0,
+                ],
+                'topSignals' => [],
+                'signals' => [],
+            ]
+        );
         $adoptionSnapshot = $this->capture(
             'adoption.metrics',
             fn(): array => $adoptionService->getSnapshot($defaultScopes),
@@ -190,6 +208,12 @@ class DiagnosticsBundleService extends Component
             'summary' => [
                 'checks' => $checkSummary,
                 'collectionErrors' => count($collectionErrors),
+                'reliability' => [
+                    'status' => (string)($reliabilitySnapshot['status'] ?? 'ok'),
+                    'signalsWarn' => (int)($reliabilitySnapshot['summary']['signalsWarn'] ?? 0),
+                    'signalsCritical' => (int)($reliabilitySnapshot['summary']['signalsCritical'] ?? 0),
+                    'topSignals' => count((array)($reliabilitySnapshot['topSignals'] ?? [])),
+                ],
             ],
             'snapshots' => [
                 'security' => $securityPosture,
@@ -202,6 +226,7 @@ class DiagnosticsBundleService extends Component
                 'consumers' => $consumerLagSnapshot,
                 'webhooks' => $deadLetterSummary,
                 'observability' => $observabilitySnapshot,
+                'reliability' => $reliabilitySnapshot,
                 'adoption' => $adoptionSnapshot,
             ],
             'collectionErrors' => $collectionErrors,
@@ -560,7 +585,7 @@ class DiagnosticsBundleService extends Component
             return $schemaVersion;
         }
 
-        return '0.6.2';
+        return '0.8.7';
     }
 
     private function normalizeOptionalString(mixed $value, int $maxLength): ?string

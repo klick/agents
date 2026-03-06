@@ -11,10 +11,16 @@ All notable changes to this project are documented in this file.
 - Added dedicated regression check (`scripts/qa/reference-automations-regression-check.sh`) and integrated it into the release gate.
 - Added starter-pack catalog service with API endpoint `GET /agents/v1/starter-packs` (`templates:read`) and CLI command `craft agents/starter-packs` for copy/paste runtime snippets (`curl`, `javascript`, `python`).
 - Added integration starter-pack docs at `docs/integration-starter-packs.md`.
+- Added reliability threshold evaluation service with read-only triage summaries embedded in `GET /agents/v1/metrics`.
+- Added CLI reliability snapshot check (`craft agents/reliability-check`) with strict mode support for CI/operator gates.
+- Added dedicated reliability regression check (`scripts/qa/reliability-pack-regression-check.sh`) and integrated it into the release gate.
 
 ### Changed
 
 - Extended capability/openapi/schema contracts to advertise and describe template catalog usage for integrators.
+- Enriched diagnostics bundle output with reliability summary/signal snapshots for faster incident triage.
+- Updated Dashboard Readiness tab with “Needs Attention Now” triage signals and threshold-driven runbook guidance.
+- Updated observability runbook thresholds and response playbooks for reliability signals.
 
 ## 0.8.7 - 2026-03-05
 
