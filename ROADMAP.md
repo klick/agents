@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-06  
-Current release: `v0.9.0`
+Current release: `v0.9.1`
 
 ## Direction
 
@@ -90,6 +90,16 @@ Target: September 2026
 Release outcome:
 
 - Integrators can move from first call to production patterns faster, and operators get clearer reliability/lifecycle posture without exposing unfinished return workflows.
+
+## Done (`v0.9.1`)
+
+Target: September 2026
+
+- Hidden Lifecycle Governance warning surfaces in the Agents CP view (summary panel + card warning strips) while keeping lifecycle APIs/services intact.
+
+Release outcome:
+
+- Operators get a cleaner Agent card view now, with lifecycle governance still available for future reintroduction without backend rollback.
 
 ## Success Checks
 

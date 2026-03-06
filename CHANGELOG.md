@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.9.1 - 2026-03-06
+
+### Changed
+
+- Hidden lifecycle warning surfaces from the Agents CP view by removing the Lifecycle Governance summary block and per-agent warning strips/risk labels from cards.
+- Kept lifecycle governance backend/API/CLI data paths intact so warning UI can be reintroduced without schema or service rollback.
+- Updated lifecycle governance QA assertions to reflect the new CP visibility contract.
+
 ## 0.9.0 - 2026-03-06
 
 ### Added
