@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.9.2 - 2026-03-06
+
 ### Added
 
 - Added per-agent Owner input in Agents CP create/edit form, with create-mode default prefilled from current CP user email.
@@ -12,6 +14,11 @@ All notable changes to this project are documented in this file.
 
 - Persisted credential owner metadata in managed credential storage and fed it into lifecycle ownership posture (with `.env` metadata-map fallback retained).
 - Added migration `m260306_100000_add_credential_owner_column` and regression coverage for owner-field flows.
+- Simplified Agents CP cards by removing lifecycle inline warning strips and the lifecycle risk table block.
+
+### Fixed
+
+- Fixed token-authenticated machine POST compatibility by disabling CSRF enforcement on API controller endpoints (including `/agents/v1/consumers/checkpoint`).
 
 ## 0.9.1 - 2026-03-06
 

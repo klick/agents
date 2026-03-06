@@ -605,7 +605,7 @@ class DiagnosticsBundleService extends Component
             return $schemaVersion;
         }
 
-        return '0.9.1';
+        return '0.9.2';
     }
 
     private function normalizeOptionalString(mixed $value, int $maxLength): ?string
