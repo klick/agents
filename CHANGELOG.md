@@ -14,13 +14,18 @@ All notable changes to this project are documented in this file.
 - Added reliability threshold evaluation service with read-only triage summaries embedded in `GET /agents/v1/metrics`.
 - Added CLI reliability snapshot check (`craft agents/reliability-check`) with strict mode support for CI/operator gates.
 - Added dedicated reliability regression check (`scripts/qa/reliability-pack-regression-check.sh`) and integrated it into the release gate.
+- Added lifecycle governance service with API endpoint `GET /agents/v1/lifecycle` (`lifecycle:read`) and CLI command `craft agents/lifecycle-report`.
+- Added lifecycle governance operator docs (`docs/agent-lifecycle-governance.md`) and VitePress troubleshooting page for ownership/risk posture workflows.
+- Added dedicated lifecycle governance regression check (`scripts/qa/lifecycle-governance-regression-check.sh`) and integrated it into the release gate.
 
 ### Changed
 
 - Extended capability/openapi/schema contracts to advertise and describe template catalog usage for integrators.
 - Enriched diagnostics bundle output with reliability summary/signal snapshots for faster incident triage.
+- Enriched diagnostics bundle output with lifecycle status/summary snapshots for ownership and stale-agent triage.
 - Updated Dashboard Readiness tab with “Needs Attention Now” triage signals and threshold-driven runbook guidance.
 - Updated observability runbook thresholds and response playbooks for reliability signals.
+- Updated Agents CP view with lifecycle governance summary cards and per-agent risk factor visibility.
 
 ## 0.8.7 - 2026-03-05
 

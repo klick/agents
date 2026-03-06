@@ -139,6 +139,19 @@ class DiagnosticsBundleService extends Component
                 'signals' => [],
             ]
         );
+        $lifecycleSnapshot = $this->capture(
+            'lifecycle.governance',
+            fn(): array => $plugin->getLifecycleGovernanceService()->getSnapshot(),
+            $collectionErrors,
+            [
+                'service' => 'agents',
+                'generatedAt' => $generatedAt,
+                'status' => 'unknown',
+                'summary' => [],
+                'topRisks' => [],
+                'agents' => [],
+            ]
+        );
         $adoptionSnapshot = $this->capture(
             'adoption.metrics',
             fn(): array => $adoptionService->getSnapshot($defaultScopes),
@@ -214,6 +227,12 @@ class DiagnosticsBundleService extends Component
                     'signalsCritical' => (int)($reliabilitySnapshot['summary']['signalsCritical'] ?? 0),
                     'topSignals' => count((array)($reliabilitySnapshot['topSignals'] ?? [])),
                 ],
+                'lifecycle' => [
+                    'status' => (string)($lifecycleSnapshot['status'] ?? 'unknown'),
+                    'agents' => (int)($lifecycleSnapshot['summary']['total'] ?? 0),
+                    'riskWarn' => (int)($lifecycleSnapshot['summary']['riskWarn'] ?? 0),
+                    'riskCritical' => (int)($lifecycleSnapshot['summary']['riskCritical'] ?? 0),
+                ],
             ],
             'snapshots' => [
                 'security' => $securityPosture,
@@ -227,6 +246,7 @@ class DiagnosticsBundleService extends Component
                 'webhooks' => $deadLetterSummary,
                 'observability' => $observabilitySnapshot,
                 'reliability' => $reliabilitySnapshot,
+                'lifecycle' => $lifecycleSnapshot,
                 'adoption' => $adoptionSnapshot,
             ],
             'collectionErrors' => $collectionErrors,

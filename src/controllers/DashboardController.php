@@ -246,6 +246,32 @@ class DashboardController extends Controller
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
         $defaultScopes = (array)($posture['authentication']['tokenScopes'] ?? []);
         $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
+        $lifecycleSnapshot = [
+            'service' => 'agents',
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'status' => 'unknown',
+            'summary' => [],
+            'topRisks' => [],
+            'agents' => [],
+        ];
+        try {
+            $lifecycleSnapshot = $plugin->getLifecycleGovernanceService()->getSnapshot();
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load lifecycle governance snapshot for CP: ' . $e->getMessage(), __METHOD__);
+        }
+        $lifecycleSummary = (array)($lifecycleSnapshot['summary'] ?? []);
+        $lifecycleTopRisks = (array)($lifecycleSnapshot['topRisks'] ?? []);
+        $lifecycleByCredentialId = [];
+        foreach ((array)($lifecycleSnapshot['agents'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $credentialId = (int)($row['credentialId'] ?? 0);
+            if ($credentialId <= 0) {
+                continue;
+            }
+            $lifecycleByCredentialId[$credentialId] = $row;
+        }
         $credentialExpirySummary = [
             'expired' => 0,
             'expiringSoon' => 0,
@@ -273,6 +299,10 @@ class DashboardController extends Controller
             'credentialUsageIndicatorEnabled' => (bool)$this->getSettingsModel()->enableCredentialUsageIndicator,
             'securityPosture' => $posture,
             'managedCredentials' => $managedCredentials,
+            'lifecycleSnapshot' => $lifecycleSnapshot,
+            'lifecycleSummary' => $lifecycleSummary,
+            'lifecycleTopRisks' => $lifecycleTopRisks,
+            'lifecycleByCredentialId' => $lifecycleByCredentialId,
             'credentialExpirySummary' => $credentialExpirySummary,
             'defaultScopes' => $defaultScopes,
             'revealedCredential' => $this->pullRevealedCredential(),

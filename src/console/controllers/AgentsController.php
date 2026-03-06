@@ -47,7 +47,7 @@ class AgentsController extends Controller
             'template-catalog' => array_merge($options, ['templateId', 'json']),
             'starter-packs' => array_merge($options, ['templateId', 'json']),
             'discovery-prewarm' => array_merge($options, ['target', 'json']),
-            'auth-check', 'discovery-check', 'readiness-check', 'reliability-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
+            'auth-check', 'discovery-check', 'readiness-check', 'reliability-check', 'lifecycle-report', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
         };
     }
@@ -535,6 +535,48 @@ class AgentsController extends Controller
             'status' => (string)($reliability['status'] ?? 'ok'),
             'summary' => (array)($reliability['summary'] ?? []),
             'topSignals' => (array)($reliability['topSignals'] ?? []),
+        ], $errors, $warnings);
+    }
+
+    public function actionLifecycleReport(): int
+    {
+        $snapshot = Plugin::getInstance()->getLifecycleGovernanceService()->getSnapshot();
+
+        $errors = [];
+        $warnings = [];
+
+        foreach ((array)($snapshot['agents'] ?? []) as $agent) {
+            if (!is_array($agent)) {
+                continue;
+            }
+
+            $handle = (string)($agent['handle'] ?? 'unknown');
+            $displayName = (string)($agent['displayName'] ?? $handle);
+            foreach ((array)($agent['risk']['factors'] ?? []) as $factor) {
+                if (!is_array($factor)) {
+                    continue;
+                }
+                $level = strtolower(trim((string)($factor['level'] ?? 'ok')));
+                $message = trim((string)($factor['message'] ?? ''));
+                if ($message === '') {
+                    continue;
+                }
+                $line = sprintf('%s (%s): %s', $displayName, $handle, $message);
+                if ($level === 'critical') {
+                    $errors[] = $line;
+                } elseif ($level === 'warn') {
+                    $warnings[] = $line;
+                }
+            }
+        }
+
+        return $this->emitCheckResult('lifecycle-report', [
+            'generatedAt' => (string)($snapshot['generatedAt'] ?? gmdate('Y-m-d\TH:i:s\Z')),
+            'status' => (string)($snapshot['status'] ?? 'ok'),
+            'runtime' => (array)($snapshot['runtime'] ?? []),
+            'thresholds' => (array)($snapshot['thresholds'] ?? []),
+            'summary' => (array)($snapshot['summary'] ?? []),
+            'topRisks' => (array)($snapshot['topRisks'] ?? []),
         ], $errors, $warnings);
     }
 

@@ -25,6 +25,7 @@ use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiagnosticsBundleService;
 use Klick\Agents\services\DiscoveryTxtService;
+use Klick\Agents\services\LifecycleGovernanceService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
 use Klick\Agents\services\ReliabilitySignalService;
@@ -67,6 +68,7 @@ class Plugin extends BasePlugin
             'adoptionMetricsService' => AdoptionMetricsService::class,
             'observabilityMetricsService' => ObservabilityMetricsService::class,
             'reliabilitySignalService' => ReliabilitySignalService::class,
+            'lifecycleGovernanceService' => LifecycleGovernanceService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
             'templateCatalogService' => TemplateCatalogService::class,
             'starterPackService' => StarterPackService::class,
@@ -196,6 +198,7 @@ class Plugin extends BasePlugin
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
                 'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics',
                 'agents/v1/metrics' => 'agents/api/metrics',
+                'agents/v1/lifecycle' => 'agents/api/lifecycle',
                 'agents/v1/diagnostics/bundle' => 'agents/api/diagnostics-bundle',
                 'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoint',
                 'agents/v1/consumers/lag' => 'agents/api/consumers-lag',
@@ -287,6 +290,13 @@ class Plugin extends BasePlugin
     {
         /** @var ReliabilitySignalService $service */
         $service = $this->get('reliabilitySignalService');
+        return $service;
+    }
+
+    public function getLifecycleGovernanceService(): LifecycleGovernanceService
+    {
+        /** @var LifecycleGovernanceService $service */
+        $service = $this->get('lifecycleGovernanceService');
         return $service;
     }
 

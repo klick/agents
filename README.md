@@ -34,7 +34,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
-| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/templates`, `/starter-packs`, `/schema`) | Production stable | Checkpoint/lag and schema/template contract surfaces for integrations. |
+| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`) | Production stable | Checkpoint/lag, schema/template contracts, and lifecycle governance visibility for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
 | Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
@@ -105,6 +105,13 @@ Environment variables:
 - `PLUGIN_AGENTS_TOKEN_SCOPES` (comma/space list, default scoped read set)
 - `PLUGIN_AGENTS_ENABLE_USERS_API` (default: `false`; enables `/users` endpoints)
 - `PLUGIN_AGENTS_ENABLE_ADDRESSES_API` (default: `false`; enables `/addresses` endpoints)
+- `PLUGIN_AGENTS_LIFECYCLE_METADATA_MAP` (optional JSON map keyed by credential handle for `owner`, `useCase`, `environment`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_UNUSED_WARN_DAYS` (default: `30`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_UNUSED_CRITICAL_DAYS` (default: `90`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_NEVER_USED_WARN_DAYS` (default: `30`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_NEVER_USED_CRITICAL_DAYS` (default: `90`)
+- `PLUGIN_AGENTS_LIFECYCLE_ROTATION_WARN_DAYS` (default: `45`)
+- `PLUGIN_AGENTS_LIFECYCLE_ROTATION_CRITICAL_DAYS` (default: `120`)
 - `PLUGIN_AGENTS_REDACT_EMAIL` (default: `true`, applied when sensitive scope is missing)
 - `PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE` (default: `60`)
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
@@ -142,6 +149,7 @@ Enablement precedence:
 - Canonical first agent jobs: [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
 - Schema/OpenAPI-based reference automations: [docs/reference-automations.md](docs/reference-automations.md)
 - Copy/paste starter packs (curl/JS/Python): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
+- Agent lifecycle governance (ownership, stale/expiry/rotation posture): [docs/agent-lifecycle-governance.md](docs/agent-lifecycle-governance.md)
 - Observability runbook and alert thresholds: [docs/observability-runbook.md](docs/observability-runbook.md)
 
 ## Support
@@ -151,6 +159,7 @@ Enablement precedence:
 - Canonical jobs (repo): [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
 - Reference automations (repo): [docs/reference-automations.md](docs/reference-automations.md)
 - Starter packs (repo): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
+- Agent lifecycle governance (repo): [docs/agent-lifecycle-governance.md](docs/agent-lifecycle-governance.md)
 - Observability runbook (repo): [docs/observability-runbook.md](docs/observability-runbook.md)
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
@@ -225,6 +234,7 @@ Read/discovery endpoints:
 - `GET /auth/whoami`
 - `GET /adoption/metrics`
 - `GET /metrics`
+- `GET /lifecycle`
 - `GET /diagnostics/bundle`
 - `GET /products`
 - `GET /variants`
@@ -298,6 +308,7 @@ Read scopes:
 - `auth:read`
 - `adoption:read`
 - `metrics:read`
+- `lifecycle:read`
 - `diagnostics:read`
 - `products:read`
 - `variants:read`
@@ -356,6 +367,7 @@ Craft-native command routes:
 - `craft agents/discovery-check`
 - `craft agents/readiness-check`
 - `craft agents/reliability-check`
+- `craft agents/lifecycle-report`
 - `craft agents/template-catalog`
 - `craft agents/starter-packs`
 - `craft agents/diagnostics-bundle`
@@ -402,6 +414,8 @@ php craft agents/discovery-check --json=1
 php craft agents/readiness-check --json=1
 php craft agents/reliability-check --json=1
 php craft agents/reliability-check --strict=1 --json=1
+php craft agents/lifecycle-report --json=1
+php craft agents/lifecycle-report --strict=1 --json=1
 php craft agents/template-catalog --json=1
 php craft agents/template-catalog --template-id=catalog-sync-loop
 php craft agents/starter-packs --json=1
@@ -722,6 +736,8 @@ return [
   - immutable audit trail with optional advanced snapshot JSON
 - Agents:
   - managed credential lifecycle (create/edit/pause/resume/rotate/revoke/delete)
+  - lifecycle governance snapshot cards (critical/warn/stale/owner-missing counts)
+  - per-agent lifecycle warnings (owner/use-case/environment + risk signals)
   - one-time API token reveal on create/rotate
 
 ## CP rollout regression checklist
@@ -773,7 +789,7 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read diagnostics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
+- `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read lifecycle:read diagnostics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
   - If `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, optionally append control read scopes: `control:policies:read control:approvals:read control:executions:read control:audit:read`
 
 ## Secure Deployment Verification
