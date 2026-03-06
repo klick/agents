@@ -104,7 +104,7 @@ class Plugin extends BasePlugin
                 'url' => 'agents/dashboard',
             ],
         ];
-        if ($this->isRefundApprovalsExperimentalEnabled()) {
+        if ($this->isReturnRequestsCpEnabled()) {
             $subnav['control'] = [
                 'label' => 'Return Requests',
                 'url' => 'agents/control',
@@ -142,7 +142,7 @@ class Plugin extends BasePlugin
                 'agents/dashboard/security' => 'agents/dashboard/dashboard',
                 'agents/health' => 'agents/dashboard/health',
             ];
-            if ($this->isRefundApprovalsExperimentalEnabled()) {
+            if ($this->isReturnRequestsCpEnabled()) {
                 $rules['agents/control'] = 'agents/dashboard/control';
             }
 
@@ -369,6 +369,16 @@ class Plugin extends BasePlugin
         return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL');
     }
 
+    /**
+     * CP Return Requests remains internal-only until at least one concrete
+     * adapter/workflow is implemented end-to-end.
+     */
+    public function isReturnRequestsCpEnabled(): bool
+    {
+        return $this->isRefundApprovalsExperimentalEnabled()
+            && (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_RETURN_REQUESTS_CP_EXPERIMENTAL');
+    }
+
     public function isUsersApiEnabled(): bool
     {
         return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_ENABLE_USERS_API');
@@ -394,7 +404,7 @@ class Plugin extends BasePlugin
             'settings' => $settingsModel,
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
-            'refundApprovalsExperimentalEnabled' => $this->isRefundApprovalsExperimentalEnabled(),
+            'returnRequestsCpEnabled' => $this->isReturnRequestsCpEnabled(),
         ], View::TEMPLATE_MODE_CP);
     }
 
@@ -533,7 +543,7 @@ class Plugin extends BasePlugin
                         ],
                     ],
                 ];
-                if ($this->isRefundApprovalsExperimentalEnabled()) {
+                if ($this->isReturnRequestsCpEnabled()) {
                     $event->permissions[] = [
                         'heading' => 'Agents Return Requests',
                         'permissions' => [

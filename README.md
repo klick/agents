@@ -187,13 +187,6 @@ Credential lifecycle permission keys (CP):
 - `agents-revokeCredentials`
 - `agents-deleteCredentials`
 
-Control-plane permission keys (CP):
-
-- `agents-viewControlPlane`
-- `agents-manageControlPolicies`
-- `agents-manageControlApprovals`
-- `agents-executeControlActions`
-
 Supported token transports:
 
 - `Authorization: Bearer <token>` (default)
@@ -694,8 +687,6 @@ return [
   - `agents/dashboard/overview` (`Dashboard`)
   - `agents/credentials` (`Agents`)
   - `agents/settings` (`Settings`)
-- Optional experimental subnav view (enabled via `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
-  - `agents/control` (`Return Requests`)
 - Dashboard includes top tabs:
   - `Overview` (`agents/dashboard/overview`)
   - `Readiness` (`agents/dashboard/readiness`)
@@ -727,13 +718,6 @@ return [
 - Dashboard/Security:
   - read-only effective auth/rate-limit/redaction/webhook posture
   - centralized warning output from shared security policy logic
-- Return Requests (`agents/control`, experimental flag required):
-  - queue-first operator flow for requests waiting on human decision
-  - clear split between decision queue, runs needing follow-up, and historical activity
-  - agent-first model: CP request form is disabled by default
-  - optional manual fallback can be enabled in Settings (`allowCpApprovalRequests`)
-  - rule-aware execution guardrails (disabled rule blocks, approval linkage checks)
-  - immutable audit trail with optional advanced snapshot JSON
 - Agents:
   - managed credential lifecycle (create/edit/pause/resume/rotate/revoke/delete)
   - lifecycle governance snapshot cards (critical/warn/stale/owner-missing counts)
@@ -753,13 +737,7 @@ return [
    - clear discovery cache
    - when custom body content is configured in Settings, confirm endpoint output reflects those edits
 5. Verify security tab shows posture without exposing token/secret values.
-6. When `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, verify Return Requests flows:
-   - create/update policy
-   - request approval via API (agent token) with provenance metadata
-   - approve/reject approval in CP
-   - execute action with idempotency key
-   - audit event appears for each state transition
-7. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
+6. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
 
 ## Namespace migration
 

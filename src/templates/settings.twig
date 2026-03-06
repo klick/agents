@@ -1,6 +1,6 @@
 {% import '_includes/forms' as forms %}
 
-{% set requestsFeatureEnabled = refundApprovalsExperimentalEnabled ?? false %}
+{% set requestsFeatureEnabled = returnRequestsCpEnabled ?? false %}
 {% set llmsTxtSettingLocked = llmsTxtSettingLocked ?? false %}
 {% set llmsFullTxtSettingLocked = llmsFullTxtSettingLocked ?? false %}
 {% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}

@@ -26,6 +26,7 @@ All notable changes to this project are documented in this file.
 - Updated Dashboard Readiness tab with “Needs Attention Now” triage signals and threshold-driven runbook guidance.
 - Updated observability runbook thresholds and response playbooks for reliability signals.
 - Updated Agents CP view with lifecycle governance summary cards and per-agent risk factor visibility.
+- Hid CP Return Requests tab/routes/permissions by default behind an internal CP-only flag (`PLUGIN_AGENTS_RETURN_REQUESTS_CP_EXPERIMENTAL`) while keeping control-plane API/data internals unchanged.
 
 ## 0.8.7 - 2026-03-05
 

@@ -141,7 +141,7 @@ class DashboardController extends Controller
 
     public function actionControl(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
 
         $plugin = Plugin::getInstance();
@@ -227,7 +227,7 @@ class DashboardController extends Controller
             'settings' => $this->getSettingsModel(),
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
-            'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
+            'returnRequestsCpEnabled' => $plugin->isReturnRequestsCpEnabled(),
             'credentialUsageIndicatorSettingLocked' => (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false),
             'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
             'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
@@ -417,7 +417,7 @@ class DashboardController extends Controller
         $settingsData['enabled'] = (bool)$enabledState['locked']
             ? (bool)$enabledState['enabled']
             : $this->parseBooleanBodyParam('enabled', (bool)$settings->enabled);
-        $settingsData['allowCpApprovalRequests'] = $plugin->isRefundApprovalsExperimentalEnabled()
+        $settingsData['allowCpApprovalRequests'] = $plugin->isReturnRequestsCpEnabled()
             ? $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests)
             : false;
         $settingsData['enableCredentialUsageIndicator'] = $credentialUsageIndicatorLocked
@@ -885,7 +885,7 @@ class DashboardController extends Controller
 
     public function actionUpsertControlPolicy(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE);
 
@@ -914,7 +914,7 @@ class DashboardController extends Controller
 
     public function actionRequestControlApproval(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
 
@@ -971,7 +971,7 @@ class DashboardController extends Controller
 
     public function actionDecideControlApproval(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
 
@@ -1023,7 +1023,7 @@ class DashboardController extends Controller
 
     public function actionExecuteControlAction(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
 
@@ -1080,7 +1080,7 @@ class DashboardController extends Controller
 
     public function actionSimulateControlAction(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
 
@@ -1138,7 +1138,7 @@ class DashboardController extends Controller
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',
         ];
-        if ($this->isRefundApprovalsExperimentalEnabled()) {
+        if ($this->isReturnRequestsCpEnabled()) {
             $endpoints = array_merge($endpoints, [
                 $apiBasePath . '/control/policies',
                 $apiBasePath . '/control/approvals',
@@ -1757,14 +1757,14 @@ class DashboardController extends Controller
         ];
     }
 
-    private function isRefundApprovalsExperimentalEnabled(): bool
+    private function isReturnRequestsCpEnabled(): bool
     {
-        return Plugin::getInstance()->isRefundApprovalsExperimentalEnabled();
+        return Plugin::getInstance()->isReturnRequestsCpEnabled();
     }
 
-    private function requireRefundApprovalsExperimentalEnabled(): void
+    private function requireReturnRequestsCpEnabled(): void
     {
-        if ($this->isRefundApprovalsExperimentalEnabled()) {
+        if ($this->isReturnRequestsCpEnabled()) {
             return;
         }
 
