@@ -31,11 +31,13 @@ DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
 MIGRATION_FILE="$PLUGIN_ROOT/src/migrations/m260226_180000_add_agents_credentials_table.php"
 PAUSE_MIGRATION_FILE="$PLUGIN_ROOT/src/migrations/m260305_110000_add_credential_pause_column.php"
+OWNER_MIGRATION_FILE="$PLUGIN_ROOT/src/migrations/m260306_100000_add_credential_owner_column.php"
 CP_TEMPLATE="$PLUGIN_ROOT/src/templates/credentials.twig"
 
 expect_fixed "agents_credentials" "$MIGRATION_FILE" "Managed credentials migration defines credentials table"
 expect_fixed "'tokenHash'" "$MIGRATION_FILE" "Managed credentials migration includes token hash column"
 expect_fixed "pausedAt" "$PAUSE_MIGRATION_FILE" "Managed credentials pause migration defines pausedAt column"
+expect_fixed "owner" "$OWNER_MIGRATION_FILE" "Managed credentials owner migration defines owner column"
 expect_fixed "class CredentialService extends Component" "$CREDENTIAL_SERVICE" "CredentialService class exists"
 expect_fixed "createManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports credential creation"
 expect_fixed "updateManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports credential profile/scope updates"
@@ -45,6 +47,8 @@ expect_fixed "deleteManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService 
 expect_fixed "recordCredentialUse" "$CREDENTIAL_SERVICE" "CredentialService tracks last-used metadata"
 expect_fixed "pauseManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports reversible pause"
 expect_fixed "resumeManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService supports reversible resume"
+expect_fixed "supportsOwnerColumn" "$CREDENTIAL_SERVICE" "CredentialService supports owner column detection"
+expect_fixed "normalizeOwner" "$CREDENTIAL_SERVICE" "CredentialService normalizes owner values"
 
 expect_fixed "getManagedCredentialsForRuntime" "$SECURITY_SERVICE" "Security policy consumes managed credentials for runtime auth"
 expect_fixed "managedCredentialCount" "$SECURITY_SERVICE" "Security posture exposes managed credential counts"
@@ -58,6 +62,8 @@ expect_fixed "actionRevokeCredential" "$DASHBOARD_CONTROLLER" "Dashboard control
 expect_fixed "actionDeleteCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports credential delete action"
 expect_fixed "actionPauseCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports agent pause action"
 expect_fixed "actionResumeCredential" "$DASHBOARD_CONTROLLER" "Dashboard controller supports agent resume action"
+expect_fixed "credentialOwner" "$DASHBOARD_CONTROLLER" "Dashboard controller parses credential owner input"
+expect_fixed "resolveCurrentCpUserEmail" "$DASHBOARD_CONTROLLER" "Dashboard controller resolves current CP user email for owner prefill"
 expect_fixed "requireCredentialPermission" "$DASHBOARD_CONTROLLER" "Dashboard controller enforces credential permissions"
 expect_fixed "canCredentialPermission" "$DASHBOARD_CONTROLLER" "Dashboard controller exposes credential permission checks"
 
@@ -70,5 +76,6 @@ expect_fixed "pause-credential" "$CP_TEMPLATE" "Agents CP template supports paus
 expect_fixed "resume-credential" "$CP_TEMPLATE" "Agents CP template supports resume action"
 expect_fixed "update-credential" "$CP_TEMPLATE" "Credentials CP template supports update action"
 expect_fixed "delete-credential" "$CP_TEMPLATE" "Credentials CP template supports delete action"
+expect_fixed "credentialOwner" "$CP_TEMPLATE" "Credentials CP template includes owner input"
 
 echo "Credential lifecycle regression checks completed."

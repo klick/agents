@@ -297,6 +297,7 @@ class DashboardController extends Controller
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'credentialUsageIndicatorEnabled' => (bool)$this->getSettingsModel()->enableCredentialUsageIndicator,
+            'defaultCredentialOwner' => $this->resolveCurrentCpUserEmail(),
             'securityPosture' => $posture,
             'managedCredentials' => $managedCredentials,
             'lifecycleSnapshot' => $lifecycleSnapshot,
@@ -604,6 +605,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $handle = (string)$this->request->getBodyParam('credentialHandle', '');
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $owner = $this->parseStringBodyParam('credentialOwner', $this->resolveCurrentCpUserEmail());
         $token = (string)$this->request->getBodyParam('credentialToken', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
         $webhookSubscriptions = [
@@ -628,6 +630,7 @@ class DashboardController extends Controller
             $result = $plugin->getCredentialService()->createManagedCredential(
                 $handle,
                 $displayName,
+                $owner,
                 $token,
                 $scopes,
                 $defaultScopes,
@@ -662,6 +665,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $owner = $this->parseStringBodyParam('credentialOwner', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
         $webhookSubscriptions = [
             'resourceTypes' => $this->parseWebhookDimensionInput(
@@ -690,6 +694,7 @@ class DashboardController extends Controller
             $credential = $plugin->getCredentialService()->updateManagedCredential(
                 $credentialId,
                 $displayName,
+                $owner,
                 $scopes,
                 $defaultScopes,
                 $webhookSubscriptions,
@@ -1733,6 +1738,22 @@ class DashboardController extends Controller
         }
 
         return $userComponent->checkPermission($permission);
+    }
+
+    private function resolveCurrentCpUserEmail(): string
+    {
+        $identity = Craft::$app->getUser()->getIdentity();
+        if ($identity === null) {
+            return '';
+        }
+
+        $email = trim((string)($identity->email ?? ''));
+        if ($email !== '') {
+            return $email;
+        }
+
+        $username = trim((string)($identity->username ?? ''));
+        return $username;
     }
 
     private function buildCpActorContext(): array

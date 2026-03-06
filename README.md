@@ -175,7 +175,7 @@ Credential sources:
 
 - `PLUGIN_AGENTS_API_CREDENTIALS` (strict JSON credential objects with per-credential scopes)
 - `PLUGIN_AGENTS_API_TOKEN` (legacy single-token fallback)
-- Control Panel managed credentials (Agents tab: create/edit/pause/resume/rotate/revoke/delete with last-used metadata)
+- Control Panel managed credentials (Agents tab: create/edit/pause/resume/rotate/revoke/delete with last-used metadata and per-agent owner field)
 
 Managed credentials are stored in plugin DB tables and participate in runtime auth alongside env credentials.
 

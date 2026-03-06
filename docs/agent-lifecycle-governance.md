@@ -20,7 +20,12 @@ Required scope:
 
 ## Metadata mapping (optional)
 
-You can map ownership/use-case/environment by credential handle with:
+Owner can now be set directly in CP when creating/editing an agent:
+
+- `Agents -> Agents -> Add/Edit -> Owner`
+- Create mode defaults owner to the current CP user email.
+
+You can also map ownership/use-case/environment by credential handle with:
 
 - `PLUGIN_AGENTS_LIFECYCLE_METADATA_MAP`
 

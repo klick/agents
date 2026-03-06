@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Added per-agent Owner input in Agents CP create/edit form, with create-mode default prefilled from current CP user email.
+
+### Changed
+
+- Persisted credential owner metadata in managed credential storage and fed it into lifecycle ownership posture (with `.env` metadata-map fallback retained).
+- Added migration `m260306_100000_add_credential_owner_column` and regression coverage for owner-field flows.
+
 ## 0.9.1 - 2026-03-06
 
 ### Changed

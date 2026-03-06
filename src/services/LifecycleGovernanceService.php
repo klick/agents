@@ -300,13 +300,17 @@ class LifecycleGovernanceService extends Component
             $fallbackUseCase = $handle;
         }
 
-        $owner = trim((string)($mappedMetadata['owner'] ?? ''));
+        $credentialOwner = trim((string)($credential['owner'] ?? ''));
+        $mappedOwner = trim((string)($mappedMetadata['owner'] ?? ''));
+        $owner = $credentialOwner !== '' ? $credentialOwner : $mappedOwner;
         $useCase = trim((string)($mappedMetadata['useCase'] ?? $mappedMetadata['usecase'] ?? ''));
         $environment = trim((string)($mappedMetadata['environment'] ?? ''));
         $source = 'inferred';
 
-        if ($owner !== '' || $useCase !== '' || $environment !== '') {
+        if ($mappedOwner !== '' || $useCase !== '' || $environment !== '') {
             $source = 'map';
+        } elseif ($credentialOwner !== '') {
+            $source = 'credential';
         }
 
         if ($owner === '') {
