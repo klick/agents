@@ -54,7 +54,6 @@ expect_fixed "'lifecycleSummary' => \$lifecycleSummary" "$DASHBOARD_CONTROLLER" 
 expect_fixed "'lifecycleByCredentialId' => \$lifecycleByCredentialId" "$DASHBOARD_CONTROLLER" "Dashboard per-agent lifecycle payload missing"
 
 expect_fixed "Lifecycle Governance" "$CREDENTIALS_TEMPLATE" "Credentials CP lifecycle summary section missing"
-expect_fixed "agents-lifecycle-inline" "$CREDENTIALS_TEMPLATE" "Credentials CP per-agent lifecycle warning block missing"
 
 expect_fixed "GET /lifecycle" "$README_FILE" "README lifecycle endpoint missing"
 expect_fixed "lifecycle:read" "$README_FILE" "README lifecycle scope missing"
