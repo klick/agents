@@ -1267,6 +1267,32 @@ class ApiController extends Controller
         return $this->jsonResponse($service->getCatalog('/agents/v1'));
     }
 
+    public function actionStarterPacks(): Response
+    {
+        if (($guard = $this->guardRequest('templates:read')) !== null) {
+            return $guard;
+        }
+
+        $request = Craft::$app->getRequest();
+        $templateId = strtolower(trim((string)$request->getQueryParam('id', '')));
+        $service = Plugin::getInstance()->getStarterPackService();
+
+        if ($templateId !== '') {
+            $starterPack = $service->getStarterPackById($templateId, '/agents/v1');
+            if ($starterPack === null) {
+                return $this->errorResponse(404, self::ERROR_NOT_FOUND, sprintf('Unknown starter pack `%s`.', $templateId));
+            }
+
+            return $this->jsonResponse([
+                'version' => $this->resolvePluginVersion(),
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'starterPack' => $starterPack,
+            ]);
+        }
+
+        return $this->jsonResponse($service->getCatalog('/agents/v1'));
+    }
+
     public function actionSchema(): Response
     {
         if (($guard = $this->guardRequest('schema:read')) !== null) {
@@ -1366,6 +1392,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read']],
             ['method' => 'POST', 'path' => '/consumers/checkpoint', 'requiredScopes' => ['consumers:write']],
             ['method' => 'GET', 'path' => '/templates', 'requiredScopes' => ['templates:read']],
+            ['method' => 'GET', 'path' => '/starter-packs', 'requiredScopes' => ['templates:read']],
             ['method' => 'GET', 'path' => '/schema', 'requiredScopes' => ['schema:read']],
             ['method' => 'GET', 'path' => '/capabilities', 'requiredScopes' => ['capabilities:read']],
             ['method' => 'GET', 'path' => '/openapi.json', 'requiredScopes' => ['openapi:read']],
@@ -1433,6 +1460,7 @@ class ApiController extends Controller
                 'agents/discovery-check',
                 'agents/readiness-check',
                 'agents/template-catalog',
+                'agents/starter-packs',
                 'agents/diagnostics-bundle',
                 'agents/smoke',
             ],
@@ -1957,6 +1985,17 @@ class ApiController extends Controller
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '404' => ['description' => 'Unknown template id'],
+                ]),
+                'x-required-scopes' => ['templates:read'],
+            ]],
+            '/starter-packs' => ['get' => [
+                'summary' => 'Copy/paste integration starter packs derived from canonical templates',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'schema' => ['type' => 'string'], 'description' => 'Optional template id to return one starter pack.'],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '404' => ['description' => 'Unknown starter pack id'],
                 ]),
                 'x-required-scopes' => ['templates:read'],
             ]],
@@ -4670,6 +4709,29 @@ class ApiController extends Controller
                             'count' => ['type' => 'integer'],
                             'templates' => ['type' => 'array', 'items' => ['type' => 'object']],
                             'template' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'starterpacks.catalog' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/starter-packs',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'string'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'service' => ['type' => 'string'],
+                            'version' => ['type' => 'string'],
+                            'generatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'basePath' => ['type' => 'string'],
+                            'contracts' => ['type' => 'object'],
+                            'count' => ['type' => 'integer'],
+                            'starterPacks' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'starterPack' => ['type' => 'object'],
                         ],
                     ],
                 ],

@@ -9,6 +9,8 @@ All notable changes to this project are documented in this file.
 - Added canonical template catalog service with API endpoint `GET /agents/v1/templates` (`templates:read`) and CLI command `craft agents/template-catalog`.
 - Added schema/OpenAPI-linked reference automation docs and JSON fixtures for the three canonical first jobs.
 - Added dedicated regression check (`scripts/qa/reference-automations-regression-check.sh`) and integrated it into the release gate.
+- Added starter-pack catalog service with API endpoint `GET /agents/v1/starter-packs` (`templates:read`) and CLI command `craft agents/starter-packs` for copy/paste runtime snippets (`curl`, `javascript`, `python`).
+- Added integration starter-pack docs at `docs/integration-starter-packs.md`.
 
 ### Changed
 

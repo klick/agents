@@ -5,6 +5,7 @@ These automations map directly to machine contracts exposed by:
 - `GET /agents/v1/openapi.json`
 - `GET /agents/v1/schema`
 - `GET /agents/v1/templates`
+- `GET /agents/v1/starter-packs`
 
 Set runtime variables:
 

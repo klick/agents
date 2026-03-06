@@ -28,6 +28,7 @@ use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
 use Klick\Agents\services\SecurityPolicyService;
+use Klick\Agents\services\StarterPackService;
 use Klick\Agents\services\TemplateCatalogService;
 use Klick\Agents\services\WebhookService;
 
@@ -66,6 +67,7 @@ class Plugin extends BasePlugin
             'observabilityMetricsService' => ObservabilityMetricsService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
             'templateCatalogService' => TemplateCatalogService::class,
+            'starterPackService' => StarterPackService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
@@ -185,6 +187,7 @@ class Plugin extends BasePlugin
                 'agents/v1/changes' => 'agents/api/changes',
                 'agents/v1/sections' => 'agents/api/sections',
                 'agents/v1/templates' => 'agents/api/templates',
+                'agents/v1/starter-packs' => 'agents/api/starter-packs',
                 'agents/v1/schema' => 'agents/api/schema',
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
@@ -275,6 +278,13 @@ class Plugin extends BasePlugin
     {
         /** @var ObservabilityMetricsService $service */
         $service = $this->get('observabilityMetricsService');
+        return $service;
+    }
+
+    public function getStarterPackService(): StarterPackService
+    {
+        /** @var StarterPackService $service */
+        $service = $this->get('starterPackService');
         return $service;
     }
 

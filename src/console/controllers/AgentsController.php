@@ -45,6 +45,7 @@ class AgentsController extends Controller
             'entry-show' => array_merge($options, ['resourceId', 'slug', 'section', 'json']),
             'section-list' => array_merge($options, ['json']),
             'template-catalog' => array_merge($options, ['templateId', 'json']),
+            'starter-packs' => array_merge($options, ['templateId', 'json']),
             'discovery-prewarm' => array_merge($options, ['target', 'json']),
             'auth-check', 'discovery-check', 'readiness-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
@@ -589,6 +590,60 @@ class AgentsController extends Controller
                 "- %s (%s)\n",
                 (string)($template['id'] ?? ''),
                 (string)($template['displayName'] ?? '')
+            ));
+        }
+        $this->stdout("Use --template-id=<id> for detailed output.\n");
+
+        return ExitCode::OK;
+    }
+
+    public function actionStarterPacks(): int
+    {
+        $service = Plugin::getInstance()->getStarterPackService();
+        $templateId = strtolower(trim($this->templateId));
+
+        if ($templateId !== '') {
+            $starterPack = $service->getStarterPackById($templateId, '/agents/v1');
+            if ($starterPack === null) {
+                $this->stderr(sprintf("Unknown starter pack: %s\n", $templateId));
+                return ExitCode::UNSPECIFIED_ERROR;
+            }
+
+            $payload = [
+                'version' => Plugin::getInstance()->getVersion(),
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'starterPack' => $starterPack,
+            ];
+            if ($this->json) {
+                return $this->emitJson($payload);
+            }
+
+            $this->stdout(sprintf("Starter pack: %s\n", (string)($starterPack['displayName'] ?? $starterPack['id'] ?? 'starter-pack')));
+            $this->stdout(sprintf("ID: %s\n", (string)($starterPack['id'] ?? '')));
+            $this->stdout(sprintf("Intent: %s\n", (string)($starterPack['intent'] ?? '')));
+            $this->stdout("Runtimes:\n");
+            foreach ((array)($starterPack['runtimes'] ?? []) as $runtimeKey => $runtime) {
+                $this->stdout(sprintf(
+                    "- %s (%s)\n",
+                    (string)$runtimeKey,
+                    (string)($runtime['filename'] ?? 'snippet')
+                ));
+            }
+            $this->stdout("Use --json=1 to print snippet content.\n");
+            return ExitCode::OK;
+        }
+
+        $catalog = $service->getCatalog('/agents/v1');
+        if ($this->json) {
+            return $this->emitJson($catalog);
+        }
+
+        $this->stdout(sprintf("Starter packs: %d\n", (int)($catalog['count'] ?? 0)));
+        foreach ((array)($catalog['starterPacks'] ?? []) as $starterPack) {
+            $this->stdout(sprintf(
+                "- %s (%s)\n",
+                (string)($starterPack['id'] ?? ''),
+                (string)($starterPack['displayName'] ?? '')
             ));
         }
         $this->stdout("Use --template-id=<id> for detailed output.\n");

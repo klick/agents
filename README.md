@@ -34,7 +34,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
-| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/templates`, `/schema`) | Production stable | Checkpoint/lag and schema/template contract surfaces for integrations. |
+| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/templates`, `/starter-packs`, `/schema`) | Production stable | Checkpoint/lag and schema/template contract surfaces for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
 | Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
@@ -141,6 +141,7 @@ Enablement precedence:
 - 30-minute first-success path: [docs/quickstart-30min.md](docs/quickstart-30min.md)
 - Canonical first agent jobs: [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
 - Schema/OpenAPI-based reference automations: [docs/reference-automations.md](docs/reference-automations.md)
+- Copy/paste starter packs (curl/JS/Python): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
 - Observability runbook and alert thresholds: [docs/observability-runbook.md](docs/observability-runbook.md)
 
 ## Support
@@ -149,6 +150,7 @@ Enablement precedence:
 - Quickstart (repo): [docs/quickstart-30min.md](docs/quickstart-30min.md)
 - Canonical jobs (repo): [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
 - Reference automations (repo): [docs/reference-automations.md](docs/reference-automations.md)
+- Starter packs (repo): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
 - Observability runbook (repo): [docs/observability-runbook.md](docs/observability-runbook.md)
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
@@ -256,6 +258,7 @@ Read/discovery endpoints:
 - `GET /consumers/lag`
 - `POST /consumers/checkpoint`
 - `GET /templates`
+- `GET /starter-packs`
 - `GET /schema`
 - `GET /capabilities`
 - `GET /openapi.json`
@@ -353,6 +356,7 @@ Craft-native command routes:
 - `craft agents/discovery-check`
 - `craft agents/readiness-check`
 - `craft agents/template-catalog`
+- `craft agents/starter-packs`
 - `craft agents/diagnostics-bundle`
 - `craft agents/smoke`
 
@@ -397,6 +401,8 @@ php craft agents/discovery-check --json=1
 php craft agents/readiness-check --json=1
 php craft agents/template-catalog --json=1
 php craft agents/template-catalog --template-id=catalog-sync-loop
+php craft agents/starter-packs --json=1
+php craft agents/starter-packs --template-id=catalog-sync-loop --json=1
 php craft agents/diagnostics-bundle --json=1
 php craft agents/smoke --json=1
 ```
