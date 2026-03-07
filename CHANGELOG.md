@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.9.3 - 2026-03-07
+
+### Changed
+
+- Migrated sync-state naming across docs/contracts/QA from legacy `/consumers/*` wording to canonical `/sync-state/*` endpoints.
+- Refined CP dashboard and accounts UX with a unified metric-strip card style, improved card filtering states, and updated discovery-doc card interactions.
+- Updated Reliability Threshold settings fields to use Craft env-var-aware inputs in CP.
+
+### Fixed
+
+- Fixed reliability threshold parsing so numeric and env-var-backed values are persisted and evaluated consistently in runtime signals.
+- Fixed reliability QA coverage for env-var-driven threshold settings.
+
 ## 0.9.2 - 2026-03-06
 
 ### Added
