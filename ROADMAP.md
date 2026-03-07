@@ -1,6 +1,6 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-06  
+Date: 2026-03-07  
 Current release: `v0.9.1`
 
 ## Direction
@@ -100,6 +100,20 @@ Target: September 2026
 Release outcome:
 
 - Operators get a cleaner Agent card view now, with lifecycle governance still available for future reintroduction without backend rollback.
+
+## Planned (`v0.10.0`)
+
+Target: October 2026
+
+- Add external plugin data adapters for agent accounts (read-only first).
+- Introduce provider registry + registration event so integrations can be added without hardcoding controller logic.
+- Add explicit plugin/resource scopes for external data (for example `plugins:seomatic:meta:read`).
+- Expose registered external resources in capabilities, OpenAPI, and schema outputs.
+- Ship first-party reference adapters for SEOmatic and Campaign (when installed).
+
+Release outcome:
+
+- Teams can let agents safely consume data from selected Craft plugins using the same governed account model.
 
 ## Success Checks
 

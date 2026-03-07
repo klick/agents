@@ -111,7 +111,7 @@ class Plugin extends BasePlugin
             ];
         }
         $subnav['credentials'] = [
-            'label' => 'Agents',
+            'label' => 'Accounts',
             'url' => 'agents/credentials',
         ];
         $subnav['settings'] = [
@@ -200,6 +200,8 @@ class Plugin extends BasePlugin
                 'agents/v1/metrics' => 'agents/api/metrics',
                 'agents/v1/lifecycle' => 'agents/api/lifecycle',
                 'agents/v1/diagnostics/bundle' => 'agents/api/diagnostics-bundle',
+                'agents/v1/sync-state/checkpoint' => 'agents/api/consumers-checkpoint',
+                'agents/v1/sync-state/lag' => 'agents/api/consumers-lag',
                 'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoint',
                 'agents/v1/consumers/lag' => 'agents/api/consumers-lag',
                 'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
@@ -527,19 +529,19 @@ class Plugin extends BasePlugin
                     'heading' => 'Agents Access',
                     'permissions' => [
                         self::PERMISSION_CREDENTIALS_VIEW => [
-                            'label' => 'View managed agents tab',
+                            'label' => 'View managed accounts tab',
                         ],
                         self::PERMISSION_CREDENTIALS_MANAGE => [
-                            'label' => 'Create and edit managed agents',
+                            'label' => 'Create and edit managed accounts',
                         ],
                         self::PERMISSION_CREDENTIALS_ROTATE => [
-                            'label' => 'Rotate managed agent tokens',
+                            'label' => 'Rotate managed account tokens',
                         ],
                         self::PERMISSION_CREDENTIALS_REVOKE => [
-                            'label' => 'Revoke managed agent tokens',
+                            'label' => 'Revoke managed account tokens',
                         ],
                         self::PERMISSION_CREDENTIALS_DELETE => [
-                            'label' => 'Delete managed agents',
+                            'label' => 'Delete managed accounts',
                         ],
                     ],
                 ];

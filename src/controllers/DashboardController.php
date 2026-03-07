@@ -646,11 +646,11 @@ class DashboardController extends Controller
                 'action' => 'created',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Agent `%s` created. Copy the API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` created. Copy the API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to create agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to create account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -686,7 +686,7 @@ class DashboardController extends Controller
         ];
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
@@ -702,13 +702,13 @@ class DashboardController extends Controller
                 $networkPolicy
             );
             if (!is_array($credential)) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
-            $this->setSuccessFlash(sprintf('Agent `%s` updated.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` updated.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to update agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to update account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -724,14 +724,14 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
@@ -743,9 +743,9 @@ class DashboardController extends Controller
                 'action' => 'rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Agent `%s` rotated. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` rotated. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to rotate agent token: ' . $e->getMessage());
+            $this->setFailFlash('Unable to rotate account token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -758,19 +758,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $revoked = Plugin::getInstance()->getCredentialService()->revokeManagedCredential($credentialId);
             if (!$revoked) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
             } else {
-                $this->setSuccessFlash('Agent token revoked.');
+                $this->setSuccessFlash('Account token revoked.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to revoke agent token: ' . $e->getMessage());
+            $this->setFailFlash('Unable to revoke account token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -783,19 +783,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $paused = Plugin::getInstance()->getCredentialService()->pauseManagedCredential($credentialId);
             if (!$paused) {
-                $this->setFailFlash('Agent could not be paused. It may be revoked, already paused, or migrations are not up to date.');
+                $this->setFailFlash('Account could not be paused. It may be revoked, already paused, or migrations are not up to date.');
             } else {
-                $this->setSuccessFlash('Agent paused.');
+                $this->setSuccessFlash('Account paused.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to pause agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to pause account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -808,19 +808,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $resumed = Plugin::getInstance()->getCredentialService()->resumeManagedCredential($credentialId);
             if (!$resumed) {
-                $this->setFailFlash('Agent could not be resumed. It may be revoked or migrations are not up to date.');
+                $this->setFailFlash('Account could not be resumed. It may be revoked or migrations are not up to date.');
             } else {
-                $this->setSuccessFlash('Agent resumed.');
+                $this->setSuccessFlash('Account resumed.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to resume agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to resume account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -836,14 +836,14 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
@@ -855,9 +855,9 @@ class DashboardController extends Controller
                 'action' => 'revoked and rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Agent `%s` revoked and rotated. Old token is now invalid. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` revoked and rotated. Old token is now invalid. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to revoke and rotate agent token: ' . $e->getMessage());
+            $this->setFailFlash('Unable to revoke and rotate account token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -870,19 +870,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $deleted = Plugin::getInstance()->getCredentialService()->deleteManagedCredential($credentialId);
             if (!$deleted) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
             } else {
-                $this->setSuccessFlash('Agent deleted.');
+                $this->setSuccessFlash('Account deleted.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to delete agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to delete account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -1137,8 +1137,8 @@ class DashboardController extends Controller
             $apiBasePath . '/entries',
             $apiBasePath . '/changes',
             $apiBasePath . '/sections',
-            $apiBasePath . '/consumers/lag',
-            $apiBasePath . '/consumers/checkpoint',
+            $apiBasePath . '/sync-state/lag',
+            $apiBasePath . '/sync-state/checkpoint',
             $apiBasePath . '/schema',
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',

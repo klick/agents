@@ -1,23 +1,39 @@
 {% extends "_layouts/cp" %}
 {% set title = "Agents Dashboard" %}
 {% set selectedSubnavItem = "dashboard" %}
-{% set tabs = {} %}
-{% for tab in dashboardTabs %}
-  {% set tabs = tabs|merge({
-    (tab.key): {
-      label: tab.label,
-      url: url(tab.url),
-    }
-  }) %}
-{% endfor %}
-{% set selectedTab = activeDashboardTab %}
-{% set dashboardHeading = tabs[selectedTab].label ?? 'Dashboard' %}
+{% set dashboardHeadingByKey = {
+  overview: 'Overview',
+  readiness: 'Readiness',
+  discovery: 'Discovery Docs',
+  security: 'Security',
+} %}
+{% set dashboardHeading = dashboardHeadingByKey[activeDashboardTab]|default('Overview') %}
 {% set tabIntroByKey = {
   overview: 'Operate the runtime, verify what is enabled, and jump straight to the right place for each change.',
   readiness: 'Review health signals, lag telemetry, and warnings before integrations or releases.',
   discovery: 'Manage discovery document freshness and quickly inspect what external agents can read.',
   security: 'Monitor auth posture, webhook reliability, and security warnings in one place.'
 } %}
+{% set dashboardSidebarNavItems = {} %}
+{% for tab in dashboardTabs %}
+  {% set dashboardSidebarNavItems = dashboardSidebarNavItems|merge({
+    (tab.key): {
+      label: tab.label,
+      url: tab.url,
+    }
+  }) %}
+{% endfor %}
+
+{% block sidebar %}
+  {% include "_includes/nav"
+    with {
+      label: 'Dashboard',
+      items: dashboardSidebarNavItems,
+      selectedItem: activeDashboardTab,
+    }
+    only
+  %}
+{% endblock %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
@@ -189,7 +205,7 @@
             <div class="value">{{ readinessTabWarnings }}</div>
           </div>
           <div class="agents-metric {{ readinessTabConsumerCountClass }}">
-            <div class="label">Consumer integrations</div>
+            <div class="label">Sync integrations</div>
             <div class="value">{{ readinessTabConsumerCount }}</div>
           </div>
           <div class="agents-metric {{ readinessTabLagClass }}">
@@ -316,7 +332,7 @@
 
 
       <section class="border rounded p-3">
-        <h2 class="h4">Consumer Lag</h2>
+        <h2 class="h4">Sync State Lag</h2>
         <p class="agents-subtle">
           Healthy: <strong>{{ consumerLagSummary.healthy|default(0) }}</strong>,
           warning: <strong>{{ consumerLagSummary.warning|default(0) }}</strong>,
@@ -350,7 +366,7 @@
             <p class="agents-subtle">Showing top 10 highest lag rows.</p>
           {% endif %}
         {% else %}
-          <p>No consumer checkpoint telemetry submitted yet.</p>
+          <p>No sync-state checkpoint telemetry submitted yet.</p>
         {% endif %}
       </section>
 
@@ -391,7 +407,7 @@
             <div class="value">{{ telemetryDlqFailed }}</div>
           </div>
           <div class="agents-metric {{ telemetryConsumerLagClass }}">
-            <div class="label">Max consumer lag</div>
+            <div class="label">Max sync-state lag</div>
             <div class="value">{{ telemetryConsumerLagMaxSeconds }}s</div>
           </div>
           <div class="agents-metric {{ telemetryActiveCredentialsClass }}">

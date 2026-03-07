@@ -89,7 +89,7 @@ Actions:
 2. Confirm webhook receiver health and signature verification.
 3. Correlate repeated failures with endpoint/network incidents.
 
-### Consumer lag (`agents_consumer_lag_max_seconds`)
+### Sync-state lag (`agents_consumer_lag_max_seconds`)
 
 Trigger:
 
@@ -98,8 +98,8 @@ Trigger:
 
 Actions:
 
-1. Inspect lag rows via `GET /agents/v1/consumers/lag`.
-2. Re-establish checkpoint updates via `POST /agents/v1/consumers/checkpoint`.
+1. Inspect lag rows via `GET /agents/v1/sync-state/lag`.
+2. Re-establish checkpoint updates via `POST /agents/v1/sync-state/checkpoint`.
 3. Run a bounded backfill for stale resources, then return to incremental sync.
 
 ## Escalation package

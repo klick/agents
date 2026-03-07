@@ -34,6 +34,7 @@ class SecurityPolicyService extends Component
         'changes:read',
         'sections:read',
         'users:read',
+        'syncstate:read',
         'consumers:read',
         'templates:read',
         'schema:read',

@@ -166,7 +166,7 @@ curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/auth/whoami"
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/products?status=live&limit=100"
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/entries?status=live&limit=100"
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/changes?types=products,entries&limit=100"
-curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/consumers/checkpoint" \
+curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/sync-state/checkpoint" \
   -d '{"integrationKey":"catalog-sync","resourceType":"changes","cursor":"opaque-cursor-token","updatedSince":"2026-03-05T00:00:00Z","checkpointAt":"2026-03-05T12:00:00Z","metadata":{"worker":"sync-a","version":"1"}}'
 BASH;
 
@@ -201,7 +201,7 @@ await request("/auth/whoami");
 await request("/products?status=live&limit=100");
 await request("/entries?status=live&limit=100");
 await request("/changes?types=products,entries&limit=100");
-await request("/consumers/checkpoint", {
+await request("/sync-state/checkpoint", {
   method: "POST",
   body: JSON.stringify({
     integrationKey: "catalog-sync",
@@ -244,7 +244,7 @@ request("GET", "/auth/whoami")
 request("GET", "/products?status=live&limit=100")
 request("GET", "/entries?status=live&limit=100")
 request("GET", "/changes?types=products,entries&limit=100")
-request("POST", "/consumers/checkpoint", json={
+request("POST", "/sync-state/checkpoint", json={
     "integrationKey": "catalog-sync",
     "resourceType": "changes",
     "cursor": "opaque-cursor-token",

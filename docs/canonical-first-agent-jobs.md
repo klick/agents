@@ -21,7 +21,7 @@ Required scopes:
 - `products:read`
 - `entries:read`
 - `changes:read`
-- `consumers:write`
+- `syncstate:write`
 
 Flow:
 

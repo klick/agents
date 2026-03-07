@@ -37,6 +37,7 @@ class ApiController extends Controller
         'changes:read',
         'sections:read',
         'users:read',
+        'syncstate:read',
         'consumers:read',
         'templates:read',
         'schema:read',
@@ -1393,8 +1394,10 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
             ['method' => 'GET', 'path' => '/users', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
             ['method' => 'GET', 'path' => '/users/show', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
-            ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read']],
-            ['method' => 'POST', 'path' => '/consumers/checkpoint', 'requiredScopes' => ['consumers:write']],
+            ['method' => 'GET', 'path' => '/sync-state/lag', 'requiredScopes' => ['syncstate:read'], 'optionalScopes' => ['consumers:read']],
+            ['method' => 'POST', 'path' => '/sync-state/checkpoint', 'requiredScopes' => ['syncstate:write'], 'optionalScopes' => ['consumers:write']],
+            ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read'], 'optionalScopes' => ['syncstate:read'], 'deprecated' => true, 'replacedBy' => '/sync-state/lag'],
+            ['method' => 'POST', 'path' => '/consumers/checkpoint', 'requiredScopes' => ['consumers:write'], 'optionalScopes' => ['syncstate:write'], 'deprecated' => true, 'replacedBy' => '/sync-state/checkpoint'],
             ['method' => 'GET', 'path' => '/templates', 'requiredScopes' => ['templates:read']],
             ['method' => 'GET', 'path' => '/starter-packs', 'requiredScopes' => ['templates:read']],
             ['method' => 'GET', 'path' => '/schema', 'requiredScopes' => ['schema:read']],
@@ -1969,8 +1972,30 @@ class ApiController extends Controller
                 'x-required-scopes' => ['users:read'],
                 'x-optional-scopes' => ['users:read_sensitive'],
             ]],
+            '/sync-state/lag' => ['get' => [
+                'summary' => 'List sync-state lag by integration/resource',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'integrationKey', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'resourceType', 'schema' => ['type' => 'string']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 1000]],
+                ],
+                'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
+                'x-required-scopes' => ['syncstate:read'],
+                'x-legacy-scopes' => ['consumers:read'],
+            ]],
+            '/sync-state/checkpoint' => ['post' => [
+                'summary' => 'Record latest sync-state checkpoint/cursor for lag tracking',
+                'requestBody' => ['required' => true],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['syncstate:write'],
+                'x-legacy-scopes' => ['consumers:write'],
+            ]],
             '/consumers/lag' => ['get' => [
-                'summary' => 'List consumer checkpoint lag by integration/resource',
+                'summary' => 'List consumer checkpoint lag by integration/resource (deprecated alias)',
+                'deprecated' => true,
                 'parameters' => [
                     ['in' => 'query', 'name' => 'integrationKey', 'schema' => ['type' => 'string']],
                     ['in' => 'query', 'name' => 'resourceType', 'schema' => ['type' => 'string']],
@@ -1978,15 +2003,20 @@ class ApiController extends Controller
                 ],
                 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
                 'x-required-scopes' => ['consumers:read'],
+                'x-alternative-scopes' => ['syncstate:read'],
+                'x-replaced-by' => '/sync-state/lag',
             ]],
             '/consumers/checkpoint' => ['post' => [
-                'summary' => 'Record latest consumer checkpoint/cursor for lag tracking',
+                'summary' => 'Record latest consumer checkpoint/cursor for lag tracking (deprecated alias)',
+                'deprecated' => true,
                 'requestBody' => ['required' => true],
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
                 ]),
                 'x-required-scopes' => ['consumers:write'],
+                'x-alternative-scopes' => ['syncstate:write'],
+                'x-replaced-by' => '/sync-state/checkpoint',
             ]],
             '/templates' => ['get' => [
                 'summary' => 'Canonical integration templates derived from schema/openapi contracts',
@@ -2262,7 +2292,7 @@ class ApiController extends Controller
 
     public function actionConsumersLag(): Response
     {
-        if (($guard = $this->guardRequest('consumers:read')) !== null) {
+        if (($guard = $this->guardRequestAnyScopes(['syncstate:read', 'consumers:read'])) !== null) {
             return $guard;
         }
 
@@ -2288,7 +2318,7 @@ class ApiController extends Controller
 
     public function actionConsumersCheckpoint(): Response
     {
-        if (($guard = $this->guardRequest('consumers:write', ['POST'])) !== null) {
+        if (($guard = $this->guardRequestAnyScopes(['syncstate:write', 'consumers:write'], ['POST'])) !== null) {
             return $guard;
         }
 
@@ -3238,8 +3268,10 @@ class ApiController extends Controller
             'sections:read' => 'Read section list endpoint.',
             'users:read' => 'Read user list and lookup endpoints.',
             'users:read_sensitive' => 'Unredacted user email/profile detail fields.',
-            'consumers:read' => 'Read per-integration consumer lag/checkpoint status.',
-            'consumers:write' => 'Record per-integration consumer checkpoints for lag tracking.',
+            'syncstate:read' => 'Read per-integration sync-state lag/checkpoint status.',
+            'syncstate:write' => 'Record per-integration sync-state checkpoints for lag tracking.',
+            'consumers:read' => 'Deprecated alias for `syncstate:read`.',
+            'consumers:write' => 'Deprecated alias for `syncstate:write`.',
             'templates:read' => 'Read canonical integration templates derived from schema/openapi contracts.',
             'schema:read' => 'Read machine-readable endpoint schemas for a specific version.',
             'capabilities:read' => 'Read capabilities descriptor endpoint.',
@@ -4646,9 +4678,31 @@ class ApiController extends Controller
                         ],
                     ],
                 ],
+                'syncstate.checkpoint' => [
+                    'method' => 'POST',
+                    'path' => '/agents/v1/sync-state/checkpoint',
+                    'body' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'integrationKey' => ['type' => 'string'],
+                            'resourceType' => ['type' => 'string'],
+                            'cursor' => ['type' => 'string'],
+                            'updatedSince' => ['type' => 'string', 'format' => 'date-time'],
+                            'checkpointAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'metadata' => ['type' => 'object'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
                 'consumers.checkpoint' => [
                     'method' => 'POST',
                     'path' => '/agents/v1/consumers/checkpoint',
+                    'deprecated' => true,
                     'body' => [
                         'type' => 'object',
                         'properties' => [

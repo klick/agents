@@ -23,7 +23,7 @@ Contract lookups:
 - `GET $BASE_URL/schema?endpoint=products.list`
 - `GET $BASE_URL/schema?endpoint=entries.list`
 - `GET $BASE_URL/schema?endpoint=changes.feed`
-- `GET $BASE_URL/schema?endpoint=consumers.checkpoint`
+- `GET $BASE_URL/schema?endpoint=syncstate.checkpoint`
 
 Example execution:
 
@@ -32,7 +32,7 @@ curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/auth/whoami"
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/products?status=live&limit=100"
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/entries?status=live&limit=100"
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/changes?types=products,entries&limit=100"
-curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/consumers/checkpoint" \
+curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/sync-state/checkpoint" \
   -d @docs/reference-automations/fixtures/catalog-sync-checkpoint.json
 ```
 

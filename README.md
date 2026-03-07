@@ -34,7 +34,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
-| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`) | Production stable | Checkpoint/lag, schema/template contracts, and lifecycle governance visibility for integrations. |
+| Integration state API (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`) | Production stable | Checkpoint/lag, schema/template contracts, and lifecycle governance visibility for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
 | Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
@@ -258,8 +258,11 @@ Read/discovery endpoints:
 - `GET /users/show` (requires exactly one of `id` or `username`; only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `GET /changes`
 - `GET /sections`
-- `GET /consumers/lag`
-- `POST /consumers/checkpoint`
+- `GET /sync-state/lag`
+- `POST /sync-state/checkpoint`
+- Legacy aliases (deprecated, still supported during transition):
+  - `GET /consumers/lag`
+  - `POST /consumers/checkpoint`
 - `GET /templates`
 - `GET /starter-packs`
 - `GET /schema`
@@ -323,8 +326,7 @@ Read scopes:
 - `sections:read`
 - `users:read` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `users:read_sensitive` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
-- `consumers:read`
-- `consumers:write`
+- `syncstate:read`
 - `templates:read`
 - `schema:read`
 - `capabilities:read`
@@ -338,6 +340,10 @@ Read scopes:
 
 Write scopes:
 
+- `syncstate:write`
+- Legacy scope aliases (deprecated, still accepted during transition):
+  - `consumers:read` -> `syncstate:read`
+  - `consumers:write` -> `syncstate:write`
 - `control:policies:write` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:approvals:request` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:approvals:decide` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)

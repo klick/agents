@@ -148,13 +148,13 @@ class ReliabilitySignalService extends Component
             ],
             [
                 'id' => 'consumer_lag_max_seconds',
-                'label' => 'Max consumer lag',
+                'label' => 'Max sync-state lag',
                 'metric' => 'agents_consumer_lag_max_seconds',
                 'unit' => 'seconds',
                 'warnThreshold' => 300,
                 'criticalThreshold' => 900,
                 'comparator' => '>',
-                'primaryResponse' => 'Inspect /agents/v1/consumers/lag and restore checkpoint writes.',
+                'primaryResponse' => 'Inspect /agents/v1/sync-state/lag and restore checkpoint writes.',
             ],
         ];
     }
