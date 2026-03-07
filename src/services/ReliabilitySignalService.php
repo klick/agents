@@ -2,7 +2,10 @@
 
 namespace Klick\Agents\services;
 
+use Klick\Agents\Plugin;
+use Klick\Agents\models\Settings;
 use craft\base\Component;
+use craft\helpers\App;
 
 class ReliabilitySignalService extends Component
 {
@@ -85,6 +88,8 @@ class ReliabilitySignalService extends Component
      */
     public function thresholdCatalog(): array
     {
+        $consumerLagThresholds = $this->consumerLagThresholds();
+
         return [
             [
                 'id' => 'auth_failures',
@@ -151,12 +156,80 @@ class ReliabilitySignalService extends Component
                 'label' => 'Max sync-state lag',
                 'metric' => 'agents_consumer_lag_max_seconds',
                 'unit' => 'seconds',
-                'warnThreshold' => 300,
-                'criticalThreshold' => 900,
+                'warnThreshold' => $consumerLagThresholds['warn'],
+                'criticalThreshold' => $consumerLagThresholds['critical'],
                 'comparator' => '>',
                 'primaryResponse' => 'Inspect /agents/v1/sync-state/lag and restore checkpoint writes.',
             ],
         ];
+    }
+
+    /**
+     * @return array{warn:int,critical:int}
+     */
+    private function consumerLagThresholds(): array
+    {
+        $warnDefault = 300;
+        $criticalDefault = 900;
+
+        $settings = Plugin::getInstance()->getSettings();
+        if (!$settings instanceof Settings) {
+            return [
+                'warn' => $warnDefault,
+                'critical' => $criticalDefault,
+            ];
+        }
+
+        $warn = $this->parseThresholdValue($settings->reliabilityConsumerLagWarnSeconds, $warnDefault, 0, 604800);
+        $critical = $this->parseThresholdValue($settings->reliabilityConsumerLagCriticalSeconds, $criticalDefault, 1, 604800);
+        if ($critical <= $warn) {
+            $critical = $warn + 1;
+        }
+
+        return [
+            'warn' => $warn,
+            'critical' => $critical,
+        ];
+    }
+
+    private function parseThresholdValue(mixed $raw, int $default, int $min, int $max): int
+    {
+        if (is_int($raw) || is_float($raw)) {
+            return $this->clampThreshold((int)$raw, $min, $max);
+        }
+
+        if (!is_string($raw)) {
+            return $default;
+        }
+
+        $value = trim($raw);
+        if ($value === '') {
+            return $default;
+        }
+
+        if (is_numeric($value)) {
+            return $this->clampThreshold((int)$value, $min, $max);
+        }
+
+        $parsed = App::parseEnv($value);
+        if (!is_int($parsed) && !is_float($parsed) && !(is_string($parsed) && is_numeric($parsed))) {
+            return $default;
+        }
+
+        return $this->clampThreshold((int)$parsed, $min, $max);
+    }
+
+    private function clampThreshold(int $value, int $min, int $max): int
+    {
+        if ($value < $min) {
+            return $min;
+        }
+
+        if ($value > $max) {
+            return $max;
+        }
+
+        return $value;
     }
 
     private function buildSignal(array $threshold, int|float $value): ?array

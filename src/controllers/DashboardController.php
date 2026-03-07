@@ -33,6 +33,7 @@ class DashboardController extends Controller
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
         $settings = $this->getSettingsModel();
+        $settingsOverrides = $this->getSettingsOverrides();
         $readinessService = $plugin->getReadinessService();
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
         $activeDashboardTab = $this->resolveDashboardTab();
@@ -108,6 +109,17 @@ class DashboardController extends Controller
                 'commerceEnabled' => (bool)$settings->enableCommerceTxt,
                 'llmsTtl' => (int)$settings->llmsTxtCacheTtl,
                 'commerceTtl' => (int)$settings->commerceTxtCacheTtl,
+            ],
+            'discoverySettings' => [
+                'llmsTxtBody' => (string)$settings->llmsTxtBody,
+                'commerceTxtBody' => (string)$settings->commerceTxtBody,
+            ],
+            'discoverySettingsLocks' => [
+                'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
+                'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
+                'commerceTxtSettingLocked' => (bool)($settingsOverrides['enableCommerceTxt'] ?? false),
+                'llmsTxtBodySettingLocked' => (bool)($settingsOverrides['llmsTxtBody'] ?? false),
+                'commerceTxtBodySettingLocked' => (bool)($settingsOverrides['commerceTxtBody'] ?? false),
             ],
             'consumerLagSummary' => (array)($consumerLagSnapshot['summary'] ?? []),
             'consumerLagRows' => (array)($consumerLagSnapshot['rows'] ?? []),
@@ -232,8 +244,8 @@ class DashboardController extends Controller
             'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
             'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
             'commerceTxtSettingLocked' => (bool)($settingsOverrides['enableCommerceTxt'] ?? false),
-            'llmsTxtBodySettingLocked' => (bool)($settingsOverrides['llmsTxtBody'] ?? false),
-            'commerceTxtBodySettingLocked' => (bool)($settingsOverrides['commerceTxtBody'] ?? false),
+            'reliabilityConsumerLagWarnSecondsLocked' => (bool)($settingsOverrides['reliabilityConsumerLagWarnSeconds'] ?? false),
+            'reliabilityConsumerLagCriticalSecondsLocked' => (bool)($settingsOverrides['reliabilityConsumerLagCriticalSeconds'] ?? false),
         ]);
     }
 
@@ -413,6 +425,8 @@ class DashboardController extends Controller
         $credentialUsageIndicatorLocked = (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false);
         $llmsBodyLocked = (bool)($settingsOverrides['llmsTxtBody'] ?? false);
         $commerceBodyLocked = (bool)($settingsOverrides['commerceTxtBody'] ?? false);
+        $consumerLagWarnLocked = (bool)($settingsOverrides['reliabilityConsumerLagWarnSeconds'] ?? false);
+        $consumerLagCriticalLocked = (bool)($settingsOverrides['reliabilityConsumerLagCriticalSeconds'] ?? false);
 
         $settingsData = get_object_vars($settings);
         $settingsData['enabled'] = (bool)$enabledState['locked']
@@ -439,6 +453,25 @@ class DashboardController extends Controller
         $settingsData['commerceTxtBody'] = $commerceBodyLocked
             ? (string)$settings->commerceTxtBody
             : $this->parseStringBodyParam('commerceTxtBody', (string)$settings->commerceTxtBody);
+        $settingsData['reliabilityConsumerLagWarnSeconds'] = $consumerLagWarnLocked
+            ? $settings->reliabilityConsumerLagWarnSeconds
+            : $this->parseEnvAwareIntegerSetting('reliabilityConsumerLagWarnSeconds', $settings->reliabilityConsumerLagWarnSeconds, 0, 604800);
+        $settingsData['reliabilityConsumerLagCriticalSeconds'] = $consumerLagCriticalLocked
+            ? $settings->reliabilityConsumerLagCriticalSeconds
+            : $this->parseEnvAwareIntegerSetting('reliabilityConsumerLagCriticalSeconds', $settings->reliabilityConsumerLagCriticalSeconds, 1, 604800);
+
+        $thresholdAdjusted = false;
+        $warnIsNumeric = $this->isNumericSettingValue($settingsData['reliabilityConsumerLagWarnSeconds']);
+        $criticalIsNumeric = $this->isNumericSettingValue($settingsData['reliabilityConsumerLagCriticalSeconds']);
+        if ($warnIsNumeric && $criticalIsNumeric && (int)$settingsData['reliabilityConsumerLagCriticalSeconds'] <= (int)$settingsData['reliabilityConsumerLagWarnSeconds']) {
+            if (!$consumerLagCriticalLocked) {
+                $settingsData['reliabilityConsumerLagCriticalSeconds'] = min(604800, (int)$settingsData['reliabilityConsumerLagWarnSeconds'] + 1);
+                $thresholdAdjusted = true;
+            } elseif (!$consumerLagWarnLocked) {
+                $settingsData['reliabilityConsumerLagWarnSeconds'] = max(0, (int)$settingsData['reliabilityConsumerLagCriticalSeconds'] - 1);
+                $thresholdAdjusted = true;
+            }
+        }
 
         if ($resetDiscoveryBodyTarget === 'llms' && !$llmsBodyLocked) {
             $settingsData['llmsTxtBody'] = '';
@@ -476,6 +509,15 @@ class DashboardController extends Controller
         }
         if ($commerceBodyLocked) {
             $notes[] = '`commerceTxtBody` is controlled by `config/agents.php`.';
+        }
+        if ($consumerLagWarnLocked) {
+            $notes[] = '`reliabilityConsumerLagWarnSeconds` is controlled by `config/agents.php`.';
+        }
+        if ($consumerLagCriticalLocked) {
+            $notes[] = '`reliabilityConsumerLagCriticalSeconds` is controlled by `config/agents.php`.';
+        }
+        if ($thresholdAdjusted) {
+            $notes[] = '`reliabilityConsumerLagCriticalSeconds` was auto-adjusted to stay greater than warn threshold.';
         }
 
         if (!empty($notes)) {
@@ -1500,7 +1542,69 @@ class DashboardController extends Controller
             'enableCommerceTxt' => array_key_exists('enableCommerceTxt', $config),
             'llmsTxtBody' => array_key_exists('llmsTxtBody', $config),
             'commerceTxtBody' => array_key_exists('commerceTxtBody', $config),
+            'reliabilityConsumerLagWarnSeconds' => array_key_exists('reliabilityConsumerLagWarnSeconds', $config),
+            'reliabilityConsumerLagCriticalSeconds' => array_key_exists('reliabilityConsumerLagCriticalSeconds', $config),
         ];
+    }
+
+    private function parseEnvAwareIntegerSetting(string $name, int|string $default, int $min, int $max): int|string
+    {
+        $raw = $this->request->getBodyParam($name);
+        if ($raw === null) {
+            return $default;
+        }
+
+        if (is_array($raw)) {
+            if (empty($raw)) {
+                return $default;
+            }
+            $raw = end($raw);
+        }
+
+        if (is_int($raw)) {
+            return $this->clampInteger($raw, $min, $max);
+        }
+
+        if (is_float($raw)) {
+            return $this->clampInteger((int)$raw, $min, $max);
+        }
+
+        $value = trim((string)$raw);
+        if ($value === '') {
+            return $default;
+        }
+
+        if (is_numeric($value)) {
+            return $this->clampInteger((int)$value, $min, $max);
+        }
+
+        return $value;
+    }
+
+    private function clampInteger(int $value, int $min, int $max): int
+    {
+        if ($value < $min) {
+            return $min;
+        }
+
+        if ($value > $max) {
+            return $max;
+        }
+
+        return $value;
+    }
+
+    private function isNumericSettingValue(mixed $value): bool
+    {
+        if (is_int($value) || is_float($value)) {
+            return true;
+        }
+
+        if (!is_string($value)) {
+            return false;
+        }
+
+        return is_numeric(trim($value));
     }
 
     private function parseStringBodyParam(string $name, string $default = ''): string

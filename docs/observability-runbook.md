@@ -93,8 +93,9 @@ Actions:
 
 Trigger:
 
-- Warn: `> 300s`
-- Critical: `> 900s`
+- Warn: `> reliabilityConsumerLagWarnSeconds` (default: `300s`)
+- Critical: `> reliabilityConsumerLagCriticalSeconds` (default: `900s`)
+- Config path: `config/agents.php`
 
 Actions:
 

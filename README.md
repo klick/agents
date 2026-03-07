@@ -684,6 +684,8 @@ return [
         'currency' => 'USD',
         'region' => 'US',
     ],
+    'reliabilityConsumerLagWarnSeconds' => 300,
+    'reliabilityConsumerLagCriticalSeconds' => 900,
 ];
 ```
 

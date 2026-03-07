@@ -39,30 +39,32 @@
       <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
     </p>
 
-    <div class="agents-metric-grid">
-      <div class="agents-metric {{ controlPendingCount > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
+    <div class="agents-metric-strip-wrap">
+      <div class="agents-metric-strip">
+      <div class="agents-metric agents-metric-strip-card {{ controlPendingCount > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
         <div class="label">Waiting for decision</div>
         <div class="value">{{ controlPendingCount }}</div>
       </div>
-      <div class="agents-metric {{ controlExpiredApprovalsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
+      <div class="agents-metric agents-metric-strip-card {{ controlExpiredApprovalsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
         <div class="label">Expired approvals</div>
         <div class="value">{{ controlExpiredApprovalsCount }}</div>
       </div>
-      <div class="agents-metric {{ controlBlockedRunsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
+      <div class="agents-metric agents-metric-strip-card {{ controlBlockedRunsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
         <div class="label">Runs blocked</div>
         <div class="value">{{ controlBlockedRunsCount }}</div>
       </div>
-      <div class="agents-metric {{ controlCompletedRunsCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
+      <div class="agents-metric agents-metric-strip-card {{ controlCompletedRunsCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
         <div class="label">Runs completed</div>
         <div class="value">{{ controlCompletedRunsCount }}</div>
       </div>
-      <div class="agents-metric {{ controlActiveRulesCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
+      <div class="agents-metric agents-metric-strip-card {{ controlActiveRulesCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
         <div class="label">Active rules</div>
         <div class="value">{{ controlActiveRulesCount }}</div>
       </div>
-      <div class="agents-metric {{ controlActivityCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
+      <div class="agents-metric agents-metric-strip-card {{ controlActivityCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
         <div class="label">Activity entries</div>
         <div class="value">{{ controlActivityCount }}</div>
+      </div>
       </div>
     </div>
   </section>

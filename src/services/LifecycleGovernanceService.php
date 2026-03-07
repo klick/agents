@@ -171,6 +171,7 @@ class LifecycleGovernanceService extends Component
         $factors = [];
 
         $expiryStatus = strtolower((string)($credential['expiryStatus'] ?? 'none'));
+        $isNeverExpire = (bool)($credential['expiryPolicy']['isNeverExpire'] ?? false) || $expiryStatus === 'never';
         if ($expiryStatus === 'expired') {
             $factors[] = $this->factor('expired', 'critical', 'Credential is expired and unusable.');
         } elseif ($expiryStatus === 'expiring_soon') {
@@ -182,7 +183,7 @@ class LifecycleGovernanceService extends Component
                     ? sprintf('Credential expires in %d day(s).', (int)$daysLeft)
                     : 'Credential is expiring soon.'
             );
-        } elseif ($expiryStatus === 'none') {
+        } elseif ($expiryStatus === 'none' && !$isNeverExpire) {
             $factors[] = $this->factor('no_expiry_policy', 'warn', 'No expiry policy configured for this credential.');
         }
 

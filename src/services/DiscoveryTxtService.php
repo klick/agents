@@ -155,6 +155,7 @@ class DiscoveryTxtService extends Component
             'lastModified' => $lastModified,
             'bytes' => strlen($body),
             'lineCount' => $this->lineCount($body),
+            'body' => $body,
             'preview' => $this->buildPreview($body),
         ];
     }

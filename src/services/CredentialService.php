@@ -843,6 +843,7 @@ class CredentialService extends Component
             'expiresInDays' => null,
             'isExpired' => false,
             'isExpiringSoon' => false,
+            'isNeverExpire' => false,
             'status' => 'none',
         ];
 
@@ -853,13 +854,19 @@ class CredentialService extends Component
         $expiresAtRaw = $this->normalizeDateString($row['expiresAt'] ?? null);
         $expiryReminderDays = $this->normalizeReminderDays($row['expiryReminderDays'] ?? self::DEFAULT_EXPIRY_REMINDER_DAYS);
         if ($expiresAtRaw === null) {
-            $default['expiryReminderDays'] = $expiryReminderDays;
+            $isNeverExpire = $this->isNeverExpirePolicy($row);
+            $default['expiryReminderDays'] = $isNeverExpire ? 0 : $expiryReminderDays;
+            $default['isNeverExpire'] = $isNeverExpire;
+            $default['status'] = $isNeverExpire ? 'never' : 'none';
             return $default;
         }
 
         $expiresTimestamp = strtotime($expiresAtRaw);
         if ($expiresTimestamp === false) {
-            $default['expiryReminderDays'] = $expiryReminderDays;
+            $isNeverExpire = $this->isNeverExpirePolicy($row);
+            $default['expiryReminderDays'] = $isNeverExpire ? 0 : $expiryReminderDays;
+            $default['isNeverExpire'] = $isNeverExpire;
+            $default['status'] = $isNeverExpire ? 'never' : 'none';
             return $default;
         }
 
@@ -875,6 +882,7 @@ class CredentialService extends Component
             'expiresInDays' => $expiresInDays,
             'isExpired' => $isExpired,
             'isExpiringSoon' => $isExpiringSoon,
+            'isNeverExpire' => false,
             'status' => $isExpired ? 'expired' : ($isExpiringSoon ? 'expiring_soon' : 'active'),
         ];
     }
@@ -882,28 +890,38 @@ class CredentialService extends Component
     private function resolveCreateExpiryPolicy(array $input): array
     {
         $ttlDays = $this->normalizeNullableInt($input['ttlDays'] ?? null);
+        $expiryReminderDays = $this->normalizeReminderDays($input['expiryReminderDays'] ?? null);
         $expiresAt = null;
-        if ($ttlDays !== null && $ttlDays > 0) {
+        if ($ttlDays === 0) {
+            $expiresAt = null;
+            $expiryReminderDays = 0;
+        } elseif ($ttlDays !== null && $ttlDays > 0) {
             $expiresAt = gmdate('Y-m-d H:i:s', time() + ($ttlDays * 86400));
         }
 
         return [
             'expiresAt' => $expiresAt,
-            'expiryReminderDays' => $this->normalizeReminderDays($input['expiryReminderDays'] ?? null),
+            'expiryReminderDays' => $expiryReminderDays,
         ];
     }
 
     private function resolveUpdateExpiryPolicy(array $row, array $input): array
     {
         $currentExpiry = $this->normalizeDateString($row['expiresAt'] ?? null);
-        $currentReminder = $this->normalizeReminderDays($row['expiryReminderDays'] ?? self::DEFAULT_EXPIRY_REMINDER_DAYS);
+        $currentReminder = $this->isNeverExpirePolicy($row)
+            ? 0
+            : $this->normalizeReminderDays($row['expiryReminderDays'] ?? self::DEFAULT_EXPIRY_REMINDER_DAYS);
 
         $ttlDays = $this->normalizeNullableInt($input['ttlDays'] ?? null);
         $reminderDays = $this->normalizeNullableInt($input['expiryReminderDays'] ?? null);
 
         $expiresAt = $currentExpiry;
+        $resolvedReminderDays = $reminderDays === null ? $currentReminder : $this->normalizeReminderDays($reminderDays);
         if ($ttlDays !== null) {
-            if ($ttlDays <= 0) {
+            if ($ttlDays === 0) {
+                $expiresAt = null;
+                $resolvedReminderDays = 0;
+            } elseif ($ttlDays < 0) {
                 $expiresAt = null;
             } else {
                 $expiresAt = gmdate('Y-m-d H:i:s', time() + ($ttlDays * 86400));
@@ -912,8 +930,22 @@ class CredentialService extends Component
 
         return [
             'expiresAt' => $expiresAt,
-            'expiryReminderDays' => $reminderDays === null ? $currentReminder : $this->normalizeReminderDays($reminderDays),
+            'expiryReminderDays' => $resolvedReminderDays,
         ];
+    }
+
+    private function isNeverExpirePolicy(array $row): bool
+    {
+        if (!$this->supportsExpiryColumns()) {
+            return false;
+        }
+
+        $raw = $row['expiryReminderDays'] ?? null;
+        if (!is_numeric($raw)) {
+            return false;
+        }
+
+        return (int)$raw === 0;
     }
 
     private function resolveUpdateIpAllowlist(array $row, mixed $input): array

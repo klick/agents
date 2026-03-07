@@ -65,33 +65,35 @@
 
       <section class="border rounded p-3">
         <h2 class="h4">At a Glance</h2>
-        <div class="agents-metric-grid">
-          <div class="agents-metric {{ agentsEnabled ? 'agents-metric--good' : 'agents-metric--bad' }}">
+        <div class="agents-overview-strip-wrap agents-metric-strip-wrap">
+          <div class="agents-overview-strip agents-metric-strip">
+          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ agentsEnabled ? 'agents-metric--good' : 'agents-metric--bad' }}">
             <div class="label">Runtime state</div>
             <div class="value" style="display: flex; align-items: center; gap: 8px;">
               <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
               {{ agentsEnabled ? 'Enabled' : 'Disabled' }}
             </div>
           </div>
-          <div class="agents-metric {{ readinessMetricClass }}">
+          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ readinessMetricClass }}">
             <div class="label">Readiness score</div>
             <div class="value">{{ overviewReadinessScore }}/100</div>
           </div>
-          <div class="agents-metric {{ discoveryDocsMetricClass }}">
+          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ discoveryDocsMetricClass }}">
             <div class="label">Discovery docs enabled</div>
             <div class="value">{{ discoveryEnabledCount }}/3</div>
           </div>
-          <div class="agents-metric {{ webhookDeliveryMetricClass }}">
+          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ webhookDeliveryMetricClass }}">
             <div class="label">Webhook delivery</div>
             <div class="value">{{ webhookEnabled ? 'On' : 'Off' }}</div>
           </div>
-          <div class="agents-metric {{ warningMetricClass }}">
+          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ warningMetricClass }}">
             <div class="label">Security warnings</div>
             <div class="value">{{ overviewWarnings }}</div>
           </div>
-          <div class="agents-metric {{ errorMetricClass }}">
+          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ errorMetricClass }}">
             <div class="label">Security errors</div>
             <div class="value">{{ overviewErrors }}</div>
+          </div>
           </div>
         </div>
       </section>
@@ -191,26 +193,28 @@
 
       <section class="border rounded p-3">
         <h2 class="h4">Readiness Summary</h2>
-        <div class="agents-metric-grid">
-          <div class="agents-metric {{ readinessTabScoreClass }}">
+        <div class="agents-metric-strip-wrap">
+          <div class="agents-metric-strip">
+          <div class="agents-metric agents-metric-strip-card {{ readinessTabScoreClass }}">
             <div class="label">Overall score</div>
             <div class="value">{{ readinessTabScore }}/100</div>
           </div>
-          <div class="agents-metric {{ readinessTabStatusClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ readinessTabStatusClass }}">
             <div class="label">Status</div>
             <div class="value">{{ readinessSummary.status|default('unknown') }}</div>
           </div>
-          <div class="agents-metric {{ readinessTabWarningsClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ readinessTabWarningsClass }}">
             <div class="label">Warnings</div>
             <div class="value">{{ readinessTabWarnings }}</div>
           </div>
-          <div class="agents-metric {{ readinessTabConsumerCountClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ readinessTabConsumerCountClass }}">
             <div class="label">Sync integrations</div>
             <div class="value">{{ readinessTabConsumerCount }}</div>
           </div>
-          <div class="agents-metric {{ readinessTabLagClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ readinessTabLagClass }}">
             <div class="label">Max lag</div>
             <div class="value">{{ readinessTabMaxLagSeconds }}s</div>
+          </div>
           </div>
         </div>
       </section>
@@ -221,22 +225,24 @@
 
       <section class="border rounded p-3">
         <h2 class="h4">Needs Attention Now</h2>
-        <div class="agents-metric-grid">
-          <div class="agents-metric {{ reliabilityStatusClass }}">
+        <div class="agents-metric-strip-wrap">
+          <div class="agents-metric-strip">
+          <div class="agents-metric agents-metric-strip-card {{ reliabilityStatusClass }}">
             <div class="label">Reliability status</div>
             <div class="value">{{ reliabilityStatus|upper }}</div>
           </div>
-          <div class="agents-metric {{ reliabilitySignalsCritical > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
+          <div class="agents-metric agents-metric-strip-card {{ reliabilitySignalsCritical > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
             <div class="label">Critical signals</div>
             <div class="value">{{ reliabilitySignalsCritical }}</div>
           </div>
-          <div class="agents-metric {{ reliabilitySignalsWarn > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
+          <div class="agents-metric agents-metric-strip-card {{ reliabilitySignalsWarn > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
             <div class="label">Warning signals</div>
             <div class="value">{{ reliabilitySignalsWarn }}</div>
           </div>
-          <div class="agents-metric {{ reliabilitySignalsEvaluated > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
+          <div class="agents-metric agents-metric-strip-card {{ reliabilitySignalsEvaluated > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
             <div class="label">Signals evaluated</div>
             <div class="value">{{ reliabilitySignalsEvaluated }}</div>
+          </div>
           </div>
         </div>
 
@@ -377,42 +383,44 @@
       <section class="border rounded p-3">
         <h2 class="h4">Telemetry Snapshot</h2>
         <p class="agents-subtle">Derived from the runtime observability surface (`GET /agents/v1/metrics`). Generated at {{ observabilitySummary.generatedAt|default('n/a') }}.</p>
-        <div class="agents-metric-grid">
-          <div class="agents-metric {{ telemetryRequestsClass }}">
+        <div class="agents-metric-strip-wrap">
+          <div class="agents-metric-strip">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryRequestsClass }}">
             <div class="label">Guarded requests</div>
             <div class="value">{{ telemetryRequestsTotal }}</div>
           </div>
-          <div class="agents-metric {{ telemetryAuthFailuresClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryAuthFailuresClass }}">
             <div class="label">Auth failures</div>
             <div class="value">{{ telemetryAuthFailures }}</div>
           </div>
-          <div class="agents-metric {{ telemetryForbiddenClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryForbiddenClass }}">
             <div class="label">Scope denials (403)</div>
             <div class="value">{{ telemetryForbidden }}</div>
           </div>
-          <div class="agents-metric {{ telemetryRateLimitClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryRateLimitClass }}">
             <div class="label">Rate-limit denials</div>
             <div class="value">{{ telemetryRateLimit }}</div>
           </div>
-          <div class="agents-metric {{ telemetryErrors5xxClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryErrors5xxClass }}">
             <div class="label">Server errors (5xx)</div>
             <div class="value">{{ telemetryErrors5xx }}</div>
           </div>
-          <div class="agents-metric {{ telemetryQueueDepthClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryQueueDepthClass }}">
             <div class="label">Queue depth</div>
             <div class="value">{{ telemetryQueueDepth }}</div>
           </div>
-          <div class="agents-metric {{ telemetryDlqFailedClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryDlqFailedClass }}">
             <div class="label">DLQ failed events</div>
             <div class="value">{{ telemetryDlqFailed }}</div>
           </div>
-          <div class="agents-metric {{ telemetryConsumerLagClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryConsumerLagClass }}">
             <div class="label">Max sync-state lag</div>
             <div class="value">{{ telemetryConsumerLagMaxSeconds }}s</div>
           </div>
-          <div class="agents-metric {{ telemetryActiveCredentialsClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ telemetryActiveCredentialsClass }}">
             <div class="label">Active credentials (7d)</div>
             <div class="value">{{ telemetryActiveCredentials7d }}</div>
+          </div>
           </div>
         </div>
 
@@ -522,48 +530,102 @@
         <p class="agents-subtle">Refresh cache after content or settings changes.</p>
       </section>
 
-      <div class="agents-grid">
+      <div class="agents-discovery-doc-grid">
         {% for key, document in discoveryStatus.documents %}
-          <section class="border rounded p-3">
-            <h2 class="h4">{{ document.name }}</h2>
-            <p>
+          {% set discoveryKey = key|default('') %}
+          {% set bodyFieldName = discoveryKey == 'llms' ? 'llmsTxtBody' : (discoveryKey == 'commerce' ? 'commerceTxtBody' : '') %}
+          {% set bodyLock = discoveryKey == 'llms'
+            ? (discoverySettingsLocks.llmsTxtBodySettingLocked ?? false)
+            : (discoveryKey == 'commerce' ? (discoverySettingsLocks.commerceTxtBodySettingLocked ?? false) : true) %}
+          {% set canEditBody = bodyFieldName != '' and not bodyLock %}
+          {% set configuredBody = bodyFieldName != '' ? (attribute(discoverySettings, bodyFieldName)|default('')) : '' %}
+          {% set bodyValue = (document.body is defined and document.body is not same as(null)) ? document.body : '' %}
+          {% set previewValue = bodyValue != '' ? bodyValue : (configuredBody != '' ? configuredBody : (document.preview ?: '# Disabled')) %}
+          {% set refreshTarget = discoveryKey == 'llms' ? 'llms' : (discoveryKey == 'commerce' ? 'commerce' : 'llms-full') %}
+          {% set toggleEnableField = discoveryKey == 'llms' ? 'enableLlmsTxt' : (discoveryKey == 'commerce' ? 'enableCommerceTxt' : 'enableLlmsFullTxt') %}
+
+          <section class="agents-discovery-doc-card">
+            <div class="agents-discovery-doc-card-head">
+              <h2 class="agents-discovery-doc-card-title">{{ document.name }}</h2>
               <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
-              <strong>{{ document.enabled ? 'Enabled' : 'Disabled' }}</strong>
-              <span class="agents-subtle">({{ document.path }})</span>
-            </p>
+            </div>
 
-            <table class="data fullwidth" style="margin-bottom: 8px;">
-              <tbody>
-              <tr>
-                <th>URL</th>
-                <td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td>
-              </tr>
-              <tr>
-                <th>Last Modified</th>
-                <td>{{ document.lastModified ?: 'n/a' }}</td>
-              </tr>
-              <tr>
-                <th>Cache TTL</th>
-                <td>{{ document.cacheTtlSeconds }} seconds</td>
-              </tr>
-              </tbody>
-            </table>
+            <div class="agents-discovery-doc-meta">
+              <div><strong>URL:</strong> <a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.path }}</a></div>
+              <div><strong>Last Modified:</strong> <span>{{ document.lastModified ?: 'n/a' }}</span></div>
+              <div><strong>Cache TTL:</strong> <span>{{ document.cacheTtlSeconds }} seconds</span></div>
+            </div>
 
-            <details class="agents-advanced" style="margin-bottom: 8px;">
-              <summary><strong>Preview</strong></summary>
-              <pre class="rounded p-3" style="border: 1px solid #d1d5db; background: #f9fafb;"><code style="background: transparent; color: inherit;">{{ document.preview ?: '# Disabled' }}</code></pre>
-            </details>
+            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-editor" id="discovery-editor-{{ discoveryKey }}">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/save-settings') }}
+              {{ redirectInput('agents/dashboard/discovery') }}
+              <textarea
+                class="agents-discovery-doc-preview"
+                name="{{ bodyFieldName ?: '_readonlyPreview' }}"
+                rows="12"
+                {% if not canEditBody %}readonly{% endif %}
+              >{{ previewValue }}</textarea>
+              {% if bodyFieldName == '' %}
+                <p class="agents-subtle" style="margin: 8px 0 0;">This document is generated-only and cannot be edited inline.</p>
+              {% elseif bodyLock %}
+                <p class="agents-subtle" style="margin: 8px 0 0;">Inline edit is locked by <code>config/agents.php</code>.</p>
+              {% endif %}
 
-            <details class="agents-advanced">
-              <summary><strong>Details</strong></summary>
-              <table class="data fullwidth" style="margin-top: 8px;">
-                <tbody>
-                <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
-                <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
-                <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
+            </form>
+
+            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-reset-{{ discoveryKey }}">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/save-settings') }}
+              {{ redirectInput('agents/dashboard/discovery') }}
+              <input type="hidden" name="resetDiscoveryBodyTarget" value="{{ discoveryKey == 'commerce' ? 'commerce' : 'llms' }}">
+            </form>
+            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-refresh-{{ discoveryKey }}">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/prewarm-discovery') }}
+              {{ redirectInput('agents/dashboard/discovery') }}
+              <input type="hidden" name="target" value="{{ refreshTarget }}">
+            </form>
+            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-toggle-{{ discoveryKey }}">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/save-settings') }}
+              {{ redirectInput('agents/dashboard/discovery') }}
+              <input type="hidden" name="{{ toggleEnableField }}" value="{{ document.enabled ? 0 : 1 }}">
+            </form>
+
+            <div class="agents-discovery-doc-actions">
+              {% if canEditBody %}
+                <button class="btn submit" type="submit" form="discovery-editor-{{ discoveryKey }}">Save</button>
+              {% endif %}
+              <div class="agents-discovery-doc-btn-group">
+                <button
+                  class="btn agents-discovery-doc-btn"
+                  type="submit"
+                  form="discovery-reset-{{ discoveryKey }}"
+                  {% if bodyFieldName == '' or bodyLock %}disabled{% endif %}
+                >Reset</button>
+                <button class="btn agents-discovery-doc-btn" type="submit" form="discovery-refresh-{{ discoveryKey }}">Refresh</button>
+              </div>
+              <button
+                class="btn agents-discovery-doc-btn"
+                type="submit"
+                form="discovery-toggle-{{ discoveryKey }}"
+              >{{ document.enabled ? 'Disable' : 'Enable' }}</button>
+            </div>
+
+            <div class="agents-discovery-doc-details-row">
+              <details class="agents-advanced agents-discovery-doc-details">
+                <summary><strong>Details</strong></summary>
+                <table class="data fullwidth" style="margin-top: 8px;">
+                  <tbody>
+                  <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
+                  <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
+                  <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
+                  <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
                 </tbody>
-              </table>
-            </details>
+                </table>
+              </details>
+            </div>
           </section>
         {% endfor %}
       </div>
@@ -571,7 +633,7 @@
       <section class="border rounded p-3">
         <h2 class="h4">Editing Path</h2>
         <ul class="agents-link-list">
-          <li>Use <strong>Settings</strong> for custom body edits to <code>llms.txt</code> and <code>commerce.txt</code>.</li>
+          <li>Edit <code>llms.txt</code> and <code>commerce.txt</code> directly in the cards above.</li>
           <li>Use <code>config/agents.php</code> when you need environment-level overrides/lock-state.</li>
           <li>Use this tab for refresh and verification only.</li>
           <li>Do not place secrets in discovery documents.</li>
@@ -610,26 +672,28 @@
 
       <section class="border rounded p-3">
         <h2 class="h4">Security Snapshot</h2>
-        <div class="agents-metric-grid">
-          <div class="agents-metric {{ securityTokenRequiredClass }}">
+        <div class="agents-metric-strip-wrap">
+          <div class="agents-metric-strip">
+          <div class="agents-metric agents-metric-strip-card {{ securityTokenRequiredClass }}">
             <div class="label">Token required</div>
             <div class="value">{{ securityTokenRequired ? 'Yes' : 'No' }}</div>
           </div>
-          <div class="agents-metric {{ securityCredentialCountClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ securityCredentialCountClass }}">
             <div class="label">Active credentials</div>
             <div class="value">{{ securityCredentialCount }}</div>
           </div>
-          <div class="agents-metric {{ securityWarningsClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ securityWarningsClass }}">
             <div class="label">Warnings</div>
             <div class="value">{{ securityWarnings }}</div>
           </div>
-          <div class="agents-metric {{ securityErrorsClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ securityErrorsClass }}">
             <div class="label">Errors</div>
             <div class="value">{{ securityErrors }}</div>
           </div>
-          <div class="agents-metric {{ securityDlqClass }}">
+          <div class="agents-metric agents-metric-strip-card {{ securityDlqClass }}">
             <div class="label">DLQ events</div>
             <div class="value">{{ securityDlqCount }}</div>
+          </div>
           </div>
         </div>
       </section>
@@ -791,4 +855,145 @@
       </section>
     {% endif %}
   </div>
+
+  {% css %}
+    .agents-discovery-doc-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 960px) {
+      .agents-discovery-doc-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .agents-discovery-doc-card {
+      border: 1px solid #bfc9d6;
+      border-radius: 6px;
+      background: #ffffff;
+      box-shadow: 0 4px 4px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .agents-discovery-doc-card-head {
+      padding: 12px 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .agents-discovery-doc-card-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 700;
+      color: #596673;
+    }
+
+    .agents-discovery-doc-meta {
+      padding: 0 12px 20px;
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      line-height: 1.35;
+      color: #596673;
+    }
+
+    .agents-discovery-doc-editor {
+      margin: 0;
+      padding: 0;
+      display: block;
+    }
+
+    .agents-discovery-doc-preview {
+      width: 100%;
+      min-height: 220px;
+      border: 0;
+      border-radius: 0;
+      background: #e5ebf2;
+      color: inherit;
+      padding: 12px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      box-shadow: none;
+    }
+
+    .agents-discovery-doc-preview[readonly] {
+      background: #e3e9f0;
+      cursor: default;
+    }
+
+    .agents-discovery-doc-actions {
+      padding: 10px 12px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
+
+    .agents-discovery-doc-inline-form {
+      margin: 0;
+      display: inline-flex;
+    }
+
+    .agents-discovery-doc-btn.btn {
+      border: 0;
+      box-shadow: none;
+      background: #d4dbe4;
+      color: #000000;
+      border-radius: 4px;
+      padding: 7px 10px;
+      font-size: 12px;
+      line-height: 1;
+      min-height: 30px;
+      white-space: nowrap;
+    }
+
+    .agents-discovery-doc-btn.btn:hover,
+    .agents-discovery-doc-btn.btn:focus {
+      background: #c6cfda;
+      color: #000000;
+    }
+
+    .agents-discovery-doc-btn.btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: #d4dbe4;
+      color: #000000;
+    }
+
+    .agents-discovery-doc-btn-group {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .agents-discovery-doc-btn-group .agents-discovery-doc-btn.btn + .agents-discovery-doc-btn.btn {
+      margin-left: 1px;
+    }
+
+    .agents-discovery-doc-btn-group .agents-discovery-doc-btn.btn {
+      border-radius: 0;
+    }
+
+    .agents-discovery-doc-details-row {
+      padding: 0 12px 12px;
+    }
+
+    .agents-discovery-doc-details-row .agents-advanced > summary {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+  {% endcss %}
 {% endblock %}

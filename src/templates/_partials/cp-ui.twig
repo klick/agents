@@ -85,6 +85,85 @@
     color: #18212a;
   }
 
+  .agents-metric-strip-wrap {
+    overflow-x: auto;
+    margin-top: 0;
+    background: #ffffff;
+    width: 100%;
+  }
+
+  .agents-metric-strip {
+    display: flex;
+    flex-wrap: nowrap;
+    width: max-content;
+    min-width: 100%;
+    background: #ffffff;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card {
+    border: 0;
+    padding: 10px 12px 8px;
+    border-top: 1px solid #c8d0da;
+    border-bottom: 1px solid #c8d0da;
+    border-right: 1px solid #c8d0da;
+    border-radius: 0;
+    min-height: 70px;
+    background: #ffffff;
+    box-shadow: none;
+    flex: 1 0 170px;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card:first-child {
+    border-left: 1px solid #c8d0da;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card:last-child {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card .label {
+    font-size: 13px;
+    line-height: 1.3;
+    color: inherit;
+    margin: 0 0 6px;
+    white-space: nowrap;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card .value {
+    font-size: 20px;
+    line-height: 1;
+    font-weight: 600;
+    color: inherit;
+    margin: 0;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card.agents-metric--good {
+    background: #ffffff;
+    box-shadow: none;
+    border-color: #c8d0da;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card.agents-metric--warn {
+    background: #fffbef;
+    box-shadow: none;
+    border-color: #c8d0da;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card.agents-metric--bad {
+    background: #f8e2e2;
+    box-shadow: none;
+    border-color: #c8d0da;
+  }
+
+  .agents-metric-strip .agents-metric-strip-card.agents-metric--good .value,
+  .agents-metric-strip .agents-metric-strip-card.agents-metric--warn .value,
+  .agents-metric-strip .agents-metric-strip-card.agents-metric--bad .value {
+    color: inherit;
+  }
+
   .agents-two-col {
     display: grid;
     gap: 16px;

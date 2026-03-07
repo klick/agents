@@ -5,8 +5,8 @@
 {% set llmsFullTxtSettingLocked = llmsFullTxtSettingLocked ?? false %}
 {% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}
 {% set credentialUsageIndicatorSettingLocked = credentialUsageIndicatorSettingLocked ?? false %}
-{% set llmsTxtBodySettingLocked = llmsTxtBodySettingLocked ?? false %}
-{% set commerceTxtBodySettingLocked = commerceTxtBodySettingLocked ?? false %}
+{% set reliabilityConsumerLagWarnSecondsLocked = reliabilityConsumerLagWarnSecondsLocked ?? false %}
+{% set reliabilityConsumerLagCriticalSecondsLocked = reliabilityConsumerLagCriticalSecondsLocked ?? false %}
 
 <section class="border rounded p-3">
   <h2 class="h4">Runtime Switches</h2>
@@ -79,43 +79,36 @@
 
 
 <section class="border rounded p-3">
-  <h2 class="h4">Discovery Body Overrides</h2>
-  <p class="agents-subtle">Use custom bodies only when you need fixed text output instead of generated content.</p>
+  <h2 class="h4">Reliability Thresholds</h2>
+  <p class="agents-subtle">Tune reliability alert sensitivity for your sync cadence.</p>
 
-  {{ forms.textareaField({
-    label: 'llms.txt custom body',
-    instructions: llmsTxtBodySettingLocked
-      ? 'Controlled by config/agents.php (`llmsTxtBody`).'
-      : 'Optional. Leave blank to use generated output. If set, this body is served exactly.',
-    name: 'llmsTxtBody',
-    rows: 12,
-    class: 'code',
-    value: settings.llmsTxtBody ?? '',
-    disabled: llmsTxtBodySettingLocked,
+  {{ forms.autosuggestField({
+    label: 'Sync-state lag warn threshold (seconds)',
+    instructions: reliabilityConsumerLagWarnSecondsLocked
+      ? 'Controlled by config/agents.php (`reliabilityConsumerLagWarnSeconds`).'
+      : 'Signal turns WARN when max sync-state lag is greater than this value.',
+    id: 'reliabilityConsumerLagWarnSeconds',
+    name: 'reliabilityConsumerLagWarnSeconds',
+    value: settings.reliabilityConsumerLagWarnSeconds ?? 300,
+    suggestEnvVars: true,
+    placeholder: '300',
+    disabled: reliabilityConsumerLagWarnSecondsLocked,
   }) }}
-  <p style="margin-top: -8px; margin-bottom: 16px;">
-    <button class="btn" type="submit" name="resetDiscoveryBodyTarget" value="llms"{% if llmsTxtBodySettingLocked %} disabled{% endif %}>
-      Reset llms.txt body to generated default
-    </button>
-  </p>
 
-  {{ forms.textareaField({
-    label: 'commerce.txt custom body',
-    instructions: commerceTxtBodySettingLocked
-      ? 'Controlled by config/agents.php (`commerceTxtBody`).'
-      : 'Optional. Leave blank to use generated output. If set, this body is served exactly.',
-    name: 'commerceTxtBody',
-    rows: 12,
-    class: 'code',
-    value: settings.commerceTxtBody ?? '',
-    disabled: commerceTxtBodySettingLocked,
+  {{ forms.autosuggestField({
+    label: 'Sync-state lag critical threshold (seconds)',
+    instructions: reliabilityConsumerLagCriticalSecondsLocked
+      ? 'Controlled by config/agents.php (`reliabilityConsumerLagCriticalSeconds`).'
+      : 'Signal turns CRITICAL when max sync-state lag is greater than this value. Must be higher than warn threshold.',
+    id: 'reliabilityConsumerLagCriticalSeconds',
+    name: 'reliabilityConsumerLagCriticalSeconds',
+    value: settings.reliabilityConsumerLagCriticalSeconds ?? 900,
+    suggestEnvVars: true,
+    placeholder: '900',
+    disabled: reliabilityConsumerLagCriticalSecondsLocked,
   }) }}
-  <p style="margin-top: -8px;">
-    <button class="btn" type="submit" name="resetDiscoveryBodyTarget" value="commerce"{% if commerceTxtBodySettingLocked %} disabled{% endif %}>
-      Reset commerce.txt body to generated default
-    </button>
-  </p>
 </section>
+
 
 {% if requestsFeatureEnabled %}
   <section class="border rounded p-3">
@@ -134,7 +127,7 @@
   </section>
 {% endif %}
 
-{% if agentsEnabledLocked or credentialUsageIndicatorSettingLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
+{% if agentsEnabledLocked or credentialUsageIndicatorSettingLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
   <section class="border rounded p-3 warning">
     <h2 class="h4">Configuration Locks</h2>
     {% if agentsEnabledLocked %}
@@ -143,8 +136,11 @@
     {% if credentialUsageIndicatorSettingLocked %}
       <p>`enableCredentialUsageIndicator` is controlled by <code>config/agents.php</code>.</p>
     {% endif %}
-    {% if llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or llmsTxtBodySettingLocked or commerceTxtBodySettingLocked %}
+    {% if llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked %}
       <p>Some discovery settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
+    {% endif %}
+    {% if reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
+      <p>Some reliability thresholds are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
     {% endif %}
   </section>
 {% endif %}
