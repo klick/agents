@@ -1,6 +1,6 @@
 {% import '_includes/forms' as forms %}
 
-{% set requestsFeatureEnabled = refundApprovalsExperimentalEnabled ?? false %}
+{% set requestsFeatureEnabled = returnRequestsCpEnabled ?? false %}
 {% set llmsTxtSettingLocked = llmsTxtSettingLocked ?? false %}
 {% set llmsFullTxtSettingLocked = llmsFullTxtSettingLocked ?? false %}
 {% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}
@@ -26,10 +26,10 @@
   }) }}
 
   {{ forms.lightswitchField({
-    label: 'Enable live usage indicator on Agent cards',
+    label: 'Enable live usage indicator on Account cards',
     instructions: credentialUsageIndicatorSettingLocked
       ? 'Controlled by config/agents.php (`enableCredentialUsageIndicator`).'
-      : 'Show temporary yellow activity color on an Agent card dot when that key is used.',
+      : 'Show temporary yellow activity color on an Account card dot when that key is used.',
     name: 'enableCredentialUsageIndicator',
     on: settings.enableCredentialUsageIndicator ?? true,
     onLabel: false,

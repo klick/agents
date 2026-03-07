@@ -24,6 +24,7 @@ class CredentialService extends Component
     private ?bool $supportsExpiryColumns = null;
     private ?bool $supportsIpAllowlistColumn = null;
     private ?bool $supportsPauseColumn = null;
+    private ?bool $supportsOwnerColumn = null;
 
     public function getManagedCredentialsForRuntime(array $defaultScopes): array
     {
@@ -93,6 +94,7 @@ class CredentialService extends Component
                 'id' => (int)($row['id'] ?? 0),
                 'handle' => (string)($row['handle'] ?? ''),
                 'displayName' => (string)($row['displayName'] ?? ''),
+                'owner' => $this->supportsOwnerColumn() ? $this->normalizeOwner($row['owner'] ?? null) : '',
                 'tokenPrefix' => (string)($row['tokenPrefix'] ?? ''),
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
@@ -168,6 +170,7 @@ class CredentialService extends Component
     public function createManagedCredential(
         string $handle,
         string $displayName,
+        string $owner,
         string $rawToken,
         array $scopes,
         array $defaultScopes,
@@ -186,6 +189,7 @@ class CredentialService extends Component
         }
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $normalizedHandle);
+        $normalizedOwner = $this->normalizeOwner($owner);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
         $normalizedExpiryPolicy = $this->resolveCreateExpiryPolicy($expiryPolicy);
@@ -232,6 +236,9 @@ class CredentialService extends Component
         ];
         if ($this->supportsPauseColumn()) {
             $insertData['pausedAt'] = null;
+        }
+        if ($this->supportsOwnerColumn()) {
+            $insertData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
         }
         if ($this->supportsWebhookSubscriptionColumns()) {
             $insertData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
@@ -394,6 +401,7 @@ class CredentialService extends Component
     public function updateManagedCredential(
         int $id,
         string $displayName,
+        string $owner,
         array $scopes,
         array $defaultScopes,
         array $webhookSubscriptions = [],
@@ -419,6 +427,7 @@ class CredentialService extends Component
         }
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $handle);
+        $normalizedOwner = $this->normalizeOwner($owner);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
         $normalizedExpiryPolicy = $this->resolveUpdateExpiryPolicy($row, $expiryPolicy);
@@ -435,6 +444,9 @@ class CredentialService extends Component
         if ($this->supportsWebhookSubscriptionColumns()) {
             $updateData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
             $updateData['webhookActions'] = $this->encodeJson($normalizedWebhookSubscriptions['actions']);
+        }
+        if ($this->supportsOwnerColumn()) {
+            $updateData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
         }
         if ($this->supportsExpiryColumns()) {
             $updateData['expiresAt'] = $normalizedExpiryPolicy['expiresAt'];
@@ -627,6 +639,22 @@ class CredentialService extends Component
         return $this->supportsPauseColumn;
     }
 
+    private function supportsOwnerColumn(): bool
+    {
+        if ($this->supportsOwnerColumn !== null) {
+            return $this->supportsOwnerColumn;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsOwnerColumn = false;
+            return false;
+        }
+
+        $this->supportsOwnerColumn = $schema->getColumn('owner') !== null;
+        return $this->supportsOwnerColumn;
+    }
+
     private function normalizeHandle(string $value): string
     {
         $normalized = strtolower(trim($value));
@@ -644,6 +672,24 @@ class CredentialService extends Component
             $name = substr($name, 0, 255);
         }
         return $name;
+    }
+
+    private function normalizeOwner(mixed $value): string
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return '';
+        }
+
+        $owner = trim((string)$value);
+        if ($owner === '') {
+            return '';
+        }
+
+        if (strlen($owner) > 255) {
+            $owner = substr($owner, 0, 255);
+        }
+
+        return $owner;
     }
 
     private function normalizeProvidedToken(string $value): string

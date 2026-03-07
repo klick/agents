@@ -121,6 +121,37 @@ class DiagnosticsBundleService extends Component
                 'metrics' => [],
             ]
         );
+        $reliabilitySnapshot = $this->capture(
+            'reliability.signals',
+            fn(): array => $plugin->getReliabilitySignalService()->evaluateSnapshot((array)$observabilitySnapshot),
+            $collectionErrors,
+            [
+                'status' => 'ok',
+                'thresholdsVersion' => 'reliability-thresholds-v1',
+                'generatedAt' => $generatedAt,
+                'summary' => [
+                    'signalsEvaluated' => 0,
+                    'signalsWarn' => 0,
+                    'signalsCritical' => 0,
+                    'signalsOk' => 0,
+                ],
+                'topSignals' => [],
+                'signals' => [],
+            ]
+        );
+        $lifecycleSnapshot = $this->capture(
+            'lifecycle.governance',
+            fn(): array => $plugin->getLifecycleGovernanceService()->getSnapshot(),
+            $collectionErrors,
+            [
+                'service' => 'agents',
+                'generatedAt' => $generatedAt,
+                'status' => 'unknown',
+                'summary' => [],
+                'topRisks' => [],
+                'agents' => [],
+            ]
+        );
         $adoptionSnapshot = $this->capture(
             'adoption.metrics',
             fn(): array => $adoptionService->getSnapshot($defaultScopes),
@@ -190,6 +221,18 @@ class DiagnosticsBundleService extends Component
             'summary' => [
                 'checks' => $checkSummary,
                 'collectionErrors' => count($collectionErrors),
+                'reliability' => [
+                    'status' => (string)($reliabilitySnapshot['status'] ?? 'ok'),
+                    'signalsWarn' => (int)($reliabilitySnapshot['summary']['signalsWarn'] ?? 0),
+                    'signalsCritical' => (int)($reliabilitySnapshot['summary']['signalsCritical'] ?? 0),
+                    'topSignals' => count((array)($reliabilitySnapshot['topSignals'] ?? [])),
+                ],
+                'lifecycle' => [
+                    'status' => (string)($lifecycleSnapshot['status'] ?? 'unknown'),
+                    'agents' => (int)($lifecycleSnapshot['summary']['total'] ?? 0),
+                    'riskWarn' => (int)($lifecycleSnapshot['summary']['riskWarn'] ?? 0),
+                    'riskCritical' => (int)($lifecycleSnapshot['summary']['riskCritical'] ?? 0),
+                ],
             ],
             'snapshots' => [
                 'security' => $securityPosture,
@@ -202,6 +245,8 @@ class DiagnosticsBundleService extends Component
                 'consumers' => $consumerLagSnapshot,
                 'webhooks' => $deadLetterSummary,
                 'observability' => $observabilitySnapshot,
+                'reliability' => $reliabilitySnapshot,
+                'lifecycle' => $lifecycleSnapshot,
                 'adoption' => $adoptionSnapshot,
             ],
             'collectionErrors' => $collectionErrors,
@@ -560,7 +605,7 @@ class DiagnosticsBundleService extends Component
             return $schemaVersion;
         }
 
-        return '0.6.2';
+        return '0.9.2';
     }
 
     private function normalizeOptionalString(mixed $value, int $maxLength): ?string

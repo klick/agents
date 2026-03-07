@@ -25,9 +25,13 @@ use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiagnosticsBundleService;
 use Klick\Agents\services\DiscoveryTxtService;
+use Klick\Agents\services\LifecycleGovernanceService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
+use Klick\Agents\services\ReliabilitySignalService;
 use Klick\Agents\services\SecurityPolicyService;
+use Klick\Agents\services\StarterPackService;
+use Klick\Agents\services\TemplateCatalogService;
 use Klick\Agents\services\WebhookService;
 
 class Plugin extends BasePlugin
@@ -44,7 +48,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.8.5';
+    public string $schemaVersion = '0.9.2';
 
     public static ?self $plugin = null;
 
@@ -63,7 +67,11 @@ class Plugin extends BasePlugin
             'consumerLagService' => ConsumerLagService::class,
             'adoptionMetricsService' => AdoptionMetricsService::class,
             'observabilityMetricsService' => ObservabilityMetricsService::class,
+            'reliabilitySignalService' => ReliabilitySignalService::class,
+            'lifecycleGovernanceService' => LifecycleGovernanceService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
+            'templateCatalogService' => TemplateCatalogService::class,
+            'starterPackService' => StarterPackService::class,
         ]);
         $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
@@ -96,19 +104,19 @@ class Plugin extends BasePlugin
                 'url' => 'agents/dashboard',
             ],
         ];
-        if ($this->isRefundApprovalsExperimentalEnabled()) {
+        if ($this->isReturnRequestsCpEnabled()) {
             $subnav['control'] = [
                 'label' => 'Return Requests',
                 'url' => 'agents/control',
             ];
         }
+        $subnav['credentials'] = [
+            'label' => 'Accounts',
+            'url' => 'agents/credentials',
+        ];
         $subnav['settings'] = [
             'label' => 'Settings',
             'url' => 'agents/settings',
-        ];
-        $subnav['credentials'] = [
-            'label' => 'Agents',
-            'url' => 'agents/credentials',
         ];
         $item['subnav'] = $subnav;
 
@@ -134,7 +142,7 @@ class Plugin extends BasePlugin
                 'agents/dashboard/security' => 'agents/dashboard/dashboard',
                 'agents/health' => 'agents/dashboard/health',
             ];
-            if ($this->isRefundApprovalsExperimentalEnabled()) {
+            if ($this->isReturnRequestsCpEnabled()) {
                 $rules['agents/control'] = 'agents/dashboard/control';
             }
 
@@ -182,13 +190,18 @@ class Plugin extends BasePlugin
                 'agents/v1/users/show' => 'agents/api/user-show',
                 'agents/v1/changes' => 'agents/api/changes',
                 'agents/v1/sections' => 'agents/api/sections',
+                'agents/v1/templates' => 'agents/api/templates',
+                'agents/v1/starter-packs' => 'agents/api/starter-packs',
                 'agents/v1/schema' => 'agents/api/schema',
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
                 'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics',
                 'agents/v1/metrics' => 'agents/api/metrics',
+                'agents/v1/lifecycle' => 'agents/api/lifecycle',
                 'agents/v1/diagnostics/bundle' => 'agents/api/diagnostics-bundle',
+                'agents/v1/sync-state/checkpoint' => 'agents/api/consumers-checkpoint',
+                'agents/v1/sync-state/lag' => 'agents/api/consumers-lag',
                 'agents/v1/consumers/checkpoint' => 'agents/api/consumers-checkpoint',
                 'agents/v1/consumers/lag' => 'agents/api/consumers-lag',
                 'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
@@ -275,10 +288,38 @@ class Plugin extends BasePlugin
         return $service;
     }
 
+    public function getReliabilitySignalService(): ReliabilitySignalService
+    {
+        /** @var ReliabilitySignalService $service */
+        $service = $this->get('reliabilitySignalService');
+        return $service;
+    }
+
+    public function getLifecycleGovernanceService(): LifecycleGovernanceService
+    {
+        /** @var LifecycleGovernanceService $service */
+        $service = $this->get('lifecycleGovernanceService');
+        return $service;
+    }
+
+    public function getStarterPackService(): StarterPackService
+    {
+        /** @var StarterPackService $service */
+        $service = $this->get('starterPackService');
+        return $service;
+    }
+
     public function getDiagnosticsBundleService(): DiagnosticsBundleService
     {
         /** @var DiagnosticsBundleService $service */
         $service = $this->get('diagnosticsBundleService');
+        return $service;
+    }
+
+    public function getTemplateCatalogService(): TemplateCatalogService
+    {
+        /** @var TemplateCatalogService $service */
+        $service = $this->get('templateCatalogService');
         return $service;
     }
 
@@ -330,6 +371,16 @@ class Plugin extends BasePlugin
         return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL');
     }
 
+    /**
+     * CP Return Requests remains internal-only until at least one concrete
+     * adapter/workflow is implemented end-to-end.
+     */
+    public function isReturnRequestsCpEnabled(): bool
+    {
+        return $this->isRefundApprovalsExperimentalEnabled()
+            && (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_RETURN_REQUESTS_CP_EXPERIMENTAL');
+    }
+
     public function isUsersApiEnabled(): bool
     {
         return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_ENABLE_USERS_API');
@@ -355,7 +406,7 @@ class Plugin extends BasePlugin
             'settings' => $settingsModel,
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
-            'refundApprovalsExperimentalEnabled' => $this->isRefundApprovalsExperimentalEnabled(),
+            'returnRequestsCpEnabled' => $this->isReturnRequestsCpEnabled(),
         ], View::TEMPLATE_MODE_CP);
     }
 
@@ -478,23 +529,23 @@ class Plugin extends BasePlugin
                     'heading' => 'Agents Access',
                     'permissions' => [
                         self::PERMISSION_CREDENTIALS_VIEW => [
-                            'label' => 'View managed agents tab',
+                            'label' => 'View managed accounts tab',
                         ],
                         self::PERMISSION_CREDENTIALS_MANAGE => [
-                            'label' => 'Create and edit managed agents',
+                            'label' => 'Create and edit managed accounts',
                         ],
                         self::PERMISSION_CREDENTIALS_ROTATE => [
-                            'label' => 'Rotate managed agent tokens',
+                            'label' => 'Rotate managed account tokens',
                         ],
                         self::PERMISSION_CREDENTIALS_REVOKE => [
-                            'label' => 'Revoke managed agent tokens',
+                            'label' => 'Revoke managed account tokens',
                         ],
                         self::PERMISSION_CREDENTIALS_DELETE => [
-                            'label' => 'Delete managed agents',
+                            'label' => 'Delete managed accounts',
                         ],
                     ],
                 ];
-                if ($this->isRefundApprovalsExperimentalEnabled()) {
+                if ($this->isReturnRequestsCpEnabled()) {
                     $event->permissions[] = [
                         'heading' => 'Agents Return Requests',
                         'permissions' => [

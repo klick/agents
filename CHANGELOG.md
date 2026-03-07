@@ -4,6 +4,81 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.9.2 - 2026-03-06
+
+### Added
+
+- Added per-agent Owner input in Agents CP create/edit form, with create-mode default prefilled from current CP user email.
+
+### Changed
+
+- Persisted credential owner metadata in managed credential storage and fed it into lifecycle ownership posture (with `.env` metadata-map fallback retained).
+- Added migration `m260306_100000_add_credential_owner_column` and regression coverage for owner-field flows.
+- Simplified Agents CP cards by removing lifecycle inline warning strips and the lifecycle risk table block.
+
+### Fixed
+
+- Fixed token-authenticated machine POST compatibility by disabling CSRF enforcement on API controller endpoints (including `/agents/v1/consumers/checkpoint`).
+
+## 0.9.1 - 2026-03-06
+
+### Changed
+
+- Hidden lifecycle warning surfaces from the Agents CP view by removing the Lifecycle Governance summary block and per-agent warning strips/risk labels from cards.
+- Kept lifecycle governance backend/API/CLI data paths intact so warning UI can be reintroduced without schema or service rollback.
+- Updated lifecycle governance QA assertions to reflect the new CP visibility contract.
+
+## 0.9.0 - 2026-03-06
+
+### Added
+
+- Added canonical template catalog service with API endpoint `GET /agents/v1/templates` (`templates:read`) and CLI command `craft agents/template-catalog`.
+- Added schema/OpenAPI-linked reference automation docs and JSON fixtures for the three canonical first jobs.
+- Added dedicated regression check (`scripts/qa/reference-automations-regression-check.sh`) and integrated it into the release gate.
+- Added starter-pack catalog service with API endpoint `GET /agents/v1/starter-packs` (`templates:read`) and CLI command `craft agents/starter-packs` for copy/paste runtime snippets (`curl`, `javascript`, `python`).
+- Added integration starter-pack docs at `docs/integration-starter-packs.md`.
+- Added reliability threshold evaluation service with read-only triage summaries embedded in `GET /agents/v1/metrics`.
+- Added CLI reliability snapshot check (`craft agents/reliability-check`) with strict mode support for CI/operator gates.
+- Added dedicated reliability regression check (`scripts/qa/reliability-pack-regression-check.sh`) and integrated it into the release gate.
+- Added lifecycle governance service with API endpoint `GET /agents/v1/lifecycle` (`lifecycle:read`) and CLI command `craft agents/lifecycle-report`.
+- Added lifecycle governance operator docs (`docs/agent-lifecycle-governance.md`) and VitePress troubleshooting page for ownership/risk posture workflows.
+- Added dedicated lifecycle governance regression check (`scripts/qa/lifecycle-governance-regression-check.sh`) and integrated it into the release gate.
+
+### Changed
+
+- Extended capability/openapi/schema contracts to advertise and describe template catalog usage for integrators.
+- Enriched diagnostics bundle output with reliability summary/signal snapshots for faster incident triage.
+- Enriched diagnostics bundle output with lifecycle status/summary snapshots for ownership and stale-agent triage.
+- Updated Dashboard Readiness tab with “Needs Attention Now” triage signals and threshold-driven runbook guidance.
+- Updated observability runbook thresholds and response playbooks for reliability signals.
+- Updated Agents CP view with lifecycle governance summary cards and per-agent risk factor visibility.
+- Hid CP Return Requests tab/routes/permissions by default behind an internal CP-only flag (`PLUGIN_AGENTS_RETURN_REQUESTS_CP_EXPERIMENTAL`) while keeping control-plane API/data internals unchanged.
+
+## 0.8.7 - 2026-03-05
+
+### Changed
+
+- Reordered Control Panel subnavigation to place `Agents` directly below `Dashboard` for faster operator access.
+
+## 0.8.6 - 2026-03-05
+
+### Added
+
+- Added CP runtime setting `enableCredentialUsageIndicator` to toggle live per-agent usage activity indicators on the Agents cards.
+- Added managed-agent pause state persistence (`pausedAt`) with migration `m260305_110000_add_credential_pause_column`.
+- Added pause/resume lifecycle actions for managed agents in CP and runtime credential filtering.
+
+### Changed
+
+- Reworked the CP `Agents` view from API-key table workflows to card-based agent management with inline create/edit flows.
+- Renamed CP navigation and permission copy from API-key terminology to agent terminology.
+- Extended managed credential usage tracking to classify read/write operations for activity-state UI feedback.
+
+### Fixed
+
+- Fixed pause/resume action reliability across upgraded installs by handling missing pause-column scenarios safely.
+- Fixed live usage indicator behavior to respect settings while still allowing explicit debug simulation via query params.
+
 ## 0.8.5 - 2026-03-04
 
 ### Added

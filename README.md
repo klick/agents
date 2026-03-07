@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.8.5**
+Current plugin version: **0.9.2**
 
 ## Purpose
 
@@ -34,7 +34,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
-| Integration state API (`/consumers/lag`, `/consumers/checkpoint`, `/schema`) | Production stable | Checkpoint/lag and schema contract surfaces for integrations. |
+| Integration state API (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`) | Production stable | Checkpoint/lag, schema/template contracts, and lifecycle governance visibility for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
 | Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.8.5
+composer require klick/agents:^0.9.2
 php craft plugin/install agents
 ```
 
@@ -105,6 +105,13 @@ Environment variables:
 - `PLUGIN_AGENTS_TOKEN_SCOPES` (comma/space list, default scoped read set)
 - `PLUGIN_AGENTS_ENABLE_USERS_API` (default: `false`; enables `/users` endpoints)
 - `PLUGIN_AGENTS_ENABLE_ADDRESSES_API` (default: `false`; enables `/addresses` endpoints)
+- `PLUGIN_AGENTS_LIFECYCLE_METADATA_MAP` (optional JSON map keyed by credential handle for `owner`, `useCase`, `environment`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_UNUSED_WARN_DAYS` (default: `30`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_UNUSED_CRITICAL_DAYS` (default: `90`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_NEVER_USED_WARN_DAYS` (default: `30`)
+- `PLUGIN_AGENTS_LIFECYCLE_STALE_NEVER_USED_CRITICAL_DAYS` (default: `90`)
+- `PLUGIN_AGENTS_LIFECYCLE_ROTATION_WARN_DAYS` (default: `45`)
+- `PLUGIN_AGENTS_LIFECYCLE_ROTATION_CRITICAL_DAYS` (default: `120`)
 - `PLUGIN_AGENTS_REDACT_EMAIL` (default: `true`, applied when sensitive scope is missing)
 - `PLUGIN_AGENTS_RATE_LIMIT_PER_MINUTE` (default: `60`)
 - `PLUGIN_AGENTS_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
@@ -140,6 +147,9 @@ Enablement precedence:
 
 - 30-minute first-success path: [docs/quickstart-30min.md](docs/quickstart-30min.md)
 - Canonical first agent jobs: [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
+- Schema/OpenAPI-based reference automations: [docs/reference-automations.md](docs/reference-automations.md)
+- Copy/paste starter packs (curl/JS/Python): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
+- Agent lifecycle governance (ownership, stale/expiry/rotation posture): [docs/agent-lifecycle-governance.md](docs/agent-lifecycle-governance.md)
 - Observability runbook and alert thresholds: [docs/observability-runbook.md](docs/observability-runbook.md)
 
 ## Support
@@ -147,6 +157,9 @@ Enablement precedence:
 - Docs: https://marcusscheller.com/docs/agents/
 - Quickstart (repo): [docs/quickstart-30min.md](docs/quickstart-30min.md)
 - Canonical jobs (repo): [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
+- Reference automations (repo): [docs/reference-automations.md](docs/reference-automations.md)
+- Starter packs (repo): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
+- Agent lifecycle governance (repo): [docs/agent-lifecycle-governance.md](docs/agent-lifecycle-governance.md)
 - Observability runbook (repo): [docs/observability-runbook.md](docs/observability-runbook.md)
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
@@ -162,7 +175,7 @@ Credential sources:
 
 - `PLUGIN_AGENTS_API_CREDENTIALS` (strict JSON credential objects with per-credential scopes)
 - `PLUGIN_AGENTS_API_TOKEN` (legacy single-token fallback)
-- Control Panel managed credentials (Agents tab: create/edit/pause/resume/rotate/revoke/delete with last-used metadata)
+- Control Panel managed credentials (Agents tab: create/edit/pause/resume/rotate/revoke/delete with last-used metadata and per-agent owner field)
 
 Managed credentials are stored in plugin DB tables and participate in runtime auth alongside env credentials.
 
@@ -173,13 +186,6 @@ Credential lifecycle permission keys (CP):
 - `agents-rotateCredentials`
 - `agents-revokeCredentials`
 - `agents-deleteCredentials`
-
-Control-plane permission keys (CP):
-
-- `agents-viewControlPlane`
-- `agents-manageControlPolicies`
-- `agents-manageControlApprovals`
-- `agents-executeControlActions`
 
 Supported token transports:
 
@@ -221,6 +227,7 @@ Read/discovery endpoints:
 - `GET /auth/whoami`
 - `GET /adoption/metrics`
 - `GET /metrics`
+- `GET /lifecycle`
 - `GET /diagnostics/bundle`
 - `GET /products`
 - `GET /variants`
@@ -251,8 +258,13 @@ Read/discovery endpoints:
 - `GET /users/show` (requires exactly one of `id` or `username`; only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `GET /changes`
 - `GET /sections`
-- `GET /consumers/lag`
-- `POST /consumers/checkpoint`
+- `GET /sync-state/lag`
+- `POST /sync-state/checkpoint`
+- Legacy aliases (deprecated, still supported during transition):
+  - `GET /consumers/lag`
+  - `POST /consumers/checkpoint`
+- `GET /templates`
+- `GET /starter-packs`
 - `GET /schema`
 - `GET /capabilities`
 - `GET /openapi.json`
@@ -292,6 +304,7 @@ Read scopes:
 - `auth:read`
 - `adoption:read`
 - `metrics:read`
+- `lifecycle:read`
 - `diagnostics:read`
 - `products:read`
 - `variants:read`
@@ -313,8 +326,8 @@ Read scopes:
 - `sections:read`
 - `users:read` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `users:read_sensitive` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
-- `consumers:read`
-- `consumers:write`
+- `syncstate:read`
+- `templates:read`
 - `schema:read`
 - `capabilities:read`
 - `openapi:read`
@@ -327,6 +340,10 @@ Read scopes:
 
 Write scopes:
 
+- `syncstate:write`
+- Legacy scope aliases (deprecated, still accepted during transition):
+  - `consumers:read` -> `syncstate:read`
+  - `consumers:write` -> `syncstate:write`
 - `control:policies:write` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:approvals:request` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
 - `control:approvals:decide` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
@@ -348,6 +365,10 @@ Craft-native command routes:
 - `craft agents/auth-check`
 - `craft agents/discovery-check`
 - `craft agents/readiness-check`
+- `craft agents/reliability-check`
+- `craft agents/lifecycle-report`
+- `craft agents/template-catalog`
+- `craft agents/starter-packs`
 - `craft agents/diagnostics-bundle`
 - `craft agents/smoke`
 
@@ -390,6 +411,14 @@ php craft agents/auth-check --strict=1 --json=1
 # Discovery/readiness/diagnostics/smoke checks
 php craft agents/discovery-check --json=1
 php craft agents/readiness-check --json=1
+php craft agents/reliability-check --json=1
+php craft agents/reliability-check --strict=1 --json=1
+php craft agents/lifecycle-report --json=1
+php craft agents/lifecycle-report --strict=1 --json=1
+php craft agents/template-catalog --json=1
+php craft agents/template-catalog --template-id=catalog-sync-loop
+php craft agents/starter-packs --json=1
+php craft agents/starter-packs --template-id=catalog-sync-loop --json=1
 php craft agents/diagnostics-bundle --json=1
 php craft agents/smoke --json=1
 ```
@@ -662,10 +691,8 @@ return [
 
 - `Agents` section now uses 3 primary subnav views by default:
   - `agents/dashboard/overview` (`Dashboard`)
-  - `agents/settings` (`Settings`)
   - `agents/credentials` (`Agents`)
-- Optional experimental subnav view (enabled via `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
-  - `agents/control` (`Return Requests`)
+  - `agents/settings` (`Settings`)
 - Dashboard includes top tabs:
   - `Overview` (`agents/dashboard/overview`)
   - `Readiness` (`agents/dashboard/readiness`)
@@ -697,15 +724,10 @@ return [
 - Dashboard/Security:
   - read-only effective auth/rate-limit/redaction/webhook posture
   - centralized warning output from shared security policy logic
-- Return Requests (`agents/control`, experimental flag required):
-  - queue-first operator flow for requests waiting on human decision
-  - clear split between decision queue, runs needing follow-up, and historical activity
-  - agent-first model: CP request form is disabled by default
-  - optional manual fallback can be enabled in Settings (`allowCpApprovalRequests`)
-  - rule-aware execution guardrails (disabled rule blocks, approval linkage checks)
-  - immutable audit trail with optional advanced snapshot JSON
 - Agents:
   - managed credential lifecycle (create/edit/pause/resume/rotate/revoke/delete)
+  - lifecycle governance snapshot cards (critical/warn/stale/owner-missing counts)
+  - per-agent lifecycle warnings (owner/use-case/environment + risk signals)
   - one-time API token reveal on create/rotate
 
 ## CP rollout regression checklist
@@ -721,13 +743,7 @@ return [
    - clear discovery cache
    - when custom body content is configured in Settings, confirm endpoint output reflects those edits
 5. Verify security tab shows posture without exposing token/secret values.
-6. When `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, verify Return Requests flows:
-   - create/update policy
-   - request approval via API (agent token) with provenance metadata
-   - approve/reject approval in CP
-   - execute action with idempotency key
-   - audit event appears for each state transition
-7. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
+6. Verify API and CLI behavior remains unchanged except expected `SERVICE_DISABLED` when runtime is off.
 
 ## Namespace migration
 
@@ -757,7 +773,7 @@ return [
 - Prior behavior effectively granted broad read access to any valid token.
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
-  - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read diagnostics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
+- `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read lifecycle:read diagnostics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
   - If `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, optionally append control read scopes: `control:policies:read control:approvals:read control:executions:read control:audit:read`
 
 ## Secure Deployment Verification

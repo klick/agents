@@ -43,6 +43,22 @@ curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/products?status=liv
 
 Expected: JSON with `data` array.
 
+Optional contract bootstrap:
+
+```bash
+curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/templates"
+```
+
+Expected: canonical workflow templates with schema/openapi references.
+
+Optional starter-pack bootstrap:
+
+```bash
+curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=catalog-sync-loop" | jq -r '.starterPack.runtimes.curl.snippet'
+```
+
+Expected: copy/paste starter code for `curl`, `javascript`, and `python`.
+
 ## 6. Confirm deterministic validation behavior
 
 ```bash

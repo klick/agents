@@ -1,0 +1,21 @@
+{
+  "actionType": "return.request",
+  "actionRef": "RET-100045",
+  "reason": "Customer return requested",
+  "metadata": {
+    "source": "agent-runtime",
+    "agentId": "returns-orchestrator",
+    "traceId": "trace-100045"
+  },
+  "payload": {
+    "orderNumber": "A1B2C3D4",
+    "amount": 49.9,
+    "currency": "GBP",
+    "lineItems": [
+      {
+        "sku": "SKU-123",
+        "qty": 1
+      }
+    ]
+  }
+}

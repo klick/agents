@@ -141,7 +141,7 @@ class DashboardController extends Controller
 
     public function actionControl(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
 
         $plugin = Plugin::getInstance();
@@ -227,7 +227,7 @@ class DashboardController extends Controller
             'settings' => $this->getSettingsModel(),
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
-            'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
+            'returnRequestsCpEnabled' => $plugin->isReturnRequestsCpEnabled(),
             'credentialUsageIndicatorSettingLocked' => (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false),
             'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
             'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
@@ -246,6 +246,32 @@ class DashboardController extends Controller
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
         $defaultScopes = (array)($posture['authentication']['tokenScopes'] ?? []);
         $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
+        $lifecycleSnapshot = [
+            'service' => 'agents',
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'status' => 'unknown',
+            'summary' => [],
+            'topRisks' => [],
+            'agents' => [],
+        ];
+        try {
+            $lifecycleSnapshot = $plugin->getLifecycleGovernanceService()->getSnapshot();
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load lifecycle governance snapshot for CP: ' . $e->getMessage(), __METHOD__);
+        }
+        $lifecycleSummary = (array)($lifecycleSnapshot['summary'] ?? []);
+        $lifecycleTopRisks = (array)($lifecycleSnapshot['topRisks'] ?? []);
+        $lifecycleByCredentialId = [];
+        foreach ((array)($lifecycleSnapshot['agents'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $credentialId = (int)($row['credentialId'] ?? 0);
+            if ($credentialId <= 0) {
+                continue;
+            }
+            $lifecycleByCredentialId[$credentialId] = $row;
+        }
         $credentialExpirySummary = [
             'expired' => 0,
             'expiringSoon' => 0,
@@ -271,8 +297,13 @@ class DashboardController extends Controller
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'credentialUsageIndicatorEnabled' => (bool)$this->getSettingsModel()->enableCredentialUsageIndicator,
+            'defaultCredentialOwner' => $this->resolveCurrentCpUserEmail(),
             'securityPosture' => $posture,
             'managedCredentials' => $managedCredentials,
+            'lifecycleSnapshot' => $lifecycleSnapshot,
+            'lifecycleSummary' => $lifecycleSummary,
+            'lifecycleTopRisks' => $lifecycleTopRisks,
+            'lifecycleByCredentialId' => $lifecycleByCredentialId,
             'credentialExpirySummary' => $credentialExpirySummary,
             'defaultScopes' => $defaultScopes,
             'revealedCredential' => $this->pullRevealedCredential(),
@@ -387,7 +418,7 @@ class DashboardController extends Controller
         $settingsData['enabled'] = (bool)$enabledState['locked']
             ? (bool)$enabledState['enabled']
             : $this->parseBooleanBodyParam('enabled', (bool)$settings->enabled);
-        $settingsData['allowCpApprovalRequests'] = $plugin->isRefundApprovalsExperimentalEnabled()
+        $settingsData['allowCpApprovalRequests'] = $plugin->isReturnRequestsCpEnabled()
             ? $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests)
             : false;
         $settingsData['enableCredentialUsageIndicator'] = $credentialUsageIndicatorLocked
@@ -574,6 +605,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $handle = (string)$this->request->getBodyParam('credentialHandle', '');
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $owner = $this->parseStringBodyParam('credentialOwner', $this->resolveCurrentCpUserEmail());
         $token = (string)$this->request->getBodyParam('credentialToken', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
         $webhookSubscriptions = [
@@ -598,6 +630,7 @@ class DashboardController extends Controller
             $result = $plugin->getCredentialService()->createManagedCredential(
                 $handle,
                 $displayName,
+                $owner,
                 $token,
                 $scopes,
                 $defaultScopes,
@@ -613,11 +646,11 @@ class DashboardController extends Controller
                 'action' => 'created',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Agent `%s` created. Copy the API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` created. Copy the API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to create agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to create account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -632,6 +665,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $owner = $this->parseStringBodyParam('credentialOwner', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
         $webhookSubscriptions = [
             'resourceTypes' => $this->parseWebhookDimensionInput(
@@ -652,7 +686,7 @@ class DashboardController extends Controller
         ];
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
@@ -660,6 +694,7 @@ class DashboardController extends Controller
             $credential = $plugin->getCredentialService()->updateManagedCredential(
                 $credentialId,
                 $displayName,
+                $owner,
                 $scopes,
                 $defaultScopes,
                 $webhookSubscriptions,
@@ -667,13 +702,13 @@ class DashboardController extends Controller
                 $networkPolicy
             );
             if (!is_array($credential)) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
-            $this->setSuccessFlash(sprintf('Agent `%s` updated.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` updated.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to update agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to update account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -689,14 +724,14 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
@@ -708,9 +743,9 @@ class DashboardController extends Controller
                 'action' => 'rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Agent `%s` rotated. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` rotated. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to rotate agent token: ' . $e->getMessage());
+            $this->setFailFlash('Unable to rotate account token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -723,19 +758,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $revoked = Plugin::getInstance()->getCredentialService()->revokeManagedCredential($credentialId);
             if (!$revoked) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
             } else {
-                $this->setSuccessFlash('Agent token revoked.');
+                $this->setSuccessFlash('Account token revoked.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to revoke agent token: ' . $e->getMessage());
+            $this->setFailFlash('Unable to revoke account token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -748,19 +783,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $paused = Plugin::getInstance()->getCredentialService()->pauseManagedCredential($credentialId);
             if (!$paused) {
-                $this->setFailFlash('Agent could not be paused. It may be revoked, already paused, or migrations are not up to date.');
+                $this->setFailFlash('Account could not be paused. It may be revoked, already paused, or migrations are not up to date.');
             } else {
-                $this->setSuccessFlash('Agent paused.');
+                $this->setSuccessFlash('Account paused.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to pause agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to pause account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -773,19 +808,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $resumed = Plugin::getInstance()->getCredentialService()->resumeManagedCredential($credentialId);
             if (!$resumed) {
-                $this->setFailFlash('Agent could not be resumed. It may be revoked or migrations are not up to date.');
+                $this->setFailFlash('Account could not be resumed. It may be revoked or migrations are not up to date.');
             } else {
-                $this->setSuccessFlash('Agent resumed.');
+                $this->setSuccessFlash('Account resumed.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to resume agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to resume account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -801,14 +836,14 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
 
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
                 return $this->redirectToPostedUrl(null, 'agents/credentials');
             }
 
@@ -820,9 +855,9 @@ class DashboardController extends Controller
                 'action' => 'revoked and rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
-            $this->setSuccessFlash(sprintf('Agent `%s` revoked and rotated. Old token is now invalid. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
+            $this->setSuccessFlash(sprintf('Account `%s` revoked and rotated. Old token is now invalid. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to revoke and rotate agent token: ' . $e->getMessage());
+            $this->setFailFlash('Unable to revoke and rotate account token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -835,19 +870,19 @@ class DashboardController extends Controller
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
-            $this->setFailFlash('Missing agent ID.');
+            $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/credentials');
         }
 
         try {
             $deleted = Plugin::getInstance()->getCredentialService()->deleteManagedCredential($credentialId);
             if (!$deleted) {
-                $this->setFailFlash('Agent not found.');
+                $this->setFailFlash('Account not found.');
             } else {
-                $this->setSuccessFlash('Agent deleted.');
+                $this->setSuccessFlash('Account deleted.');
             }
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to delete agent: ' . $e->getMessage());
+            $this->setFailFlash('Unable to delete account: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/credentials');
@@ -855,7 +890,7 @@ class DashboardController extends Controller
 
     public function actionUpsertControlPolicy(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE);
 
@@ -884,7 +919,7 @@ class DashboardController extends Controller
 
     public function actionRequestControlApproval(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
 
@@ -941,7 +976,7 @@ class DashboardController extends Controller
 
     public function actionDecideControlApproval(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
 
@@ -993,7 +1028,7 @@ class DashboardController extends Controller
 
     public function actionExecuteControlAction(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
 
@@ -1050,7 +1085,7 @@ class DashboardController extends Controller
 
     public function actionSimulateControlAction(): Response
     {
-        $this->requireRefundApprovalsExperimentalEnabled();
+        $this->requireReturnRequestsCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
 
@@ -1102,13 +1137,13 @@ class DashboardController extends Controller
             $apiBasePath . '/entries',
             $apiBasePath . '/changes',
             $apiBasePath . '/sections',
-            $apiBasePath . '/consumers/lag',
-            $apiBasePath . '/consumers/checkpoint',
+            $apiBasePath . '/sync-state/lag',
+            $apiBasePath . '/sync-state/checkpoint',
             $apiBasePath . '/schema',
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',
         ];
-        if ($this->isRefundApprovalsExperimentalEnabled()) {
+        if ($this->isReturnRequestsCpEnabled()) {
             $endpoints = array_merge($endpoints, [
                 $apiBasePath . '/control/policies',
                 $apiBasePath . '/control/approvals',
@@ -1560,6 +1595,19 @@ class DashboardController extends Controller
 
     private function buildObservabilitySummary(array $snapshot): array
     {
+        $reliability = (array)($snapshot['reliability'] ?? []);
+        if (empty($reliability)) {
+            $plugin = Plugin::getInstance();
+            if ($plugin !== null) {
+                try {
+                    $reliability = $plugin->getReliabilitySignalService()->evaluateSnapshot($snapshot);
+                } catch (Throwable) {
+                    $reliability = [];
+                }
+            }
+        }
+        $reliabilitySummary = (array)($reliability['summary'] ?? []);
+
         return [
             'generatedAt' => (string)($snapshot['generatedAt'] ?? gmdate('Y-m-d\TH:i:s\Z')),
             'requestsTotal' => (int)$this->resolveMetricValue($snapshot, 'agents_requests_total'),
@@ -1571,6 +1619,13 @@ class DashboardController extends Controller
             'webhookDlqFailed' => (int)$this->resolveMetricValue($snapshot, 'agents_webhook_dlq_failed'),
             'consumerLagMaxSeconds' => (int)$this->resolveMetricValue($snapshot, 'agents_consumer_lag_max_seconds'),
             'activeCredentials7d' => (int)$this->resolveMetricValue($snapshot, 'agents_adoption_active_credentials_7d'),
+            'reliabilityStatus' => (string)($reliability['status'] ?? 'ok'),
+            'reliabilityThresholdsVersion' => (string)($reliability['thresholdsVersion'] ?? ''),
+            'reliabilitySignalsWarn' => (int)($reliabilitySummary['signalsWarn'] ?? 0),
+            'reliabilitySignalsCritical' => (int)($reliabilitySummary['signalsCritical'] ?? 0),
+            'reliabilitySignalsEvaluated' => (int)($reliabilitySummary['signalsEvaluated'] ?? 0),
+            'reliabilityTopSignals' => array_values(array_slice((array)($reliability['topSignals'] ?? []), 0, 5)),
+            'reliabilitySignals' => array_values((array)($reliability['signals'] ?? [])),
         ];
     }
 
@@ -1685,6 +1740,22 @@ class DashboardController extends Controller
         return $userComponent->checkPermission($permission);
     }
 
+    private function resolveCurrentCpUserEmail(): string
+    {
+        $identity = Craft::$app->getUser()->getIdentity();
+        if ($identity === null) {
+            return '';
+        }
+
+        $email = trim((string)($identity->email ?? ''));
+        if ($email !== '') {
+            return $email;
+        }
+
+        $username = trim((string)($identity->username ?? ''));
+        return $username;
+    }
+
     private function buildCpActorContext(): array
     {
         $identity = Craft::$app->getUser()->getIdentity();
@@ -1707,14 +1778,14 @@ class DashboardController extends Controller
         ];
     }
 
-    private function isRefundApprovalsExperimentalEnabled(): bool
+    private function isReturnRequestsCpEnabled(): bool
     {
-        return Plugin::getInstance()->isRefundApprovalsExperimentalEnabled();
+        return Plugin::getInstance()->isReturnRequestsCpEnabled();
     }
 
-    private function requireRefundApprovalsExperimentalEnabled(): void
+    private function requireReturnRequestsCpEnabled(): void
     {
-        if ($this->isRefundApprovalsExperimentalEnabled()) {
+        if ($this->isReturnRequestsCpEnabled()) {
             return;
         }
 

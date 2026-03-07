@@ -23,6 +23,7 @@ class AgentsController extends Controller
     public string $slug = '';
     public string $section = '';
     public string $type = '';
+    public string $templateId = '';
     public string $target = 'all';
     public bool $strict = false;
 
@@ -43,8 +44,10 @@ class AgentsController extends Controller
             'entry-list' => array_merge($options, ['section', 'type', 'status', 'search', 'limit', 'json']),
             'entry-show' => array_merge($options, ['resourceId', 'slug', 'section', 'json']),
             'section-list' => array_merge($options, ['json']),
+            'template-catalog' => array_merge($options, ['templateId', 'json']),
+            'starter-packs' => array_merge($options, ['templateId', 'json']),
             'discovery-prewarm' => array_merge($options, ['target', 'json']),
-            'auth-check', 'discovery-check', 'readiness-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
+            'auth-check', 'discovery-check', 'readiness-check', 'reliability-check', 'lifecycle-report', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
         };
     }
@@ -55,6 +58,7 @@ class AgentsController extends Controller
             'q' => 'search',
             'j' => 'json',
             'i' => 'resourceId',
+            't' => 'templateId',
         ];
     }
 
@@ -492,6 +496,90 @@ class AgentsController extends Controller
         return $this->emitCheckResult('smoke', $summary, $errors, $warnings);
     }
 
+    public function actionReliabilityCheck(): int
+    {
+        $snapshot = Plugin::getInstance()->getObservabilityMetricsService()->getMetricsSnapshot();
+        $reliability = Plugin::getInstance()->getReliabilitySignalService()->evaluateSnapshot($snapshot);
+
+        $errors = [];
+        $warnings = [];
+
+        foreach ((array)($reliability['signals'] ?? []) as $signal) {
+            if (!is_array($signal)) {
+                continue;
+            }
+            $label = (string)($signal['label'] ?? $signal['id'] ?? 'signal');
+            $severity = strtolower(trim((string)($signal['severity'] ?? 'ok')));
+            $value = (string)($signal['value'] ?? '0');
+            $triggerValue = $severity === 'critical'
+                ? (string)($signal['criticalThreshold'] ?? '0')
+                : (string)($signal['warnThreshold'] ?? '0');
+            $comparator = (string)($signal['comparator'] ?? '>');
+            $message = sprintf(
+                '%s is %s (value=%s, trigger=%s %s).',
+                $label,
+                $severity,
+                $value,
+                $comparator,
+                $triggerValue
+            );
+            if ($severity === 'critical') {
+                $errors[] = $message;
+            } elseif ($severity === 'warn') {
+                $warnings[] = $message;
+            }
+        }
+
+        return $this->emitCheckResult('reliability-check', [
+            'generatedAt' => (string)($reliability['generatedAt'] ?? gmdate('Y-m-d\TH:i:s\Z')),
+            'status' => (string)($reliability['status'] ?? 'ok'),
+            'summary' => (array)($reliability['summary'] ?? []),
+            'topSignals' => (array)($reliability['topSignals'] ?? []),
+        ], $errors, $warnings);
+    }
+
+    public function actionLifecycleReport(): int
+    {
+        $snapshot = Plugin::getInstance()->getLifecycleGovernanceService()->getSnapshot();
+
+        $errors = [];
+        $warnings = [];
+
+        foreach ((array)($snapshot['agents'] ?? []) as $agent) {
+            if (!is_array($agent)) {
+                continue;
+            }
+
+            $handle = (string)($agent['handle'] ?? 'unknown');
+            $displayName = (string)($agent['displayName'] ?? $handle);
+            foreach ((array)($agent['risk']['factors'] ?? []) as $factor) {
+                if (!is_array($factor)) {
+                    continue;
+                }
+                $level = strtolower(trim((string)($factor['level'] ?? 'ok')));
+                $message = trim((string)($factor['message'] ?? ''));
+                if ($message === '') {
+                    continue;
+                }
+                $line = sprintf('%s (%s): %s', $displayName, $handle, $message);
+                if ($level === 'critical') {
+                    $errors[] = $line;
+                } elseif ($level === 'warn') {
+                    $warnings[] = $line;
+                }
+            }
+        }
+
+        return $this->emitCheckResult('lifecycle-report', [
+            'generatedAt' => (string)($snapshot['generatedAt'] ?? gmdate('Y-m-d\TH:i:s\Z')),
+            'status' => (string)($snapshot['status'] ?? 'ok'),
+            'runtime' => (array)($snapshot['runtime'] ?? []),
+            'thresholds' => (array)($snapshot['thresholds'] ?? []),
+            'summary' => (array)($snapshot['summary'] ?? []),
+            'topRisks' => (array)($snapshot['topRisks'] ?? []),
+        ], $errors, $warnings);
+    }
+
     public function actionDiagnosticsBundle(): int
     {
         $bundle = Plugin::getInstance()->getDiagnosticsBundleService()->getBundle([
@@ -530,6 +618,121 @@ class AgentsController extends Controller
         $this->stdout("Use --json=1 to print the full diagnostics artifact.\n");
 
         return $ok ? ExitCode::OK : ExitCode::UNSPECIFIED_ERROR;
+    }
+
+    public function actionTemplateCatalog(): int
+    {
+        $service = Plugin::getInstance()->getTemplateCatalogService();
+        $templateId = strtolower(trim($this->templateId));
+
+        if ($templateId !== '') {
+            $template = $service->getTemplateById($templateId, '/agents/v1');
+            if ($template === null) {
+                $this->stderr(sprintf("Unknown template: %s\n", $templateId));
+                return ExitCode::UNSPECIFIED_ERROR;
+            }
+
+            $payload = [
+                'version' => Plugin::getInstance()->getVersion(),
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'template' => $template,
+            ];
+
+            if ($this->json) {
+                return $this->emitJson($payload);
+            }
+
+            $this->stdout(sprintf("Template: %s\n", (string)($template['displayName'] ?? $template['id'] ?? 'template')));
+            $this->stdout(sprintf("ID: %s\n", (string)($template['id'] ?? '')));
+            $this->stdout(sprintf("Intent: %s\n", (string)($template['intent'] ?? '')));
+            $this->stdout("Required scopes:\n");
+            foreach ((array)($template['requiredScopes'] ?? []) as $scope) {
+                $this->stdout(sprintf("- %s\n", (string)$scope));
+            }
+            $this->stdout("Endpoint sequence:\n");
+            foreach ((array)($template['endpointSequence'] ?? []) as $step) {
+                $this->stdout(sprintf(
+                    "- %s %s (schema endpoint: %s)\n",
+                    (string)($step['method'] ?? 'GET'),
+                    (string)($step['path'] ?? ''),
+                    (string)($step['schemaEndpoint'] ?? '')
+                ));
+            }
+
+            return ExitCode::OK;
+        }
+
+        $catalog = $service->getCatalog('/agents/v1');
+
+        if ($this->json) {
+            return $this->emitJson($catalog);
+        }
+
+        $this->stdout(sprintf("Templates: %d\n", (int)($catalog['count'] ?? 0)));
+        foreach ((array)($catalog['templates'] ?? []) as $template) {
+            $this->stdout(sprintf(
+                "- %s (%s)\n",
+                (string)($template['id'] ?? ''),
+                (string)($template['displayName'] ?? '')
+            ));
+        }
+        $this->stdout("Use --template-id=<id> for detailed output.\n");
+
+        return ExitCode::OK;
+    }
+
+    public function actionStarterPacks(): int
+    {
+        $service = Plugin::getInstance()->getStarterPackService();
+        $templateId = strtolower(trim($this->templateId));
+
+        if ($templateId !== '') {
+            $starterPack = $service->getStarterPackById($templateId, '/agents/v1');
+            if ($starterPack === null) {
+                $this->stderr(sprintf("Unknown starter pack: %s\n", $templateId));
+                return ExitCode::UNSPECIFIED_ERROR;
+            }
+
+            $payload = [
+                'version' => Plugin::getInstance()->getVersion(),
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                'starterPack' => $starterPack,
+            ];
+            if ($this->json) {
+                return $this->emitJson($payload);
+            }
+
+            $this->stdout(sprintf("Starter pack: %s\n", (string)($starterPack['displayName'] ?? $starterPack['id'] ?? 'starter-pack')));
+            $this->stdout(sprintf("ID: %s\n", (string)($starterPack['id'] ?? '')));
+            $this->stdout(sprintf("Intent: %s\n", (string)($starterPack['intent'] ?? '')));
+            $this->stdout("Runtimes:\n");
+            foreach ((array)($starterPack['runtimes'] ?? []) as $runtimeKey => $runtime) {
+                $this->stdout(sprintf(
+                    "- %s (%s)\n",
+                    (string)$runtimeKey,
+                    (string)($runtime['filename'] ?? 'snippet')
+                ));
+            }
+            $this->stdout("Use --json=1 to print snippet content.\n");
+            return ExitCode::OK;
+        }
+
+        $catalog = $service->getCatalog('/agents/v1');
+        if ($this->json) {
+            return $this->emitJson($catalog);
+        }
+
+        $this->stdout(sprintf("Starter packs: %d\n", (int)($catalog['count'] ?? 0)));
+        foreach ((array)($catalog['starterPacks'] ?? []) as $starterPack) {
+            $this->stdout(sprintf(
+                "- %s (%s)\n",
+                (string)($starterPack['id'] ?? ''),
+                (string)($starterPack['displayName'] ?? '')
+            ));
+        }
+        $this->stdout("Use --template-id=<id> for detailed output.\n");
+
+        return ExitCode::OK;
     }
 
     private function emitJson(array $payload): int

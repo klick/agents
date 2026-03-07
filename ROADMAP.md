@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-04  
-Current release: `v0.8.5`
+Date: 2026-03-07  
+Current release: `v0.9.1`
 
 ## Direction
 
@@ -76,16 +76,44 @@ Release outcome:
 
 - Integrations can access a materially wider runtime surface with consistent sync semantics and discovery hints.
 
-## Now (`v0.9.0`)
+## Done (`v0.9.0`)
 
 Target: September 2026
 
-- Improve integrator DX with schema/OpenAPI-based templates.
-- Publish reference automations for the canonical jobs (with tested sample payloads).
+- Shipped schema/OpenAPI-based integration templates for canonical jobs.
+- Shipped three tested reference automations with fixture payloads.
+- Shipped copy/paste agent starter packs (`curl`, `javascript`, `python`) for onboarding.
+- Expanded operator reliability pack with threshold defaults, triage signals, and richer diagnostics bundle snapshots.
+- Shipped lifecycle governance controls: ownership metadata mapping, expiry/rotation reminders, and stale-key warnings.
+- Removed Return Requests CP surface (tab/routes/forms/permissions) from public operator UX; kept internal control-plane internals feature-flagged for future adapter-based execution.
 
 Release outcome:
 
-- Faster integration delivery from initial setup to reusable production automation patterns.
+- Integrators can move from first call to production patterns faster, and operators get clearer reliability/lifecycle posture without exposing unfinished return workflows.
+
+## Done (`v0.9.1`)
+
+Target: September 2026
+
+- Hidden Lifecycle Governance warning surfaces in the Agents CP view (summary panel + card warning strips) while keeping lifecycle APIs/services intact.
+
+Release outcome:
+
+- Operators get a cleaner Agent card view now, with lifecycle governance still available for future reintroduction without backend rollback.
+
+## Planned (`v0.10.0`)
+
+Target: October 2026
+
+- Add external plugin data adapters for agent accounts (read-only first).
+- Introduce provider registry + registration event so integrations can be added without hardcoding controller logic.
+- Add explicit plugin/resource scopes for external data (for example `plugins:seomatic:meta:read`).
+- Expose registered external resources in capabilities, OpenAPI, and schema outputs.
+- Ship first-party reference adapters for SEOmatic and Campaign (when installed).
+
+Release outcome:
+
+- Teams can let agents safely consume data from selected Craft plugins using the same governed account model.
 
 ## Success Checks
 
