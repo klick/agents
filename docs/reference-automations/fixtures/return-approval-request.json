@@ -1,7 +1,7 @@
 {
   "actionType": "return.request",
   "actionRef": "RET-100045",
-  "reason": "Customer return requested",
+  "reason": "Customer control requested",
   "metadata": {
     "source": "agent-runtime",
     "agentId": "returns-orchestrator",

@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.0 - 2026-03-07
+
+### Added
+
+- Added governed write action support for `entry.updateDraft` through `POST /agents/v1/control/actions/execute`, including native draft creation/update execution in `ControlPlaneService`.
+- Added action payload contract metadata for `entry.updateDraft` to OpenAPI/schema descriptors (`x-action-payloads` / `xActionPayloads`).
+- Added experimental `entries:write` scope for governed entry-draft updates and exposed it in Accounts scope selection (effective only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`).
+- Added reference automation fixture + docs for governed entry draft updates:
+  - `docs/reference-automations/fixtures/entry-update-draft-execute.json`
+  - `docs/reference-automations.md`
+  - `docs/canonical-first-agent-jobs.md`
+- Added template + starter-pack discoverability for `governed-entry-draft-update` across template/starter services and docs.
+- Added per-account write indicator icons in CP cards: locked icon when write actions require human approval, unlocked icon when write actions are allowed without approval.
+- Added per-account “Always require human approval” control for write-capable accounts in CP create/edit flows.
+
+### Changed
+
+- Extended QA regression scripts to assert governed entry-draft write contracts and starter-pack/reference automation coverage.
+- Added a CP Settings runtime toggle (`enableWritesExperimental`) for governed writing/control API surfaces, with env/config lock handling.
+- Removed legacy refund/return env-flag aliases; governed write surfaces now respond only to `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` and `PLUGIN_AGENTS_WRITES_CP_EXPERIMENTAL`.
+- Restricted CP visibility/effectiveness of per-account human-approval control to write-capable accounts only.
+
+### Fixed
+
+- Fixed CP per-account human-approval lightswitch persistence and edit-mode hydration so off/on state is saved and displayed correctly.
+- Fixed write indicator rendering and status copy on account cards for write-capable credentials.
+
 ## 0.9.3 - 2026-03-07
 
 ### Changed
@@ -65,7 +92,7 @@ All notable changes to this project are documented in this file.
 - Updated Dashboard Readiness tab with “Needs Attention Now” triage signals and threshold-driven runbook guidance.
 - Updated observability runbook thresholds and response playbooks for reliability signals.
 - Updated Agents CP view with lifecycle governance summary cards and per-agent risk factor visibility.
-- Hid CP Return Requests tab/routes/permissions by default behind an internal CP-only flag (`PLUGIN_AGENTS_RETURN_REQUESTS_CP_EXPERIMENTAL`) while keeping control-plane API/data internals unchanged.
+- Hid CP Control tab/routes/permissions by default behind an internal CP-only flag (`PLUGIN_AGENTS_WRITES_CP_EXPERIMENTAL`) while keeping control-plane API/data internals unchanged.
 
 ## 0.8.7 - 2026-03-05
 
@@ -201,7 +228,7 @@ All notable changes to this project are documented in this file.
 
 ## 0.3.7 - 2026-02-27
 
-- Fixed CP navigation state so the Agents section/subnav remains active across Dashboard, Settings, API Keys, and Return Requests routes.
+- Fixed CP navigation state so the Agents section/subnav remains active across Dashboard, Settings, API Keys, and Control routes.
 - Fixed plugin settings entry-point behavior: opening Agents from `admin/settings/plugins` now redirects to `admin/agents/dashboard/overview`.
 - Added an `Agents discovery caches` option to Craft’s Clear Caches utility (`agents-discovery`) to clear cached `llms.txt` and `commerce.txt` documents.
 - Added canonical CP redirects for `admin/agents` and `admin/agents/dashboard` to `admin/agents/dashboard/overview`.
@@ -209,14 +236,14 @@ All notable changes to this project are documented in this file.
 ## 0.3.6 - 2026-02-27
 
 - Polished CP IA by consolidating Overview/Readiness/Discovery/Security into a Dashboard with top tabs, while preserving legacy deep links via redirects.
-- Renamed and simplified the experimental approvals area to Return Requests with clearer queue-first copy (`Now`, decisions, follow-up runs, activity) and agent-first fallback messaging.
+- Renamed and simplified the experimental approvals area to Control with clearer queue-first copy (`Now`, decisions, follow-up runs, activity) and agent-first fallback messaging.
 - Improved API Keys UX with preset examples, native Craft scope selection, one-time key copy/download helpers, and a revoke+rotate shortcut action.
 - Improved CP readability by default-collapsing technical JSON blocks and tightening labels/messages across settings and credential actions.
 - Updated readiness diagnostics to treat CP and site web contexts as valid request context for the web-request readiness check.
 
 ## 0.3.5 - 2026-02-27
 
-- Hid refund-approvals/control surfaces behind `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL` (default off): CP tab/routes, API routes, capabilities/OpenAPI discoverability, and related scope catalog entries are now gated.
+- Hid governed-write/control surfaces behind `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (default off): CP tab/routes, API routes, capabilities/OpenAPI discoverability, and related scope catalog entries are now gated.
 - Added agent-first approval request mode: CP request form is disabled by default and can be re-enabled via settings.
 - Added API scope split for approvals: `control:approvals:request` and `control:approvals:decide` (legacy `control:approvals:write` remains supported).
 - Added required approval-request provenance metadata on API (`metadata.source`, `metadata.agentId`, `metadata.traceId`).

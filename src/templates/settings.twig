@@ -1,9 +1,13 @@
 {% import '_includes/forms' as forms %}
 
-{% set requestsFeatureEnabled = returnRequestsCpEnabled ?? false %}
+{% set requestsFeatureEnabled = controlCpEnabled ?? false %}
 {% set llmsTxtSettingLocked = llmsTxtSettingLocked ?? false %}
 {% set llmsFullTxtSettingLocked = llmsFullTxtSettingLocked ?? false %}
 {% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}
+{% set writesExperimentalSettingLocked = writesExperimentalSettingLocked ?? false %}
+{% set writesExperimentalLockedByEnv = writesExperimentalLockedByEnv ?? false %}
+{% set writesExperimentalConfigLocked = writesExperimentalConfigLocked ?? false %}
+{% set writesExperimentalLockSource = writesExperimentalLockSource ?? '' %}
 {% set credentialUsageIndicatorSettingLocked = credentialUsageIndicatorSettingLocked ?? false %}
 {% set reliabilityConsumerLagWarnSecondsLocked = reliabilityConsumerLagWarnSecondsLocked ?? false %}
 {% set reliabilityConsumerLagCriticalSecondsLocked = reliabilityConsumerLagCriticalSecondsLocked ?? false %}
@@ -23,6 +27,22 @@
     onLabel: false,
     offLabel: false,
     disabled: agentsEnabledLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Enable governed writing APIs (experimental)',
+    instructions: writesExperimentalLockedByEnv
+      ? 'Controlled by ' ~ writesExperimentalLockSource ~ ' in your environment.'
+      : (writesExperimentalConfigLocked
+        ? 'Controlled by config/agents.php (`enableWritesExperimental`).'
+        : 'Enable /control/* governed write surfaces for policies, approvals, simulations, and execute actions.'),
+    name: 'enableWritesExperimental',
+    on: writesExperimentalSettingLocked
+      ? (writesExperimentalEnabled ?? (settings.enableWritesExperimental ?? false))
+      : (settings.enableWritesExperimental ?? false),
+    onLabel: false,
+    offLabel: false,
+    disabled: writesExperimentalSettingLocked,
   }) }}
 
   {{ forms.lightswitchField({
@@ -117,7 +137,7 @@
 
     {{ forms.lightswitchField({
       first: true,
-      label: 'Allow manual return requests in Return Requests tab',
+      label: 'Allow manual control requests in Control tab',
       instructions: 'Fallback only. Recommended: agents/integrations create requests, humans only approve/reject.',
       name: 'allowCpApprovalRequests',
       on: settings.allowCpApprovalRequests ?? false,
@@ -127,11 +147,17 @@
   </section>
 {% endif %}
 
-{% if agentsEnabledLocked or credentialUsageIndicatorSettingLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
+{% if agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
   <section class="border rounded p-3 warning">
     <h2 class="h4">Configuration Locks</h2>
     {% if agentsEnabledLocked %}
       <p>`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
+    {% endif %}
+    {% if writesExperimentalLockedByEnv %}
+      <p>`enableWritesExperimental` is locked by environment variable source: {{ writesExperimentalLockSource }}.</p>
+    {% endif %}
+    {% if writesExperimentalConfigLocked %}
+      <p>`enableWritesExperimental` is controlled by <code>config/agents.php</code>.</p>
     {% endif %}
     {% if credentialUsageIndicatorSettingLocked %}
       <p>`enableCredentialUsageIndicator` is controlled by <code>config/agents.php</code>.</p>

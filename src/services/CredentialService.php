@@ -25,6 +25,7 @@ class CredentialService extends Component
     private ?bool $supportsIpAllowlistColumn = null;
     private ?bool $supportsPauseColumn = null;
     private ?bool $supportsOwnerColumn = null;
+    private ?bool $supportsForceHumanApprovalColumn = null;
 
     public function getManagedCredentialsForRuntime(array $defaultScopes): array
     {
@@ -63,6 +64,7 @@ class CredentialService extends Component
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
                 'ipAllowlist' => $this->decodeIpAllowlist($row),
+                'forceHumanApproval' => $this->decodeForceHumanApproval($row),
                 'source' => 'cp',
                 'managedCredentialId' => (int)($row['id'] ?? 0),
             ];
@@ -95,6 +97,7 @@ class CredentialService extends Component
                 'handle' => (string)($row['handle'] ?? ''),
                 'displayName' => (string)($row['displayName'] ?? ''),
                 'owner' => $this->supportsOwnerColumn() ? $this->normalizeOwner($row['owner'] ?? null) : '',
+                'forceHumanApproval' => $this->decodeForceHumanApproval($row),
                 'tokenPrefix' => (string)($row['tokenPrefix'] ?? ''),
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
@@ -171,6 +174,7 @@ class CredentialService extends Component
         string $handle,
         string $displayName,
         string $owner,
+        bool $forceHumanApproval,
         string $rawToken,
         array $scopes,
         array $defaultScopes,
@@ -239,6 +243,9 @@ class CredentialService extends Component
         }
         if ($this->supportsOwnerColumn()) {
             $insertData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
+        }
+        if ($this->supportsForceHumanApprovalColumn()) {
+            $insertData['forceHumanApproval'] = $forceHumanApproval ? 1 : 0;
         }
         if ($this->supportsWebhookSubscriptionColumns()) {
             $insertData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
@@ -402,6 +409,7 @@ class CredentialService extends Component
         int $id,
         string $displayName,
         string $owner,
+        bool $forceHumanApproval,
         array $scopes,
         array $defaultScopes,
         array $webhookSubscriptions = [],
@@ -447,6 +455,9 @@ class CredentialService extends Component
         }
         if ($this->supportsOwnerColumn()) {
             $updateData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
+        }
+        if ($this->supportsForceHumanApprovalColumn()) {
+            $updateData['forceHumanApproval'] = $forceHumanApproval ? 1 : 0;
         }
         if ($this->supportsExpiryColumns()) {
             $updateData['expiresAt'] = $normalizedExpiryPolicy['expiresAt'];
@@ -655,6 +666,22 @@ class CredentialService extends Component
         return $this->supportsOwnerColumn;
     }
 
+    private function supportsForceHumanApprovalColumn(): bool
+    {
+        if ($this->supportsForceHumanApprovalColumn !== null) {
+            return $this->supportsForceHumanApprovalColumn;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsForceHumanApprovalColumn = false;
+            return false;
+        }
+
+        $this->supportsForceHumanApprovalColumn = $schema->getColumn('forceHumanApproval') !== null;
+        return $this->supportsForceHumanApprovalColumn;
+    }
+
     private function normalizeHandle(string $value): string
     {
         $normalized = strtolower(trim($value));
@@ -690,6 +717,15 @@ class CredentialService extends Component
         }
 
         return $owner;
+    }
+
+    private function decodeForceHumanApproval(array $row): bool
+    {
+        if (!$this->supportsForceHumanApprovalColumn()) {
+            return true;
+        }
+
+        return (bool)($row['forceHumanApproval'] ?? true);
     }
 
     private function normalizeProvidedToken(string $value): string

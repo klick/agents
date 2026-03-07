@@ -1,20 +1,20 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = "Agents Return Requests" %}
+{% set title = "Agents Control" %}
 {% set selectedSubnavItem = "control" %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
-  <h1>Return Requests</h1>
-  <p class="agents-page-intro">Operate approval and execution workflows for return-related actions: triage, decide, run, and audit from one screen.</p>
+  <h1>Control</h1>
+  <p class="agents-page-intro">Operate governed approval and execution workflows: triage, decide, run, and audit from one screen.</p>
 
   <div class="agents-layout-stack">
   <section class="border rounded p-3">
     <h2 class="h4">Flow in 3 steps</h2>
     <ol style="margin: 0 0 0 18px;">
-      <li>An agent/integration creates a return request when a refund needs review.</li>
+      <li>An agent/integration creates a control request when an action needs review.</li>
       <li>A human approves or rejects the request.</li>
       <li>An approved action is run once, with duplicate protection.</li>
     </ol>
@@ -214,7 +214,7 @@
     <p class="light">Recommended flow: agents create requests via API. Use this form only if you need a manual fallback.</p>
 
     {% if canManageApprovals and allowCpApprovalRequests %}
-      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Create this return request?">
+      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Create this control request?">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/request-control-approval') }}
         {{ redirectInput('agents/control') }}
@@ -309,7 +309,7 @@
       <p class="warning">Manual creation is off (agent-first mode).</p>
       <p class="light">Use your integration to call <code>POST /agents/v1/control/approvals/request</code>.</p>
     {% else %}
-      <p class="warning">You do not have permission to create return requests.</p>
+      <p class="warning">You do not have permission to create control requests.</p>
     {% endif %}
   </section>
 

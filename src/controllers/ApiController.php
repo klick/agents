@@ -1418,7 +1418,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/llms-full.txt', 'public' => true],
             ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
         ];
-        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+        if (!$this->isWritesExperimentalEnabled()) {
             $endpoints = array_values(array_filter(
                 $endpoints,
                 static fn(array $endpoint): bool => !str_starts_with((string)($endpoint['path'] ?? ''), '/control/')
@@ -2124,6 +2124,26 @@ class ApiController extends Controller
                 ]),
                 'x-required-scopes' => ['control:actions:execute'],
                 'x-optional-scopes' => ['policy.config.requiredScope'],
+                'x-action-payloads' => [
+                    'entry.updateDraft' => [
+                        'requiredScope' => 'entries:write',
+                        'description' => 'Create/update an entry draft without publishing.',
+                        'payload' => [
+                            'type' => 'object',
+                            'required' => ['entryId'],
+                            'properties' => [
+                                'entryId' => ['type' => 'integer', 'minimum' => 1],
+                                'siteId' => ['type' => 'integer', 'minimum' => 1],
+                                'draftId' => ['type' => 'integer', 'minimum' => 1],
+                                'title' => ['type' => 'string'],
+                                'slug' => ['type' => 'string'],
+                                'draftName' => ['type' => 'string'],
+                                'draftNotes' => ['type' => 'string'],
+                                'fields' => ['type' => 'object'],
+                            ],
+                        ],
+                    ],
+                ],
             ]],
             '/control/audit' => ['get' => [
                 'summary' => 'List control-plane audit events',
@@ -2158,7 +2178,7 @@ class ApiController extends Controller
             '/llms-full.txt' => ['get' => ['summary' => 'Public llms-full.txt extended discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
             '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
         ];
-        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+        if (!$this->isWritesExperimentalEnabled()) {
             foreach ($this->controlOpenApiPaths() as $path) {
                 unset($paths[$path]);
             }
@@ -2350,7 +2370,7 @@ class ApiController extends Controller
 
     public function actionControlPolicies(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2371,7 +2391,7 @@ class ApiController extends Controller
 
     public function actionControlPolicyUpsert(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2406,7 +2426,7 @@ class ApiController extends Controller
 
     public function actionControlApprovals(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2431,7 +2451,7 @@ class ApiController extends Controller
 
     public function actionControlApprovalRequest(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2477,7 +2497,7 @@ class ApiController extends Controller
 
     public function actionControlApprovalDecide(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2515,7 +2535,7 @@ class ApiController extends Controller
 
     public function actionControlExecutions(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2540,7 +2560,7 @@ class ApiController extends Controller
 
     public function actionControlPolicySimulate(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2557,6 +2577,7 @@ class ApiController extends Controller
                 'actionRef' => (string)$request->getBodyParam('actionRef', ''),
                 'approvalId' => (int)$request->getBodyParam('approvalId', 0),
                 'payload' => $request->getBodyParam('payload', []),
+                'forceHumanApproval' => (bool)($this->authContext['forceHumanApproval'] ?? false),
             ]);
         } catch (\InvalidArgumentException $e) {
             return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
@@ -2574,7 +2595,7 @@ class ApiController extends Controller
 
     public function actionControlActionsExecute(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2602,6 +2623,7 @@ class ApiController extends Controller
                 'approvalId' => (int)$request->getBodyParam('approvalId', 0),
                 'idempotencyKey' => $this->resolveIdempotencyKey(),
                 'payload' => $this->resolveBodyArrayParam('payload'),
+                'forceHumanApproval' => (bool)($this->authContext['forceHumanApproval'] ?? false),
             ], $this->buildControlActorContext());
         } catch (\InvalidArgumentException $e) {
             return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
@@ -2622,7 +2644,7 @@ class ApiController extends Controller
 
     public function actionControlAudit(): Response
     {
-        if (($guard = $this->guardRefundApprovalsExperimentalEnabled()) !== null) {
+        if (($guard = $this->guardWritesExperimentalEnabled()) !== null) {
             return $guard;
         }
 
@@ -2836,6 +2858,7 @@ class ApiController extends Controller
             'credentialId' => $matchedCredential['id'],
             'credentialSource' => (string)($matchedCredential['source'] ?? 'env'),
             'managedCredentialId' => isset($matchedCredential['managedCredentialId']) ? (int)$matchedCredential['managedCredentialId'] : null,
+            'forceHumanApproval' => (bool)($matchedCredential['forceHumanApproval'] ?? false),
             'scopes' => $matchedCredential['scopes'],
             'authMethod' => $providedToken['source'],
         ];
@@ -2877,6 +2900,7 @@ class ApiController extends Controller
                 'principalFingerprint' => $principalFingerprint,
                 'source' => (string)($credential['source'] ?? 'env'),
                 'managedCredentialId' => isset($credential['managedCredentialId']) ? (int)$credential['managedCredentialId'] : 0,
+                'forceHumanApproval' => (bool)($credential['forceHumanApproval'] ?? false),
                 'ipAllowlist' => $this->normalizeIpAllowlist($credential['ipAllowlist'] ?? []),
             ];
         }
@@ -3206,7 +3230,7 @@ class ApiController extends Controller
     {
         $scopes = $this->authContext['scopes'] ?? $this->getSecurityConfig()['tokenScopes'];
         $normalized = array_values(array_unique(array_map('strval', $scopes)));
-        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+        if (!$this->isWritesExperimentalEnabled()) {
             $normalized = array_values(array_filter(
                 $normalized,
                 static fn(string $scope): bool => !str_starts_with($scope, 'control:')
@@ -3257,6 +3281,7 @@ class ApiController extends Controller
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
             'entries:read' => 'Read live content entry endpoints.',
             'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
+            'entries:write' => 'Update entry drafts through governed control actions (for example `entry.updateDraft`).',
             'assets:read' => 'Read asset list and lookup endpoints.',
             'categories:read' => 'Read category list and lookup endpoints.',
             'tags:read' => 'Read tag list and lookup endpoints.',
@@ -3289,7 +3314,7 @@ class ApiController extends Controller
             'webhooks:dlq:read' => 'Read failed webhook dead-letter events.',
             'webhooks:dlq:replay' => 'Replay failed webhook dead-letter events.',
         ];
-        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+        if (!$this->isWritesExperimentalEnabled()) {
             foreach ($this->controlScopeKeys() as $scope) {
                 unset($scopes[$scope]);
             }
@@ -3308,9 +3333,9 @@ class ApiController extends Controller
         return $scopes;
     }
 
-    private function isRefundApprovalsExperimentalEnabled(): bool
+    private function isWritesExperimentalEnabled(): bool
     {
-        return Plugin::getInstance()->isRefundApprovalsExperimentalEnabled();
+        return Plugin::getInstance()->isWritesExperimentalEnabled();
     }
 
     private function isUsersApiEnabled(): bool
@@ -3323,9 +3348,9 @@ class ApiController extends Controller
         return Plugin::getInstance()->isAddressesApiEnabled();
     }
 
-    private function guardRefundApprovalsExperimentalEnabled(): ?Response
+    private function guardWritesExperimentalEnabled(): ?Response
     {
-        if ($this->isRefundApprovalsExperimentalEnabled()) {
+        if ($this->isWritesExperimentalEnabled()) {
             return null;
         }
 
@@ -4873,12 +4898,33 @@ class ApiController extends Controller
                     'path' => '/agents/v1/control/actions/execute',
                     'body' => [
                         'type' => 'object',
+                        'required' => ['actionType', 'idempotencyKey'],
                         'properties' => [
                             'actionType' => ['type' => 'string'],
                             'actionRef' => ['type' => 'string'],
                             'approvalId' => ['type' => 'integer'],
                             'idempotencyKey' => ['type' => 'string'],
                             'payload' => ['type' => 'object'],
+                        ],
+                        'xActionPayloads' => [
+                            'entry.updateDraft' => [
+                                'requiredScope' => 'entries:write',
+                                'description' => 'Create/update an entry draft without publishing.',
+                                'payload' => [
+                                    'type' => 'object',
+                                    'required' => ['entryId'],
+                                    'properties' => [
+                                        'entryId' => ['type' => 'integer', 'minimum' => 1],
+                                        'siteId' => ['type' => 'integer', 'minimum' => 1],
+                                        'draftId' => ['type' => 'integer', 'minimum' => 1],
+                                        'title' => ['type' => 'string'],
+                                        'slug' => ['type' => 'string'],
+                                        'draftName' => ['type' => 'string'],
+                                        'draftNotes' => ['type' => 'string'],
+                                        'fields' => ['type' => 'object'],
+                                    ],
+                                ],
+                            ],
                         ],
                     ],
                     'response' => [
@@ -4976,7 +5022,7 @@ class ApiController extends Controller
         if (!$this->isAddressesApiEnabled()) {
             unset($catalogs['v1']['addresses.list'], $catalogs['v1']['addresses.show']);
         }
-        if (!$this->isRefundApprovalsExperimentalEnabled()) {
+        if (!$this->isWritesExperimentalEnabled()) {
             unset(
                 $catalogs['v1']['control.approvals.list'],
                 $catalogs['v1']['control.approvals.request'],

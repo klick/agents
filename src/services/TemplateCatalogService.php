@@ -122,6 +122,30 @@ class TemplateCatalogService extends Component
                     'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: return-ret-100045-v1" "$BASE_URL/control/actions/execute" -d @docs/reference-automations/fixtures/return-action-execute.json',
                 ],
             ],
+            [
+                'id' => 'governed-entry-draft-update',
+                'displayName' => 'Governed Entry Draft Update',
+                'intent' => 'Create/update entry drafts through governed action execution without publishing.',
+                'requiresExperimental' => true,
+                'requiredScopes' => [
+                    'control:actions:execute',
+                    'entries:write',
+                    'control:executions:read',
+                ],
+                'optionalScopes' => [
+                    'control:approvals:request',
+                    'control:approvals:decide',
+                ],
+                'endpointSequence' => [
+                    $this->step('POST', '/control/approvals/request', 'control.approvals.request'),
+                    $this->step('POST', '/control/actions/execute', 'control.actions.execute'),
+                    $this->step('GET', '/control/executions', 'control.executions.list'),
+                ],
+                'sampleCommands' => [
+                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/request" -d \'{"actionType":"entry.updateDraft","actionRef":"ENTRY-OPS-1001","reason":"Prepare draft update for editorial review","metadata":{"source":"agent-runtime","agentId":"content-ops","traceId":"trace-entry-1001"},"payload":{"entryId":1001,"siteId":1}}\'',
+                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: entry-ops-1001-v1" "$BASE_URL/control/actions/execute" -d @docs/reference-automations/fixtures/entry-update-draft-execute.json',
+                ],
+            ],
         ];
     }
 
@@ -165,6 +189,6 @@ class TemplateCatalogService extends Component
             }
         }
 
-        return '0.9.2';
+        return '0.10.0';
     }
 }

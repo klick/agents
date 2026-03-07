@@ -64,6 +64,7 @@ expect_fixed "syncstate:write" "$API_CONTROLLER" "Sync-state write scope is decl
 expect_fixed "adoption:read" "$API_CONTROLLER" "Adoption metrics scope is declared in API controller"
 expect_fixed "metrics:read" "$API_CONTROLLER" "Observability metrics scope is declared in API controller"
 expect_fixed "control:actions:execute" "$API_CONTROLLER" "Control execution scope is declared in API controller"
+expect_fixed "entries:write" "$API_CONTROLLER" "Entry draft write scope is declared in API controller"
 expect_fixed "webhooks:dlq:replay" "$API_CONTROLLER" "Webhook replay scope is declared in API controller"
 
 expect_fixed "'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics'" "$PLUGIN_FILE" "Plugin registers adoption metrics route"
@@ -80,5 +81,6 @@ expect_fixed "Runbook & Alert Guidance" "$DASHBOARD_TEMPLATE" "Dashboard readine
 expect_fixed "getCpPosture()" "$ADOPTION_SERVICE" "Adoption metrics service uses existing security posture API"
 expect_fixed "for (\$attempt = 0; \$attempt < 4; \$attempt++)" "$CONTROL_SERVICE" "Control approval decisions use optimistic concurrency retries"
 expect_fixed "'secondaryDecisionBy' => null" "$CONTROL_SERVICE" "Control approval updates guard dual-approval second-decision races"
+expect_fixed "entry.updatedraft" "$CONTROL_SERVICE" "Control execution service supports entry.updateDraft action"
 
 echo "Control/consumer regression checks completed."

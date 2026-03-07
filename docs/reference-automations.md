@@ -58,7 +58,7 @@ curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/entries?section=sup
 
 Template id: `governed-return-approval-run`
 
-Requires: `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`
+Requires: `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`
 
 Contract lookups:
 
@@ -77,4 +77,32 @@ curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: appl
 
 curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: return-ret-100045-v1" "$BASE_URL/control/actions/execute" \
   -d @docs/reference-automations/fixtures/return-action-execute.json
+```
+
+## 4) Governed Entry Draft Update
+
+Template id: `governed-entry-draft-update`
+
+Requires: `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`
+
+Contract lookups:
+
+- `GET $BASE_URL/schema?endpoint=control.approvals.request`
+- `GET $BASE_URL/schema?endpoint=control.actions.execute`
+
+Recommended scopes:
+
+- `control:actions:execute`
+- `entries:write`
+- `control:approvals:request`
+- `control:approvals:decide`
+
+Example execution:
+
+```bash
+curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/request" \
+  -d '{"actionType":"entry.updateDraft","actionRef":"ENTRY-OPS-1001","reason":"Prepare draft update for editorial review","metadata":{"source":"agent-runtime","agentId":"content-ops","traceId":"trace-entry-1001"},"payload":{"entryId":1001,"siteId":1}}'
+
+curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: entry-ops-1001-v1" "$BASE_URL/control/actions/execute" \
+  -d @docs/reference-automations/fixtures/entry-update-draft-execute.json
 ```

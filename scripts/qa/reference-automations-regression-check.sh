@@ -27,6 +27,7 @@ expect_file "$PLUGIN_ROOT/docs/reference-automations/fixtures/catalog-sync-check
 expect_file "$PLUGIN_ROOT/docs/reference-automations/fixtures/return-approval-request.json" "Return approval request fixture"
 expect_file "$PLUGIN_ROOT/docs/reference-automations/fixtures/return-approval-decide.json" "Return approval decision fixture"
 expect_file "$PLUGIN_ROOT/docs/reference-automations/fixtures/return-action-execute.json" "Return action execute fixture"
+expect_file "$PLUGIN_ROOT/docs/reference-automations/fixtures/entry-update-draft-execute.json" "Entry draft execute fixture"
 
 expect_fixed "agents/v1/templates" "$PLUGIN_ROOT/src/Plugin.php" "Templates route registration missing"
 expect_fixed "function actionTemplates" "$PLUGIN_ROOT/src/controllers/ApiController.php" "Templates endpoint action missing"
@@ -38,6 +39,8 @@ expect_fixed "agents/template-catalog" "$PLUGIN_ROOT/src/controllers/ApiControll
 expect_fixed "Template id: \`catalog-sync-loop\`" "$PLUGIN_ROOT/docs/reference-automations.md" "catalog-sync-loop reference doc missing"
 expect_fixed "Template id: \`support-context-lookup\`" "$PLUGIN_ROOT/docs/reference-automations.md" "support-context-lookup reference doc missing"
 expect_fixed "Template id: \`governed-return-approval-run\`" "$PLUGIN_ROOT/docs/reference-automations.md" "governed-return-approval-run reference doc missing"
+expect_fixed "Template id: \`governed-entry-draft-update\`" "$PLUGIN_ROOT/docs/reference-automations.md" "governed-entry-draft-update reference doc missing"
+expect_fixed "\"actionType\": \"entry.updateDraft\"" "$PLUGIN_ROOT/docs/reference-automations/fixtures/entry-update-draft-execute.json" "entry.updateDraft fixture action type missing"
 
 while IFS= read -r fixture; do
   php -r 'json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);' "$fixture" >/dev/null

@@ -28,6 +28,7 @@ class StarterPackService extends Component
             'catalog-sync-loop',
             'support-context-lookup',
             'governed-return-approval-run',
+            'governed-entry-draft-update',
         ];
         $starterPacks = [];
         foreach ($orderedTemplateIds as $templateId) {
@@ -107,6 +108,9 @@ class StarterPackService extends Component
         } elseif ($templateId === 'governed-return-approval-run') {
             $env[] = ['name' => 'RETURN_REF', 'required' => false, 'default' => 'RET-100045'];
             $env[] = ['name' => 'ORDER_NUMBER', 'required' => false, 'default' => 'A1B2C3D4'];
+        } elseif ($templateId === 'governed-entry-draft-update') {
+            $env[] = ['name' => 'ENTRY_ID', 'required' => true, 'default' => '1001'];
+            $env[] = ['name' => 'SITE_ID', 'required' => false, 'default' => '1'];
         }
 
         return $env;
@@ -129,6 +133,11 @@ class StarterPackService extends Component
                 'curl' => $this->governedReturnCurlSnippet($basePath),
                 'javascript' => $this->governedReturnJavascriptSnippet($basePath),
                 'python' => $this->governedReturnPythonSnippet($basePath),
+            ],
+            'governed-entry-draft-update' => [
+                'curl' => $this->governedEntryDraftUpdateCurlSnippet($basePath),
+                'javascript' => $this->governedEntryDraftUpdateJavascriptSnippet($basePath),
+                'python' => $this->governedEntryDraftUpdatePythonSnippet($basePath),
             ],
             default => [],
         };
@@ -358,7 +367,7 @@ set -euo pipefail
 : "${ORDER_NUMBER:=A1B2C3D4}"
 
 curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/request" \
-  -d "{\"actionType\":\"return.request\",\"actionRef\":\"$RETURN_REF\",\"reason\":\"Customer return requested\",\"metadata\":{\"source\":\"agent-runtime\",\"agentId\":\"returns-orchestrator\",\"traceId\":\"trace-100045\"},\"payload\":{\"orderNumber\":\"$ORDER_NUMBER\",\"amount\":49.9,\"currency\":\"GBP\",\"lineItems\":[{\"sku\":\"SKU-123\",\"qty\":1}]}}"
+  -d "{\"actionType\":\"return.request\",\"actionRef\":\"$RETURN_REF\",\"reason\":\"Customer control requested\",\"metadata\":{\"source\":\"agent-runtime\",\"agentId\":\"returns-orchestrator\",\"traceId\":\"trace-100045\"},\"payload\":{\"orderNumber\":\"$ORDER_NUMBER\",\"amount\":49.9,\"currency\":\"GBP\",\"lineItems\":[{\"sku\":\"SKU-123\",\"qty\":1}]}}"
 
 curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/decide" \
   -d '{"approvalId":123,"decision":"approved","decisionReason":"Policy and amount threshold satisfied"}'
@@ -401,7 +410,7 @@ const approval = await request("/control/approvals/request", {
   body: JSON.stringify({
     actionType: "return.request",
     actionRef: RETURN_REF,
-    reason: "Customer return requested",
+    reason: "Customer control requested",
     metadata: {
       source: "agent-runtime",
       agentId: "returns-orchestrator",
@@ -472,7 +481,7 @@ def request(method: str, path: str, **kwargs):
 approval = request("POST", "/control/approvals/request", json={
     "actionType": "return.request",
     "actionRef": RETURN_REF,
-    "reason": "Customer return requested",
+    "reason": "Customer control requested",
     "metadata": {
         "source": "agent-runtime",
         "agentId": "returns-orchestrator",
@@ -511,6 +520,158 @@ PY;
         return str_replace('__BASE_PATH__', $basePath, trim($snippet));
     }
 
+    private function governedEntryDraftUpdateCurlSnippet(string $basePath): string
+    {
+        $snippet = <<<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SITE_URL:=https://example.test}"
+: "${BASE_URL:=$SITE_URL__BASE_PATH__}"
+: "${AGENTS_TOKEN:=replace-with-token}"
+: "${ENTRY_ID:=1001}"
+: "${SITE_ID:=1}"
+
+curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/request" \
+  -d "{\"actionType\":\"entry.updateDraft\",\"actionRef\":\"ENTRY-OPS-$ENTRY_ID\",\"reason\":\"Prepare draft update for editorial review\",\"metadata\":{\"source\":\"agent-runtime\",\"agentId\":\"content-ops\",\"traceId\":\"trace-entry-$ENTRY_ID\"},\"payload\":{\"entryId\":$ENTRY_ID,\"siteId\":$SITE_ID}}"
+
+curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: entry-ops-$ENTRY_ID-v1" "$BASE_URL/control/actions/execute" \
+  -d "{\"actionType\":\"entry.updateDraft\",\"actionRef\":\"ENTRY-OPS-$ENTRY_ID\",\"approvalId\":123,\"idempotencyKey\":\"entry-ops-$ENTRY_ID-v1\",\"payload\":{\"entryId\":$ENTRY_ID,\"siteId\":$SITE_ID,\"draftName\":\"Agent update draft\",\"draftNotes\":\"Prepared by governed automation for editorial review.\",\"title\":\"Updated Draft Title\",\"slug\":\"updated-draft-title\",\"fields\":{\"summary\":\"Short summary prepared by the agent.\"}}}"
+BASH;
+
+        return str_replace('__BASE_PATH__', $basePath, trim($snippet));
+    }
+
+    private function governedEntryDraftUpdateJavascriptSnippet(string $basePath): string
+    {
+        $snippet = <<<'JS'
+const SITE_URL = process.env.SITE_URL ?? "https://example.test";
+const BASE_URL = process.env.BASE_URL ?? `${SITE_URL}__BASE_PATH__`;
+const AGENTS_TOKEN = process.env.AGENTS_TOKEN ?? "replace-with-token";
+const ENTRY_ID = Number(process.env.ENTRY_ID ?? 1001);
+const SITE_ID = Number(process.env.SITE_ID ?? 1);
+
+async function request(path, init = {}) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${AGENTS_TOKEN}`,
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}: ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
+await request("/control/approvals/request", {
+  method: "POST",
+  body: JSON.stringify({
+    actionType: "entry.updateDraft",
+    actionRef: `ENTRY-OPS-${ENTRY_ID}`,
+    reason: "Prepare draft update for editorial review",
+    metadata: {
+      source: "agent-runtime",
+      agentId: "content-ops",
+      traceId: `trace-entry-${ENTRY_ID}`,
+    },
+    payload: {
+      entryId: ENTRY_ID,
+      siteId: SITE_ID,
+    },
+  }),
+});
+
+await request("/control/actions/execute", {
+  method: "POST",
+  headers: { "X-Idempotency-Key": `entry-ops-${ENTRY_ID}-v1` },
+  body: JSON.stringify({
+    actionType: "entry.updateDraft",
+    actionRef: `ENTRY-OPS-${ENTRY_ID}`,
+    approvalId: 123,
+    idempotencyKey: `entry-ops-${ENTRY_ID}-v1`,
+    payload: {
+      entryId: ENTRY_ID,
+      siteId: SITE_ID,
+      draftName: "Agent update draft",
+      draftNotes: "Prepared by governed automation for editorial review.",
+      title: "Updated Draft Title",
+      slug: "updated-draft-title",
+      fields: {
+        summary: "Short summary prepared by the agent.",
+      },
+    },
+  }),
+});
+JS;
+
+        return str_replace('__BASE_PATH__', $basePath, trim($snippet));
+    }
+
+    private function governedEntryDraftUpdatePythonSnippet(string $basePath): string
+    {
+        $snippet = <<<'PY'
+import os
+import requests
+
+SITE_URL = os.getenv("SITE_URL", "https://example.test")
+BASE_URL = os.getenv("BASE_URL", f"{SITE_URL}__BASE_PATH__")
+AGENTS_TOKEN = os.getenv("AGENTS_TOKEN", "replace-with-token")
+ENTRY_ID = int(os.getenv("ENTRY_ID", "1001"))
+SITE_ID = int(os.getenv("SITE_ID", "1"))
+
+headers = {
+    "Authorization": f"Bearer {AGENTS_TOKEN}",
+    "Content-Type": "application/json",
+}
+
+def request(method: str, path: str, **kwargs):
+    response = requests.request(method, f"{BASE_URL}{path}", headers=headers, timeout=20, **kwargs)
+    response.raise_for_status()
+    return response.json()
+
+request("POST", "/control/approvals/request", json={
+    "actionType": "entry.updateDraft",
+    "actionRef": f"ENTRY-OPS-{ENTRY_ID}",
+    "reason": "Prepare draft update for editorial review",
+    "metadata": {
+        "source": "agent-runtime",
+        "agentId": "content-ops",
+        "traceId": f"trace-entry-{ENTRY_ID}",
+    },
+    "payload": {
+        "entryId": ENTRY_ID,
+        "siteId": SITE_ID,
+    },
+})
+
+idempotency_key = f"entry-ops-{ENTRY_ID}-v1"
+request("POST", "/control/actions/execute", json={
+    "actionType": "entry.updateDraft",
+    "actionRef": f"ENTRY-OPS-{ENTRY_ID}",
+    "approvalId": 123,
+    "idempotencyKey": idempotency_key,
+    "payload": {
+        "entryId": ENTRY_ID,
+        "siteId": SITE_ID,
+        "draftName": "Agent update draft",
+        "draftNotes": "Prepared by governed automation for editorial review.",
+        "title": "Updated Draft Title",
+        "slug": "updated-draft-title",
+        "fields": {
+            "summary": "Short summary prepared by the agent.",
+        },
+    },
+}, headers={**headers, "X-Idempotency-Key": idempotency_key})
+PY;
+
+        return str_replace('__BASE_PATH__', $basePath, trim($snippet));
+    }
+
     private function normalizeBasePath(string $basePath): string
     {
         $normalized = trim($basePath);
@@ -540,6 +701,6 @@ PY;
             }
         }
 
-        return '0.9.2';
+        return '0.10.0';
     }
 }

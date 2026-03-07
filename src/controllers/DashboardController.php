@@ -153,7 +153,7 @@ class DashboardController extends Controller
 
     public function actionControl(): Response
     {
-        $this->requireReturnRequestsCpEnabled();
+        $this->requireControlCpEnabled();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
 
         $plugin = Plugin::getInstance();
@@ -233,13 +233,20 @@ class DashboardController extends Controller
 
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
+        $writesState = $plugin->getWritesExperimentalState();
         $settingsOverrides = $this->getSettingsOverrides();
+        $writesConfigLocked = (bool)($settingsOverrides['enableWritesExperimental'] ?? false);
 
         return $this->renderCpTemplate('agents/settings-tab', [
             'settings' => $this->getSettingsModel(),
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
-            'returnRequestsCpEnabled' => $plugin->isReturnRequestsCpEnabled(),
+            'writesExperimentalEnabled' => (bool)$writesState['enabled'],
+            'writesExperimentalSettingLocked' => (bool)$writesState['locked'] || $writesConfigLocked,
+            'writesExperimentalLockedByEnv' => (bool)$writesState['locked'],
+            'writesExperimentalConfigLocked' => $writesConfigLocked,
+            'writesExperimentalLockSource' => (string)($writesState['source'] ?? ''),
+            'controlCpEnabled' => $plugin->isControlCpEnabled(),
             'credentialUsageIndicatorSettingLocked' => (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false),
             'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
             'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
@@ -417,11 +424,15 @@ class DashboardController extends Controller
         $plugin = Plugin::getInstance();
         $settings = $this->getSettingsModel();
         $enabledState = $plugin->getAgentsEnabledState();
+        $writesState = $plugin->getWritesExperimentalState();
         $settingsOverrides = $this->getSettingsOverrides();
         $resetDiscoveryBodyTarget = strtolower(trim((string)$this->request->getBodyParam('resetDiscoveryBodyTarget', '')));
         $llmsLocked = (bool)($settingsOverrides['enableLlmsTxt'] ?? false);
         $llmsFullLocked = (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false);
         $commerceLocked = (bool)($settingsOverrides['enableCommerceTxt'] ?? false);
+        $writesConfigLocked = (bool)($settingsOverrides['enableWritesExperimental'] ?? false);
+        $writesEnvLocked = (bool)($writesState['locked'] ?? false);
+        $writesLocked = $writesConfigLocked || $writesEnvLocked;
         $credentialUsageIndicatorLocked = (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false);
         $llmsBodyLocked = (bool)($settingsOverrides['llmsTxtBody'] ?? false);
         $commerceBodyLocked = (bool)($settingsOverrides['commerceTxtBody'] ?? false);
@@ -432,7 +443,10 @@ class DashboardController extends Controller
         $settingsData['enabled'] = (bool)$enabledState['locked']
             ? (bool)$enabledState['enabled']
             : $this->parseBooleanBodyParam('enabled', (bool)$settings->enabled);
-        $settingsData['allowCpApprovalRequests'] = $plugin->isReturnRequestsCpEnabled()
+        $settingsData['enableWritesExperimental'] = $writesLocked
+            ? (bool)$settings->enableWritesExperimental
+            : $this->parseBooleanBodyParam('enableWritesExperimental', (bool)$settings->enableWritesExperimental);
+        $settingsData['allowCpApprovalRequests'] = $plugin->isControlCpEnabled()
             ? $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests)
             : false;
         $settingsData['enableCredentialUsageIndicator'] = $credentialUsageIndicatorLocked
@@ -491,6 +505,12 @@ class DashboardController extends Controller
         $notes = [];
         if ((bool)$enabledState['locked']) {
             $notes[] = '`enabled` remains controlled by `PLUGIN_AGENTS_ENABLED`.';
+        }
+        if ($writesEnvLocked) {
+            $notes[] = '`enableWritesExperimental` remains controlled by `' . (string)($writesState['source'] ?? 'environment') . '`.';
+        }
+        if ($writesConfigLocked) {
+            $notes[] = '`enableWritesExperimental` is controlled by `config/agents.php`.';
         }
         if ($llmsLocked) {
             $notes[] = '`enableLlmsTxt` is controlled by `config/agents.php`.';
@@ -650,6 +670,9 @@ class DashboardController extends Controller
         $owner = $this->parseStringBodyParam('credentialOwner', $this->resolveCurrentCpUserEmail());
         $token = (string)$this->request->getBodyParam('credentialToken', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
+        $forceHumanApproval = $this->hasWritingCapabilityScope($scopes)
+            ? $this->parseBooleanBodyParam('credentialForceHumanApproval', false)
+            : false;
         $webhookSubscriptions = [
             'resourceTypes' => $this->parseWebhookDimensionInput(
                 $this->request->getBodyParam('credentialWebhookResourceTypes', []),
@@ -673,6 +696,7 @@ class DashboardController extends Controller
                 $handle,
                 $displayName,
                 $owner,
+                $forceHumanApproval,
                 $token,
                 $scopes,
                 $defaultScopes,
@@ -709,6 +733,9 @@ class DashboardController extends Controller
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
         $owner = $this->parseStringBodyParam('credentialOwner', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
+        $forceHumanApproval = $this->hasWritingCapabilityScope($scopes)
+            ? $this->parseBooleanBodyParam('credentialForceHumanApproval', false)
+            : false;
         $webhookSubscriptions = [
             'resourceTypes' => $this->parseWebhookDimensionInput(
                 $this->request->getBodyParam('credentialWebhookResourceTypes', []),
@@ -737,6 +764,7 @@ class DashboardController extends Controller
                 $credentialId,
                 $displayName,
                 $owner,
+                $forceHumanApproval,
                 $scopes,
                 $defaultScopes,
                 $webhookSubscriptions,
@@ -932,7 +960,7 @@ class DashboardController extends Controller
 
     public function actionUpsertControlPolicy(): Response
     {
-        $this->requireReturnRequestsCpEnabled();
+        $this->requireControlCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE);
 
@@ -961,7 +989,7 @@ class DashboardController extends Controller
 
     public function actionRequestControlApproval(): Response
     {
-        $this->requireReturnRequestsCpEnabled();
+        $this->requireControlCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
 
@@ -1018,7 +1046,7 @@ class DashboardController extends Controller
 
     public function actionDecideControlApproval(): Response
     {
-        $this->requireReturnRequestsCpEnabled();
+        $this->requireControlCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
 
@@ -1070,7 +1098,7 @@ class DashboardController extends Controller
 
     public function actionExecuteControlAction(): Response
     {
-        $this->requireReturnRequestsCpEnabled();
+        $this->requireControlCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
 
@@ -1127,7 +1155,7 @@ class DashboardController extends Controller
 
     public function actionSimulateControlAction(): Response
     {
-        $this->requireReturnRequestsCpEnabled();
+        $this->requireControlCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
 
@@ -1185,7 +1213,7 @@ class DashboardController extends Controller
             $apiBasePath . '/capabilities',
             $apiBasePath . '/openapi.json',
         ];
-        if ($this->isReturnRequestsCpEnabled()) {
+        if ($this->isControlCpEnabled()) {
             $endpoints = array_merge($endpoints, [
                 $apiBasePath . '/control/policies',
                 $apiBasePath . '/control/approvals',
@@ -1321,6 +1349,22 @@ class DashboardController extends Controller
         $scopes = array_values(array_unique($scopes));
         sort($scopes);
         return $scopes;
+    }
+
+    private function hasWritingCapabilityScope(array $scopes): bool
+    {
+        $writingScopes = ['entries:write'];
+        foreach ($scopes as $scope) {
+            $normalized = strtolower(trim((string)$scope));
+            if ($normalized === '') {
+                continue;
+            }
+            if (in_array($normalized, $writingScopes, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function parseWebhookDimensionInput(mixed $rawInput, array $allowedValues): array
@@ -1536,6 +1580,7 @@ class DashboardController extends Controller
         }
 
         return [
+            'enableWritesExperimental' => array_key_exists('enableWritesExperimental', $config),
             'enableCredentialUsageIndicator' => array_key_exists('enableCredentialUsageIndicator', $config),
             'enableLlmsTxt' => array_key_exists('enableLlmsTxt', $config),
             'enableLlmsFullTxt' => array_key_exists('enableLlmsFullTxt', $config),
@@ -1882,14 +1927,14 @@ class DashboardController extends Controller
         ];
     }
 
-    private function isReturnRequestsCpEnabled(): bool
+    private function isControlCpEnabled(): bool
     {
-        return Plugin::getInstance()->isReturnRequestsCpEnabled();
+        return Plugin::getInstance()->isControlCpEnabled();
     }
 
-    private function requireReturnRequestsCpEnabled(): void
+    private function requireControlCpEnabled(): void
     {
-        if ($this->isReturnRequestsCpEnabled()) {
+        if ($this->isControlCpEnabled()) {
             return;
         }
 

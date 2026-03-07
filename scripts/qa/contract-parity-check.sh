@@ -91,7 +91,7 @@ cut -d' ' -f2 "$capabilities_endpoints" | LC_ALL=C sort -u >"$capabilities_paths
 
 awk '
   /private function availableScopes\(\): array/ { in_section=1; next }
-  /private function isRefundApprovalsExperimentalEnabled\(\): bool/ { in_section=0 }
+  /private function isWritesExperimentalEnabled\(\): bool/ { in_section=0 }
   in_section { print }
 ' "$API_CONTROLLER" \
   | perl -ne 'while (/\x27([a-z0-9:_]+)\x27\s*=>/g) { print "$1\n"; }' \

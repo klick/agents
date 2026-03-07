@@ -4,6 +4,7 @@ namespace Klick\Agents\services;
 
 use Craft;
 use craft\base\Component;
+use craft\elements\Entry;
 use craft\helpers\StringHelper;
 use yii\db\Query;
 
@@ -28,6 +29,7 @@ class ControlPlaneService extends Component
     private const RISK_LEVEL_MEDIUM = 'medium';
     private const RISK_LEVEL_HIGH = 'high';
     private const RISK_LEVEL_CRITICAL = 'critical';
+    private const ACTION_ENTRY_UPDATE_DRAFT = 'entry.updatedraft';
 
     public function getControlPlaneSnapshot(int $limit = 20): array
     {
@@ -551,6 +553,7 @@ class ControlPlaneService extends Component
         $actionRef = $this->normalizeOptionalString($input['actionRef'] ?? null, 128);
         $payload = $this->normalizeArray($input['payload'] ?? []);
         $approvalId = isset($input['approvalId']) ? (int)$input['approvalId'] : 0;
+        $forceHumanApproval = (bool)($input['forceHumanApproval'] ?? false);
 
         $policy = $this->resolvePolicyForAction($actionType);
         $requiredScope = $this->normalizeOptionalString($policy['requiredScope'] ?? null, 96);
@@ -565,13 +568,16 @@ class ControlPlaneService extends Component
             $reasons[] = 'Matched policy is disabled for execution.';
         }
 
-        if ((bool)($policy['requiresApproval'] ?? true)) {
+        $requiresApproval = (bool)($policy['requiresApproval'] ?? true) || $forceHumanApproval;
+        if ($requiresApproval) {
             $approvalStatus = 'required';
             if ($approvalId <= 0) {
                 if ($status !== 'blocked') {
                     $status = 'requires_approval';
                 }
-                $reasons[] = 'Approval is required before execution.';
+                $reasons[] = $forceHumanApproval
+                    ? 'This account requires human approval before execution.'
+                    : 'Approval is required before execution.';
             } else {
                 $approval = $this->findApprovalById($approvalId);
                 if (!is_array($approval)) {
@@ -612,6 +618,7 @@ class ControlPlaneService extends Component
                 'approvalStatus' => $approvalStatus,
                 'wouldExecute' => $status === 'allowed',
                 'reasons' => $reasons,
+                'forceHumanApproval' => $forceHumanApproval,
             ],
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
         ];
@@ -642,19 +649,14 @@ class ControlPlaneService extends Component
         $requestedBy = $this->resolveActorId($actor);
         $payload = $this->normalizeArray($input['payload'] ?? []);
         $approvalId = isset($input['approvalId']) ? (int)$input['approvalId'] : 0;
+        $forceHumanApproval = (bool)($input['forceHumanApproval'] ?? false);
 
         $policy = $this->resolvePolicyForAction($actionType);
         $requiredScope = $this->normalizeOptionalString($policy['requiredScope'] ?? null, 96);
 
         $status = self::EXECUTION_STATUS_PENDING;
         $errorMessage = null;
-        $resultPayload = [
-            'executionMode' => 'record_only',
-            'message' => 'Action execution recorded. Integrate downstream adapters for side effects.',
-            'policyHandle' => (string)($policy['handle'] ?? 'default'),
-            'riskLevel' => (string)($policy['riskLevel'] ?? self::RISK_LEVEL_HIGH),
-            'requiresApproval' => (bool)($policy['requiresApproval'] ?? true),
-        ];
+        $resultPayload = $this->recordOnlyResultPayload($policy);
 
         if (!(bool)($policy['enabled'] ?? true)) {
             $status = self::EXECUTION_STATUS_BLOCKED;
@@ -663,11 +665,14 @@ class ControlPlaneService extends Component
         }
 
         $approvalEntityId = null;
-        if ($status === self::EXECUTION_STATUS_PENDING && (bool)($policy['requiresApproval'] ?? true)) {
+        $requiresApproval = (bool)($policy['requiresApproval'] ?? true) || $forceHumanApproval;
+        if ($status === self::EXECUTION_STATUS_PENDING && $requiresApproval) {
             $approval = $approvalId > 0 ? $this->findApprovalById($approvalId) : null;
             if (!is_array($approval)) {
                 $status = self::EXECUTION_STATUS_BLOCKED;
-                $errorMessage = 'Approval is required before execution.';
+                $errorMessage = $forceHumanApproval
+                    ? 'This account requires human approval before execution.'
+                    : 'Approval is required before execution.';
                 $resultPayload['message'] = $errorMessage;
             } else {
                 $approvalEntityId = (int)($approval['id'] ?? 0);
@@ -689,7 +694,13 @@ class ControlPlaneService extends Component
         }
 
         if ($status === self::EXECUTION_STATUS_PENDING) {
-            $status = self::EXECUTION_STATUS_SUCCEEDED;
+            $executionOutcome = $this->executeActionPayload($actionType, $actionRef, $payload, $policy);
+            $status = (string)($executionOutcome['status'] ?? self::EXECUTION_STATUS_SUCCEEDED);
+            $errorMessage = $this->normalizeOptionalString($executionOutcome['errorMessage'] ?? null);
+            $resultPayloadCandidate = $executionOutcome['resultPayload'] ?? null;
+            if (is_array($resultPayloadCandidate) && !empty($resultPayloadCandidate)) {
+                $resultPayload = $resultPayloadCandidate;
+            }
         }
 
         $now = gmdate('Y-m-d H:i:s');
@@ -826,7 +837,7 @@ class ControlPlaneService extends Component
         $normalizedActionType = $this->normalizeActionType($actionType);
 
         if ($normalizedActionType === '' || !$this->tableExists(self::TABLE_POLICIES)) {
-            return $this->defaultPolicy();
+            return $this->defaultPolicy($normalizedActionType);
         }
 
         $rows = (new Query())
@@ -852,17 +863,318 @@ class ControlPlaneService extends Component
         }
 
         if (!is_array($matched)) {
-            return $this->defaultPolicy();
+            return $this->defaultPolicy($normalizedActionType);
         }
 
         $config = $this->normalizeArray($matched['config'] ?? []);
         $requiredScope = $this->normalizeOptionalString($config['requiredScope'] ?? null, 96);
         if ($requiredScope === null || $requiredScope === '') {
-            $requiredScope = 'control:actions:execute';
+            $requiredScope = $this->defaultRequiredScopeForAction($normalizedActionType);
         }
 
         $matched['requiredScope'] = $requiredScope;
         return $matched;
+    }
+
+    private function executeActionPayload(string $actionType, ?string $actionRef, array $payload, array $policy): array
+    {
+        if ($actionType === self::ACTION_ENTRY_UPDATE_DRAFT) {
+            return $this->executeEntryUpdateDraftAction($actionType, $actionRef, $payload, $policy);
+        }
+
+        return [
+            'status' => self::EXECUTION_STATUS_SUCCEEDED,
+            'errorMessage' => null,
+            'resultPayload' => $this->recordOnlyResultPayload($policy),
+        ];
+    }
+
+    private function executeEntryUpdateDraftAction(string $actionType, ?string $actionRef, array $payload, array $policy): array
+    {
+        $entryId = isset($payload['entryId']) ? (int)$payload['entryId'] : 0;
+        if ($entryId <= 0) {
+            throw new \InvalidArgumentException('payload.entryId is required and must be a positive integer for actionType `entry.updateDraft`.');
+        }
+
+        $siteId = isset($payload['siteId']) ? (int)$payload['siteId'] : 0;
+        if (isset($payload['siteId']) && $siteId <= 0) {
+            throw new \InvalidArgumentException('payload.siteId must be a positive integer when provided.');
+        }
+
+        $draftId = isset($payload['draftId']) ? (int)$payload['draftId'] : 0;
+        if (isset($payload['draftId']) && $draftId <= 0) {
+            throw new \InvalidArgumentException('payload.draftId must be a positive integer when provided.');
+        }
+
+        $titleProvided = array_key_exists('title', $payload);
+        $slugProvided = array_key_exists('slug', $payload);
+        $draftNameProvided = array_key_exists('draftName', $payload);
+        $draftNotesProvided = array_key_exists('draftNotes', $payload);
+        $fieldsProvided = array_key_exists('fields', $payload);
+
+        $title = $this->normalizePayloadString($payload['title'] ?? null, 'payload.title');
+        $slug = $this->normalizePayloadString($payload['slug'] ?? null, 'payload.slug');
+        $draftName = $this->normalizePayloadString($payload['draftName'] ?? null, 'payload.draftName');
+        $draftNotes = $this->normalizePayloadString($payload['draftNotes'] ?? null, 'payload.draftNotes');
+
+        $fieldValues = [];
+        if ($fieldsProvided) {
+            if (!is_array($payload['fields'])) {
+                throw new \InvalidArgumentException('payload.fields must be an object/map when provided.');
+            }
+            $fieldValues = $payload['fields'];
+        }
+
+        if (
+            !$titleProvided &&
+            !$slugProvided &&
+            !$draftNameProvided &&
+            !$draftNotesProvided &&
+            !$fieldsProvided
+        ) {
+            throw new \InvalidArgumentException('payload must include at least one of: title, slug, draftName, draftNotes, or fields.');
+        }
+
+        $canonicalQuery = Entry::find()
+            ->id($entryId)
+            ->canonicalsOnly()
+            ->status(null);
+
+        if ($siteId > 0) {
+            $canonicalQuery->siteId($siteId);
+        } else {
+            $canonicalQuery->site('*');
+        }
+
+        /** @var Entry|null $canonical */
+        $canonical = $canonicalQuery->one();
+        if (!$canonical instanceof Entry) {
+            throw new \InvalidArgumentException('payload.entryId references an unknown canonical entry.');
+        }
+
+        $createdDraft = false;
+        if ($draftId > 0) {
+            $draftQuery = Entry::find()
+                ->id($draftId)
+                ->drafts(true)
+                ->status(null);
+
+            if ($siteId > 0) {
+                $draftQuery->siteId($siteId);
+            } else {
+                $draftQuery->site('*');
+            }
+
+            /** @var Entry|null $draft */
+            $draft = $draftQuery->one();
+            if (!$draft instanceof Entry || !$draft->getIsDraft()) {
+                throw new \InvalidArgumentException('payload.draftId must reference an existing draft entry.');
+            }
+            if ((int)$draft->getCanonicalId() !== (int)$canonical->id) {
+                throw new \InvalidArgumentException('payload.draftId does not belong to the provided payload.entryId canonical entry.');
+            }
+        } else {
+            /** @var Entry $draft */
+            $draft = Craft::$app->getDrafts()->createDraft(
+                $canonical,
+                creatorId: null,
+                name: $draftNameProvided ? $draftName : null,
+                notes: $draftNotesProvided ? $draftNotes : null,
+                newAttributes: [],
+                provisional: false,
+            );
+            $createdDraft = true;
+        }
+
+        $changedKeys = [];
+        if ($titleProvided) {
+            $draft->title = $title;
+            $changedKeys[] = 'title';
+        }
+        if ($slugProvided) {
+            $draft->slug = $slug;
+            $changedKeys[] = 'slug';
+        }
+        if ($draftNameProvided) {
+            if (!$createdDraft) {
+                $draft->draftName = $draftName;
+            }
+            $changedKeys[] = 'draftName';
+        }
+        if ($draftNotesProvided) {
+            if (!$createdDraft) {
+                $draft->draftNotes = $draftNotes;
+            }
+            $changedKeys[] = 'draftNotes';
+        }
+        if ($fieldsProvided) {
+            $fieldUpdateResult = $this->prepareEntryFieldValues($draft, $fieldValues);
+            if (!empty($fieldUpdateResult['unknownFieldHandles'])) {
+                $unknown = implode('`, `', (array)$fieldUpdateResult['unknownFieldHandles']);
+                throw new \InvalidArgumentException(sprintf('payload.fields contains unknown field handles: `%s`.', $unknown));
+            }
+            if (!empty($fieldUpdateResult['fieldValues'])) {
+                $draft->setFieldValues((array)$fieldUpdateResult['fieldValues']);
+                foreach ((array)$fieldUpdateResult['fieldValues'] as $handle => $_value) {
+                    $changedKeys[] = 'fields.' . $handle;
+                }
+            }
+        }
+
+        if (empty($changedKeys)) {
+            throw new \InvalidArgumentException('payload does not contain any effective draft mutations.');
+        }
+
+        $saveSuccess = Craft::$app->getElements()->saveElement(
+            $draft,
+            propagate: $siteId <= 0,
+            saveContent: true,
+        );
+        if (!$saveSuccess) {
+            $validationErrors = $this->normalizeElementErrors($draft->getErrors());
+            $firstError = !empty($validationErrors) ? (string)$validationErrors[0] : 'Draft update failed validation.';
+
+            return [
+                'status' => self::EXECUTION_STATUS_FAILED,
+                'errorMessage' => $firstError,
+                'resultPayload' => [
+                    'executionMode' => 'entry_draft_update',
+                    'message' => 'Draft update failed validation.',
+                    'policyHandle' => (string)($policy['handle'] ?? 'default'),
+                    'riskLevel' => (string)($policy['riskLevel'] ?? self::RISK_LEVEL_HIGH),
+                    'requiresApproval' => (bool)($policy['requiresApproval'] ?? true),
+                    'actionType' => $actionType,
+                    'actionRef' => $actionRef,
+                    'entryId' => (int)$canonical->id,
+                    'draftId' => (int)($draft->id ?? 0),
+                    'siteId' => (int)($draft->siteId ?? 0),
+                    'createdDraft' => $createdDraft,
+                    'changedKeys' => array_values(array_unique($changedKeys)),
+                    'validationErrors' => $validationErrors,
+                ],
+            ];
+        }
+
+        return [
+            'status' => self::EXECUTION_STATUS_SUCCEEDED,
+            'errorMessage' => null,
+            'resultPayload' => [
+                'executionMode' => 'entry_draft_update',
+                'message' => 'Draft updated successfully.',
+                'policyHandle' => (string)($policy['handle'] ?? 'default'),
+                'riskLevel' => (string)($policy['riskLevel'] ?? self::RISK_LEVEL_HIGH),
+                'requiresApproval' => (bool)($policy['requiresApproval'] ?? true),
+                'actionType' => $actionType,
+                'actionRef' => $actionRef,
+                'entryId' => (int)$canonical->id,
+                'draftId' => (int)$draft->id,
+                'siteId' => (int)($draft->siteId ?? 0),
+                'draftName' => $this->extractDraftName($draft),
+                'createdDraft' => $createdDraft,
+                'changedKeys' => array_values(array_unique($changedKeys)),
+            ],
+        ];
+    }
+
+    private function prepareEntryFieldValues(Entry $draft, array $rawFieldValues): array
+    {
+        $allowedFieldHandles = [];
+        $fieldLayout = $draft->getFieldLayout();
+        if ($fieldLayout !== null) {
+            foreach ($fieldLayout->getCustomFields() as $field) {
+                $handle = trim((string)$field->handle);
+                if ($handle !== '') {
+                    $allowedFieldHandles[] = $handle;
+                }
+            }
+        }
+
+        $allowedFieldHandles = array_values(array_unique($allowedFieldHandles));
+        $fieldValues = [];
+        $unknownFieldHandles = [];
+        foreach ($rawFieldValues as $fieldHandle => $value) {
+            if (!is_string($fieldHandle) && !is_numeric($fieldHandle)) {
+                throw new \InvalidArgumentException('payload.fields keys must be field handles.');
+            }
+            $normalizedHandle = trim((string)$fieldHandle);
+            if ($normalizedHandle === '') {
+                continue;
+            }
+            if (!in_array($normalizedHandle, $allowedFieldHandles, true)) {
+                $unknownFieldHandles[] = $normalizedHandle;
+                continue;
+            }
+            $fieldValues[$normalizedHandle] = $value;
+        }
+
+        return [
+            'fieldValues' => $fieldValues,
+            'unknownFieldHandles' => array_values(array_unique($unknownFieldHandles)),
+        ];
+    }
+
+    private function normalizePayloadString(mixed $value, string $path): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (!is_string($value) && !is_numeric($value)) {
+            throw new \InvalidArgumentException(sprintf('%s must be a string when provided.', $path));
+        }
+
+        return trim((string)$value);
+    }
+
+    private function normalizeElementErrors(array $errors): array
+    {
+        $messages = [];
+        foreach ($errors as $attribute => $attributeErrors) {
+            if (!is_array($attributeErrors)) {
+                continue;
+            }
+            foreach ($attributeErrors as $errorMessage) {
+                if (!is_string($errorMessage) && !is_numeric($errorMessage)) {
+                    continue;
+                }
+                $error = trim((string)$errorMessage);
+                if ($error === '') {
+                    continue;
+                }
+                $attributeName = trim((string)$attribute);
+                $messages[] = $attributeName !== '' ? sprintf('%s: %s', $attributeName, $error) : $error;
+            }
+        }
+
+        return array_values(array_unique($messages));
+    }
+
+    private function extractDraftName(Entry $draft): ?string
+    {
+        try {
+            $name = trim((string)$draft->getDraftName());
+            return $name !== '' ? $name : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function recordOnlyResultPayload(array $policy): array
+    {
+        return [
+            'executionMode' => 'record_only',
+            'message' => 'Action execution recorded. Integrate downstream adapters for side effects.',
+            'policyHandle' => (string)($policy['handle'] ?? 'default'),
+            'riskLevel' => (string)($policy['riskLevel'] ?? self::RISK_LEVEL_HIGH),
+            'requiresApproval' => (bool)($policy['requiresApproval'] ?? true),
+        ];
+    }
+
+    private function defaultRequiredScopeForAction(string $actionType): string
+    {
+        return match ($actionType) {
+            self::ACTION_ENTRY_UPDATE_DRAFT => 'entries:write',
+            default => 'control:actions:execute',
+        };
     }
 
     private function resolveRequiredApprovals(string $actionType, array $payload, array $metadata, array $policy): int
@@ -931,8 +1243,10 @@ class ControlPlaneService extends Component
         ];
     }
 
-    private function defaultPolicy(): array
+    private function defaultPolicy(string $actionType = ''): array
     {
+        $requiredScope = $this->defaultRequiredScopeForAction($actionType);
+
         return [
             'id' => 0,
             'handle' => 'default-control-policy',
@@ -942,10 +1256,10 @@ class ControlPlaneService extends Component
             'enabled' => true,
             'riskLevel' => self::RISK_LEVEL_HIGH,
             'config' => [
-                'requiredScope' => 'control:actions:execute',
+                'requiredScope' => $requiredScope,
                 'mode' => 'fail-safe',
             ],
-            'requiredScope' => 'control:actions:execute',
+            'requiredScope' => $requiredScope,
             'dateCreated' => null,
             'dateUpdated' => null,
         ];

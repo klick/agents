@@ -7,6 +7,7 @@ use craft\base\Model;
 class Settings extends Model
 {
     public bool $enabled = true;
+    public bool $enableWritesExperimental = false;
     public bool $allowCpApprovalRequests = false;
     public bool $enableCredentialUsageIndicator = true;
     public bool $enableLlmsTxt = true;
@@ -31,7 +32,7 @@ class Settings extends Model
     public function rules(): array
     {
         return [
-            [['enabled', 'allowCpApprovalRequests', 'enableCredentialUsageIndicator', 'enableLlmsTxt', 'enableLlmsFullTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
+            [['enabled', 'enableWritesExperimental', 'allowCpApprovalRequests', 'enableCredentialUsageIndicator', 'enableLlmsTxt', 'enableLlmsFullTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
             [['llmsTxtCacheTtl', 'commerceTxtCacheTtl'], 'integer', 'min' => 0, 'max' => 604800],
             [['reliabilityConsumerLagWarnSeconds', 'reliabilityConsumerLagCriticalSeconds'], 'safe'],
             [['llmsTxtBody', 'llmsSiteSummary', 'commerceTxtBody', 'commerceSummary', 'commerceCatalogUrl'], 'string'],

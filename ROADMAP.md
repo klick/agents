@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-07  
-Current release: `v0.9.1`
+Current release: `v0.10.0`
 
 ## Direction
 
@@ -85,7 +85,7 @@ Target: September 2026
 - Shipped copy/paste agent starter packs (`curl`, `javascript`, `python`) for onboarding.
 - Expanded operator reliability pack with threshold defaults, triage signals, and richer diagnostics bundle snapshots.
 - Shipped lifecycle governance controls: ownership metadata mapping, expiry/rotation reminders, and stale-key warnings.
-- Removed Return Requests CP surface (tab/routes/forms/permissions) from public operator UX; kept internal control-plane internals feature-flagged for future adapter-based execution.
+- Removed Control CP surface (tab/routes/forms/permissions) from public operator UX; kept internal control-plane internals feature-flagged for future adapter-based execution.
 
 Release outcome:
 
@@ -101,7 +101,7 @@ Release outcome:
 
 - Operators get a cleaner Agent card view now, with lifecycle governance still available for future reintroduction without backend rollback.
 
-## Planned (`v0.10.0`)
+## Planned (`v0.11.0`)
 
 Target: October 2026
 

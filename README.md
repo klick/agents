@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.9.3**
+Current plugin version: **0.10.0**
 
 ## Purpose
 
@@ -40,7 +40,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 | Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
 | CLI (`craft agents/*`) | Production stable (ops tooling) | Operator/dev diagnostics and automation helper surface. |
 | Discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`) | Optional stable feature | Public discovery text, not core trust boundary. |
-| Control-plane actions (`/control/*`, return-request workflows) | Experimental | Enabled only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`. |
+| Control-plane actions (`/control/*`, governed write workflows) | Experimental | Enabled only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`. |
 
 This plugin gives external/internal agents a stable interface for:
 
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.9.3
+composer require klick/agents:^0.10.0
 php craft plugin/install agents
 ```
 
@@ -119,7 +119,8 @@ Environment variables:
 - `PLUGIN_AGENTS_WEBHOOK_SECRET` (required when webhook URL is set; used for HMAC signature)
 - `PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS` (default: `5`)
 - `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default: `3`, max queue retry attempts)
-- `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL` (default: `false`; enables refund-approval/control surfaces)
+- `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (default: `false`; enables governed write/control API surfaces)
+- `PLUGIN_AGENTS_WRITES_CP_EXPERIMENTAL` (optional explicit CP override; when unset, CP control tab/routes follow `enableWritesExperimental`)
 
 These are documented in `.env.example`.
 
@@ -269,7 +270,7 @@ Read/discovery endpoints:
 - `GET /capabilities`
 - `GET /openapi.json`
 
-Control-plane endpoints (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`):
+Control-plane endpoints (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`):
 
 - `GET /control/policies`
 - `POST /control/policies/upsert`
@@ -333,23 +334,24 @@ Read scopes:
 - `openapi:read`
 - `webhooks:dlq:read`
 - `webhooks:dlq:replay`
-- `control:policies:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:approvals:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:executions:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:audit:read` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:policies:read` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:approvals:read` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:executions:read` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:audit:read` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
 
 Write scopes:
 
 - `syncstate:write`
+- `entries:write` (experimental; required by governed draft updates like `entry.updateDraft` and only useful when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
 - Legacy scope aliases (deprecated, still accepted during transition):
   - `consumers:read` -> `syncstate:read`
   - `consumers:write` -> `syncstate:write`
-- `control:policies:write` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:approvals:request` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:approvals:decide` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:approvals:write` (legacy combined scope, backward-compatible; only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:actions:simulate` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
-- `control:actions:execute` (only when `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`)
+- `control:policies:write` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:approvals:request` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:approvals:decide` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:approvals:write` (legacy combined scope, backward-compatible; only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:actions:simulate` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `control:actions:execute` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
 
 ## CLI Commands
 
@@ -776,7 +778,7 @@ return [
 - New default scopes intentionally exclude elevated permissions.
 - To preserve legacy broad reads temporarily, set:
 - `PLUGIN_AGENTS_TOKEN_SCOPES=\"health:read readiness:read auth:read adoption:read metrics:read lifecycle:read diagnostics:read products:read orders:read orders:read_sensitive entries:read entries:read_all_statuses changes:read sections:read capabilities:read openapi:read\"`
-  - If `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`, optionally append control read scopes: `control:policies:read control:approvals:read control:executions:read control:audit:read`
+  - If `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`, optionally append control read scopes: `control:policies:read control:approvals:read control:executions:read control:audit:read`
 
 ## Secure Deployment Verification
 
@@ -795,7 +797,7 @@ curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
   "https://example.com/agents/v1/entries?status=all&limit=1"
 
-# 5) Control policy list (only when PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true)
+# 5) Control policy list (only when PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true)
 curl -i -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
   "https://example.com/agents/v1/control/policies"
 

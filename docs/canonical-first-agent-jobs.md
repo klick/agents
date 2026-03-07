@@ -86,7 +86,7 @@ Purpose: execute a high-risk action only after policy and approval checks.
 
 Template id: `governed-return-approval-run`
 
-This flow requires `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`.
+This flow requires `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`.
 
 Required scopes (requester):
 
@@ -113,7 +113,7 @@ Approval request payload example:
 {
   "actionType": "return.request",
   "actionRef": "RET-100045",
-  "reason": "Customer return requested",
+  "reason": "Customer control requested",
   "metadata": {
     "source": "agent-runtime",
     "agentId": "returns-orchestrator",
@@ -140,6 +140,48 @@ Execute payload example:
     "orderNumber": "A1B2C3D4",
     "amount": 49.9,
     "currency": "GBP"
+  }
+}
+```
+
+## Job 4: Governed Entry Draft Update
+
+Purpose: prepare content updates in a draft for human review, without publishing.
+
+Required scopes:
+
+- `control:actions:execute`
+- `entries:write`
+
+Recommended with approvals:
+
+- `control:approvals:request`
+- `control:approvals:decide`
+
+Flow:
+
+1. (Optional) request/decide approval for `entry.updateDraft`.
+2. Execute `entry.updateDraft` with an idempotency key.
+3. Hand off draft to editorial review and publishing workflow.
+
+Execute payload example:
+
+```json
+{
+  "actionType": "entry.updateDraft",
+  "actionRef": "ENTRY-OPS-1001",
+  "approvalId": 123,
+  "idempotencyKey": "entry-ops-1001-v1",
+  "payload": {
+    "entryId": 1001,
+    "siteId": 1,
+    "draftName": "Agent update draft",
+    "draftNotes": "Prepared by governed automation for editorial review.",
+    "title": "Updated Draft Title",
+    "slug": "updated-draft-title",
+    "fields": {
+      "summary": "Short summary prepared by the agent."
+    }
   }
 }
 ```

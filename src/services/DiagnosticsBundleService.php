@@ -215,7 +215,7 @@ class DiagnosticsBundleService extends Component
                 'environmentProfileSource' => (string)($securityPosture['profile']['source'] ?? ''),
                 'profileDefaultsApplied' => (bool)($securityPosture['profile']['defaultsApplied'] ?? false),
                 'effectivePolicyVersion' => (string)($securityPosture['profile']['effectivePolicyVersion'] ?? ''),
-                'refundApprovalsExperimentalEnabled' => $plugin->isRefundApprovalsExperimentalEnabled(),
+                'writesExperimentalEnabled' => $plugin->isWritesExperimentalEnabled(),
             ],
             'checks' => $checks,
             'summary' => [

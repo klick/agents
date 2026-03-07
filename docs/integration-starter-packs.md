@@ -77,7 +77,7 @@ curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=su
 
 ### 3) Governed Return Approval Run (`governed-return-approval-run`)
 
-Requires: `PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL=true`
+Requires: `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`
 
 ```bash
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=governed-return-approval-run" \
@@ -91,5 +91,24 @@ curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=go
 
 ```bash
 curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=governed-return-approval-run" \
+  | jq -r '.starterPack.runtimes.python.snippet'
+```
+
+### 4) Governed Entry Draft Update (`governed-entry-draft-update`)
+
+Requires: `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`
+
+```bash
+curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=governed-entry-draft-update" \
+  | jq -r '.starterPack.runtimes.curl.snippet'
+```
+
+```bash
+curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=governed-entry-draft-update" \
+  | jq -r '.starterPack.runtimes.javascript.snippet'
+```
+
+```bash
+curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/starter-packs?id=governed-entry-draft-update" \
   | jq -r '.starterPack.runtimes.python.snippet'
 ```

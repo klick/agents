@@ -48,7 +48,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.9.3';
+    public string $schemaVersion = '0.10.0';
 
     public static ?self $plugin = null;
 
@@ -104,9 +104,9 @@ class Plugin extends BasePlugin
                 'url' => 'agents/dashboard',
             ],
         ];
-        if ($this->isReturnRequestsCpEnabled()) {
+        if ($this->isControlCpEnabled()) {
             $subnav['control'] = [
-                'label' => 'Return Requests',
+                'label' => 'Control',
                 'url' => 'agents/control',
             ];
         }
@@ -142,7 +142,7 @@ class Plugin extends BasePlugin
                 'agents/dashboard/security' => 'agents/dashboard/dashboard',
                 'agents/health' => 'agents/dashboard/health',
             ];
-            if ($this->isReturnRequestsCpEnabled()) {
+            if ($this->isControlCpEnabled()) {
                 $rules['agents/control'] = 'agents/dashboard/control';
             }
 
@@ -207,7 +207,7 @@ class Plugin extends BasePlugin
                 'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
                 'agents/v1/webhooks/dlq/replay' => 'agents/api/webhook-dlq-replay',
             ];
-            if ($this->isRefundApprovalsExperimentalEnabled()) {
+            if ($this->isWritesExperimentalEnabled()) {
                 $rules = array_merge($rules, [
                     'agents/v1/control/policies' => 'agents/api/control-policies',
                     'agents/v1/control/policies/upsert' => 'agents/api/control-policy-upsert',
@@ -366,19 +366,46 @@ class Plugin extends BasePlugin
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
-    public function isRefundApprovalsExperimentalEnabled(): bool
+    public function getWritesExperimentalState(): array
     {
-        return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_REFUND_APPROVALS_EXPERIMENTAL');
+        $writesEnabled = App::parseBooleanEnv('$PLUGIN_AGENTS_WRITES_EXPERIMENTAL');
+        if ($writesEnabled !== null) {
+            return [
+                'enabled' => (bool)$writesEnabled,
+                'source' => 'env:PLUGIN_AGENTS_WRITES_EXPERIMENTAL',
+                'locked' => true,
+            ];
+        }
+
+        $settings = $this->getSettings();
+        $settingsEnabled = $settings instanceof Settings ? (bool)$settings->enableWritesExperimental : false;
+
+        return [
+            'enabled' => $settingsEnabled,
+            'source' => 'settings',
+            'locked' => false,
+        ];
     }
 
-    /**
-     * CP Return Requests remains internal-only until at least one concrete
-     * adapter/workflow is implemented end-to-end.
-     */
-    public function isReturnRequestsCpEnabled(): bool
+    public function isWritesExperimentalEnabled(): bool
     {
-        return $this->isRefundApprovalsExperimentalEnabled()
-            && (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_RETURN_REQUESTS_CP_EXPERIMENTAL');
+        return (bool)$this->getWritesExperimentalState()['enabled'];
+    }
+
+    public function isWritesCpExperimentalEnabled(): bool
+    {
+        $cpEnabled = App::parseBooleanEnv('$PLUGIN_AGENTS_WRITES_CP_EXPERIMENTAL');
+        if ($cpEnabled !== null) {
+            return (bool)$cpEnabled;
+        }
+
+        // Follow the write-surface toggle when no explicit CP override is provided.
+        return $this->isWritesExperimentalEnabled();
+    }
+
+    public function isControlCpEnabled(): bool
+    {
+        return $this->isWritesCpExperimentalEnabled();
     }
 
     public function isUsersApiEnabled(): bool
@@ -401,12 +428,18 @@ class Plugin extends BasePlugin
         $settings = $this->getSettings();
         $settingsModel = $settings instanceof Settings ? $settings : new Settings();
         $enabledState = $this->getAgentsEnabledState();
+        $writesState = $this->getWritesExperimentalState();
 
         return Craft::$app->getView()->renderTemplate('agents/settings', [
             'settings' => $settingsModel,
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'agentsEnabledSource' => (string)$enabledState['source'],
-            'returnRequestsCpEnabled' => $this->isReturnRequestsCpEnabled(),
+            'writesExperimentalEnabled' => (bool)$writesState['enabled'],
+            'writesExperimentalSettingLocked' => (bool)$writesState['locked'],
+            'writesExperimentalLockedByEnv' => (bool)$writesState['locked'],
+            'writesExperimentalConfigLocked' => false,
+            'writesExperimentalLockSource' => (string)($writesState['source'] ?? ''),
+            'controlCpEnabled' => $this->isControlCpEnabled(),
         ], View::TEMPLATE_MODE_CP);
     }
 
@@ -545,21 +578,21 @@ class Plugin extends BasePlugin
                         ],
                     ],
                 ];
-                if ($this->isReturnRequestsCpEnabled()) {
+                if ($this->isControlCpEnabled()) {
                     $event->permissions[] = [
-                        'heading' => 'Agents Return Requests',
+                        'heading' => 'Agents Control',
                         'permissions' => [
                             self::PERMISSION_CONTROL_VIEW => [
-                                'label' => 'View return requests tab',
+                                'label' => 'View control tab',
                             ],
                             self::PERMISSION_CONTROL_POLICIES_MANAGE => [
-                                'label' => 'Create and edit return rules',
+                                'label' => 'Create and edit control rules',
                             ],
                             self::PERMISSION_CONTROL_APPROVALS_MANAGE => [
-                                'label' => 'Approve and reject return requests',
+                                'label' => 'Approve and reject control requests',
                             ],
                             self::PERMISSION_CONTROL_ACTIONS_EXECUTE => [
-                                'label' => 'Run approved return actions',
+                                'label' => 'Run approved control actions',
                             ],
                         ],
                     ];
