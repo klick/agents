@@ -1985,7 +1985,7 @@ class ApiController extends Controller
             ]],
             '/sync-state/checkpoint' => ['post' => [
                 'summary' => 'Record latest sync-state checkpoint/cursor for lag tracking',
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2009,7 +2009,7 @@ class ApiController extends Controller
             '/consumers/checkpoint' => ['post' => [
                 'summary' => 'Record latest consumer checkpoint/cursor for lag tracking (deprecated alias)',
                 'deprecated' => true,
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2057,7 +2057,7 @@ class ApiController extends Controller
             '/control/policies' => ['get' => ['summary' => 'List control policies', 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]), 'x-required-scopes' => ['control:policies:read']]],
             '/control/policies/upsert' => ['post' => [
                 'summary' => 'Create or update a control policy',
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2076,7 +2076,7 @@ class ApiController extends Controller
             ]],
             '/control/approvals/request' => ['post' => [
                 'summary' => 'Create approval request',
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2086,7 +2086,7 @@ class ApiController extends Controller
             ]],
             '/control/approvals/decide' => ['post' => [
                 'summary' => 'Approve or reject approval request',
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2107,7 +2107,7 @@ class ApiController extends Controller
             ]],
             '/control/policy-simulate' => ['post' => [
                 'summary' => 'Dry-run policy/approval evaluation for a proposed action',
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2116,7 +2116,7 @@ class ApiController extends Controller
             ]],
             '/control/actions/execute' => ['post' => [
                 'summary' => 'Execute an idempotent control action',
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2166,7 +2166,7 @@ class ApiController extends Controller
             ]],
             '/webhooks/dlq/replay' => ['post' => [
                 'summary' => 'Replay dead-letter webhook events',
-                'requestBody' => ['required' => true],
+                'requestBody' => $this->openApiJsonObjectRequestBody(),
                 'responses' => $this->openApiGuardedResponses([
                     '200' => ['description' => 'OK'],
                     '400' => ['description' => 'Invalid request'],
@@ -2194,6 +2194,8 @@ class ApiController extends Controller
             }
         }
 
+        $apiServerUrl = rtrim((string)Craft::$app->getRequest()->getHostInfo(), '/') . '/agents/v1';
+
         return $this->jsonResponse([
             'openapi' => '3.1.0',
             'info' => [
@@ -2202,6 +2204,7 @@ class ApiController extends Controller
                 'description' => 'Agent discovery and control-plane API for read surfaces plus governed policy/approval/action workflows.',
             ],
             'servers' => [
+                ['url' => $apiServerUrl, 'description' => 'Absolute API base (GPT/Actions-friendly)'],
                 ['url' => '/agents/v1', 'description' => 'Primary API'],
                 ['url' => '/', 'description' => 'Site root discovery files'],
             ],
@@ -3601,7 +3604,37 @@ class ApiController extends Controller
             '503' => ['description' => 'Service disabled or server misconfigured.'],
         ];
 
-        return array_merge($responses, $guardResponses);
+        return $this->openApiResponseMap($responses, $guardResponses);
+    }
+
+    private function openApiJsonObjectRequestBody(bool $required = true): array
+    {
+        return [
+            'required' => $required,
+            'content' => [
+                'application/json' => [
+                    'schema' => [
+                        'type' => 'object',
+                        'additionalProperties' => true,
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    private function openApiResponseMap(array ...$responseMaps): array
+    {
+        $merged = [];
+        foreach ($responseMaps as $map) {
+            foreach ($map as $statusCode => $definition) {
+                $normalizedDefinition = is_array($definition)
+                    ? $definition
+                    : ['description' => (string)$definition];
+                $merged[(string)$statusCode] = $normalizedDefinition;
+            }
+        }
+
+        return $merged;
     }
 
     private function resolveBodyArrayParam(string $param): array

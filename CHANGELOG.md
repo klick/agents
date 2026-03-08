@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.3 - 2026-03-08
+
+### Fixed
+
+- Fixed `GET /agents/v1/openapi.json` response maps so OpenAPI `responses` are emitted as status-code objects (not arrays), restoring validator compatibility for GPT Actions and other OpenAPI tooling.
+- Fixed OpenAPI POST operation contracts to include a minimal JSON `requestBody.content` schema where bodies are required, preventing requestBody validation errors in strict Action importers.
+- Added an absolute API server URL (`https://<host>/agents/v1`) to the OpenAPI `servers` list so GPT Actions can resolve a valid server URL without manual schema edits.
+
 ## 0.10.2 - 2026-03-08
 
 ### Changed
