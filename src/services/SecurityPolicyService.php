@@ -526,6 +526,10 @@ class SecurityPolicyService extends Component
                 continue;
             }
 
+            if ($scope === 'entries:write') {
+                $scope = 'entries:write:draft';
+            }
+
             $scopes[] = $scope;
         }
 

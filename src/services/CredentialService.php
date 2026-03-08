@@ -1164,6 +1164,10 @@ class CredentialService extends Component
                 continue;
             }
 
+            if ($value === 'entries:write') {
+                $value = 'entries:write:draft';
+            }
+
             $normalized[] = $value;
         }
 

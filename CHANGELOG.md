@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.1 - 2026-03-08
+
+### Changed
+
+- Renamed governed draft-write scope to `entries:write:draft` for clarity, and kept `entries:write` as a deprecated compatibility alias.
+- Simplified governed-approval operator flow: final approval now executes immediately, and approved/apply/completed states are clearer in the Control CP.
+- Relaxed dual-approval requirement when only one active CP user exists, so single-operator installs can still run governed flows.
+
 ## 0.10.0 - 2026-03-07
 
 ### Added

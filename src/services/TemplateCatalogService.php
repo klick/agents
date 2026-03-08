@@ -129,7 +129,7 @@ class TemplateCatalogService extends Component
                 'requiresExperimental' => true,
                 'requiredScopes' => [
                     'control:actions:execute',
-                    'entries:write',
+                    'entries:write:draft',
                     'control:executions:read',
                 ],
                 'optionalScopes' => [
@@ -189,6 +189,6 @@ class TemplateCatalogService extends Component
             }
         }
 
-        return '0.10.0';
+        return '0.10.1';
     }
 }

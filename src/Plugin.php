@@ -48,7 +48,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.10.0';
+    public string $schemaVersion = '0.10.1';
 
     public static ?self $plugin = null;
 
@@ -144,6 +144,8 @@ class Plugin extends BasePlugin
             ];
             if ($this->isControlCpEnabled()) {
                 $rules['agents/control'] = 'agents/dashboard/control';
+                $rules['agents/control/approvals'] = 'agents/dashboard/control';
+                $rules['agents/control/rules'] = 'agents/dashboard/control';
             }
 
             $event->rules = array_merge($event->rules, $rules);

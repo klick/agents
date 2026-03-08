@@ -3,27 +3,46 @@
 
 {% set title = "Agents Control" %}
 {% set selectedSubnavItem = "control" %}
+{% set controlHeadingByKey = {
+  approvals: 'Approvals',
+  rules: 'Rules',
+} %}
+{% set controlHeading = controlHeadingByKey[activeControlTab]|default('Approvals') %}
+{% set controlIntroByKey = {
+  approvals: 'Review, approve, and run governed requests with clear operator actions and audit visibility.',
+  rules: 'Define risk and approval behavior for governed actions, and validate outcomes with dry-run simulation.',
+} %}
+{% set controlSidebarNavItems = {} %}
+{% for tab in controlTabs %}
+  {% set controlSidebarNavItems = controlSidebarNavItems|merge({
+    (tab.key): {
+      label: tab.label,
+      url: tab.url,
+    }
+  }) %}
+{% endfor %}
+
+{% block sidebar %}
+  {% include "_includes/nav"
+    with {
+      label: 'Control',
+      items: controlSidebarNavItems,
+      selectedItem: activeControlTab,
+    }
+    only
+  %}
+{% endblock %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
-  <h1>Control</h1>
-  <p class="agents-page-intro">Operate governed approval and execution workflows: triage, decide, run, and audit from one screen.</p>
+  <div class="agents-page-header">
+    <h1>{{ controlHeading }}</h1>
+    <p class="agents-page-intro">{{ controlIntroByKey[activeControlTab] ?? 'Operate governed approval and execution workflows.' }}</p>
+  </div>
 
   <div class="agents-layout-stack">
-  <section class="border rounded p-3">
-    <h2 class="h4">Flow in 3 steps</h2>
-    <ol style="margin: 0 0 0 18px;">
-      <li>An agent/integration creates a control request when an action needs review.</li>
-      <li>A human approves or rejects the request.</li>
-      <li>An approved action is run once, with duplicate protection.</li>
-    </ol>
-  </section>
-
-
-  <hr>
-
-
+  {% if activeControlTab == 'approvals' %}
   {% set controlPendingCount = controlSummary.approvalsPending|default(0) %}
   {% set controlExpiredApprovalsCount = controlSummary.approvalsExpired|default(0) %}
   {% set controlBlockedRunsCount = controlSummary.executionsBlocked|default(0) %}
@@ -33,12 +52,6 @@
 
   <section class="border rounded p-3">
     <h2 class="h4">Now</h2>
-    <p>
-      <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
-      <strong>{{ agentsEnabled ? 'Enabled' : 'Disabled' }}</strong>
-      <span class="text-muted">(source: {{ agentsEnabledSource == 'env' ? 'environment variable' : 'plugin settings' }})</span>
-    </p>
-
     <div class="agents-metric-strip-wrap">
       <div class="agents-metric-strip">
       <div class="agents-metric agents-metric-strip-card {{ controlPendingCount > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
@@ -91,11 +104,64 @@
         <tbody>
         {% for approval in controlPendingApprovals %}
           {% set policy = approval.policy ?? null %}
+          {% set reviewMode = approval.reviewMode ?? 'none' %}
+          {% set reviewGuards = approval.reviewGuards ?? [] %}
+          {% set hasBlockingReviewGuards = approval.reviewHasBlockingGuards ?? false %}
           <tr>
             <td>#{{ approval.id }}</td>
             <td>
-              <code>{{ approval.actionType }}</code><br>
-              <span class="light">{{ approval.actionRef ?: 'no case reference' }}</span>
+              <div>{{ approval.actionLabel ?: 'Unknown action' }}</div>
+              <span class="agents-actor-raw">{{ approval.actionType }}</span>
+              {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
+              <div class="light">
+                {% if approval.targetEntryCpUrl %}
+                  <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                {% else %}
+                  {{ targetTitle }}
+                {% endif %}
+              </div>
+              {% if reviewMode == 'draft' %}
+                <div class="light agents-control-review-mode">
+                  Reviewing draft{% if approval.reviewDraftId %} #{{ approval.reviewDraftId }}{% endif %}
+                  {% if approval.targetEntryCanonicalCpUrl %}
+                    ·
+                    <a href="{{ cpUrl(approval.targetEntryCanonicalCpUrl) }}" class="agents-control-target-link">
+                      open canonical
+                    </a>
+                  {% endif %}
+                </div>
+              {% elseif reviewMode == 'canonical' %}
+                <div class="light agents-control-review-mode">Review falls back to canonical entry.</div>
+              {% endif %}
+              {% if approval.targetEntryId %}
+                <button
+                  class="btn small js-control-review-entry agents-control-review-btn"
+                  type="button"
+                  data-entry-id="{{ approval.targetEntryId }}"
+                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                >Review</button>
+              {% endif %}
+              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+              {% if approval.reviewChangeSummary|length %}
+                <div class="agents-control-change-summary">
+                  <div class="light">Proposed changes</div>
+                  <ul>
+                    {% for change in approval.reviewChangeSummary %}
+                      <li><strong>{{ change.label }}:</strong> {{ change.value }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+              {% if reviewGuards|length %}
+                <div class="agents-control-review-guards">
+                  {% for guard in reviewGuards %}
+                    <div class="agents-control-review-guard agents-control-review-guard--{{ guard.level == 'critical' ? 'critical' : 'warning' }}">
+                      <strong>{{ guard.label }}</strong>: {{ guard.detail }}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
             </td>
             <td>
               {% if policy %}
@@ -112,32 +178,46 @@
                 {% endif %}
               </div>
               {% if approval.decidedBy %}
-                <div class="light">Primary approver: {{ approval.decidedBy }}</div>
+                <div class="light">Primary approver: {{ approval.decidedByLabel ?: approval.decidedBy }}</div>
+                <span class="agents-actor-raw">Primary ID: {{ approval.decidedBy }}</span>
               {% endif %}
             </td>
             <td>
-              <div>{{ approval.requestedBy }}</div>
-              <div class="light">{{ approval.dateCreated ?: 'n/a' }}</div>
+              <div>{{ approval.requestedByLabel ?: approval.requestedBy }}</div>
+              {% if approval.requestedBy %}
+                <span class="agents-actor-raw">{{ approval.requestedBy }}</span>
+              {% endif %}
+              <div class="light">{{ approval.dateCreated ? approval.dateCreated|datetime('short') : 'n/a' }}</div>
             </td>
             <td>{{ approval.reason ?: 'n/a' }}</td>
             <td>
               <div><strong>{{ approval.slaState|default('none') }}</strong></div>
-              <div class="light">due: {{ approval.slaDueAt ?: 'n/a' }}</div>
+              <div class="light">due: {{ approval.slaDueAt ? approval.slaDueAt|datetime('short') : 'n/a' }}</div>
               {% if approval.escalatedAt %}
-                <div class="light">escalated: {{ approval.escalatedAt }}</div>
+                <div class="light">escalated: {{ approval.escalatedAt|datetime('short') }}</div>
               {% endif %}
             </td>
             <td>
               {% if canManageApprovals %}
-                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})?" style="margin-bottom: 6px;">
+                {% if hasBlockingReviewGuards %}
+                  <div class="agents-control-review-guard agents-control-review-guard--critical" style="margin-bottom: 6px;">
+                    Approve actions disabled until review blockers are resolved.
+                  </div>
+                {% endif %}
+                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})? It will execute automatically once required approvals are complete." style="margin-bottom: 6px;">
                   {{ csrfInput() }}
                   {{ actionInput('agents/dashboard/decide-control-approval') }}
                   {{ redirectInput('agents/control') }}
                   <input type="hidden" name="approvalId" value="{{ approval.id }}">
                   <input type="hidden" name="decision" value="approved">
                   <input type="text" name="decisionReason" placeholder="Optional note" style="width: 100%; margin-bottom: 4px;">
-                  <button class="btn" type="submit">Approve</button>
+                  <button class="btn" type="submit"{% if hasBlockingReviewGuards %} disabled{% endif %}>Approve</button>
                 </form>
+                {% if approval.requiredApprovals|default(1) > 1 and approval.approvalsRemaining|default(0) > 1 %}
+                  <div class="light" style="margin-bottom: 6px;">
+                    This is the first approval step. Action executes automatically after final required approval.
+                  </div>
+                {% endif %}
                 <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Reject request #{{ approval.id }} ({{ approval.actionType }})?">
                   {{ csrfInput() }}
                   {{ actionInput('agents/dashboard/decide-control-approval') }}
@@ -165,6 +245,188 @@
 
 
   <section class="border rounded p-3">
+    <h2 class="h4">Approved</h2>
+    {% if controlApprovedApprovals|length %}
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>Request #</th>
+          <th>Action</th>
+          <th>Approver</th>
+          <th>Approved</th>
+          <th>Execution</th>
+          <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for approval in controlApprovedApprovals %}
+          {% set latestExecution = approval.latestExecution ?? null %}
+          {% set executionStatus = latestExecution ? latestExecution.status|lower : '' %}
+          {% set canApplyDraft = approval.actionType|lower == 'entry.updatedraft'
+            and approval.reviewMode == 'draft'
+            and approval.targetEntryDraftRecordId
+            and (executionStatus == '' or executionStatus == 'succeeded')
+          %}
+          <tr>
+            <td>#{{ approval.id }}</td>
+            <td>
+              <div>{{ approval.actionLabel ?: 'Unknown action' }}</div>
+              <span class="agents-actor-raw">{{ approval.actionType }}</span>
+              {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
+              <div class="light">
+                {% if approval.targetEntryCpUrl %}
+                  <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                {% else %}
+                  {{ targetTitle }}
+                {% endif %}
+              </div>
+              {% if approval.targetEntryId %}
+                <button
+                  class="btn small js-control-review-entry agents-control-review-btn"
+                  type="button"
+                  data-entry-id="{{ approval.targetEntryId }}"
+                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                >Review</button>
+              {% endif %}
+              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+            </td>
+            <td>
+              <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
+              {% if approval.decidedBy %}
+                <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
+              {% endif %}
+              {% if approval.secondaryDecisionBy %}
+                <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
+                <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
+              {% endif %}
+            </td>
+            <td>{{ approval.decidedAt ? approval.decidedAt|datetime('short') : 'n/a' }}</td>
+            <td>
+              {% if latestExecution %}
+                <div><strong>{{ latestExecution.status|upper }}</strong></div>
+                <div class="light">run #{{ latestExecution.id }}</div>
+                <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|datetime('short') : 'n/a' }}</div>
+              {% else %}
+                <span class="light">n/a</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if canApplyDraft %}
+                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Apply draft #{{ approval.targetEntryDraftRecordId }} to canonical entry now?">
+                  {{ csrfInput() }}
+                  {{ actionInput('elements/apply-draft') }}
+                  {{ redirectInput('agents/control/approvals') }}
+                  <input type="hidden" name="draftId" value="{{ approval.targetEntryDraftRecordId }}">
+                  {% if approval.targetEntryCanonicalId %}
+                    <input type="hidden" name="elementId" value="{{ approval.targetEntryCanonicalId }}">
+                  {% endif %}
+                  {% set applySiteId = approval.targetEntrySiteId ?: approval.targetEntryCanonicalSiteId ?: 0 %}
+                  {% if applySiteId %}
+                    <input type="hidden" name="siteId" value="{{ applySiteId }}">
+                  {% endif %}
+                  <button class="btn submit small" type="submit">Apply Draft</button>
+                </form>
+              {% elseif approval.actionType|lower == 'entry.updatedraft' and approval.reviewDraftId %}
+                {% if latestExecution and latestExecution.status|lower != 'succeeded' %}
+                  <span class="light">Apply blocked: run {{ latestExecution.status|lower }}.</span>
+                {% else %}
+                  <span class="light">Draft not available to apply.</span>
+                {% endif %}
+              {% else %}
+                <span class="light">n/a</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No approved requests yet.</p>
+    {% endif %}
+  </section>
+
+  <hr>
+
+  <section class="border rounded p-3">
+    <h2 class="h4">Applied / Completed</h2>
+    {% if controlCompletedApprovals|length %}
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>Request #</th>
+          <th>Action</th>
+          <th>Approver</th>
+          <th>Completed</th>
+          <th>Outcome</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for approval in controlCompletedApprovals %}
+          {% set latestExecution = approval.latestExecution ?? null %}
+          {% set completionState = approval.completionState ?? {} %}
+          <tr>
+            <td>#{{ approval.id }}</td>
+            <td>
+              <div>{{ approval.actionLabel ?: 'Unknown action' }}</div>
+              <span class="agents-actor-raw">{{ approval.actionType }}</span>
+              {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
+              <div class="light">
+                {% if approval.targetEntryCpUrl %}
+                  <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                {% else %}
+                  {{ targetTitle }}
+                {% endif %}
+              </div>
+              {% if approval.targetEntryId %}
+                <button
+                  class="btn small js-control-review-entry agents-control-review-btn"
+                  type="button"
+                  data-entry-id="{{ approval.targetEntryId }}"
+                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                >Review</button>
+              {% endif %}
+              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+            </td>
+            <td>
+              <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
+              {% if approval.decidedBy %}
+                <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
+              {% endif %}
+              {% if approval.secondaryDecisionBy %}
+                <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
+                <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <div><strong>{{ completionState.label ?: 'COMPLETED' }}</strong></div>
+              {% if completionState.at %}
+                <div class="light">{{ completionState.at|datetime('short') }}</div>
+              {% else %}
+                <div class="light">n/a</div>
+              {% endif %}
+            </td>
+            <td>
+              <div class="light">{{ completionState.detail ?: 'Completed.' }}</div>
+              {% if latestExecution %}
+                <div class="light">run #{{ latestExecution.id }} · {{ latestExecution.status|upper }}</div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No applied/completed requests yet.</p>
+    {% endif %}
+  </section>
+
+
+  <hr>
+
+
+  <section class="border rounded p-3">
     <h2 class="h4">Runs That Need Follow-up</h2>
     {% if controlAttentionExecutions|length %}
       <table class="data fullwidth">
@@ -183,8 +445,26 @@
           <tr>
             <td>#{{ execution.id }}</td>
             <td>
-              <code>{{ execution.actionType }}</code><br>
-              <span class="light">{{ execution.actionRef ?: 'no case reference' }}</span>
+              <div>{{ execution.actionLabel ?: 'Unknown action' }}</div>
+              <span class="agents-actor-raw">{{ execution.actionType }}</span>
+              {% set targetTitle = execution.targetTitle ?: 'Untitled target' %}
+              <div class="light">
+                {% if execution.targetEntryCpUrl %}
+                  <a href="{{ cpUrl(execution.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                {% else %}
+                  {{ targetTitle }}
+                {% endif %}
+              </div>
+              {% if execution.targetEntryId %}
+                <button
+                  class="btn small js-control-review-entry agents-control-review-btn"
+                  type="button"
+                  data-entry-id="{{ execution.targetEntryId }}"
+                  data-site-id="{{ execution.targetEntrySiteId ?: 0 }}"
+                  data-entry-url="{{ execution.targetEntryCpUrl ? cpUrl(execution.targetEntryCpUrl) : '' }}"
+                >Review</button>
+              {% endif %}
+              <span class="agents-actor-raw">Ref: {{ execution.actionRef ?: 'n/a' }}</span>
             </td>
             <td><strong>{{ execution.status }}</strong></td>
             <td>
@@ -206,203 +486,9 @@
   </section>
 
 
-  <hr>
+  {% endif %}
 
-
-  <section class="border rounded p-3">
-    <h2 class="h4">Create Request Manually (Fallback)</h2>
-    <p class="light">Recommended flow: agents create requests via API. Use this form only if you need a manual fallback.</p>
-
-    {% if canManageApprovals and allowCpApprovalRequests %}
-      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Create this control request?">
-        {{ csrfInput() }}
-        {{ actionInput('agents/dashboard/request-control-approval') }}
-        {{ redirectInput('agents/control') }}
-
-        {{ forms.textField({
-          label: 'Action name',
-          instructions: 'Internal action key. Example: returns.exception.refund',
-          name: 'actionType',
-          required: true,
-          placeholder: 'returns.exception.refund',
-        }) }}
-
-        {{ forms.textField({
-          label: 'Case reference',
-          instructions: 'Optional order/return/case reference.',
-          name: 'actionRef',
-          placeholder: 'order-12345:return-998',
-        }) }}
-
-        {{ forms.textField({
-          label: 'Duplicate protection key',
-          instructions: 'Optional but recommended. Reuse prevents accidental duplicates.',
-          name: 'idempotencyKey',
-          placeholder: 'approval-returns-12345-v1',
-        }) }}
-
-        {{ forms.textareaField({
-          label: 'Reason for review',
-          name: 'reason',
-          rows: 2,
-          placeholder: 'High-value return outside normal threshold.',
-        }) }}
-
-        <h3 class="h5">Request Details</h3>
-        {{ forms.textField({
-          label: 'Order number / ID',
-          name: 'payloadOrderId',
-          placeholder: '12345',
-        }) }}
-        {{ forms.textField({
-          label: 'Return number / ID',
-          name: 'payloadReturnId',
-          placeholder: '998',
-        }) }}
-        {{ forms.textField({
-          label: 'Customer ID',
-          name: 'payloadCustomerId',
-          placeholder: 'cust_001',
-        }) }}
-        {{ forms.textField({
-          label: 'Approver note',
-          name: 'payloadNote',
-          placeholder: 'Photos are unclear, needs manual decision.',
-        }) }}
-
-        <h3 class="h5">Source Tracking</h3>
-        {{ forms.textField({
-          label: 'Source',
-          name: 'metadataSource',
-          placeholder: 'cp-manual',
-        }) }}
-        {{ forms.textField({
-          label: 'Team/Channel',
-          name: 'metadataChannel',
-          placeholder: 'ops',
-        }) }}
-
-        <details style="margin-bottom: 12px;">
-          <summary><strong>Advanced JSON (optional)</strong></summary>
-          <div style="margin-top: 8px;">
-            {{ forms.textareaField({
-              label: 'Payload JSON',
-              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
-              name: 'payloadJson',
-              rows: 4,
-              value: '{}',
-            }) }}
-
-            {{ forms.textareaField({
-              label: 'Metadata JSON',
-              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
-              name: 'metadataJson',
-              rows: 3,
-              value: '{}',
-            }) }}
-          </div>
-        </details>
-
-        <button class="btn submit" type="submit">Create Request</button>
-      </form>
-    {% elseif canManageApprovals %}
-      <p class="warning">Manual creation is off (agent-first mode).</p>
-      <p class="light">Use your integration to call <code>POST /agents/v1/control/approvals/request</code>.</p>
-    {% else %}
-      <p class="warning">You do not have permission to create control requests.</p>
-    {% endif %}
-  </section>
-
-
-  <hr>
-
-
-  <section class="border rounded p-3">
-    <h2 class="h4">Run an Approved Action</h2>
-    {% if canExecuteActions %}
-      <p class="light">This checks rule + approval requirements first and blocks invalid runs automatically.</p>
-
-      <form method="post" accept-charset="UTF-8" id="control-execute-form" class="js-confirm-form" data-confirm-message="">
-        {{ csrfInput() }}
-        {{ actionInput('agents/dashboard/execute-control-action') }}
-        {{ redirectInput('agents/control') }}
-
-        {{ forms.textField({
-          label: 'Action name',
-          id: 'execute-action-type',
-          name: 'actionType',
-          required: true,
-          placeholder: 'returns.exception.refund',
-        }) }}
-
-        {{ forms.textField({
-          label: 'Case reference',
-          name: 'actionRef',
-          placeholder: 'order-12345:return-998',
-        }) }}
-
-        {{ forms.textField({
-          label: 'Approved request #',
-          id: 'execute-approval-id',
-          name: 'approvalId',
-          instructions: 'Required when the matching rule needs approval.',
-          placeholder: '123',
-        }) }}
-
-        {{ forms.textField({
-          label: 'Duplicate protection key',
-          name: 'idempotencyKey',
-          required: true,
-          placeholder: 'exec-returns-12345-v1',
-        }) }}
-
-        <h3 class="h5">Run Details</h3>
-        {{ forms.textField({
-          label: 'Order number / ID',
-          name: 'payloadOrderId',
-          placeholder: '12345',
-        }) }}
-        {{ forms.textField({
-          label: 'Return number / ID',
-          name: 'payloadReturnId',
-          placeholder: '998',
-        }) }}
-        {{ forms.textField({
-          label: 'Reason code (optional)',
-          name: 'payloadReasonCode',
-          placeholder: 'DAMAGED_ITEM',
-        }) }}
-        {{ forms.textField({
-          label: 'Operator note',
-          name: 'payloadOperatorNote',
-          placeholder: 'Refund approved after manual check.',
-        }) }}
-
-        <details style="margin-bottom: 12px;">
-          <summary><strong>Advanced JSON (optional)</strong></summary>
-          <div style="margin-top: 8px;">
-            {{ forms.textareaField({
-              label: 'Payload JSON',
-              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
-              name: 'payloadJson',
-              rows: 4,
-              value: '{}',
-            }) }}
-          </div>
-        </details>
-
-        <div id="execute-policy-hint" class="light" style="margin-bottom: 8px;"></div>
-        <button class="btn submit" id="execute-submit" type="submit">Run Action</button>
-      </form>
-    {% else %}
-      <p class="warning">You do not have permission to run actions.</p>
-    {% endif %}
-  </section>
-
-
-  <hr>
-
-
+  {% if activeControlTab == 'rules' %}
   <section class="border rounded p-3">
     <h2 class="h4">Policy Simulator (Dry Run)</h2>
     <p class="light">Evaluate policy/approval outcomes without recording an execution run.</p>
@@ -411,7 +497,7 @@
       <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Run dry-run simulation?">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/simulate-control-action') }}
-        {{ redirectInput('agents/control') }}
+        {{ redirectInput('agents/control/rules') }}
 
         {{ forms.textField({
           label: 'Action name',
@@ -541,7 +627,7 @@
           <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
             {{ csrfInput() }}
             {{ actionInput('agents/dashboard/upsert-control-policy') }}
-            {{ redirectInput('agents/control') }}
+            {{ redirectInput('agents/control/rules') }}
 
             {{ forms.textField({
               label: 'Rule key',
@@ -608,11 +694,10 @@
       <p class="warning">You do not have permission to manage rules.</p>
     {% endif %}
   </section>
+  {% endif %}
 
-
+  {% if activeControlTab == 'approvals' %}
   <hr>
-
-
   <section class="border rounded p-3">
     <h2 class="h4">Activity Log</h2>
     {% if controlAuditEvents|length %}
@@ -629,10 +714,15 @@
         <tbody>
         {% for event in controlAuditEvents %}
           <tr>
-            <td>{{ event.dateCreated ?: 'n/a' }}</td>
+            <td>{{ event.dateCreated ? event.dateCreated|datetime('short') : 'n/a' }}</td>
             <td><code>{{ event.category }}</code></td>
             <td>{{ event.action }} ({{ event.outcome }})</td>
-            <td>{{ event.actorType }} / {{ event.actorId ?: 'n/a' }}</td>
+            <td>
+              <div>{{ event.actorLabel ?: (event.actorId ?: 'n/a') }}</div>
+              {% if event.actorId %}
+                <span class="agents-actor-raw">{{ event.actorType }} / {{ event.actorId }}</span>
+              {% endif %}
+            </td>
             <td>{{ event.summary ?: 'n/a' }}</td>
           </tr>
         {% endfor %}
@@ -647,141 +737,135 @@
       <pre class="border rounded p-3" style="margin-top: 8px;">{{ controlSnapshotJson }}</pre>
     </details>
   </section>
+  {% endif %}
   </div>
 
-  {% if canManageApprovals or canExecuteActions or canManagePolicies %}
-    {% js %}
-      (() => {
-        const confirmForms = document.querySelectorAll('.js-confirm-form');
-        confirmForms.forEach((form) => {
-          form.addEventListener('submit', (event) => {
-            const customMessage = form.getAttribute('data-confirm-message') || 'Are you sure?';
-            if (!window.confirm(customMessage)) {
-              event.preventDefault();
-            }
-          });
+  {% js %}
+    (() => {
+      const confirmForms = document.querySelectorAll('.js-confirm-form');
+      confirmForms.forEach((form) => {
+        form.addEventListener('submit', (event) => {
+          const customMessage = form.getAttribute('data-confirm-message') || 'Are you sure?';
+          if (!window.confirm(customMessage)) {
+            event.preventDefault();
+          }
         });
+      });
 
-        const executeForm = document.getElementById('control-execute-form');
-        if (!executeForm) {
-          return;
-        }
+      const reviewButtons = document.querySelectorAll('.js-control-review-entry');
+      reviewButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const entryIdRaw = button.getAttribute('data-entry-id') || '';
+          const siteIdRaw = button.getAttribute('data-site-id') || '';
+          const entryUrl = button.getAttribute('data-entry-url') || '';
+          const entryId = Number.parseInt(entryIdRaw, 10);
+          const siteId = Number.parseInt(siteIdRaw, 10);
 
-        const actionTypeInput = document.getElementById('execute-action-type');
-        const approvalIdInput = document.getElementById('execute-approval-id');
-        const executeButton = document.getElementById('execute-submit');
-        const hintNode = document.getElementById('execute-policy-hint');
-
-        if (!actionTypeInput || !approvalIdInput || !executeButton || !hintNode) {
-          return;
-        }
-
-        const policies = {{ controlPolicies|json_encode|raw }};
-        const approvedApprovalsById = {{ controlApprovedApprovalsById|json_encode|raw }};
-
-        const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const matchesPattern = (actionType, pattern) => {
-          if (!pattern || pattern === '*') {
-            return true;
-          }
-
-          const regex = '^' + pattern.split('*').map(escapeRegex).join('.*') + '$';
-          return new RegExp(regex).test(actionType);
-        };
-
-        const resolvePolicy = (actionType) => {
-          let best = null;
-          let bestLen = -1;
-
-          policies.forEach((policy) => {
-            const pattern = String(policy.actionPattern || '').trim();
-            if (!pattern) {
-              return;
+          if (!Number.isInteger(entryId) || entryId <= 0) {
+            if (entryUrl !== '') {
+              window.location.href = entryUrl;
             }
-
-            if (!matchesPattern(actionType, pattern)) {
-              return;
-            }
-
-            if (pattern.length > bestLen) {
-              best = policy;
-              bestLen = pattern.length;
-            }
-          });
-
-          if (best) {
-            return best;
-          }
-
-          return {
-            handle: 'default-control-policy',
-            riskLevel: 'high',
-            requiresApproval: true,
-            enabled: true,
-          };
-        };
-
-        const setExecuteState = () => {
-          const actionType = String(actionTypeInput.value || '').trim();
-          const approvalIdRaw = String(approvalIdInput.value || '').trim();
-
-          if (!actionType) {
-            executeButton.disabled = true;
-            hintNode.textContent = 'Enter an action name to validate this run.';
-            executeForm.setAttribute('data-confirm-message', '');
             return;
           }
 
-          const policy = resolvePolicy(actionType);
-          const risk = String(policy.riskLevel || 'unknown').toUpperCase();
-          const requiresApproval = Boolean(policy.requiresApproval);
-          const policyEnabled = Boolean(policy.enabled);
-
-          if (!policyEnabled) {
-            executeButton.disabled = true;
-            hintNode.textContent = `Rule ${policy.handle || 'default'} is disabled. This run is blocked.`;
-            executeForm.setAttribute('data-confirm-message', '');
-            return;
-          }
-
-          if (requiresApproval) {
-            if (!approvalIdRaw) {
-              executeButton.disabled = true;
-              hintNode.textContent = `Risk ${risk}. This rule needs an approved request number.`;
-              executeForm.setAttribute('data-confirm-message', '');
-              return;
+          if (typeof Craft !== 'undefined' && typeof Craft.createElementEditor === 'function') {
+            const editorParams = {elementId: entryId};
+            if (Number.isInteger(siteId) && siteId > 0) {
+              editorParams.siteId = siteId;
             }
 
-            const approvalId = Number.parseInt(approvalIdRaw, 10);
-            if (!Number.isInteger(approvalId) || !approvedApprovalsById[approvalId]) {
-              executeButton.disabled = true;
-              hintNode.textContent = `Risk ${risk}. Request number must point to an approved request.`;
-              executeForm.setAttribute('data-confirm-message', '');
+            try {
+              Craft.createElementEditor('craft\\elements\\Entry', editorParams);
               return;
-            }
-
-            const approvedActionType = String(approvedApprovalsById[approvalId] || '');
-            if (approvedActionType !== actionType) {
-              executeButton.disabled = true;
-              hintNode.textContent = `Risk ${risk}. Request #${approvalId} is for ${approvedActionType}, not ${actionType}.`;
-              executeForm.setAttribute('data-confirm-message', '');
-              return;
+            } catch (error) {
+              if (window.console && typeof window.console.warn === 'function') {
+                console.warn('Unable to open entry flyout from control action table.', error);
+              }
             }
           }
 
-          executeButton.disabled = false;
-          hintNode.textContent = `Ready. Risk ${risk}. Approval ${requiresApproval ? 'required and validated' : 'not required'} by rule ${policy.handle || 'default-control-policy'}.`;
+          if (entryUrl !== '') {
+            window.location.href = entryUrl;
+          }
+        });
+      });
 
-          const approvalSegment = requiresApproval
-            ? ` Request #${approvalIdRaw} has been validated.`
-            : ' This rule does not require approval.';
-          executeForm.setAttribute('data-confirm-message', `Run ${actionType} with risk ${risk}?${approvalSegment}`);
-        };
+    })();
+  {% endjs %}
 
-        actionTypeInput.addEventListener('input', setExecuteState);
-        approvalIdInput.addEventListener('input', setExecuteState);
-        setExecuteState();
-      })();
-    {% endjs %}
-  {% endif %}
+  {% css %}
+    .agents-page-header {
+      text-align: center;
+      margin: 12px 0 24px;
+    }
+
+    .agents-page-header h1 {
+      margin: 0;
+    }
+
+    .agents-page-header .agents-page-intro {
+      margin: 0 auto;
+    }
+
+    .agents-page-header + .agents-layout-stack {
+      margin-top: 40px;
+    }
+
+    .agents-actor-raw {
+      display: block;
+      margin-top: 2px;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      line-height: 1.3;
+      color: #5f6d7c;
+      word-break: break-all;
+    }
+
+    .agents-control-review-btn {
+      margin-top: 6px;
+    }
+
+    .agents-control-review-mode {
+      margin-top: 4px;
+    }
+
+    .agents-control-change-summary {
+      margin-top: 8px;
+    }
+
+    .agents-control-change-summary ul {
+      margin: 4px 0 0;
+      padding-left: 18px;
+    }
+
+    .agents-control-change-summary li {
+      margin: 2px 0;
+      line-height: 1.3;
+    }
+
+    .agents-control-review-guards {
+      margin-top: 8px;
+    }
+
+    .agents-control-review-guard {
+      margin: 4px 0;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid #d9d9d9;
+      background: #f9f9f9;
+      color: #1f2933;
+      line-height: 1.3;
+    }
+
+    .agents-control-review-guard--warning {
+      background: #fff8e1;
+      border-color: #f0cf80;
+    }
+
+    .agents-control-review-guard--critical {
+      background: #fdeaea;
+      border-color: #ec9ca7;
+    }
+  {% endcss %}
 {% endblock %}

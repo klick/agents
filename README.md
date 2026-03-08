@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.10.0**
+Current plugin version: **0.10.1**
 
 ## Purpose
 
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.10.0
+composer require klick/agents:^0.10.1
 php craft plugin/install agents
 ```
 
@@ -342,8 +342,9 @@ Read scopes:
 Write scopes:
 
 - `syncstate:write`
-- `entries:write` (experimental; required by governed draft updates like `entry.updateDraft` and only useful when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
+- `entries:write:draft` (experimental; required by governed draft updates like `entry.updateDraft` and only useful when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
 - Legacy scope aliases (deprecated, still accepted during transition):
+  - `entries:write` -> `entries:write:draft`
   - `consumers:read` -> `syncstate:read`
   - `consumers:write` -> `syncstate:write`
 - `control:policies:write` (only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)

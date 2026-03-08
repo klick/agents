@@ -151,7 +151,7 @@ Purpose: prepare content updates in a draft for human review, without publishing
 Required scopes:
 
 - `control:actions:execute`
-- `entries:write`
+- `entries:write:draft`
 
 Recommended with approvals:
 

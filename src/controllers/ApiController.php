@@ -2126,7 +2126,7 @@ class ApiController extends Controller
                 'x-optional-scopes' => ['policy.config.requiredScope'],
                 'x-action-payloads' => [
                     'entry.updateDraft' => [
-                        'requiredScope' => 'entries:write',
+                        'requiredScope' => 'entries:write:draft',
                         'description' => 'Create/update an entry draft without publishing.',
                         'payload' => [
                             'type' => 'object',
@@ -3222,14 +3222,62 @@ class ApiController extends Controller
             return true;
         }
 
-        $scopes = $this->authContext['scopes'] ?? [];
-        return in_array('*', $scopes, true) || in_array($scope, $scopes, true);
+        $requiredScope = strtolower(trim($scope));
+        if ($requiredScope === '') {
+            return true;
+        }
+
+        $scopes = [];
+        foreach ((array)($this->authContext['scopes'] ?? []) as $grantedScope) {
+            if (!is_string($grantedScope) && !is_numeric($grantedScope)) {
+                continue;
+            }
+
+            $normalizedGrantedScope = strtolower(trim((string)$grantedScope));
+            if ($normalizedGrantedScope === '') {
+                continue;
+            }
+            $scopes[] = $normalizedGrantedScope;
+        }
+
+        $scopes = array_values(array_unique($scopes));
+        if (in_array('*', $scopes, true) || in_array($requiredScope, $scopes, true)) {
+            return true;
+        }
+
+        if ($requiredScope === 'entries:write:draft' && in_array('entries:write', $scopes, true)) {
+            return true;
+        }
+
+        if ($requiredScope === 'entries:write' && in_array('entries:write:draft', $scopes, true)) {
+            return true;
+        }
+
+        return false;
     }
 
     private function getGrantedScopes(): array
     {
         $scopes = $this->authContext['scopes'] ?? $this->getSecurityConfig()['tokenScopes'];
-        $normalized = array_values(array_unique(array_map('strval', $scopes)));
+        $normalized = [];
+        foreach ((array)$scopes as $scope) {
+            if (!is_string($scope) && !is_numeric($scope)) {
+                continue;
+            }
+
+            $value = strtolower(trim((string)$scope));
+            if ($value === '') {
+                continue;
+            }
+
+            if ($value === 'entries:write') {
+                $value = 'entries:write:draft';
+            }
+
+            $normalized[] = $value;
+        }
+
+        $normalized = array_values(array_unique($normalized));
         if (!$this->isWritesExperimentalEnabled()) {
             $normalized = array_values(array_filter(
                 $normalized,
@@ -3281,7 +3329,8 @@ class ApiController extends Controller
             'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
             'entries:read' => 'Read live content entry endpoints.',
             'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
-            'entries:write' => 'Update entry drafts through governed control actions (for example `entry.updateDraft`).',
+            'entries:write:draft' => 'Create/update entry drafts through governed control actions (for example `entry.updateDraft`).',
+            'entries:write' => 'Deprecated alias for `entries:write:draft`.',
             'assets:read' => 'Read asset list and lookup endpoints.',
             'categories:read' => 'Read category list and lookup endpoints.',
             'tags:read' => 'Read tag list and lookup endpoints.',
@@ -4908,7 +4957,7 @@ class ApiController extends Controller
                         ],
                         'xActionPayloads' => [
                             'entry.updateDraft' => [
-                                'requiredScope' => 'entries:write',
+                                'requiredScope' => 'entries:write:draft',
                                 'description' => 'Create/update an entry draft without publishing.',
                                 'payload' => [
                                     'type' => 'object',

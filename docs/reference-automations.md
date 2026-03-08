@@ -93,7 +93,7 @@ Contract lookups:
 Recommended scopes:
 
 - `control:actions:execute`
-- `entries:write`
+- `entries:write:draft`
 - `control:approvals:request`
 - `control:approvals:decide`
 

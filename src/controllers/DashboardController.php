@@ -5,6 +5,7 @@ namespace Klick\Agents\controllers;
 use Craft;
 use Klick\Agents\Plugin;
 use Klick\Agents\models\Settings;
+use craft\elements\Entry;
 use craft\web\Controller;
 use craft\web\View;
 use Throwable;
@@ -16,6 +17,7 @@ class DashboardController extends Controller
     private const SESSION_REVEALED_CREDENTIAL = 'agents.revealedCredential';
     private const SESSION_CONTROL_SIMULATION = 'agents.controlSimulation';
     private const DASHBOARD_TABS = ['overview', 'readiness', 'discovery', 'security'];
+    private const CONTROL_TABS = ['approvals', 'rules'];
 
     public function actionIndex(): Response
     {
@@ -159,6 +161,8 @@ class DashboardController extends Controller
         $plugin = Plugin::getInstance();
         $settings = $this->getSettingsModel();
         $enabledState = $plugin->getAgentsEnabledState();
+        $activeControlTab = $this->resolveControlTab();
+        $controlTabs = $this->controlTabs();
         $snapshot = $plugin->getControlPlaneService()->getControlPlaneSnapshot(25);
         $policies = (array)($snapshot['policies'] ?? []);
         $approvals = (array)($snapshot['approvals'] ?? []);
@@ -183,9 +187,25 @@ class DashboardController extends Controller
         $policyHintsByActionType = $this->buildPolicyHintsByActionType($actionTypes);
         $approvalsWithPolicy = $this->appendPolicyHints($approvals, $policyHintsByActionType);
         $executionsWithPolicy = $this->appendPolicyHints($executions, $policyHintsByActionType);
+        $approvalsWithPolicy = $this->decorateControlItemsWithActionLabels($approvalsWithPolicy);
+        $executionsWithPolicy = $this->decorateControlItemsWithActionLabels($executionsWithPolicy);
+        $credentialDisplayByActorId = $this->buildControlCredentialDisplayMap($plugin);
+        $approvalsWithPolicy = $this->decorateControlApprovalsWithActorLabels($approvalsWithPolicy, $credentialDisplayByActorId);
+        $auditEvents = $this->decorateControlAuditEventsWithActorLabels($auditEvents, $credentialDisplayByActorId);
+
+        $latestExecutionByApprovalId = [];
+        foreach ($executionsWithPolicy as $execution) {
+            $approvalId = (int)($execution['approvalId'] ?? 0);
+            if ($approvalId <= 0 || isset($latestExecutionByApprovalId[$approvalId])) {
+                continue;
+            }
+
+            $latestExecutionByApprovalId[$approvalId] = $execution;
+        }
 
         $pendingApprovals = [];
-        $approvedApprovalsById = [];
+        $approvedApprovals = [];
+        $completedApprovals = [];
         foreach ($approvalsWithPolicy as $approval) {
             $status = strtolower(trim((string)($approval['status'] ?? '')));
             if ($status === 'pending') {
@@ -193,7 +213,15 @@ class DashboardController extends Controller
             } elseif ($status === 'approved') {
                 $approvalId = (int)($approval['id'] ?? 0);
                 if ($approvalId > 0) {
-                    $approvedApprovalsById[$approvalId] = (string)($approval['actionType'] ?? '');
+                    $latestExecution = $latestExecutionByApprovalId[$approvalId] ?? null;
+                    $approval['latestExecution'] = $latestExecution;
+                    $completionState = $this->resolveControlApprovalCompletionState($approval);
+                    $approval['completionState'] = $completionState;
+                    if ((bool)($completionState['completed'] ?? false)) {
+                        $completedApprovals[] = $approval;
+                    } else {
+                        $approvedApprovals[] = $approval;
+                    }
                 }
             }
         }
@@ -215,15 +243,18 @@ class DashboardController extends Controller
             'controlExecutions' => $executionsWithPolicy,
             'controlAuditEvents' => $auditEvents,
             'controlPendingApprovals' => $pendingApprovals,
+            'controlApprovedApprovals' => $approvedApprovals,
+            'controlCompletedApprovals' => $completedApprovals,
             'controlAttentionExecutions' => $attentionExecutions,
             'controlPolicyHintsByActionType' => $policyHintsByActionType,
-            'controlApprovedApprovalsById' => $approvedApprovalsById,
             'controlSimulationResult' => $this->pullControlSimulationResult(),
             'controlSnapshotJson' => $this->prettyPrintJson($snapshot),
             'allowCpApprovalRequests' => (bool)$settings->allowCpApprovalRequests,
             'canManagePolicies' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE),
             'canManageApprovals' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
             'canExecuteActions' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE),
+            'activeControlTab' => $activeControlTab,
+            'controlTabs' => $controlTabs,
         ]);
     }
 
@@ -1052,15 +1083,21 @@ class DashboardController extends Controller
 
         $service = Plugin::getInstance()->getControlPlaneService();
         $approvalId = (int)$this->request->getBodyParam('approvalId', 0);
+        $decision = (string)$this->request->getBodyParam('decision', '');
         if ($approvalId <= 0) {
             $this->setFailFlash('Missing request number.');
+            return $this->redirectToPostedUrl(null, 'agents/control');
+        }
+
+        if (strtolower(trim($decision)) === 'approved' && !$this->canControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE)) {
+            $this->setFailFlash('You need execute permission to approve requests, because approval runs the action immediately when threshold is met.');
             return $this->redirectToPostedUrl(null, 'agents/control');
         }
 
         try {
             $approval = $service->decideApproval(
                 $approvalId,
-                (string)$this->request->getBodyParam('decision', ''),
+                $decision,
                 (string)$this->request->getBodyParam('decisionReason', ''),
                 $this->buildCpActorContext()
             );
@@ -1072,20 +1109,55 @@ class DashboardController extends Controller
 
             $decisionStatus = (string)($approval['status'] ?? 'pending');
             $approvalsRemaining = (int)($approval['approvalsRemaining'] ?? 0);
+            $decisionMessage = '';
             if ($decisionStatus === 'pending' && $approvalsRemaining > 0) {
-                $this->setSuccessFlash(sprintf(
+                $decisionMessage = sprintf(
                     'Request #%d (`%s`) recorded one approval and is still pending (%d more needed).',
                     $approvalId,
                     (string)($approval['actionType'] ?? 'action'),
                     $approvalsRemaining
-                ));
+                );
             } else {
-                $this->setSuccessFlash(sprintf(
+                $decisionMessage = sprintf(
                     'Request #%d (`%s`) is now `%s`.',
                     $approvalId,
                     (string)($approval['actionType'] ?? 'action'),
                     $decisionStatus
-                ));
+                );
+            }
+
+            $shouldRunNow =
+                strtolower(trim($decision)) === 'approved'
+                && strtolower(trim($decisionStatus)) === 'approved';
+
+            if ($shouldRunNow) {
+                try {
+                    $execution = $service->executeApprovedActionFromApprovalId($approvalId, $this->buildCpActorContext());
+                    if ((bool)($execution['idempotentReplay'] ?? false)) {
+                        $this->setSuccessFlash(sprintf(
+                            '%s Existing run reused (#%d).',
+                            $decisionMessage,
+                            (int)($execution['id'] ?? 0)
+                        ));
+                    } elseif ((string)($execution['status'] ?? '') === 'succeeded') {
+                        $this->setSuccessFlash(sprintf(
+                            '%s Executed immediately (run #%d).',
+                            $decisionMessage,
+                            (int)($execution['id'] ?? 0)
+                        ));
+                    } else {
+                        $this->setFailFlash(sprintf(
+                            '%s Run status is `%s`. %s',
+                            $decisionMessage,
+                            (string)($execution['status'] ?? 'unknown'),
+                            (string)($execution['errorMessage'] ?? 'Review policy and approval requirements.')
+                        ));
+                    }
+                } catch (\InvalidArgumentException $e) {
+                    $this->setFailFlash(sprintf('%s %s', $decisionMessage, $e->getMessage()));
+                }
+            } else {
+                $this->setSuccessFlash($decisionMessage);
             }
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
@@ -1148,6 +1220,51 @@ class DashboardController extends Controller
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
             $this->setFailFlash('Unable to run action: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/control');
+    }
+
+    public function actionExecuteApprovedControlAction(): Response
+    {
+        $this->requireControlCpEnabled();
+        $this->requirePostRequest();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE);
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $approvalId = (int)$this->request->getBodyParam('approvalId', 0);
+        if ($approvalId <= 0) {
+            $this->setFailFlash('Missing request number.');
+            return $this->redirectToPostedUrl(null, 'agents/control');
+        }
+
+        try {
+            $execution = $service->executeApprovedActionFromApprovalId($approvalId, $this->buildCpActorContext());
+            $status = (string)($execution['status'] ?? 'unknown');
+            if ((bool)($execution['idempotentReplay'] ?? false)) {
+                $this->setSuccessFlash(sprintf(
+                    'Request #%d already ran. Reusing existing run #%d.',
+                    $approvalId,
+                    (int)($execution['id'] ?? 0)
+                ));
+            } elseif ($status === 'succeeded') {
+                $this->setSuccessFlash(sprintf(
+                    'Request #%d ran successfully (run #%d).',
+                    $approvalId,
+                    (int)($execution['id'] ?? 0)
+                ));
+            } else {
+                $this->setFailFlash(sprintf(
+                    'Request #%d run is `%s`. %s',
+                    $approvalId,
+                    $status,
+                    (string)($execution['errorMessage'] ?? 'Review policy and approval requirements.')
+                ));
+            }
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to run approved request: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/control');
@@ -1246,6 +1363,14 @@ class DashboardController extends Controller
         ];
     }
 
+    private function controlTabs(): array
+    {
+        return [
+            ['key' => 'approvals', 'label' => 'Approvals', 'url' => 'agents/control/approvals'],
+            ['key' => 'rules', 'label' => 'Rules', 'url' => 'agents/control/rules'],
+        ];
+    }
+
     private function resolveDashboardTab(): string
     {
         $request = Craft::$app->getRequest();
@@ -1268,6 +1393,22 @@ class DashboardController extends Controller
         }
 
         return 'overview';
+    }
+
+    private function resolveControlTab(): string
+    {
+        $request = Craft::$app->getRequest();
+        $tabFromQuery = strtolower(trim((string)$request->getQueryParam('tab', '')));
+        if (in_array($tabFromQuery, self::CONTROL_TABS, true)) {
+            return $tabFromQuery;
+        }
+
+        $pathInfo = trim((string)$request->getPathInfo(), '/');
+        if (preg_match('#^agents/control/(approvals|rules)$#', $pathInfo, $matches) === 1) {
+            return (string)$matches[1];
+        }
+
+        return 'approvals';
     }
 
     private function getSettingsModel(): Settings
@@ -1343,6 +1484,10 @@ class DashboardController extends Controller
                 continue;
             }
 
+            if ($scope === 'entries:write') {
+                $scope = 'entries:write:draft';
+            }
+
             $scopes[] = $scope;
         }
 
@@ -1353,7 +1498,7 @@ class DashboardController extends Controller
 
     private function hasWritingCapabilityScope(array $scopes): bool
     {
-        $writingScopes = ['entries:write'];
+        $writingScopes = ['entries:write:draft', 'entries:write'];
         foreach ($scopes as $scope) {
             $normalized = strtolower(trim((string)$scope));
             if ($normalized === '') {
@@ -1721,6 +1866,883 @@ class DashboardController extends Controller
         }
 
         return $hints;
+    }
+
+    private function buildControlCredentialDisplayMap(Plugin $plugin): array
+    {
+        $map = [];
+        try {
+            $posture = $plugin->getSecurityPolicyService()->getCpPosture();
+            $defaultScopes = (array)($posture['authentication']['tokenScopes'] ?? []);
+            $credentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
+            foreach ($credentials as $credential) {
+                if (!is_array($credential)) {
+                    continue;
+                }
+
+                $handle = trim((string)($credential['handle'] ?? ''));
+                if ($handle === '') {
+                    continue;
+                }
+
+                $displayName = trim((string)($credential['displayName'] ?? ''));
+                if ($displayName === '') {
+                    $displayName = $this->humanizeActorToken($handle);
+                }
+
+                $map[$handle] = $displayName;
+                $map['agent:' . $handle] = $displayName;
+            }
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load control credential display map: ' . $e->getMessage(), __METHOD__);
+        }
+
+        return $map;
+    }
+
+    private function decorateControlApprovalsWithActorLabels(array $approvals, array $credentialDisplayByActorId): array
+    {
+        $decorated = [];
+        foreach ($approvals as $approval) {
+            if (!is_array($approval)) {
+                continue;
+            }
+
+            $approval['requestedByLabel'] = $this->formatControlActorLabel((string)($approval['requestedBy'] ?? ''), '', $credentialDisplayByActorId);
+            $approval['decidedByLabel'] = $this->formatControlActorLabel((string)($approval['decidedBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
+            $approval['secondaryDecisionByLabel'] = $this->formatControlActorLabel((string)($approval['secondaryDecisionBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
+            $decorated[] = $approval;
+        }
+
+        return $decorated;
+    }
+
+    private function resolveControlApprovalCompletionState(array $approval): array
+    {
+        $actionType = strtolower(trim((string)($approval['actionType'] ?? '')));
+        $latestExecution = is_array($approval['latestExecution'] ?? null) ? (array)$approval['latestExecution'] : [];
+        $executionStatus = strtolower(trim((string)($latestExecution['status'] ?? '')));
+
+        if ($actionType === 'entry.updatedraft') {
+            $reviewDraftId = (int)($approval['reviewDraftId'] ?? 0);
+            $reviewMode = strtolower(trim((string)($approval['reviewMode'] ?? '')));
+            if ($reviewDraftId > 0 && $reviewMode !== 'draft') {
+                return [
+                    'completed' => true,
+                    'label' => 'APPLIED',
+                    'detail' => 'Draft is no longer active; treated as applied/resolved.',
+                    'at' => $latestExecution['executedAt'] ?? $latestExecution['dateCreated'] ?? null,
+                ];
+            }
+
+            return [
+                'completed' => false,
+                'label' => 'APPROVED',
+                'detail' => 'Awaiting draft apply in Craft.',
+                'at' => null,
+            ];
+        }
+
+        if ($executionStatus === 'succeeded') {
+            return [
+                'completed' => true,
+                'label' => 'COMPLETED',
+                'detail' => 'Execution succeeded.',
+                'at' => $latestExecution['executedAt'] ?? $latestExecution['dateCreated'] ?? null,
+            ];
+        }
+
+        return [
+            'completed' => false,
+            'label' => 'APPROVED',
+            'detail' => 'Awaiting follow-up.',
+            'at' => null,
+        ];
+    }
+
+    private function decorateControlAuditEventsWithActorLabels(array $events, array $credentialDisplayByActorId): array
+    {
+        $decorated = [];
+        foreach ($events as $event) {
+            if (!is_array($event)) {
+                continue;
+            }
+
+            $event['actorLabel'] = $this->formatControlActorLabel(
+                (string)($event['actorId'] ?? ''),
+                (string)($event['actorType'] ?? ''),
+                $credentialDisplayByActorId
+            );
+            $decorated[] = $event;
+        }
+
+        return $decorated;
+    }
+
+    private function decorateControlItemsWithActionLabels(array $items): array
+    {
+        $decorated = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $actionType = (string)($item['actionType'] ?? '');
+            $item['actionLabel'] = $this->humanizeControlActionType($actionType);
+            $targetEntry = $this->resolveControlTargetEntryDetails($item);
+            $item['targetEntryId'] = $targetEntry['id'];
+            $item['targetEntrySiteId'] = $targetEntry['siteId'];
+            $item['targetEntryCpUrl'] = $targetEntry['cpEditUrl'];
+            $item['targetTitle'] = $this->resolveControlTargetTitle($item, $targetEntry);
+            $item['targetEntryCanonicalId'] = $targetEntry['canonicalId'] ?? null;
+            $item['targetEntryCanonicalSiteId'] = $targetEntry['canonicalSiteId'] ?? null;
+            $item['targetEntryCanonicalCpUrl'] = $targetEntry['canonicalCpEditUrl'] ?? null;
+            $item['targetEntryCanonicalTitle'] = $targetEntry['canonicalTitle'] ?? null;
+            $item['reviewMode'] = $targetEntry['reviewMode'] ?? 'none';
+            $item['reviewDraftId'] = $targetEntry['draftId'] ?? null;
+            $item['targetEntryDraftRecordId'] = $targetEntry['draftRecordId'] ?? null;
+            $reviewContext = $this->buildControlReviewContext($item, $targetEntry);
+            $item['reviewChangeSummary'] = $reviewContext['changeSummary'];
+            $item['reviewGuards'] = $reviewContext['guards'];
+            $item['reviewHasBlockingGuards'] = (bool)($reviewContext['hasBlockingGuards'] ?? false);
+            $decorated[] = $item;
+        }
+
+        return $decorated;
+    }
+
+    private function resolveControlTargetTitle(array $item, ?array $targetEntry = null): ?string
+    {
+        $actionType = strtolower(trim((string)($item['actionType'] ?? '')));
+        $actionRef = trim((string)($item['actionRef'] ?? ''));
+        $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
+        $resultPayload = is_array($item['resultPayload'] ?? null) ? (array)$item['resultPayload'] : [];
+        $targetEntry ??= $this->resolveControlTargetEntryDetails($item);
+
+        if ($actionType === 'entry.updatedraft') {
+            $payloadTitle = $this->firstNonEmptyString([
+                $requestPayload['title'] ?? null,
+                $requestPayload['entryTitle'] ?? null,
+                $resultPayload['title'] ?? null,
+            ]);
+            if ($payloadTitle !== null) {
+                return $payloadTitle;
+            }
+
+            $entryTitle = $this->firstNonEmptyString([$targetEntry['title'] ?? null]);
+            if ($entryTitle !== null) {
+                return $entryTitle;
+            }
+
+            $draftTitle = $this->firstNonEmptyString([
+                $requestPayload['draftName'] ?? null,
+                $resultPayload['draftName'] ?? null,
+            ]);
+            if ($draftTitle !== null) {
+                return $draftTitle;
+            }
+        }
+
+        $genericTitle = $this->firstNonEmptyString([
+            $requestPayload['title'] ?? null,
+            $requestPayload['name'] ?? null,
+            $requestPayload['label'] ?? null,
+            $resultPayload['title'] ?? null,
+            $resultPayload['name'] ?? null,
+            $resultPayload['label'] ?? null,
+        ]);
+        if ($genericTitle !== null) {
+            return $genericTitle;
+        }
+
+        return $this->humanizeControlActionRef($actionRef);
+    }
+
+    private function resolveControlTargetEntryDetails(array $item): array
+    {
+        $actionType = strtolower(trim((string)($item['actionType'] ?? '')));
+        if ($actionType !== 'entry.updatedraft') {
+            return [
+                'id' => null,
+                'siteId' => null,
+                'title' => null,
+                'cpEditUrl' => null,
+                'canonicalId' => null,
+                'canonicalSiteId' => null,
+                'canonicalTitle' => null,
+                'canonicalCpEditUrl' => null,
+                'draftId' => null,
+                'draftRecordId' => null,
+                'draftExists' => null,
+                'reviewMode' => 'none',
+            ];
+        }
+
+        $targetIds = $this->extractControlTargetIds($item);
+        $entryId = (int)($targetIds['entryId'] ?? 0);
+        $preferredSiteId = (int)($targetIds['siteId'] ?? 0);
+        $draftId = (int)($targetIds['draftId'] ?? 0);
+
+        if ($entryId <= 0) {
+            return [
+                'id' => null,
+                'siteId' => $preferredSiteId > 0 ? $preferredSiteId : null,
+                'title' => null,
+                'cpEditUrl' => null,
+                'canonicalId' => null,
+                'canonicalSiteId' => $preferredSiteId > 0 ? $preferredSiteId : null,
+                'canonicalTitle' => null,
+                'canonicalCpEditUrl' => null,
+                'draftId' => $draftId > 0 ? $draftId : null,
+                'draftRecordId' => null,
+                'draftExists' => $draftId > 0 ? false : null,
+                'reviewMode' => 'missing',
+            ];
+        }
+
+        $canonicalDescriptor = $this->resolveEntryDescriptorById($entryId, $preferredSiteId);
+        $draftDescriptor = null;
+        if ($draftId > 0) {
+            $candidateDraftDescriptor = $this->resolveDraftDescriptorById($draftId, $preferredSiteId);
+            if (
+                is_array($candidateDraftDescriptor) &&
+                (int)($candidateDraftDescriptor['canonicalId'] ?? 0) === $entryId
+            ) {
+                $draftDescriptor = $candidateDraftDescriptor;
+            }
+        }
+
+        $reviewDescriptor = $draftDescriptor ?? $canonicalDescriptor;
+        if (!is_array($reviewDescriptor) && !is_array($canonicalDescriptor)) {
+            return [
+                'id' => null,
+                'siteId' => null,
+                'title' => null,
+                'cpEditUrl' => null,
+                'canonicalId' => null,
+                'canonicalSiteId' => null,
+                'canonicalTitle' => null,
+                'canonicalCpEditUrl' => null,
+                'draftId' => $draftId > 0 ? $draftId : null,
+                'draftRecordId' => null,
+                'draftExists' => $draftId > 0 ? false : null,
+                'reviewMode' => 'missing',
+            ];
+        }
+
+        $canonicalSiteId = (int)($canonicalDescriptor['siteId'] ?? ($preferredSiteId > 0 ? $preferredSiteId : 0));
+        $reviewSiteId = (int)($reviewDescriptor['siteId'] ?? $canonicalSiteId);
+
+        return [
+            'id' => (int)($reviewDescriptor['id'] ?? 0) ?: null,
+            'siteId' => $reviewSiteId > 0 ? $reviewSiteId : null,
+            'title' => $reviewDescriptor['title'] ?? null,
+            'cpEditUrl' => $reviewDescriptor['cpEditUrl'] ?? null,
+            'canonicalId' => (int)($canonicalDescriptor['id'] ?? $entryId),
+            'canonicalSiteId' => $canonicalSiteId > 0 ? $canonicalSiteId : null,
+            'canonicalTitle' => $canonicalDescriptor['title'] ?? null,
+            'canonicalCpEditUrl' => $canonicalDescriptor['cpEditUrl'] ?? null,
+            'draftId' => $draftId > 0 ? $draftId : null,
+            'draftRecordId' => isset($draftDescriptor['draftRecordId']) ? (int)$draftDescriptor['draftRecordId'] : null,
+            'draftExists' => $draftId > 0 ? $draftDescriptor !== null : null,
+            'reviewMode' => $draftDescriptor !== null ? 'draft' : 'canonical',
+        ];
+    }
+
+    private function buildControlReviewContext(array $item, array $targetEntry): array
+    {
+        $context = [
+            'changeSummary' => [],
+            'guards' => [],
+            'hasBlockingGuards' => false,
+        ];
+
+        $actionType = strtolower(trim((string)($item['actionType'] ?? '')));
+        if ($actionType !== 'entry.updatedraft') {
+            return $context;
+        }
+
+        $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
+        $resultPayload = is_array($item['resultPayload'] ?? null) ? (array)$item['resultPayload'] : [];
+        $targetIds = $this->extractControlTargetIds($item);
+        $entryId = (int)($targetIds['entryId'] ?? 0);
+        $siteId = (int)($targetIds['siteId'] ?? 0);
+        $draftId = (int)($targetIds['draftId'] ?? 0);
+        $status = strtolower(trim((string)($item['status'] ?? '')));
+
+        $context['changeSummary'] = $this->buildControlChangeSummary($requestPayload, $resultPayload);
+        if (empty($context['changeSummary'])) {
+            $context['changeSummary'][] = [
+                'label' => 'Requested update',
+                'value' => 'No explicit field mutations were provided in the request payload.',
+            ];
+        }
+
+        if ($status !== 'pending') {
+            return $context;
+        }
+
+        if ($entryId <= 0) {
+            $context['guards'][] = [
+                'level' => 'critical',
+                'label' => 'Missing entry target',
+                'detail' => 'Approval payload is missing `entryId`.',
+            ];
+            $context['hasBlockingGuards'] = true;
+            return $context;
+        }
+
+        if ($draftId > 0 && !($targetEntry['draftExists'] ?? false)) {
+            $context['guards'][] = [
+                'level' => 'critical',
+                'label' => 'Draft not found',
+                'detail' => sprintf('Draft #%d is missing or no longer linked to entry #%d.', $draftId, $entryId),
+            ];
+            $context['hasBlockingGuards'] = true;
+            return $context;
+        }
+
+        if ($draftId <= 0) {
+            $context['guards'][] = [
+                'level' => 'warning',
+                'label' => 'No draft linked',
+                'detail' => 'Approval does not reference a draft ID, so review falls back to canonical entry.',
+            ];
+            return $context;
+        }
+
+        $draft = $this->findControlEntryForReview($draftId, $siteId, true);
+        if (!$draft instanceof Entry || !$draft->getIsDraft()) {
+            $context['guards'][] = [
+                'level' => 'critical',
+                'label' => 'Draft not readable',
+                'detail' => sprintf('Draft #%d could not be loaded for review.', $draftId),
+            ];
+            $context['hasBlockingGuards'] = true;
+            return $context;
+        }
+
+        $outdatedAttributes = $draft->getOutdatedAttributes();
+        $outdatedFields = $draft->getOutdatedFields();
+        if (!empty($outdatedAttributes) || !empty($outdatedFields)) {
+            $context['guards'][] = [
+                'level' => 'warning',
+                'label' => 'Canonical changed since draft',
+                'detail' => sprintf(
+                    '%d attributes and %d fields were updated in canonical after this draft was created.',
+                    count($outdatedAttributes),
+                    count($outdatedFields)
+                ),
+            ];
+        }
+
+        $draft->clearErrors();
+        if (!$draft->validate()) {
+            $validationErrors = $this->normalizeControlValidationErrors($draft->getErrors());
+            $context['guards'][] = [
+                'level' => 'warning',
+                'label' => 'Validation warnings',
+                'detail' => !empty($validationErrors)
+                    ? implode(' ', array_slice($validationErrors, 0, 2))
+                    : 'Draft currently has validation issues.',
+            ];
+        }
+
+        return $context;
+    }
+
+    private function buildControlChangeSummary(array $requestPayload, array $resultPayload): array
+    {
+        $summary = [];
+
+        $title = $this->firstNonEmptyString([
+            $requestPayload['title'] ?? null,
+            $resultPayload['title'] ?? null,
+        ]);
+        if ($title !== null) {
+            $summary[] = [
+                'label' => 'Title',
+                'value' => $this->formatControlReviewTextSnippet($title, 100),
+            ];
+        }
+
+        $slug = $this->firstNonEmptyString([
+            $requestPayload['slug'] ?? null,
+            $resultPayload['slug'] ?? null,
+        ]);
+        if ($slug !== null) {
+            $summary[] = [
+                'label' => 'Slug',
+                'value' => $slug,
+            ];
+        }
+
+        $draftName = $this->firstNonEmptyString([
+            $requestPayload['draftName'] ?? null,
+            $resultPayload['draftName'] ?? null,
+        ]);
+        if ($draftName !== null) {
+            $summary[] = [
+                'label' => 'Draft name',
+                'value' => $this->formatControlReviewTextSnippet($draftName, 100),
+            ];
+        }
+
+        $draftNotes = $this->firstNonEmptyString([
+            $requestPayload['draftNotes'] ?? null,
+            $resultPayload['draftNotes'] ?? null,
+        ]);
+        if ($draftNotes !== null) {
+            $summary[] = [
+                'label' => 'Draft notes',
+                'value' => $this->formatControlReviewTextSnippet($draftNotes, 140),
+            ];
+        }
+
+        if (is_array($requestPayload['fields'] ?? null) && !empty($requestPayload['fields'])) {
+            $fieldHandles = array_values(array_filter(array_map(static fn($handle): string => trim((string)$handle), array_keys($requestPayload['fields']))));
+            if (!empty($fieldHandles)) {
+                $summary[] = [
+                    'label' => 'Fields',
+                    'value' => implode(', ', array_slice($fieldHandles, 0, 6)),
+                ];
+            }
+        } elseif (is_array($resultPayload['changedKeys'] ?? null) && !empty($resultPayload['changedKeys'])) {
+            $changedKeys = array_values(array_filter(array_map(static fn($key): string => trim((string)$key), $resultPayload['changedKeys'])));
+            if (!empty($changedKeys)) {
+                $summary[] = [
+                    'label' => 'Changed keys',
+                    'value' => implode(', ', array_slice($changedKeys, 0, 6)),
+                ];
+            }
+        }
+
+        return $summary;
+    }
+
+    private function extractControlTargetIds(array $item): array
+    {
+        $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
+        $resultPayload = is_array($item['resultPayload'] ?? null) ? (array)$item['resultPayload'] : [];
+
+        $entryId = 0;
+        if (isset($requestPayload['entryId'])) {
+            $entryId = (int)$requestPayload['entryId'];
+        } elseif (isset($resultPayload['entryId'])) {
+            $entryId = (int)$resultPayload['entryId'];
+        }
+
+        $siteId = 0;
+        if (isset($requestPayload['siteId'])) {
+            $siteId = (int)$requestPayload['siteId'];
+        } elseif (isset($resultPayload['siteId'])) {
+            $siteId = (int)$resultPayload['siteId'];
+        }
+
+        $draftId = 0;
+        if (isset($requestPayload['draftId'])) {
+            $draftId = (int)$requestPayload['draftId'];
+        } elseif (isset($resultPayload['draftId'])) {
+            $draftId = (int)$resultPayload['draftId'];
+        }
+
+        return [
+            'entryId' => $entryId,
+            'siteId' => $siteId,
+            'draftId' => $draftId,
+        ];
+    }
+
+    private function resolveDraftDescriptorById(int $draftId, int $preferredSiteId = 0): ?array
+    {
+        static $cache = [];
+        if ($draftId <= 0) {
+            return null;
+        }
+
+        $cacheKey = sprintf('draft:%d:%d', $draftId, max(0, $preferredSiteId));
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        $query = Entry::find()
+            ->id($draftId)
+            ->drafts(true)
+            ->status(null);
+
+        if ($preferredSiteId > 0) {
+            $query->siteId($preferredSiteId);
+        } else {
+            $query->site('*');
+        }
+
+        $draft = $query->one();
+        if (!$draft instanceof Entry || !$draft->getIsDraft()) {
+            $cache[$cacheKey] = null;
+            return null;
+        }
+
+        $title = trim((string)$draft->title);
+        $cpEditUrl = trim((string)$draft->getCpEditUrl());
+        $cache[$cacheKey] = [
+            'id' => (int)$draft->id,
+            'siteId' => (int)($draft->siteId ?? 0),
+            'canonicalId' => (int)$draft->getCanonicalId(),
+            'draftRecordId' => (int)($draft->draftId ?? 0),
+            'title' => $title !== '' ? $title : null,
+            'cpEditUrl' => $cpEditUrl !== '' ? $cpEditUrl : null,
+        ];
+
+        return $cache[$cacheKey];
+    }
+
+    private function findControlEntryForReview(int $entryId, int $preferredSiteId = 0, bool $drafts = false): ?Entry
+    {
+        if ($entryId <= 0) {
+            return null;
+        }
+
+        $query = Entry::find()
+            ->id($entryId)
+            ->status(null);
+
+        if ($drafts) {
+            $query->drafts(true);
+        } else {
+            $query->canonicalsOnly();
+        }
+
+        if ($preferredSiteId > 0) {
+            $query->siteId($preferredSiteId);
+        } else {
+            $query->site('*');
+        }
+
+        $entry = $query->one();
+        return $entry instanceof Entry ? $entry : null;
+    }
+
+    private function normalizeControlValidationErrors(array $errors): array
+    {
+        $normalized = [];
+        foreach ($errors as $attributeErrors) {
+            if (!is_array($attributeErrors)) {
+                continue;
+            }
+            foreach ($attributeErrors as $error) {
+                $message = trim((string)$error);
+                if ($message !== '') {
+                    $normalized[] = $message;
+                }
+            }
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    private function formatControlReviewTextSnippet(string $value, int $maxLength = 120): string
+    {
+        $plain = preg_replace('/\s+/', ' ', trim(strip_tags($value)));
+        if (!is_string($plain) || $plain === '') {
+            return '';
+        }
+
+        if ((function_exists('mb_strlen') ? mb_strlen($plain) : strlen($plain)) <= $maxLength) {
+            return $plain;
+        }
+
+        $snippet = function_exists('mb_substr')
+            ? mb_substr($plain, 0, $maxLength - 1)
+            : substr($plain, 0, $maxLength - 1);
+
+        return rtrim((string)$snippet) . '…';
+    }
+
+    private function resolveEntryTitleById(int $entryId, int $preferredSiteId = 0): ?string
+    {
+        $descriptor = $this->resolveEntryDescriptorById($entryId, $preferredSiteId);
+        return is_array($descriptor) ? ($descriptor['title'] ?? null) : null;
+    }
+
+    private function resolveEntryDescriptorById(int $entryId, int $preferredSiteId = 0): ?array
+    {
+        static $cache = [];
+        if ($entryId <= 0) {
+            return null;
+        }
+
+        $cacheKey = sprintf('%d:%d', $entryId, max(0, $preferredSiteId));
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        $query = Entry::find()
+            ->id($entryId)
+            ->canonicalsOnly()
+            ->status(null);
+
+        if ($preferredSiteId > 0) {
+            $query->siteId($preferredSiteId);
+        } else {
+            $query->site('*');
+        }
+
+        $entry = $query->one();
+        if (!$entry instanceof Entry && $preferredSiteId > 0) {
+            $entry = Entry::find()
+                ->id($entryId)
+                ->canonicalsOnly()
+                ->status(null)
+                ->site('*')
+                ->one();
+        }
+
+        if (!$entry instanceof Entry) {
+            $cache[$cacheKey] = null;
+            return null;
+        }
+
+        $title = trim((string)$entry->title);
+        $cpEditUrl = trim((string)$entry->getCpEditUrl());
+        $cache[$cacheKey] = [
+            'id' => (int)$entry->id,
+            'siteId' => (int)($entry->siteId ?? 0),
+            'title' => $title !== '' ? $title : null,
+            'cpEditUrl' => $cpEditUrl !== '' ? $cpEditUrl : null,
+        ];
+        return $cache[$cacheKey];
+    }
+
+    private function firstNonEmptyString(array $values): ?string
+    {
+        foreach ($values as $value) {
+            if ($value === null) {
+                continue;
+            }
+            if (!is_string($value) && !is_numeric($value)) {
+                continue;
+            }
+
+            $candidate = trim((string)$value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function humanizeControlActionRef(string $actionRef): ?string
+    {
+        $normalizedRef = trim($actionRef);
+        if ($normalizedRef === '') {
+            return null;
+        }
+
+        $parts = array_values(array_filter(array_map('trim', explode(':', $normalizedRef)), static fn(string $part): bool => $part !== ''));
+        if (empty($parts)) {
+            return null;
+        }
+
+        if (count($parts) >= 2) {
+            $tail = (string)end($parts);
+            $simulatedTitlesByTail = [
+                'seo-refresh' => 'Spring Campaign SEO Landing Page',
+                'content-refresh' => 'Homepage Hero Content Block',
+                'pricing-refresh' => 'Pricing Overview and CTA Block',
+            ];
+            if (isset($simulatedTitlesByTail[$tail])) {
+                return $simulatedTitlesByTail[$tail];
+            }
+
+            $humanTail = $this->humanizeActorToken($tail);
+            if (preg_match('/^entry-(\d+)$/i', (string)$parts[0], $matches) === 1) {
+                return sprintf('Entry %d - %s', (int)$matches[1], $humanTail);
+            }
+
+            return $humanTail;
+        }
+
+        return $this->humanizeActorToken($parts[0]);
+    }
+
+    private function humanizeControlActionType(string $actionType): string
+    {
+        $normalized = strtolower(trim($actionType));
+        if ($normalized === '') {
+            return 'Unknown action';
+        }
+
+        if ($normalized === 'entry.updatedraft') {
+            return 'Update Entry Draft';
+        }
+
+        if (str_starts_with($normalized, 'returns.exception.refund')) {
+            return 'Handle Return Refund Exception';
+        }
+
+        if (str_starts_with($normalized, 'returns.exception.manual-review')) {
+            return 'Run Return Manual Review';
+        }
+
+        $parts = preg_split('/[.:_-]+/', $normalized) ?: [];
+        $words = [];
+        foreach ($parts as $part) {
+            $token = trim((string)$part);
+            if ($token === '' || preg_match('/^\d+$/', $token) === 1) {
+                continue;
+            }
+            $words[] = ucfirst($token);
+        }
+
+        if (empty($words)) {
+            return 'Unknown action';
+        }
+
+        return implode(' ', $words);
+    }
+
+    private function formatControlActorLabel(string $actorId, string $actorType, array $credentialDisplayByActorId): string
+    {
+        $normalizedActorId = trim($actorId);
+        if ($normalizedActorId === '') {
+            return 'n/a';
+        }
+
+        if ($actorType === 'cp-user' || str_starts_with($normalizedActorId, 'cp:')) {
+            if (preg_match('/^cp:user-(\d+)$/', $normalizedActorId, $matches) === 1) {
+                $resolvedById = $this->resolveCpUserDisplayNameById((int)$matches[1]);
+                if ($resolvedById !== null) {
+                    return $resolvedById;
+                }
+            }
+
+            if (preg_match('/^cp:(.+)$/', $normalizedActorId, $matches) === 1) {
+                $username = trim((string)($matches[1] ?? ''));
+                if ($username !== '') {
+                    $resolvedByUsername = $this->resolveCpUserDisplayNameByUsername($username);
+                    if ($resolvedByUsername !== null) {
+                        return $resolvedByUsername;
+                    }
+
+                    return $this->humanizeActorToken($username);
+                }
+            }
+
+            return 'Control Panel user';
+        }
+
+        if (isset($credentialDisplayByActorId[$normalizedActorId])) {
+            return (string)$credentialDisplayByActorId[$normalizedActorId];
+        }
+
+        if ($actorType === 'credential' && $normalizedActorId !== '') {
+            return $this->humanizeActorToken($normalizedActorId);
+        }
+
+        if ($normalizedActorId === 'system') {
+            return 'System';
+        }
+
+        if (str_starts_with($normalizedActorId, 'system:')) {
+            $suffix = trim(substr($normalizedActorId, 7));
+            if ($suffix === '') {
+                return 'System';
+            }
+
+            return sprintf('System (%s)', $this->humanizeActorToken($suffix));
+        }
+
+        if (str_starts_with($normalizedActorId, 'agent:')) {
+            $suffix = trim(substr($normalizedActorId, 6));
+            if ($suffix === '') {
+                return 'Agent';
+            }
+
+            if (isset($credentialDisplayByActorId[$suffix])) {
+                return (string)$credentialDisplayByActorId[$suffix];
+            }
+
+            return $this->humanizeActorToken($suffix);
+        }
+
+        return $this->humanizeActorToken($normalizedActorId);
+    }
+
+    private function resolveCpUserDisplayNameById(int $id): ?string
+    {
+        static $cache = [];
+        if ($id <= 0) {
+            return null;
+        }
+
+        if (array_key_exists($id, $cache)) {
+            return $cache[$id];
+        }
+
+        $user = Craft::$app->getUsers()->getUserById($id);
+        $cache[$id] = $this->extractCpUserDisplayName($user);
+        return $cache[$id];
+    }
+
+    private function resolveCpUserDisplayNameByUsername(string $username): ?string
+    {
+        static $cache = [];
+        $normalized = trim($username);
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (array_key_exists($normalized, $cache)) {
+            return $cache[$normalized];
+        }
+
+        $user = Craft::$app->getUsers()->getUserByUsernameOrEmail($normalized);
+        $cache[$normalized] = $this->extractCpUserDisplayName($user);
+        return $cache[$normalized];
+    }
+
+    private function extractCpUserDisplayName(mixed $user): ?string
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        $fullName = '';
+        if (method_exists($user, 'getFullName')) {
+            $fullName = trim((string)$user->getFullName());
+        }
+        if ($fullName !== '') {
+            return $fullName;
+        }
+
+        $username = trim((string)($user->username ?? ''));
+        if ($username !== '') {
+            return $username;
+        }
+
+        $email = trim((string)($user->email ?? ''));
+        if ($email !== '') {
+            return $email;
+        }
+
+        return null;
+    }
+
+    private function humanizeActorToken(string $value): string
+    {
+        $normalized = trim($value);
+        if ($normalized === '') {
+            return 'n/a';
+        }
+
+        $normalized = preg_replace('/[^a-zA-Z0-9]+/', ' ', $normalized) ?: '';
+        $normalized = trim($normalized);
+        if ($normalized === '') {
+            return $value;
+        }
+
+        return ucwords(strtolower($normalized));
     }
 
     private function appendPolicyHints(array $items, array $hintsByActionType): array

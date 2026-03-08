@@ -5,6 +5,7 @@ namespace Klick\Agents\services;
 use Craft;
 use craft\base\Component;
 use craft\elements\Entry;
+use craft\elements\User;
 use craft\helpers\StringHelper;
 use yii\db\Query;
 
@@ -518,6 +519,41 @@ class ControlPlaneService extends Component
 
         $latest = $this->findApprovalById($approvalId);
         return is_array($latest) ? $this->hydrateApproval($latest) : null;
+    }
+
+    public function executeApprovedActionFromApprovalId(int $approvalId, array $actor = []): array
+    {
+        if ($approvalId <= 0) {
+            throw new \InvalidArgumentException('Missing request number.');
+        }
+
+        $approvalRow = $this->findApprovalById($approvalId);
+        if (!is_array($approvalRow)) {
+            throw new \InvalidArgumentException(sprintf('Request #%d was not found.', $approvalId));
+        }
+
+        $approval = $this->hydrateApproval($approvalRow);
+        $approvalStatus = strtolower(trim((string)($approval['status'] ?? self::APPROVAL_STATUS_PENDING)));
+        if ($approvalStatus !== self::APPROVAL_STATUS_APPROVED) {
+            throw new \InvalidArgumentException(sprintf(
+                'Request #%d is `%s` and cannot be run.',
+                $approvalId,
+                $approvalStatus !== '' ? $approvalStatus : self::APPROVAL_STATUS_PENDING
+            ));
+        }
+
+        $idempotencyKey = $this->normalizeIdempotencyKey((string)($approval['idempotencyKey'] ?? ''));
+        if ($idempotencyKey === '') {
+            $idempotencyKey = sprintf('approval-%d-exec-v1', $approvalId);
+        }
+
+        return $this->executeAction([
+            'actionType' => (string)($approval['actionType'] ?? ''),
+            'actionRef' => (string)($approval['actionRef'] ?? ''),
+            'approvalId' => $approvalId,
+            'idempotencyKey' => $idempotencyKey,
+            'payload' => (array)($approval['requestPayload'] ?? []),
+        ], $actor);
     }
 
     public function getExecutions(array $filters = [], int $limit = 50): array
@@ -1172,7 +1208,7 @@ class ControlPlaneService extends Component
     private function defaultRequiredScopeForAction(string $actionType): string
     {
         return match ($actionType) {
-            self::ACTION_ENTRY_UPDATE_DRAFT => 'entries:write',
+            self::ACTION_ENTRY_UPDATE_DRAFT => 'entries:write:draft',
             default => 'control:actions:execute',
         };
     }
@@ -1217,7 +1253,25 @@ class ControlPlaneService extends Component
             }
         }
 
+        if ($required > 1 && !$this->hasMultipleActiveCpUsers()) {
+            $required = 1;
+        }
+
         return min(2, max(1, $required));
+    }
+
+    private function hasMultipleActiveCpUsers(): bool
+    {
+        try {
+            $count = (int)User::find()
+                ->status(User::STATUS_ACTIVE)
+                ->limit(2)
+                ->count();
+
+            return $count > 1;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function resolveApprovalSlaPolicy(array $policy): array
