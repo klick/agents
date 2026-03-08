@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.10.1**
+Current plugin version: **0.10.2**
 
 ## Purpose
 
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.10.1
+composer require klick/agents:^0.10.2
 php craft plugin/install agents
 ```
 
@@ -120,7 +120,7 @@ Environment variables:
 - `PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS` (default: `5`)
 - `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default: `3`, max queue retry attempts)
 - `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (default: `false`; enables governed write/control API surfaces)
-- `PLUGIN_AGENTS_WRITES_CP_EXPERIMENTAL` (optional explicit CP override; when unset, CP control tab/routes follow `enableWritesExperimental`)
+- Control CP (`agents/control/*`) follows `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (single gate).
 
 These are documented in `.env.example`.
 

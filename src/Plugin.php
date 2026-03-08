@@ -48,7 +48,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.10.1';
+    public string $schemaVersion = '0.10.2';
 
     public static ?self $plugin = null;
 
@@ -396,12 +396,7 @@ class Plugin extends BasePlugin
 
     public function isWritesCpExperimentalEnabled(): bool
     {
-        $cpEnabled = App::parseBooleanEnv('$PLUGIN_AGENTS_WRITES_CP_EXPERIMENTAL');
-        if ($cpEnabled !== null) {
-            return (bool)$cpEnabled;
-        }
-
-        // Follow the write-surface toggle when no explicit CP override is provided.
+        // Control CP visibility follows the governed write-surface toggle.
         return $this->isWritesExperimentalEnabled();
     }
 

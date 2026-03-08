@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.2 - 2026-03-08
+
+### Changed
+
+- Unified Control CP and governed write APIs behind one gate: `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (removed separate CP override behavior).
+
 ## 0.10.1 - 2026-03-08
 
 ### Changed
