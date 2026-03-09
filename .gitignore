@@ -3,6 +3,9 @@
 /.vscode/
 .DS_Store
 /.docs/
+/.plans/
+/node_modules/
+/docs/.vitepress/dist/
 /.tmp/
 
 /.tasks/

@@ -23,7 +23,9 @@ expect_fixed() {
 }
 
 expect_file "$PLUGIN_ROOT/src/services/ReliabilitySignalService.php" "Reliability signal service"
-expect_file "$PLUGIN_ROOT/docs/observability-runbook.md" "Observability runbook doc"
+RUNBOOK_DOC="$PLUGIN_ROOT/docs/troubleshooting/observability-runbook.md"
+
+expect_file "$RUNBOOK_DOC" "Observability runbook doc"
 
 expect_fixed "'reliabilitySignalService' => ReliabilitySignalService::class" "$PLUGIN_ROOT/src/Plugin.php" "Reliability service component missing"
 expect_fixed "public function getReliabilitySignalService(): ReliabilitySignalService" "$PLUGIN_ROOT/src/Plugin.php" "Reliability service getter missing"
@@ -52,9 +54,9 @@ expect_fixed "public function actionReliabilityCheck(): int" "$PLUGIN_ROOT/src/c
 expect_fixed "'reliability-check'" "$PLUGIN_ROOT/src/console/controllers/AgentsController.php" "CLI reliability-check option binding missing"
 expect_fixed "'agents/reliability-check'" "$PLUGIN_ROOT/src/controllers/ApiController.php" "Capabilities command list missing reliability-check"
 
-expect_fixed "php craft agents/reliability-check" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing CLI reliability command"
-expect_fixed "GET /agents/v1/incidents" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing incidents endpoint reference"
-expect_fixed "agents_auth_failures_total" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing auth-failures metric reference"
-expect_fixed "agents_consumer_lag_max_seconds" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing consumer lag metric reference"
+expect_fixed "php craft agents/reliability-check" "$RUNBOOK_DOC" "Runbook missing CLI reliability command"
+expect_fixed "GET /agents/v1/incidents" "$RUNBOOK_DOC" "Runbook missing incidents endpoint reference"
+expect_fixed "agents_auth_failures_total" "$RUNBOOK_DOC" "Runbook missing auth-failures metric reference"
+expect_fixed "agents_consumer_lag_max_seconds" "$RUNBOOK_DOC" "Runbook missing consumer lag metric reference"
 
 echo "PASS: reliability pack regression checks pass"

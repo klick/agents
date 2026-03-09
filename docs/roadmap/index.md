@@ -1,6 +1,6 @@
-# Agents Plugin Roadmap
+# Roadmap
 
-Date: 2026-03-07  
+Last updated: 2026-03-09  
 Current release: `v0.10.6`
 
 ## Direction
@@ -26,32 +26,29 @@ Release outcome:
 
 ## Done (`v0.6.0`)
 
-- Ship observability baseline:
-  - metrics taxonomy and naming
-  - runtime metrics collection
-  - metrics export endpoint
-  - CP telemetry snapshot
-  - runbook and alert guidance
-- Add adoption instrumentation:
-  - first-call success funnel
-  - time-to-first-success metric
-  - credential activation and weekly usage tracking
+- Ship observability baseline: metrics taxonomy and naming.
+- Ship observability baseline: runtime metrics collection.
+- Ship observability baseline: metrics export endpoint.
+- Ship observability baseline: CP telemetry snapshot.
+- Ship observability baseline: runbook and alert guidance.
+- Add adoption instrumentation: first-call success funnel.
+- Add adoption instrumentation: time-to-first-success metric.
+- Add adoption instrumentation: credential activation and weekly usage tracking.
 
 Release outcome:
 
 - Operators can triage incidents quickly, and product teams can see where integration adoption drops.
-- `v0.6.1` hotfix closed runtime reliability issues in adoption metrics, machine POST CSRF handling, and dual-approval race safety.
+- `v0.6.1` hotfix closed runtime reliability issues in adoption metrics, CSRF handling for machine POST routes, and dual-approval race protection.
 - `v0.6.2` corrected release-version metadata/tag alignment for plugin store ingestion.
 
 ## Done (`v0.7.0`)
 
-- Ship one-click diagnostics bundle:
-  - contract + redaction policy
-  - diagnostics engine
-  - CP download flow
-  - CLI companion command
+- Ship one-click diagnostics bundle: contract and redaction policy.
+- Ship one-click diagnostics bundle: diagnostics engine.
+- Ship one-click diagnostics bundle: CP download flow.
+- Ship one-click diagnostics bundle: CLI companion command.
 - Improve integrator DX with schema/OpenAPI-based templates.
-- Publish reference automations for the canonical jobs (with tested sample payloads).
+- Publish reference automations for the canonical jobs with tested sample payloads.
 
 Release outcome:
 
@@ -92,7 +89,7 @@ Release outcome:
 ## Planned (`v0.11.0`)
 
 - Add external plugin data adapters for agent accounts (read-only first).
-- Introduce provider registry + registration event so integrations can be added without hardcoding controller logic.
+- Introduce provider registry + registration event so integrations can be added without hardcoded controller logic.
 - Add explicit plugin/resource scopes for external data (for example `plugins:seomatic:meta:read`).
 - Expose registered external resources in capabilities, OpenAPI, and schema outputs.
 - Ship first-party reference adapters for SEOmatic and Campaign (when installed).
@@ -101,13 +98,7 @@ Release outcome:
 
 - Teams can let agents safely consume data from selected Craft plugins using the same governed account model.
 
-## Parked Candidates (not committed)
-
-- `F13` Custom scope kit and field policy registry is parked as a later extensibility feature; if scheduled pre-`1.0`, it should stay registry-backed and fail-closed rather than allowing arbitrary user-authored scope strings.
-- `F14` Agent commerce via stablecoin spend rail is intentionally parked to avoid current scope creep.
-- It remains a plausible pre-`1.0` candidate, but no wallet, merchant, or payment abstractions should be introduced until it is explicitly scheduled.
-
-## Success Checks
+## Success checks
 
 - Support escalations reduced by at least `30%` by end of `v0.8.0` cycle.
 - Time-to-triage for integration incidents below `15` minutes.

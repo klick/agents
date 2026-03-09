@@ -1,30 +1,34 @@
-# Agents Plugin
+# Agents
 
-Governed agent runtime for Craft CMS and Commerce.
+Safe AI and automation APIs for Craft CMS and Craft Commerce.
 
 Current plugin version: **0.10.6**
 
 ## Purpose
 
-Agents provides a secure runtime layer for machine integrations on Craft and Commerce:
+Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It is the governed machine-access layer for Craft CMS and Craft Commerce, combining scoped APIs, managed credentials, diagnostics, and optional approval controls so production behavior stays predictable, observable, and auditable.
 
-- scoped token auth with operational introspection
-- stable machine APIs for content/commerce access
-- incremental sync and signed webhook delivery
-- governed control flows (policies, approvals, execution ledger, audit; experimental flag)
-- optional public discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`)
+Teams use Agents to:
 
-Agents is a runtime + governance plugin; discovery docs are one feature, not the product.
+- Connect:
+  - expose structured machine access to Craft and Commerce data and actions
+- Control:
+  - manage credentials, scopes, policies, approvals, and audit trail in the Craft CP
+- Operate:
+  - monitor readiness, diagnostics, sync-state, lifecycle posture, and webhook reliability
+
+Discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`) are optional public discovery surfaces. They are not the core product boundary.
 
 ## Execution Model & Trust Boundary
 
-Agents is a governed API runtime. In production, runtime actions are executed through scoped API routes and policy controls, not by executing arbitrary shell commands.
+Agents is not a chatbot plugin, prompt layer, or shell execution surface. In production, machine actions execute through scoped HTTP APIs, request validation, policy controls, and auditable records.
 
 Trust boundary summary:
 
-- Runtime execution path: HTTP API + scoped auth + deterministic validation/error contracts.
-- Optional control path (feature-flagged): policy/approval checks + idempotent execution + audit trail.
-- CLI path: `craft agents/*` is for operator/developer workflows and diagnostics.
+- Runtime execution path: HTTP APIs + scoped auth + deterministic validation/error contracts.
+- Control path (feature-flagged): policy checks + approvals + idempotent execution + audit trail.
+- Operations path: readiness, incidents, lifecycle posture, sync-state, and webhook diagnostics.
+- CLI path: `craft agents/*` is for operator and developer workflows, not the production trust boundary.
 - Discovery docs path: `llms.txt`, `llms-full.txt`, and `commerce.txt` are optional public discovery surfaces.
 
 The plugin does not execute agent-provided shell commands as part of production request handling.
@@ -33,24 +37,22 @@ The plugin does not execute agent-provided shell commands as part of production 
 
 | Surface | Status | Notes |
 | --- | --- | --- |
-| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
-| Integration state API (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`, `/incidents`) | Production stable | Checkpoint/lag, schema/template contracts, lifecycle governance, and redacted runtime incident visibility for integrations. |
-| Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
-| Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
-| Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
+| Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Structured machine access to Craft and Commerce data with scoped auth and deterministic errors. |
+| Integration state API (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`, `/incidents`) | Production stable | Sync-state, schema/template contracts, lifecycle governance, and redacted runtime incident visibility. |
+| Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable capability and contract discovery. |
+| Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay, and recovery visibility. |
+| Credential controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in the Craft CP and enforced at runtime. |
 | CLI (`craft agents/*`) | Production stable (ops tooling) | Operator/dev diagnostics and automation helper surface. |
-| Discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`) | Optional stable feature | Public discovery text, not core trust boundary. |
+| Discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`) | Optional stable feature | Public discovery text, not the core trust boundary. |
 | Control-plane actions (`/control/*`, governed write workflows) | Experimental | Enabled only when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`. |
 
 This plugin gives external/internal agents a stable interface for:
 
-- health checks for automation (`/agents/v1/health`)
-- readiness summaries (`/agents/v1/readiness`)
-- auth introspection for token diagnostics (`/agents/v1/auth/whoami`)
-- one-click diagnostics bundle (`/agents/v1/diagnostics/bundle`)
-- product snapshot browsing (`/agents/v1/products`)
-- control policies/approvals/execution ledger/audit (`/agents/v1/control/*`, experimental flag)
-- read-only CLI discovery commands (`craft agents/*`)
+- API access to content and commerce data (`/agents/v1/products`, `/orders`, `/entries`, `/changes`)
+- control-plane visibility for credentials, scopes, and approvals in the Craft CP
+- readiness, diagnostics, sync-state, incidents, and lifecycle posture for production operations
+- governed write workflows (`/agents/v1/control/*`) when experimental writes are enabled
+- operator/developer CLI support via `craft agents/*`
 
 The runtime includes:
 
@@ -146,22 +148,22 @@ Enablement precedence:
 
 ## Quickstart, Jobs, and Runbooks
 
-- 30-minute first-success path: [docs/quickstart-30min.md](docs/quickstart-30min.md)
-- Canonical first agent jobs: [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
-- Schema/OpenAPI-based reference automations: [docs/reference-automations.md](docs/reference-automations.md)
-- Copy/paste starter packs (curl/JS/Python): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
-- Agent lifecycle governance (ownership, stale/expiry/rotation posture): [docs/agent-lifecycle-governance.md](docs/agent-lifecycle-governance.md)
-- Observability runbook and alert thresholds: [docs/observability-runbook.md](docs/observability-runbook.md)
+- Get started path: [docs/get-started/index.md](docs/get-started/index.md)
+- Agent bootstrap and first-call flow: [docs/api/agent-bootstrap.md](docs/api/agent-bootstrap.md)
+- Starter packs and template-driven examples: [docs/api/starter-packs.md](docs/api/starter-packs.md)
+- Lifecycle governance posture: [docs/troubleshooting/agent-lifecycle-governance.md](docs/troubleshooting/agent-lifecycle-governance.md)
+- Observability runbook and alert thresholds: [docs/troubleshooting/observability-runbook.md](docs/troubleshooting/observability-runbook.md)
+- Example automation payloads: [examples/reference-automations/fixtures](examples/reference-automations/fixtures)
 
 ## Support
 
 - Docs: https://marcusscheller.com/docs/agents/
-- Quickstart (repo): [docs/quickstart-30min.md](docs/quickstart-30min.md)
-- Canonical jobs (repo): [docs/canonical-first-agent-jobs.md](docs/canonical-first-agent-jobs.md)
-- Reference automations (repo): [docs/reference-automations.md](docs/reference-automations.md)
-- Starter packs (repo): [docs/integration-starter-packs.md](docs/integration-starter-packs.md)
-- Agent lifecycle governance (repo): [docs/agent-lifecycle-governance.md](docs/agent-lifecycle-governance.md)
-- Observability runbook (repo): [docs/observability-runbook.md](docs/observability-runbook.md)
+- Get started (repo): [docs/get-started/index.md](docs/get-started/index.md)
+- Agent bootstrap (repo): [docs/api/agent-bootstrap.md](docs/api/agent-bootstrap.md)
+- Starter packs (repo): [docs/api/starter-packs.md](docs/api/starter-packs.md)
+- Agent lifecycle governance (repo): [docs/troubleshooting/agent-lifecycle-governance.md](docs/troubleshooting/agent-lifecycle-governance.md)
+- Observability runbook (repo): [docs/troubleshooting/observability-runbook.md](docs/troubleshooting/observability-runbook.md)
+- Example payload fixtures (repo): [examples/reference-automations/fixtures](examples/reference-automations/fixtures)
 - Issues: https://github.com/klick/agents/issues
 - Source: https://github.com/klick/agents
 

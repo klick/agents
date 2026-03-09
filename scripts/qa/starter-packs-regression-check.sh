@@ -23,7 +23,9 @@ expect_fixed() {
 }
 
 expect_file "$PLUGIN_ROOT/src/services/StarterPackService.php" "Starter pack service"
-expect_file "$PLUGIN_ROOT/docs/integration-starter-packs.md" "Starter packs docs"
+STARTER_PACK_DOC="$PLUGIN_ROOT/docs/api/starter-packs.md"
+
+expect_file "$STARTER_PACK_DOC" "Starter packs docs"
 
 expect_fixed "'agents/v1/starter-packs' => 'agents/api/starter-packs'" "$PLUGIN_ROOT/src/Plugin.php" "Starter pack API route missing"
 
@@ -46,14 +48,14 @@ expect_fixed "AGENTS_TOKEN" "$PLUGIN_ROOT/src/services/StarterPackService.php" "
 expect_fixed "BASE_URL" "$PLUGIN_ROOT/src/services/StarterPackService.php" "BASE_URL placeholder missing from snippets"
 expect_fixed "SITE_URL" "$PLUGIN_ROOT/src/services/StarterPackService.php" "SITE_URL placeholder missing from snippets"
 
-expect_fixed "GET /agents/v1/starter-packs" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "Starter packs endpoint docs missing"
-expect_fixed "catalog-sync-loop" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "Catalog starter docs missing"
-expect_fixed "support-context-lookup" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "Support starter docs missing"
-expect_fixed "governed-return-approval-run" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "Governed return starter docs missing"
-expect_fixed "governed-entry-draft-update" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "Governed entry draft starter docs missing"
-expect_fixed 'CLI: `craft agents/starter-packs`' "$PLUGIN_ROOT/docs/integration-starter-packs.md" "Starter packs CLI docs missing"
-expect_fixed ".starterPack.runtimes.curl.snippet" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "curl snippet extraction docs missing"
-expect_fixed ".starterPack.runtimes.javascript.snippet" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "javascript snippet extraction docs missing"
-expect_fixed ".starterPack.runtimes.python.snippet" "$PLUGIN_ROOT/docs/integration-starter-packs.md" "python snippet extraction docs missing"
+expect_fixed "GET /agents/v1/starter-packs" "$STARTER_PACK_DOC" "Starter packs endpoint docs missing"
+expect_fixed "catalog-sync-loop" "$STARTER_PACK_DOC" "Catalog starter docs missing"
+expect_fixed "support-context-lookup" "$STARTER_PACK_DOC" "Support starter docs missing"
+expect_fixed "governed-return-approval-run" "$STARTER_PACK_DOC" "Governed return starter docs missing"
+expect_fixed "governed-entry-draft-update" "$STARTER_PACK_DOC" "Governed entry draft starter docs missing"
+expect_fixed 'craft agents/starter-packs' "$STARTER_PACK_DOC" "Starter packs CLI docs missing"
+expect_fixed ".starterPack.runtimes.curl.snippet" "$STARTER_PACK_DOC" "curl snippet extraction docs missing"
+expect_fixed ".starterPack.runtimes.javascript.snippet" "$STARTER_PACK_DOC" "javascript snippet extraction docs missing"
+expect_fixed ".starterPack.runtimes.python.snippet" "$STARTER_PACK_DOC" "python snippet extraction docs missing"
 
 echo "PASS: starter pack regression checks pass"

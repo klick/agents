@@ -29,11 +29,9 @@ DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
 CREDENTIALS_TEMPLATE="$PLUGIN_ROOT/src/templates/credentials.twig"
 LIFECYCLE_SERVICE="$PLUGIN_ROOT/src/services/LifecycleGovernanceService.php"
 README_FILE="$PLUGIN_ROOT/README.md"
-LIFECYCLE_DOC="$PLUGIN_ROOT/docs/agent-lifecycle-governance.md"
-VITEPRESS_LIFECYCLE_DOC="$PLUGIN_ROOT/.docs/site/docs/troubleshooting/agent-lifecycle-governance.md"
+VITEPRESS_LIFECYCLE_DOC="$PLUGIN_ROOT/docs/troubleshooting/agent-lifecycle-governance.md"
 
 expect_file "$LIFECYCLE_SERVICE" "Lifecycle governance service"
-expect_file "$LIFECYCLE_DOC" "Lifecycle governance doc"
 expect_file "$VITEPRESS_LIFECYCLE_DOC" "VitePress lifecycle governance doc"
 
 expect_fixed "'lifecycleGovernanceService' => LifecycleGovernanceService::class" "$PLUGIN_FILE" "Plugin lifecycle service component missing"

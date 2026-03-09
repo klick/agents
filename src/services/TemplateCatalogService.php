@@ -69,7 +69,7 @@ class TemplateCatalogService extends Component
                     'curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/products?status=live&limit=100"',
                     'curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/entries?status=live&limit=100"',
                     'curl -sS -H "Authorization: Bearer $AGENTS_TOKEN" "$BASE_URL/changes?types=products,entries&limit=100"',
-                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/sync-state/checkpoint" -d @docs/reference-automations/fixtures/catalog-sync-checkpoint.json',
+                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/sync-state/checkpoint" -d @examples/reference-automations/fixtures/catalog-sync-checkpoint.json',
                 ],
             ],
             [
@@ -117,9 +117,9 @@ class TemplateCatalogService extends Component
                     $this->step('GET', '/control/executions', 'control.executions.list'),
                 ],
                 'sampleCommands' => [
-                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/request" -d @docs/reference-automations/fixtures/return-approval-request.json',
-                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/decide" -d @docs/reference-automations/fixtures/return-approval-decide.json',
-                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: return-ret-100045-v1" "$BASE_URL/control/actions/execute" -d @docs/reference-automations/fixtures/return-action-execute.json',
+                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/request" -d @examples/reference-automations/fixtures/return-approval-request.json',
+                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/decide" -d @examples/reference-automations/fixtures/return-approval-decide.json',
+                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: return-ret-100045-v1" "$BASE_URL/control/actions/execute" -d @examples/reference-automations/fixtures/return-action-execute.json',
                 ],
             ],
             [
@@ -143,7 +143,7 @@ class TemplateCatalogService extends Component
                 ],
                 'sampleCommands' => [
                     'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" "$BASE_URL/control/approvals/request" -d \'{"actionType":"entry.updateDraft","actionRef":"ENTRY-OPS-1001","reason":"Prepare draft update for editorial review","metadata":{"source":"agent-runtime","agentId":"content-ops","traceId":"trace-entry-1001"},"payload":{"entryId":1001,"siteId":1}}\'',
-                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: entry-ops-1001-v1" "$BASE_URL/control/actions/execute" -d @docs/reference-automations/fixtures/entry-update-draft-execute.json',
+                    'curl -sS -X POST -H "Authorization: Bearer $AGENTS_TOKEN" -H "Content-Type: application/json" -H "X-Idempotency-Key: entry-ops-1001-v1" "$BASE_URL/control/actions/execute" -d @examples/reference-automations/fixtures/entry-update-draft-execute.json',
                 ],
             ],
         ];

@@ -79,8 +79,8 @@ for route in "GET /health" "GET /readiness" "GET /adoption/metrics" "GET /metric
   fi
 done
 
-if [[ ! -f "docs/observability-runbook.md" ]]; then
-  fail "Missing observability runbook: docs/observability-runbook.md"
+if [[ ! -f "docs/troubleshooting/observability-runbook.md" ]]; then
+  fail "Missing observability runbook: docs/troubleshooting/observability-runbook.md"
 fi
 
 if ! grep -q "Runbook & Alert Guidance" src/templates/dashboard.twig; then
