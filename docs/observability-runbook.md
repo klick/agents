@@ -6,6 +6,7 @@ This runbook is the operator response path for the reliability pack signals.
 
 - CP: `Agents -> Dashboard -> Readiness -> Telemetry Snapshot`
 - API: `GET /agents/v1/metrics`
+- API: `GET /agents/v1/incidents` (scope: `incidents:read`, strict redacted runtime incidents)
 - API health checks: `GET /agents/v1/health`, `GET /agents/v1/readiness`
 - CLI: `php craft agents/reliability-check` (add `--strict=1` to fail on warnings)
 
@@ -112,5 +113,6 @@ When escalating, include:
 - `X-Request-Id` samples
 - current telemetry snapshot (`/metrics` output)
 - reliability snapshot (`/metrics` -> `reliability`)
+- incident snapshot (`/incidents` output)
 - readiness snapshot (`/readiness` output)
 - last DLQ errors and replay attempts

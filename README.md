@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.10.3**
+Current plugin version: **0.10.4**
 
 ## Purpose
 
@@ -34,7 +34,7 @@ The plugin does not execute agent-provided shell commands as part of production 
 | Surface | Status | Notes |
 | --- | --- | --- |
 | Read/sync API (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`) | Production stable | Governed by token/scopes, rate limits, deterministic errors. |
-| Integration state API (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`) | Production stable | Checkpoint/lag, schema/template contracts, and lifecycle governance visibility for integrations. |
+| Integration state API (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`, `/incidents`) | Production stable | Checkpoint/lag, schema/template contracts, lifecycle governance, and redacted runtime incident visibility for integrations. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Machine-readable contract discovery. |
 | Webhooks + DLQ (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed delivery, retries, dead-letter replay. |
 | Credentials lifecycle controls (scopes, webhook subscriptions, TTL/reminder, IP allowlists) | Production stable | Managed in CP and enforced at runtime auth/delivery. |
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.10.3
+composer require klick/agents:^0.10.4
 php craft plugin/install agents
 ```
 
@@ -228,6 +228,7 @@ Read/discovery endpoints:
 - `GET /auth/whoami`
 - `GET /adoption/metrics`
 - `GET /metrics`
+- `GET /incidents`
 - `GET /lifecycle`
 - `GET /diagnostics/bundle`
 - `GET /products`
@@ -305,6 +306,7 @@ Read scopes:
 - `auth:read`
 - `adoption:read`
 - `metrics:read`
+- `incidents:read`
 - `lifecycle:read`
 - `diagnostics:read`
 - `products:read`
@@ -504,6 +506,11 @@ Identifier notes for show commands:
   - `action` (`created|updated|deleted`)
   - `updatedAt` (RFC3339 UTC)
   - `snapshot` (minimal object for `created|updated`, `null` for `deleted` tombstones)
+
+### Incidents endpoint parameters
+
+- `/incidents`: `severity` (`all|warn|critical`, default `all`), `limit` (1..200, default `50`)
+- `/incidents` returns strict-redacted runtime incident summaries derived from reliability signals
 
 ### Control endpoint parameters and behavior
 

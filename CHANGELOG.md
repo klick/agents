@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.4 - 2026-03-09
+
+### Added
+
+- Added guarded runtime incident feed endpoint `GET /agents/v1/incidents` with `incidents:read` scope and query filters (`severity`, `limit`) for strict-redacted reliability incident snapshots.
+- Added incident snapshot coverage to runtime contracts (`/capabilities`, `/openapi.json`, `/schema`) and reliability regression checks.
+
+### Changed
+
+- Updated release/docs parity for the new incidents scope and endpoint across README and operator runbooks.
+- Updated Accounts scope selection defaults to include `incidents:read` for managed credential setup.
+- Hid local `/.tmp` workspace artifacts from release surfaces by adding `/.tmp/` to `.gitignore`.
+
 ## 0.10.3 - 2026-03-08
 
 ### Fixed

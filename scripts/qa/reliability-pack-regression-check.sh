@@ -27,8 +27,14 @@ expect_file "$PLUGIN_ROOT/docs/observability-runbook.md" "Observability runbook 
 
 expect_fixed "'reliabilitySignalService' => ReliabilitySignalService::class" "$PLUGIN_ROOT/src/Plugin.php" "Reliability service component missing"
 expect_fixed "public function getReliabilitySignalService(): ReliabilitySignalService" "$PLUGIN_ROOT/src/Plugin.php" "Reliability service getter missing"
+expect_fixed "'incidentFeedService' => IncidentFeedService::class" "$PLUGIN_ROOT/src/Plugin.php" "Incident feed service component missing"
+expect_fixed "public function getIncidentFeedService(): IncidentFeedService" "$PLUGIN_ROOT/src/Plugin.php" "Incident feed service getter missing"
+expect_fixed "'agents/v1/incidents' => 'agents/api/incidents'" "$PLUGIN_ROOT/src/Plugin.php" "Incident API route missing"
 
 expect_fixed "'reliability' => \$reliability" "$PLUGIN_ROOT/src/services/ObservabilityMetricsService.php" "Metrics snapshot missing reliability payload"
+expect_fixed "class IncidentFeedService extends Component" "$PLUGIN_ROOT/src/services/IncidentFeedService.php" "Incident feed service class missing"
+expect_fixed "public function actionIncidents(): Response" "$PLUGIN_ROOT/src/controllers/ApiController.php" "Incident API action missing"
+expect_fixed "'incidents:read' => 'Read redacted runtime incident snapshot" "$PLUGIN_ROOT/src/controllers/ApiController.php" "Incident scope catalog entry missing"
 expect_fixed "'reliability.signals'" "$PLUGIN_ROOT/src/services/DiagnosticsBundleService.php" "Diagnostics bundle missing reliability capture"
 expect_fixed "'reliability' => \$reliabilitySnapshot" "$PLUGIN_ROOT/src/services/DiagnosticsBundleService.php" "Diagnostics snapshots missing reliability entry"
 expect_fixed "'reliabilityStatus' => (string)(\$reliability['status'] ?? 'ok')" "$PLUGIN_ROOT/src/controllers/DashboardController.php" "Dashboard summary missing reliability status"
@@ -47,6 +53,7 @@ expect_fixed "'reliability-check'" "$PLUGIN_ROOT/src/console/controllers/AgentsC
 expect_fixed "'agents/reliability-check'" "$PLUGIN_ROOT/src/controllers/ApiController.php" "Capabilities command list missing reliability-check"
 
 expect_fixed "php craft agents/reliability-check" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing CLI reliability command"
+expect_fixed "GET /agents/v1/incidents" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing incidents endpoint reference"
 expect_fixed "agents_auth_failures_total" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing auth-failures metric reference"
 expect_fixed "agents_consumer_lag_max_seconds" "$PLUGIN_ROOT/docs/observability-runbook.md" "Runbook missing consumer lag metric reference"
 

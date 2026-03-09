@@ -25,6 +25,7 @@ use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiagnosticsBundleService;
 use Klick\Agents\services\DiscoveryTxtService;
+use Klick\Agents\services\IncidentFeedService;
 use Klick\Agents\services\LifecycleGovernanceService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
@@ -48,7 +49,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.10.3';
+    public string $schemaVersion = '0.10.4';
 
     public static ?self $plugin = null;
 
@@ -70,6 +71,7 @@ class Plugin extends BasePlugin
             'reliabilitySignalService' => ReliabilitySignalService::class,
             'lifecycleGovernanceService' => LifecycleGovernanceService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
+            'incidentFeedService' => IncidentFeedService::class,
             'templateCatalogService' => TemplateCatalogService::class,
             'starterPackService' => StarterPackService::class,
         ]);
@@ -200,6 +202,7 @@ class Plugin extends BasePlugin
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
                 'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics',
                 'agents/v1/metrics' => 'agents/api/metrics',
+                'agents/v1/incidents' => 'agents/api/incidents',
                 'agents/v1/lifecycle' => 'agents/api/lifecycle',
                 'agents/v1/diagnostics/bundle' => 'agents/api/diagnostics-bundle',
                 'agents/v1/sync-state/checkpoint' => 'agents/api/consumers-checkpoint',
@@ -315,6 +318,13 @@ class Plugin extends BasePlugin
     {
         /** @var DiagnosticsBundleService $service */
         $service = $this->get('diagnosticsBundleService');
+        return $service;
+    }
+
+    public function getIncidentFeedService(): IncidentFeedService
+    {
+        /** @var IncidentFeedService $service */
+        $service = $this->get('incidentFeedService');
         return $service;
     }
 

@@ -1363,6 +1363,7 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/auth/whoami', 'requiredScopes' => ['auth:read']],
             ['method' => 'GET', 'path' => '/adoption/metrics', 'requiredScopes' => ['adoption:read']],
             ['method' => 'GET', 'path' => '/metrics', 'requiredScopes' => ['metrics:read']],
+            ['method' => 'GET', 'path' => '/incidents', 'requiredScopes' => ['incidents:read']],
             ['method' => 'GET', 'path' => '/lifecycle', 'requiredScopes' => ['lifecycle:read']],
             ['method' => 'GET', 'path' => '/diagnostics/bundle', 'requiredScopes' => ['diagnostics:read']],
             ['method' => 'GET', 'path' => '/products', 'requiredScopes' => ['products:read']],
@@ -1501,6 +1502,18 @@ class ApiController extends Controller
                 'summary' => 'Observability metrics snapshot for runtime, queue, webhook, and integration lag health',
                 'responses' => $this->openApiGuardedResponses(['200' => ['description' => 'OK']]),
                 'x-required-scopes' => ['metrics:read'],
+            ]],
+            '/incidents' => ['get' => [
+                'summary' => 'Redacted runtime incident snapshot for health monitoring',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'severity', 'schema' => ['type' => 'string', 'enum' => ['all', 'warn', 'critical'], 'default' => 'all']],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 50]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                ]),
+                'x-required-scopes' => ['incidents:read'],
             ]],
             '/lifecycle' => ['get' => [
                 'summary' => 'Agent lifecycle governance snapshot (ownership, stale usage, expiry, rotation, risk factors)',
@@ -2281,6 +2294,36 @@ class ApiController extends Controller
         }
 
         $snapshot = Plugin::getInstance()->getObservabilityMetricsService()->getMetricsSnapshot();
+        return $this->jsonResponse($snapshot);
+    }
+
+    public function actionIncidents(): Response
+    {
+        if (($guard = $this->guardRequest('incidents:read')) !== null) {
+            return $guard;
+        }
+
+        $severityError = $this->validateEnumQueryParam('severity', ['all', 'warn', 'critical']);
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 200);
+        $errors = [];
+        if ($severityError !== null) {
+            $errors[] = $severityError;
+        }
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $request = Craft::$app->getRequest();
+        $severity = strtolower(trim((string)$request->getQueryParam('severity', 'all')));
+        if ($severity === '') {
+            $severity = 'all';
+        }
+        $limit = (int)$request->getQueryParam('limit', 50);
+
+        $snapshot = Plugin::getInstance()->getIncidentFeedService()->getSnapshot($severity, $limit);
         return $this->jsonResponse($snapshot);
     }
 
@@ -3321,6 +3364,7 @@ class ApiController extends Controller
             'auth:read' => 'Read authenticated caller diagnostics (`/auth/whoami`).',
             'adoption:read' => 'Read adoption instrumentation snapshot (`/adoption/metrics`).',
             'metrics:read' => 'Read observability metrics snapshot (`/metrics`).',
+            'incidents:read' => 'Read redacted runtime incident snapshot (`/incidents`).',
             'lifecycle:read' => 'Read agent lifecycle governance snapshot (`/lifecycle`).',
             'diagnostics:read' => 'Read one-click diagnostics support bundle (`/diagnostics/bundle`).',
             'products:read' => 'Read product snapshot endpoints.',
@@ -5050,6 +5094,28 @@ class ApiController extends Controller
                             'generatedAt' => ['type' => 'string', 'format' => 'date-time'],
                             'format' => ['type' => 'string'],
                             'metrics' => ['type' => 'array', 'items' => ['type' => 'object']],
+                        ],
+                    ],
+                ],
+                'incidents.snapshot' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/incidents',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'severity' => ['type' => 'string', 'enum' => ['all', 'warn', 'critical']],
+                            'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'service' => ['type' => 'string'],
+                            'type' => ['type' => 'string'],
+                            'generatedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'status' => ['type' => 'string'],
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
                         ],
                     ],
                 ],
