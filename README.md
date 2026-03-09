@@ -2,7 +2,7 @@
 
 Governed agent runtime for Craft CMS and Commerce.
 
-Current plugin version: **0.10.4**
+Current plugin version: **0.10.5**
 
 ## Purpose
 
@@ -77,7 +77,7 @@ Requirements:
 After Plugin Store publication:
 
 ```bash
-composer require klick/agents:^0.10.4
+composer require klick/agents:^0.10.5
 php craft plugin/install agents
 ```
 
@@ -192,7 +192,13 @@ Supported token transports:
 
 - `Authorization: Bearer <token>` (default)
 - `X-Agents-Token: <token>` (default)
-- `?apiToken=<token>` only when `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=true`
+- `?apiToken=<token>` only when `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=true`, and only for `GET`/`HEAD` requests
+
+Write-request rules:
+
+- `POST` write endpoints require `Authorization` or `X-Agents-Token` header auth.
+- `POST` write endpoints require `Content-Type: application/json`.
+- Query-token auth is rejected on write routes even when query-token mode is enabled.
 
 Example credential JSON:
 
@@ -524,10 +530,12 @@ Identifier notes for show commands:
   - `actionRef`, `reason`, `payload`, `metadata`
   - `metadata.source`, `metadata.agentId`, `metadata.traceId` are required (agent provenance)
   - idempotency via `X-Idempotency-Key` header (or `idempotencyKey` body field)
+  - approvals persist their evaluated assurance mode (`single_approval`, `dual_control`, or `single_operator_degraded`) and downgrade reason at request time
 - `POST /control/approvals/decide` body:
   - `approvalId` (required)
   - `decision` (`approved|rejected`)
   - `decisionReason`
+  - requester/approver separation is enforced whenever the recorded assurance mode is not degraded single-operator fallback
 - `GET /control/executions` query: `status`, `actionType`, `limit`
 - `POST /control/actions/execute` body:
   - `actionType` (required)
@@ -544,6 +552,8 @@ Identifier notes for show commands:
 - Cursor tokens are opaque and may expire; restart from a recent `updatedSince` checkpoint if needed.
 - `/changes` cursor continuity also preserves the selected `types` filter.
 - Invalid `updatedSince`/`cursor` inputs return `400 INVALID_REQUEST` with stable error payload fields.
+- Dedicated sync-state credentials are credential-bound: `integrationKey` may be omitted and will default to the authenticated credential id, or it must exactly match that credential id.
+- Legacy `PLUGIN_AGENTS_API_TOKEN` (`credentialId=default`) may continue writing arbitrary `integrationKey` values only when it is the sole configured runtime credential.
 
 ### Webhook Delivery
 
@@ -627,12 +637,13 @@ curl -H "Authorization: Bearer $PLUGIN_AGENTS_API_TOKEN" \
 - Missing required scope returns HTTP `403` with `FORBIDDEN`.
 - Read/discovery endpoints are `GET`/`HEAD` only.
 - Control-plane write endpoints accept `POST` and are token-authenticated API actions.
+- Write endpoints require header-based auth and `Content-Type: application/json`.
 - Misconfigured production token setup returns HTTP `503` with `SERVER_MISCONFIGURED`.
 - Disabled runtime state returns HTTP `503` with `SERVICE_DISABLED`.
 - Invalid request payload/params return HTTP `400` with `INVALID_REQUEST`.
 - Missing resource lookups return HTTP `404` with `NOT_FOUND`.
 - Unexpected server errors return HTTP `500` with `INTERNAL_ERROR`.
-- Query-token auth is disabled by default to reduce token leakage risk.
+- Query-token auth is disabled by default to reduce token leakage risk, and remains read-only even when enabled.
 - Credential parsing is strict for `PLUGIN_AGENTS_API_CREDENTIALS` (credential objects only) and ignores malformed scalar entries.
 - Sensitive order fields are scope-gated; email is redacted by default unless `orders:read_sensitive` is granted.
 - Entry access to non-live statuses is scope-gated by `entries:read_all_statuses`.
@@ -768,7 +779,7 @@ return [
 2. Prefer `PLUGIN_AGENTS_API_CREDENTIALS` for per-integration token/scope separation.
 3. Keep `PLUGIN_AGENTS_FAIL_ON_MISSING_TOKEN_IN_PROD=true`.
 4. Keep `PLUGIN_AGENTS_ALLOW_INSECURE_NO_TOKEN_IN_PROD=false`.
-5. Keep `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=false` unless legacy clients require it temporarily.
+5. Keep `PLUGIN_AGENTS_ALLOW_QUERY_TOKEN=false` unless legacy read-only clients require it temporarily.
 6. Start with default scopes; only add elevated scopes when required:
    - `orders:read_sensitive`
    - `entries:read_all_statuses`

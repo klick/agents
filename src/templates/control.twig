@@ -177,6 +177,22 @@
                   ({{ approval.approvalsRemaining }} remaining)
                 {% endif %}
               </div>
+              {% if approval.assuranceModeLabel %}
+                <div class="light">
+                  Assurance: <strong>{{ approval.assuranceModeLabel }}</strong>
+                  {% if approval.assuranceEvaluatedAt %}
+                    <span>· evaluated {{ approval.assuranceEvaluatedAt|datetime('short') }}</span>
+                  {% endif %}
+                  {% if approval.assuranceActiveCpUserCount is not null %}
+                    <span>· active CP users {{ approval.assuranceActiveCpUserCount }}</span>
+                  {% endif %}
+                </div>
+              {% endif %}
+              {% if approval.assuranceReasonLabel %}
+                <div class="agents-control-review-guard agents-control-review-guard--warning" style="margin-top: 6px;">
+                  {{ approval.assuranceReasonLabel }}
+                </div>
+              {% endif %}
               {% if approval.decidedBy %}
                 <div class="light">Primary approver: {{ approval.decidedByLabel ?: approval.decidedBy }}</div>
                 <span class="agents-actor-raw">Primary ID: {{ approval.decidedBy }}</span>
@@ -296,6 +312,12 @@
               {% if approval.decidedBy %}
                 <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
               {% endif %}
+              {% if approval.assuranceModeLabel %}
+                <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
+              {% endif %}
+              {% if approval.assuranceReasonLabel %}
+                <div class="light">{{ approval.assuranceReasonLabel }}</div>
+              {% endif %}
               {% if approval.secondaryDecisionBy %}
                 <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
                 <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
@@ -393,6 +415,12 @@
               <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
               {% if approval.decidedBy %}
                 <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
+              {% endif %}
+              {% if approval.assuranceModeLabel %}
+                <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
+              {% endif %}
+              {% if approval.assuranceReasonLabel %}
+                <div class="light">{{ approval.assuranceReasonLabel }}</div>
               {% endif %}
               {% if approval.secondaryDecisionBy %}
                 <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>

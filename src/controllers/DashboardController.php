@@ -1064,7 +1064,12 @@ class DashboardController extends Controller
                     $status
                 ));
             } else {
-                $this->setSuccessFlash(sprintf('Request #%d created (`%s`).', (int)($approval['id'] ?? 0), $status));
+                $this->setSuccessFlash(sprintf(
+                    'Request #%d created (`%s`).%s',
+                    (int)($approval['id'] ?? 0),
+                    $status,
+                    $this->formatApprovalAssuranceFlashSuffix($approval)
+                ));
             }
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
@@ -1112,17 +1117,19 @@ class DashboardController extends Controller
             $decisionMessage = '';
             if ($decisionStatus === 'pending' && $approvalsRemaining > 0) {
                 $decisionMessage = sprintf(
-                    'Request #%d (`%s`) recorded one approval and is still pending (%d more needed).',
+                    'Request #%d (`%s`) recorded one approval and is still pending (%d more needed).%s',
                     $approvalId,
                     (string)($approval['actionType'] ?? 'action'),
-                    $approvalsRemaining
+                    $approvalsRemaining,
+                    $this->formatApprovalAssuranceFlashSuffix($approval)
                 );
             } else {
                 $decisionMessage = sprintf(
-                    'Request #%d (`%s`) is now `%s`.',
+                    'Request #%d (`%s`) is now `%s`.%s',
                     $approvalId,
                     (string)($approval['actionType'] ?? 'action'),
-                    $decisionStatus
+                    $decisionStatus,
+                    $this->formatApprovalAssuranceFlashSuffix($approval)
                 );
             }
 
@@ -1915,6 +1922,22 @@ class DashboardController extends Controller
         }
 
         return $decorated;
+    }
+
+    private function formatApprovalAssuranceFlashSuffix(array $approval): string
+    {
+        $label = trim((string)($approval['assuranceModeLabel'] ?? ''));
+        if ($label === '') {
+            return '';
+        }
+
+        $suffix = ' Assurance: ' . $label . '.';
+        $reason = trim((string)($approval['assuranceReasonLabel'] ?? ''));
+        if ($reason !== '') {
+            $suffix .= ' ' . $reason;
+        }
+
+        return $suffix;
     }
 
     private function resolveControlApprovalCompletionState(array $approval): array

@@ -79,12 +79,51 @@ if grep -q '"tokenConfigured":[[:space:]]*true' "$TMP_DIR/capabilities.json"; th
 else
   echo "WARN: Could not confirm tokenConfigured=true from capabilities response."
 fi
+allow_query_token=false
+if grep -q '"allowQueryToken":[[:space:]]*true' "$TMP_DIR/capabilities.json"; then
+  allow_query_token=true
+fi
 
 status="$(request_status "$TMP_DIR/post-health.json" -X POST -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/health")"
 if [[ "$status" != "405" && "$status" != "400" ]]; then
   fail "Expected 405/400 for non-read request to read-only endpoint, got $status"
 fi
 pass "Non-read requests rejected ($status)"
+
+status="$(request_status "$TMP_DIR/post-syncstate-form.json" \
+  -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Accept: application/json" \
+  -d "integrationKey=security-regression&resourceType=orders&cursor=form-body" \
+  "$BASE_URL/agents/v1/sync-state/checkpoint")"
+if [[ "$status" != "400" ]]; then
+  fail "Expected 400 for non-JSON write request, got $status"
+fi
+pass "Write requests require JSON content type"
+
+status="$(request_status "$TMP_DIR/post-syncstate-json.json" \
+  -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d '{"integrationKey":"security-regression","resourceType":"orders","cursor":"json-body"}' \
+  "$BASE_URL/agents/v1/sync-state/checkpoint")"
+if [[ "$status" != "200" && "$status" != "403" ]]; then
+  fail "Expected 200/403 for JSON write request with header token, got $status"
+fi
+pass "Header-authenticated JSON write request reaches route guards ($status)"
+
+if [[ "$allow_query_token" == "true" ]]; then
+  status="$(request_status "$TMP_DIR/post-syncstate-query.json" \
+    -X POST \
+    -H "Accept: application/json" \
+    -d "integrationKey=security-regression&resourceType=orders&cursor=query-token" \
+    "$BASE_URL/agents/v1/sync-state/checkpoint?apiToken=$TOKEN")"
+  if [[ "$status" != "400" ]]; then
+    fail "Expected 400 for query-token write request when query-token auth is enabled, got $status"
+  fi
+  pass "Query-token auth is rejected on write routes even when enabled"
+fi
 
 status="$(request_status "$TMP_DIR/non-live-entries.json" -H "Authorization: Bearer $TOKEN" "$BASE_URL/agents/v1/entries?status=all&limit=1")"
 if [[ "$status" != "403" ]]; then

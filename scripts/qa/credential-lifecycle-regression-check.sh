@@ -52,6 +52,12 @@ expect_fixed "resumeManagedCredential" "$CREDENTIAL_SERVICE" "CredentialService 
 expect_fixed "supportsOwnerColumn" "$CREDENTIAL_SERVICE" "CredentialService supports owner column detection"
 expect_fixed "supportsForceHumanApprovalColumn" "$CREDENTIAL_SERVICE" "CredentialService supports force-human-approval column detection"
 expect_fixed "normalizeOwner" "$CREDENTIAL_SERVICE" "CredentialService normalizes owner values"
+expect_fixed "Unable to generate a secure API token because random_bytes() failed." "$CREDENTIAL_SERVICE" "CredentialService fails closed when secure token entropy is unavailable"
+
+if grep -Fq "uniqid('', true) . microtime(true)" "$CREDENTIAL_SERVICE"; then
+  fail "CredentialService must not fall back to uniqid/microtime token entropy"
+fi
+pass "CredentialService has no predictable token-entropy fallback"
 
 expect_fixed "getManagedCredentialsForRuntime" "$SECURITY_SERVICE" "Security policy consumes managed credentials for runtime auth"
 expect_fixed "managedCredentialCount" "$SECURITY_SERVICE" "Security posture exposes managed credential counts"

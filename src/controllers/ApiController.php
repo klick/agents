@@ -2393,6 +2393,8 @@ class ApiController extends Controller
 
         try {
             $checkpoint = $service->upsertCheckpoint([
+                'credentialId' => (string)($this->authContext['credentialId'] ?? ''),
+                'credentialCount' => (int)($this->authContext['credentialCount'] ?? 0),
                 'integrationKey' => $request->getBodyParam('integrationKey', ''),
                 'resourceType' => $request->getBodyParam('resourceType', ''),
                 'cursor' => $request->getBodyParam('cursor', ''),
@@ -2791,6 +2793,10 @@ class ApiController extends Controller
             return $preAuthRateLimitResponse;
         }
 
+        if (($writeContractResponse = $this->enforceWriteRequestContract()) !== null) {
+            return $writeContractResponse;
+        }
+
         $authResult = $this->authenticateRequest($config);
         if (($authResult['errorResponse'] ?? null) instanceof Response) {
             return $authResult['errorResponse'];
@@ -2902,6 +2908,7 @@ class ApiController extends Controller
         return [
             'principalFingerprint' => $matchedCredential['principalFingerprint'],
             'credentialId' => $matchedCredential['id'],
+            'credentialCount' => count($credentials),
             'credentialSource' => (string)($matchedCredential['source'] ?? 'env'),
             'managedCredentialId' => isset($matchedCredential['managedCredentialId']) ? (int)$matchedCredential['managedCredentialId'] : null,
             'forceHumanApproval' => (bool)($matchedCredential['forceHumanApproval'] ?? false),
@@ -3067,6 +3074,48 @@ class ApiController extends Controller
     private function enforceReadRequest(): ?Response
     {
         return $this->enforceRequestMethod(['GET', 'HEAD']);
+    }
+
+    private function enforceWriteRequestContract(): ?Response
+    {
+        $request = Craft::$app->getRequest();
+        if ($request->getIsGet() || $request->getIsHead()) {
+            return null;
+        }
+
+        $queryToken = trim((string)$request->getQueryParam('apiToken', ''));
+        if ($queryToken !== '') {
+            return $this->errorResponse(
+                400,
+                self::ERROR_INVALID_REQUEST,
+                'Write requests must authenticate via Authorization or X-Agents-Token headers. Query-token auth is limited to GET/HEAD requests.'
+            );
+        }
+
+        if (!$this->requestHasJsonContentType()) {
+            return $this->errorResponse(
+                400,
+                self::ERROR_INVALID_REQUEST,
+                'Write requests must use Content-Type: application/json.'
+            );
+        }
+
+        return null;
+    }
+
+    private function requestHasJsonContentType(): bool
+    {
+        $contentType = strtolower(trim((string)Craft::$app->getRequest()->getContentType()));
+        if ($contentType === '') {
+            return false;
+        }
+
+        $mediaType = trim(explode(';', $contentType, 2)[0] ?? '');
+        if ($mediaType === 'application/json') {
+            return true;
+        }
+
+        return str_ends_with($mediaType, '+json');
     }
 
     private function enforceRequestMethod(array $allowedMethods): ?Response
@@ -3586,6 +3635,7 @@ class ApiController extends Controller
         $auth['methods'][] = 'X-Agents-Token: <token>';
         if ($config['allowQueryToken']) {
             $auth['queryParam'] = 'apiToken';
+            $auth['queryParamAllowedMethods'] = ['GET', 'HEAD'];
         }
 
         return $auth;
@@ -3615,7 +3665,13 @@ class ApiController extends Controller
         ];
 
         if ($config['allowQueryToken']) {
-            $schemes['queryToken'] = ['type' => 'apiKey', 'in' => 'query', 'name' => 'apiToken'];
+            $schemes['queryToken'] = [
+                'type' => 'apiKey',
+                'in' => 'query',
+                'name' => 'apiToken',
+                'description' => 'Read-only transport for GET/HEAD requests only when query-token auth is enabled.',
+                'x-allowed-methods' => ['GET', 'HEAD'],
+            ];
         }
 
         return $schemes;
@@ -3631,10 +3687,6 @@ class ApiController extends Controller
             ['bearerAuth' => []],
             ['agentsToken' => []],
         ];
-
-        if ($config['allowQueryToken']) {
-            $security[] = ['queryToken' => []];
-        }
 
         return $security;
     }

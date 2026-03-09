@@ -20,6 +20,12 @@ class ControlPlaneService extends Component
     private const APPROVAL_STATUS_APPROVED = 'approved';
     private const APPROVAL_STATUS_REJECTED = 'rejected';
     private const APPROVAL_STATUS_EXPIRED = 'expired';
+    private const APPROVAL_ASSURANCE_METADATA_KEY = '_agentsApproval';
+    private const APPROVAL_ASSURANCE_SINGLE = 'single_approval';
+    private const APPROVAL_ASSURANCE_DUAL = 'dual_control';
+    private const APPROVAL_ASSURANCE_DEGRADED = 'single_operator_degraded';
+    private const APPROVAL_ASSURANCE_REASON_NONE = 'none';
+    private const APPROVAL_ASSURANCE_REASON_INSUFFICIENT_CP_USERS = 'insufficient_active_cp_users';
 
     private const EXECUTION_STATUS_PENDING = 'pending';
     private const EXECUTION_STATUS_BLOCKED = 'blocked';
@@ -330,10 +336,11 @@ class ControlPlaneService extends Component
         $payload = $this->normalizeArray($input['payload'] ?? []);
         $metadata = $this->normalizeArray($input['metadata'] ?? []);
         $policy = $this->resolvePolicyForAction($actionType);
-        $requiredApprovals = $this->resolveRequiredApprovals($actionType, $payload, $metadata, $policy);
         $slaPolicy = $this->resolveApprovalSlaPolicy($policy);
-
         $now = gmdate('Y-m-d H:i:s');
+        $approvalRequirement = $this->resolveApprovalRequirement($actionType, $payload, $metadata, $policy);
+        $requiredApprovals = (int)$approvalRequirement['requiredApprovals'];
+        $metadata = $this->decorateApprovalMetadata($metadata, $approvalRequirement, $now);
 
         Craft::$app->getDb()->createCommand()->insert(self::TABLE_APPROVALS, [
             'actionType' => $actionType,
@@ -388,6 +395,9 @@ class ControlPlaneService extends Component
                 'actionRef' => $actionRef,
                 'idempotencyKey' => $idempotencyKey,
                 'requiredApprovals' => $requiredApprovals,
+                'assuranceMode' => (string)$approvalRequirement['assuranceMode'],
+                'assuranceReason' => (string)$approvalRequirement['assuranceReason'],
+                'assuranceActiveCpUserCount' => (int)$approvalRequirement['activeCpUserCount'],
                 'policyHandle' => (string)($policy['handle'] ?? 'default'),
                 'slaDueAt' => $slaPolicy['slaDueAt'],
                 'escalateAfterMinutes' => $slaPolicy['escalateAfterMinutes'],
@@ -428,6 +438,11 @@ class ControlPlaneService extends Component
             $requiredApprovals = max(1, (int)($existing['requiredApprovals'] ?? 1));
             $primaryDecider = $this->normalizeOptionalString($existing['decidedBy'] ?? null, 128);
             $secondaryDecider = $this->normalizeOptionalString($existing['secondaryDecisionBy'] ?? null, 128);
+            $requestedBy = $this->normalizeOptionalString($existing['requestedBy'] ?? null, 128);
+            $assurance = $this->extractApprovalAssurance(
+                $this->decodeJsonArray((string)($existing['metadata'] ?? '[]')),
+                $requiredApprovals
+            );
             $updateData = [];
             $updateWhere = [
                 'id' => $approvalId,
@@ -439,7 +454,18 @@ class ControlPlaneService extends Component
                 'decision' => $status,
                 'decisionReason' => $resolvedDecisionReason,
                 'requiredApprovals' => $requiredApprovals,
+                'assuranceMode' => (string)$assurance['mode'],
+                'assuranceReason' => (string)$assurance['reason'],
             ];
+
+            if (
+                $assurance['mode'] !== self::APPROVAL_ASSURANCE_DEGRADED
+                && $requestedBy !== null
+                && $requestedBy !== ''
+                && $requestedBy === $decidedBy
+            ) {
+                throw new \InvalidArgumentException('Approval must be decided by a different actor than the requester.');
+            }
 
             if ($status === self::APPROVAL_STATUS_REJECTED) {
                 $updateData = [
@@ -1213,7 +1239,7 @@ class ControlPlaneService extends Component
         };
     }
 
-    private function resolveRequiredApprovals(string $actionType, array $payload, array $metadata, array $policy): int
+    private function resolveApprovalRequirement(string $actionType, array $payload, array $metadata, array $policy): array
     {
         $required = 1;
         $riskLevel = strtolower(trim((string)($policy['riskLevel'] ?? self::RISK_LEVEL_MEDIUM)));
@@ -1253,25 +1279,42 @@ class ControlPlaneService extends Component
             }
         }
 
-        if ($required > 1 && !$this->hasMultipleActiveCpUsers()) {
+        $activeCpUserCount = $this->getActiveCpUserCount();
+        $assuranceMode = $required > 1 ? self::APPROVAL_ASSURANCE_DUAL : self::APPROVAL_ASSURANCE_SINGLE;
+        $assuranceReason = self::APPROVAL_ASSURANCE_REASON_NONE;
+        if ($required > 1 && $activeCpUserCount < 2) {
             $required = 1;
+            $assuranceMode = self::APPROVAL_ASSURANCE_DEGRADED;
+            $assuranceReason = self::APPROVAL_ASSURANCE_REASON_INSUFFICIENT_CP_USERS;
         }
 
-        return min(2, max(1, $required));
+        return [
+            'requiredApprovals' => min(2, max(1, $required)),
+            'assuranceMode' => $assuranceMode,
+            'assuranceReason' => $assuranceReason,
+            'activeCpUserCount' => $activeCpUserCount,
+        ];
+    }
+
+    private function resolveRequiredApprovals(string $actionType, array $payload, array $metadata, array $policy): int
+    {
+        return (int)$this->resolveApprovalRequirement($actionType, $payload, $metadata, $policy)['requiredApprovals'];
+    }
+
+    private function getActiveCpUserCount(): int
+    {
+        try {
+            return (int)User::find()
+                ->status(User::STATUS_ACTIVE)
+                ->count();
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private function hasMultipleActiveCpUsers(): bool
     {
-        try {
-            $count = (int)User::find()
-                ->status(User::STATUS_ACTIVE)
-                ->limit(2)
-                ->count();
-
-            return $count > 1;
-        } catch (\Throwable) {
-            return false;
-        }
+        return $this->getActiveCpUserCount() > 1;
     }
 
     private function resolveApprovalSlaPolicy(array $policy): array
@@ -1338,6 +1381,9 @@ class ControlPlaneService extends Component
     private function hydrateApproval(array $row): array
     {
         $requiredApprovals = max(1, (int)($row['requiredApprovals'] ?? 1));
+        $metadata = $this->decodeJsonArray((string)($row['metadata'] ?? '[]'));
+        $assurance = $this->extractApprovalAssurance($metadata, $requiredApprovals);
+        unset($metadata[self::APPROVAL_ASSURANCE_METADATA_KEY]);
         $primaryDecisionBy = $this->normalizeOptionalString($row['decidedBy'] ?? null, 128);
         $secondaryDecisionBy = $this->normalizeOptionalString($row['secondaryDecisionBy'] ?? null, 128);
         $approvalCount = 0;
@@ -1393,10 +1439,17 @@ class ControlPlaneService extends Component
             'secondaryDecisionReason' => $this->normalizeOptionalString($row['secondaryDecisionReason'] ?? null),
             'idempotencyKey' => $this->normalizeOptionalString($row['idempotencyKey'] ?? null, 128),
             'requestPayload' => $this->decodeJsonArray((string)($row['requestPayload'] ?? '[]')),
-            'metadata' => $this->decodeJsonArray((string)($row['metadata'] ?? '[]')),
+            'metadata' => $metadata,
             'requiredApprovals' => $requiredApprovals,
             'approvalCount' => $approvalCount,
             'approvalsRemaining' => max(0, $requiredApprovals - $approvalCount),
+            'assuranceMode' => (string)$assurance['mode'],
+            'assuranceModeLabel' => $this->formatApprovalAssuranceMode((string)$assurance['mode']),
+            'assuranceReason' => (string)$assurance['reason'],
+            'assuranceReasonLabel' => $this->formatApprovalAssuranceReason((string)$assurance['reason']),
+            'assuranceDegraded' => (string)$assurance['mode'] === self::APPROVAL_ASSURANCE_DEGRADED,
+            'assuranceEvaluatedAt' => $this->toIso8601($assurance['evaluatedAt'] ?? null),
+            'assuranceActiveCpUserCount' => isset($assurance['activeCpUserCount']) ? (int)$assurance['activeCpUserCount'] : null,
             'slaDueAt' => $slaDueAt,
             'escalateAfterMinutes' => isset($row['escalateAfterMinutes']) ? (int)$row['escalateAfterMinutes'] : null,
             'expireAfterMinutes' => isset($row['expireAfterMinutes']) ? (int)$row['expireAfterMinutes'] : null,
@@ -1449,6 +1502,60 @@ class ControlPlaneService extends Component
             'dateCreated' => $this->toIso8601($row['dateCreated'] ?? null),
             'dateUpdated' => $this->toIso8601($row['dateUpdated'] ?? null),
         ];
+    }
+
+    private function decorateApprovalMetadata(array $metadata, array $requirement, string $evaluatedAt): array
+    {
+        $metadata[self::APPROVAL_ASSURANCE_METADATA_KEY] = [
+            'mode' => (string)($requirement['assuranceMode'] ?? self::APPROVAL_ASSURANCE_SINGLE),
+            'reason' => (string)($requirement['assuranceReason'] ?? self::APPROVAL_ASSURANCE_REASON_NONE),
+            'evaluatedAt' => $evaluatedAt,
+            'activeCpUserCount' => (int)($requirement['activeCpUserCount'] ?? 0),
+        ];
+
+        return $metadata;
+    }
+
+    private function extractApprovalAssurance(array $metadata, int $requiredApprovals): array
+    {
+        $stored = $this->normalizeArray($metadata[self::APPROVAL_ASSURANCE_METADATA_KEY] ?? []);
+        $mode = strtolower(trim((string)($stored['mode'] ?? '')));
+        if (!in_array($mode, [
+            self::APPROVAL_ASSURANCE_SINGLE,
+            self::APPROVAL_ASSURANCE_DUAL,
+            self::APPROVAL_ASSURANCE_DEGRADED,
+        ], true)) {
+            $mode = $requiredApprovals > 1 ? self::APPROVAL_ASSURANCE_DUAL : self::APPROVAL_ASSURANCE_SINGLE;
+        }
+
+        $reason = strtolower(trim((string)($stored['reason'] ?? '')));
+        if ($reason === '') {
+            $reason = self::APPROVAL_ASSURANCE_REASON_NONE;
+        }
+
+        return [
+            'mode' => $mode,
+            'reason' => $reason,
+            'evaluatedAt' => $stored['evaluatedAt'] ?? null,
+            'activeCpUserCount' => isset($stored['activeCpUserCount']) ? (int)$stored['activeCpUserCount'] : null,
+        ];
+    }
+
+    private function formatApprovalAssuranceMode(string $mode): string
+    {
+        return match ($mode) {
+            self::APPROVAL_ASSURANCE_DUAL => 'Dual control',
+            self::APPROVAL_ASSURANCE_DEGRADED => 'Single-operator fallback',
+            default => 'Single approval',
+        };
+    }
+
+    private function formatApprovalAssuranceReason(string $reason): string
+    {
+        return match ($reason) {
+            self::APPROVAL_ASSURANCE_REASON_INSUFFICIENT_CP_USERS => 'Dual control was downgraded because fewer than two active CP users were available when this request was evaluated.',
+            default => '',
+        };
     }
 
     private function findApprovalById(int $approvalId): ?array

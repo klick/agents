@@ -15,10 +15,13 @@ class ConsumerLagService extends Component
     {
         $this->requireTable();
 
-        $integrationKey = $this->normalizeIntegrationKey((string)($input['integrationKey'] ?? ''));
-        if ($integrationKey === '') {
-            throw new \InvalidArgumentException('`integrationKey` is required.');
-        }
+        $credentialId = $this->normalizeIntegrationKey((string)($input['credentialId'] ?? ''));
+        $credentialCount = max(0, (int)($input['credentialCount'] ?? 0));
+        $integrationKey = $this->resolveAuthorizedIntegrationKey(
+            $input['integrationKey'] ?? '',
+            $credentialId,
+            $credentialCount
+        );
 
         $resourceType = $this->normalizeResourceType((string)($input['resourceType'] ?? ''));
         if ($resourceType === '') {
@@ -86,6 +89,47 @@ class ConsumerLagService extends Component
         }
 
         return $this->hydrateRow($row);
+    }
+
+    private function resolveAuthorizedIntegrationKey(mixed $requestedIntegrationKey, string $credentialId, int $credentialCount): string
+    {
+        $integrationKey = $this->normalizeIntegrationKey((string)$requestedIntegrationKey);
+        if ($credentialId === '') {
+            if ($credentialCount === 0) {
+                if ($integrationKey === '') {
+                    throw new \InvalidArgumentException('`integrationKey` is required when token auth is disabled.');
+                }
+
+                return $integrationKey;
+            }
+
+            throw new \InvalidArgumentException('Authenticated credential context is required.');
+        }
+
+        if ($credentialId === 'default') {
+            if ($credentialCount > 1) {
+                throw new \InvalidArgumentException('Legacy default token cannot write sync-state when multiple credentials are configured. Use a dedicated credential-scoped token.');
+            }
+
+            if ($integrationKey === '') {
+                throw new \InvalidArgumentException('`integrationKey` is required for legacy default-token sync-state writes.');
+            }
+
+            return $integrationKey;
+        }
+
+        if ($integrationKey === '') {
+            return $credentialId;
+        }
+
+        if (!hash_equals($credentialId, $integrationKey)) {
+            throw new \InvalidArgumentException(sprintf(
+                '`integrationKey` must match the authenticated credential id `%s`.',
+                $credentialId
+            ));
+        }
+
+        return $credentialId;
     }
 
     public function getConsumerLag(array $filters = [], int $limit = 200): array

@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.5 - 2026-03-09
+
+### Changed
+
+- Hardened machine-write auth: query-token transport remains read-only even when enabled, and write routes now require header auth plus `Content-Type: application/json`.
+- Bound sync-state checkpoint writes to the authenticated credential context so dedicated credentials can no longer overwrite another integration's checkpoint state.
+- Persisted approval assurance mode and downgrade reason on each request (`dual_control`, `single_approval`, `single_operator_degraded`) so later operator-count changes do not rewrite historical approval strength.
+- Surfaced approval assurance details in the Control CP and control-approval flash messaging for clearer operator auditability.
+
+### Fixed
+
+- Fixed requester/approver separation so self-approval is blocked whenever a request was evaluated under non-degraded assurance.
+- Fixed managed credential generation to fail closed when `random_bytes()` is unavailable instead of falling back to predictable entropy.
+
 ## 0.10.4 - 2026-03-09
 
 ### Added

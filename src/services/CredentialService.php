@@ -1301,12 +1301,8 @@ class CredentialService extends Component
         $bytes = '';
         try {
             $bytes = random_bytes($length);
-        } catch (\Throwable) {
-            $seed = sha1(uniqid('', true) . microtime(true));
-            while (strlen($bytes) < $length) {
-                $seed = sha1($seed . microtime(true));
-                $bytes .= $seed;
-            }
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('Unable to generate a secure API token because random_bytes() failed.', 0, $e);
         }
 
         $token = '';
