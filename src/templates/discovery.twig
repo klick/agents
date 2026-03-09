@@ -73,16 +73,18 @@
             <strong>{{ document.enabled ? 'Enabled' : 'Disabled' }}</strong>
             <span class="agents-subtle">({{ document.path }})</span>
           </p>
-          <table class="data fullwidth" style="margin-bottom: 8px;">
-            <tbody>
-            <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
-            <tr><th>Cache TTL</th><td>{{ document.cacheTtlSeconds }} seconds</td></tr>
-            <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
-            <tr><th>Last Modified</th><td>{{ document.lastModified ?: 'n/a' }}</td></tr>
-            <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
-            <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
-            </tbody>
-          </table>
+          <div class="tablepane mx-0" style="margin-top: 0; margin-bottom: 8px;">
+            <table class="data fullwidth">
+              <tbody>
+              <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
+              <tr><th>Cache TTL</th><td>{{ document.cacheTtlSeconds }} seconds</td></tr>
+              <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
+              <tr><th>Last Modified</th><td>{{ document.lastModified ?: 'n/a' }}</td></tr>
+              <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
+              <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
+              </tbody>
+            </table>
+          </div>
           <details class="agents-advanced">
             <summary><strong>Preview</strong></summary>
             <pre class="border rounded p-3" style="margin-top: 8px;">{{ document.preview ?: '# Disabled' }}</pre>

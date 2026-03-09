@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.6 - 2026-03-09
+
+### Changed
+
+- Refined the Control CP tables to share a consistent Waiting for Decision-derived header/body treatment across approvals, follow-up, activity, and rules views.
+- Added collapsed-by-default disclosure toggles for Approved, Applied / Completed, Runs That Need Follow-up, Activity Log, and inline Proposed changes details.
+- Tightened Control CP spacing and card-strip behavior for a more consistent Craft-native operator experience across desktop and mobile.
+
 ## 0.10.5 - 2026-03-09
 
 ### Changed

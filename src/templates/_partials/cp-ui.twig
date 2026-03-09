@@ -90,27 +90,37 @@
     margin-top: 0;
     background: #ffffff;
     width: 100%;
+    display: flex;
+    justify-content: center;
   }
 
   .agents-metric-strip {
     display: flex;
     flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0;
     width: max-content;
     min-width: 100%;
+    max-width: none;
+    flex: 0 0 auto;
     background: #ffffff;
   }
 
   .agents-metric-strip .agents-metric-strip-card {
     border: 0;
-    padding: 10px 12px 8px;
     border-top: 1px solid #c8d0da;
-    border-bottom: 1px solid #c8d0da;
     border-right: 1px solid #c8d0da;
+    border-bottom: 1px solid #c8d0da;
+    padding: 10px 12px 8px;
     border-radius: 0;
     min-height: 70px;
     background: #ffffff;
     box-shadow: none;
-    flex: 1 0 170px;
+    display: flex;
+    flex: 0 0 150px;
+    flex-direction: column;
+    justify-content: flex-start;
+    border-radius: 0;
   }
 
   .agents-metric-strip .agents-metric-strip-card:first-child {
@@ -164,6 +174,45 @@
     color: inherit;
   }
 
+  @media (max-width: 767px) {
+    .agents-metric-strip-wrap {
+      overflow-x: visible;
+    }
+
+    .agents-metric-strip {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+    }
+
+    .agents-metric-strip .agents-metric-strip-card {
+      min-width: 0;
+      flex-basis: auto;
+      border-top: 1px solid #c8d0da;
+      border-right: 1px solid #c8d0da;
+      border-bottom: 0;
+      border-left: 1px solid #c8d0da;
+      border-radius: 0;
+    }
+
+    .agents-metric-strip .agents-metric-strip-card:first-child {
+      border-top-left-radius: 6px;
+      border-top-right-radius: 6px;
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .agents-metric-strip .agents-metric-strip-card:last-child {
+      border-bottom: 1px solid #c8d0da;
+      border-top-right-radius: 0;
+      border-bottom-left-radius: 6px;
+      border-bottom-right-radius: 6px;
+    }
+  }
+
   .agents-two-col {
     display: grid;
     gap: 16px;
@@ -201,6 +250,11 @@
 
   .agents-advanced pre {
     margin-top: 8px;
+  }
+
+  table.data tbody tr:last-child td,
+  table.data tbody tr:last-child th {
+    border-bottom: 0 !important;
   }
 
 </style>

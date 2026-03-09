@@ -43,32 +43,34 @@
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Where to change what</h2>
-    <table class="data fullwidth">
-      <thead>
-      <tr>
-        <th>Area</th>
-        <th>Primary place</th>
-        <th>Notes</th>
-      </tr>
-      </thead>
-      <tbody>
-      <tr>
-        <td>Service on/off</td>
-        <td>CP</td>
-        <td>Can be env-locked with <code>PLUGIN_AGENTS_ENABLED</code>.</td>
-      </tr>
-      <tr>
-        <td>Discovery content</td>
-        <td>CP Settings + <code>config/agents.php</code></td>
-        <td>Use CP custom body fields for direct edits; config keys can lock/override those values.</td>
-      </tr>
-      <tr>
-        <td>Auth and managed accounts</td>
-        <td>CP + <code>.env</code></td>
-        <td>Use Accounts tab for managed pause/resume/rotate/revoke; env keys remain supported.</td>
-      </tr>
-      </tbody>
-    </table>
+    <div class="tablepane mx-0" style="margin-top: 0;">
+      <table class="data fullwidth">
+        <thead>
+        <tr>
+          <th>Area</th>
+          <th>Primary place</th>
+          <th>Notes</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>Service on/off</td>
+          <td>CP</td>
+          <td>Can be env-locked with <code>PLUGIN_AGENTS_ENABLED</code>.</td>
+        </tr>
+        <tr>
+          <td>Discovery content</td>
+          <td>CP Settings + <code>config/agents.php</code></td>
+          <td>Use CP custom body fields for direct edits; config keys can lock/override those values.</td>
+        </tr>
+        <tr>
+          <td>Auth and managed accounts</td>
+          <td>CP + <code>.env</code></td>
+          <td>Use Accounts tab for managed pause/resume/rotate/revoke; env keys remain supported.</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="border rounded p-3">

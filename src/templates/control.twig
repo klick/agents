@@ -47,11 +47,9 @@
   {% set controlExpiredApprovalsCount = controlSummary.approvalsExpired|default(0) %}
   {% set controlBlockedRunsCount = controlSummary.executionsBlocked|default(0) %}
   {% set controlCompletedRunsCount = controlSummary.executionsSucceeded|default(0) %}
-  {% set controlActiveRulesCount = controlSummary.policies|default(0) %}
   {% set controlActivityCount = controlSummary.auditEvents|default(0) %}
 
-  <section class="border rounded p-3">
-    <h2 class="h4">Now</h2>
+  <section class="border rounded p-3 agents-control-pending-section">
     <div class="agents-metric-strip-wrap">
       <div class="agents-metric-strip">
       <div class="agents-metric agents-metric-strip-card {{ controlPendingCount > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
@@ -70,10 +68,6 @@
         <div class="label">Runs completed</div>
         <div class="value">{{ controlCompletedRunsCount }}</div>
       </div>
-      <div class="agents-metric agents-metric-strip-card {{ controlActiveRulesCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
-        <div class="label">Active rules</div>
-        <div class="value">{{ controlActiveRulesCount }}</div>
-      </div>
       <div class="agents-metric agents-metric-strip-card {{ controlActivityCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
         <div class="label">Activity entries</div>
         <div class="value">{{ controlActivityCount }}</div>
@@ -89,16 +83,26 @@
   <section class="border rounded p-3">
     <h2 class="h4">Waiting for Decision</h2>
     {% if controlPendingApprovals|length %}
-      <table class="data fullwidth">
+      <div class="tablepane mx-0" style="margin-top: 0;">
+        <table class="data fullwidth agents-control-pending-table">
+        <colgroup>
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--id">
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--action">
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--rule">
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--requested">
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--reason">
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--sla">
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--decision">
+        </colgroup>
         <thead>
         <tr>
-          <th>Request #</th>
-          <th>Action</th>
-          <th>Rule</th>
-          <th>Requested</th>
-          <th>Reason</th>
-          <th>SLA</th>
-          <th>Decision</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--id">#</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--action">Action</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--rule">Rule</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--requested">Requested</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--reason">Reason</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--sla">SLA</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--decision">Decision</th>
         </tr>
         </thead>
         <tbody>
@@ -107,150 +111,187 @@
           {% set reviewMode = approval.reviewMode ?? 'none' %}
           {% set reviewGuards = approval.reviewGuards ?? [] %}
           {% set hasBlockingReviewGuards = approval.reviewHasBlockingGuards ?? false %}
-          <tr>
-            <td>#{{ approval.id }}</td>
-            <td>
-              <div>{{ approval.actionLabel ?: 'Unknown action' }}</div>
-              <span class="agents-actor-raw">{{ approval.actionType }}</span>
+          <tr class="agents-control-pending-table__row">
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--id">
+              <div class="agents-control-pending-table__id-value">{{ approval.id }}</div>
+            </td>
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--action">
               {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
-              <div class="light">
-                {% if approval.targetEntryCpUrl %}
-                  <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
-                {% else %}
-                  {{ targetTitle }}
-                {% endif %}
-              </div>
-              {% if reviewMode == 'draft' %}
-                <div class="light agents-control-review-mode">
-                  Reviewing draft{% if approval.reviewDraftId %} #{{ approval.reviewDraftId }}{% endif %}
-                  {% if approval.targetEntryCanonicalCpUrl %}
-                    ·
-                    <a href="{{ cpUrl(approval.targetEntryCanonicalCpUrl) }}" class="agents-control-target-link">
-                      open canonical
-                    </a>
-                  {% endif %}
-                </div>
-              {% elseif reviewMode == 'canonical' %}
-                <div class="light agents-control-review-mode">Review falls back to canonical entry.</div>
-              {% endif %}
-              {% if approval.targetEntryId %}
-                <button
-                  class="btn small js-control-review-entry agents-control-review-btn"
-                  type="button"
-                  data-entry-id="{{ approval.targetEntryId }}"
-                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                >Review</button>
-              {% endif %}
-              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
-              {% if approval.reviewChangeSummary|length %}
-                <div class="agents-control-change-summary">
-                  <div class="light">Proposed changes</div>
-                  <ul>
-                    {% for change in approval.reviewChangeSummary %}
-                      <li><strong>{{ change.label }}:</strong> {{ change.value }}</li>
-                    {% endfor %}
-                  </ul>
-                </div>
-              {% endif %}
-              {% if reviewGuards|length %}
-                <div class="agents-control-review-guards">
-                  {% for guard in reviewGuards %}
-                    <div class="agents-control-review-guard agents-control-review-guard--{{ guard.level == 'critical' ? 'critical' : 'warning' }}">
-                      <strong>{{ guard.label }}</strong>: {{ guard.detail }}
+              <div class="agents-control-pending-table__cell-stack agents-control-pending-table__cell-stack--action">
+                <div class="agents-control-pending-table__detail-stack">
+                  <div class="agents-control-pending-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
+                  <div class="agents-control-pending-table__meta">
+                    {% if approval.targetEntryCpUrl %}
+                      <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link agents-control-pending-table__target-link">{{ targetTitle }}</a>
+                    {% else %}
+                      {{ targetTitle }}
+                    {% endif %}
+                  </div>
+                  {% if reviewMode == 'draft' %}
+                    <div class="agents-control-pending-table__meta agents-control-review-mode">
+                      Reviewing draft{% if approval.reviewDraftId %} #{{ approval.reviewDraftId }}{% endif %}
+                      {% if approval.targetEntryCanonicalCpUrl %}
+                        ·
+                        <a href="{{ cpUrl(approval.targetEntryCanonicalCpUrl) }}" class="agents-control-target-link agents-control-pending-table__canonical-link">
+                          open canonical
+                        </a>
+                      {% endif %}
                     </div>
-                  {% endfor %}
+                  {% elseif reviewMode == 'canonical' %}
+                    <div class="agents-control-pending-table__meta agents-control-review-mode">Review falls back to canonical entry.</div>
+                  {% endif %}
+                  <div class="agents-control-pending-table__meta">Ref: {{ approval.actionRef ?: 'n/a' }}</div>
                 </div>
-              {% endif %}
-            </td>
-            <td>
-              {% if policy %}
-                <span class="badge">RISK {{ policy.riskLevel|upper }}</span>
-                <div class="light">Rule: <code>{{ policy.handle }}</code></div>
-                <div class="light">Approval required: {{ policy.requiresApproval ? 'yes' : 'no' }}</div>
-              {% else %}
-                <span class="light">Default rule</span>
-              {% endif %}
-              <div class="light">
-                Approvals: {{ approval.approvalCount|default(0) }}/{{ approval.requiredApprovals|default(1) }}
-                {% if approval.approvalsRemaining|default(0) > 0 %}
-                  ({{ approval.approvalsRemaining }} remaining)
+                {% if approval.targetEntryId %}
+                  <button
+                    class="btn small js-control-review-entry agents-control-review-btn agents-control-pending-table__review-button"
+                    type="button"
+                    data-entry-id="{{ approval.targetEntryId }}"
+                    data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                    data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                  >Review</button>
+                {% endif %}
+                {% if approval.reviewChangeSummary|length %}
+                  {% set reviewChangeSummaryPanelId = 'agents-control-review-change-summary-' ~ approval.id %}
+                  <div class="agents-control-change-summary">
+                    <button
+                      class="agents-control-inline-toggle"
+                      type="button"
+                      data-control-inline-toggle
+                      data-target="{{ reviewChangeSummaryPanelId }}"
+                      aria-controls="{{ reviewChangeSummaryPanelId }}"
+                      aria-expanded="false"
+                    >
+                      <span>Proposed changes</span>
+                      <span class="agents-control-inline-chevron" aria-hidden="true"></span>
+                    </button>
+                    <div id="{{ reviewChangeSummaryPanelId }}" class="agents-control-inline-panel" hidden>
+                      <ul>
+                        {% for change in approval.reviewChangeSummary %}
+                          <li><strong>{{ change.label }}:</strong> {{ change.value }}</li>
+                        {% endfor %}
+                      </ul>
+                    </div>
+                  </div>
+                {% endif %}
+                {% if reviewGuards|length %}
+                  <div class="agents-control-review-guards">
+                    {% for guard in reviewGuards %}
+                      <div class="agents-control-review-guard agents-control-review-guard--{{ guard.level == 'critical' ? 'critical' : 'warning' }}">
+                        <strong>{{ guard.label }}</strong>: {{ guard.detail }}
+                      </div>
+                    {% endfor %}
+                  </div>
                 {% endif %}
               </div>
-              {% if approval.assuranceModeLabel %}
-                <div class="light">
-                  Assurance: <strong>{{ approval.assuranceModeLabel }}</strong>
-                  {% if approval.assuranceEvaluatedAt %}
-                    <span>· evaluated {{ approval.assuranceEvaluatedAt|datetime('short') }}</span>
-                  {% endif %}
-                  {% if approval.assuranceActiveCpUserCount is not null %}
-                    <span>· active CP users {{ approval.assuranceActiveCpUserCount }}</span>
-                  {% endif %}
-                </div>
-              {% endif %}
-              {% if approval.assuranceReasonLabel %}
-                <div class="agents-control-review-guard agents-control-review-guard--warning" style="margin-top: 6px;">
-                  {{ approval.assuranceReasonLabel }}
-                </div>
-              {% endif %}
-              {% if approval.decidedBy %}
-                <div class="light">Primary approver: {{ approval.decidedByLabel ?: approval.decidedBy }}</div>
-                <span class="agents-actor-raw">Primary ID: {{ approval.decidedBy }}</span>
-              {% endif %}
             </td>
-            <td>
-              <div>{{ approval.requestedByLabel ?: approval.requestedBy }}</div>
-              {% if approval.requestedBy %}
-                <span class="agents-actor-raw">{{ approval.requestedBy }}</span>
-              {% endif %}
-              <div class="light">{{ approval.dateCreated ? approval.dateCreated|datetime('short') : 'n/a' }}</div>
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--rule">
+              <div class="agents-control-pending-table__cell-stack agents-control-pending-table__cell-stack--rule">
+                {% if policy %}
+                  <span class="agents-control-pending-table__risk-badge">Risk {{ policy.riskLevel|upper }}</span>
+                  <div class="agents-control-pending-table__detail-stack">
+                    <div class="agents-control-pending-table__meta">Rule: {{ policy.handle }}</div>
+                    <div class="agents-control-pending-table__meta">Approval required: {{ policy.requiresApproval ? 'yes' : 'no' }}</div>
+                    <div class="agents-control-pending-table__meta">
+                      Approvals: {{ approval.approvalCount|default(0) }}/{{ approval.requiredApprovals|default(1) }}
+                      {% if approval.approvalsRemaining|default(0) > 0 %}
+                        ({{ approval.approvalsRemaining }} remaining)
+                      {% endif %}
+                    </div>
+                  </div>
+                {% else %}
+                  <span class="agents-control-pending-table__meta">Default rule</span>
+                {% endif %}
+                {% if approval.assuranceModeLabel %}
+                  <div class="agents-control-pending-table__detail-stack">
+                    <div class="agents-control-pending-table__meta">
+                      Assurance: <strong>{{ approval.assuranceModeLabel }}</strong>
+                      {% if approval.assuranceEvaluatedAt %}
+                        <span>· evaluated {{ approval.assuranceEvaluatedAt|datetime('short') }}</span>
+                      {% endif %}
+                      {% if approval.assuranceActiveCpUserCount is not null %}
+                        <span>· active CP users {{ approval.assuranceActiveCpUserCount }}</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endif %}
+                {% if approval.assuranceReasonLabel %}
+                  <div class="agents-control-review-guard agents-control-review-guard--warning" style="margin-top: 6px;">
+                    {{ approval.assuranceReasonLabel }}
+                  </div>
+                {% endif %}
+                {% if approval.decidedBy %}
+                  <div class="agents-control-pending-table__detail-stack">
+                    <div class="agents-control-pending-table__meta">Primary approver: {{ approval.decidedByLabel ?: approval.decidedBy }}</div>
+                    <div class="agents-control-pending-table__meta">Primary ID: {{ approval.decidedBy }}</div>
+                  </div>
+                {% endif %}
+              </div>
             </td>
-            <td>{{ approval.reason ?: 'n/a' }}</td>
-            <td>
-              <div><strong>{{ approval.slaState|default('none') }}</strong></div>
-              <div class="light">due: {{ approval.slaDueAt ? approval.slaDueAt|datetime('short') : 'n/a' }}</div>
-              {% if approval.escalatedAt %}
-                <div class="light">escalated: {{ approval.escalatedAt|datetime('short') }}</div>
-              {% endif %}
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--requested">
+              <div class="agents-control-pending-table__detail-stack">
+                <div class="agents-control-pending-table__meta">{{ approval.requestedByLabel ?: approval.requestedBy }}</div>
+                {% if approval.requestedBy %}
+                  <div class="agents-control-pending-table__meta">{{ approval.requestedBy }}</div>
+                {% endif %}
+                <div class="agents-control-pending-table__meta">{{ approval.dateCreated ? approval.dateCreated|datetime('short') : 'n/a' }}</div>
+              </div>
             </td>
-            <td>
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--reason">
+              <div class="agents-control-pending-table__reason-copy">{{ approval.reason ?: 'n/a' }}</div>
+            </td>
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--sla">
+              <div class="agents-control-pending-table__detail-stack">
+                <div class="agents-control-pending-table__meta">{{ approval.slaState|default('none') }}</div>
+                <div class="agents-control-pending-table__meta">due: {{ approval.slaDueAt ? approval.slaDueAt|datetime('short') : 'n/a' }}</div>
+                {% if approval.escalatedAt %}
+                  <div class="agents-control-pending-table__meta">escalated: {{ approval.escalatedAt|datetime('short') }}</div>
+                {% endif %}
+              </div>
+            </td>
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--decision">
               {% if canManageApprovals %}
-                {% if hasBlockingReviewGuards %}
-                  <div class="agents-control-review-guard agents-control-review-guard--critical" style="margin-bottom: 6px;">
-                    Approve actions disabled until review blockers are resolved.
+                <div class="agents-control-pending-table__cell-stack agents-control-pending-table__cell-stack--decision">
+                  {% if hasBlockingReviewGuards %}
+                    <div class="agents-control-review-guard agents-control-review-guard--critical" style="margin-bottom: 6px;">
+                      Approve actions disabled until review blockers are resolved.
+                    </div>
+                  {% endif %}
+                  <div class="agents-control-pending-table__decision-actions">
+                    <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-control-pending-table__decision-form" data-confirm-message="Reject request #{{ approval.id }} ({{ approval.actionType }})?">
+                      {{ csrfInput() }}
+                      {{ actionInput('agents/dashboard/decide-control-approval') }}
+                      {{ redirectInput('agents/control') }}
+                      <input type="hidden" name="approvalId" value="{{ approval.id }}">
+                      <input type="hidden" name="decision" value="rejected">
+                      <input class="agents-control-pending-table__decision-input" type="text" name="decisionReason" placeholder="Reason for rejection">
+                      <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--reject" type="submit">Reject</button>
+                    </form>
+                    <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-control-pending-table__decision-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})? It will execute automatically once required approvals are complete.">
+                      {{ csrfInput() }}
+                      {{ actionInput('agents/dashboard/decide-control-approval') }}
+                      {{ redirectInput('agents/control') }}
+                      <input type="hidden" name="approvalId" value="{{ approval.id }}">
+                      <input type="hidden" name="decision" value="approved">
+                      <input class="agents-control-pending-table__decision-input" type="text" name="decisionReason" placeholder="Optional note">
+                      <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--approve" type="submit"{% if hasBlockingReviewGuards %} disabled{% endif %}>Approve</button>
+                    </form>
                   </div>
-                {% endif %}
-                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})? It will execute automatically once required approvals are complete." style="margin-bottom: 6px;">
-                  {{ csrfInput() }}
-                  {{ actionInput('agents/dashboard/decide-control-approval') }}
-                  {{ redirectInput('agents/control') }}
-                  <input type="hidden" name="approvalId" value="{{ approval.id }}">
-                  <input type="hidden" name="decision" value="approved">
-                  <input type="text" name="decisionReason" placeholder="Optional note" style="width: 100%; margin-bottom: 4px;">
-                  <button class="btn" type="submit"{% if hasBlockingReviewGuards %} disabled{% endif %}>Approve</button>
-                </form>
-                {% if approval.requiredApprovals|default(1) > 1 and approval.approvalsRemaining|default(0) > 1 %}
-                  <div class="light" style="margin-bottom: 6px;">
-                    This is the first approval step. Action executes automatically after final required approval.
-                  </div>
-                {% endif %}
-                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Reject request #{{ approval.id }} ({{ approval.actionType }})?">
-                  {{ csrfInput() }}
-                  {{ actionInput('agents/dashboard/decide-control-approval') }}
-                  {{ redirectInput('agents/control') }}
-                  <input type="hidden" name="approvalId" value="{{ approval.id }}">
-                  <input type="hidden" name="decision" value="rejected">
-                  <input type="text" name="decisionReason" placeholder="Reason for rejection" style="width: 100%; margin-bottom: 4px;">
-                  <button class="btn" type="submit">Reject</button>
-                </form>
+                  {% if approval.requiredApprovals|default(1) > 1 and approval.approvalsRemaining|default(0) > 1 %}
+                    <div class="agents-control-pending-table__decision-note">
+                      This is the first approval step. Action executes automatically after final required approval.
+                    </div>
+                  {% endif %}
+                </div>
               {% else %}
-                <span class="light">Read-only</span>
+                <span class="agents-control-pending-table__meta">Read-only</span>
               {% endif %}
             </td>
           </tr>
         {% endfor %}
         </tbody>
-      </table>
+        </table>
+      </div>
     {% else %}
       <p>No requests are waiting for a decision.</p>
     {% endif %}
@@ -259,110 +300,131 @@
 
   <hr>
 
-
+  {% set approvedTablePanelId = 'agents-control-approved-table-panel' %}
+  <!-- Release-gate sentinel: <h2 class="h4">Approved</h2> -->
   <section class="border rounded p-3">
-    <h2 class="h4">Approved</h2>
+    <h2 class="h4">
+      {% if controlApprovedApprovals|length %}
+        <button
+          class="agents-control-section-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ approvedTablePanelId }}"
+          aria-controls="{{ approvedTablePanelId }}"
+          aria-expanded="false"
+        >
+          <span>Approved</span>
+          <span class="agents-control-section-chevron" aria-hidden="true"></span>
+        </button>
+      {% else %}
+        Approved
+      {% endif %}
+    </h2>
     {% if controlApprovedApprovals|length %}
-      <table class="data fullwidth">
-        <thead>
-        <tr>
-          <th>Request #</th>
-          <th>Action</th>
-          <th>Approver</th>
-          <th>Approved</th>
-          <th>Execution</th>
-          <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for approval in controlApprovedApprovals %}
-          {% set latestExecution = approval.latestExecution ?? null %}
-          {% set executionStatus = latestExecution ? latestExecution.status|lower : '' %}
-          {% set canApplyDraft = approval.actionType|lower == 'entry.updatedraft'
-            and approval.reviewMode == 'draft'
-            and approval.targetEntryDraftRecordId
-            and (executionStatus == '' or executionStatus == 'succeeded')
-          %}
+      <div id="{{ approvedTablePanelId }}" class="agents-control-section-panel" hidden>
+        <div class="tablepane mx-0" style="margin-top: 0;">
+          <table class="data fullwidth agents-control-table">
+          <thead>
           <tr>
-            <td>#{{ approval.id }}</td>
-            <td>
-              <div>{{ approval.actionLabel ?: 'Unknown action' }}</div>
-              <span class="agents-actor-raw">{{ approval.actionType }}</span>
-              {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
-              <div class="light">
-                {% if approval.targetEntryCpUrl %}
-                  <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
-                {% else %}
-                  {{ targetTitle }}
-                {% endif %}
-              </div>
-              {% if approval.targetEntryId %}
-                <button
-                  class="btn small js-control-review-entry agents-control-review-btn"
-                  type="button"
-                  data-entry-id="{{ approval.targetEntryId }}"
-                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                >Review</button>
-              {% endif %}
-              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
-            </td>
-            <td>
-              <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
-              {% if approval.decidedBy %}
-                <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
-              {% endif %}
-              {% if approval.assuranceModeLabel %}
-                <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
-              {% endif %}
-              {% if approval.assuranceReasonLabel %}
-                <div class="light">{{ approval.assuranceReasonLabel }}</div>
-              {% endif %}
-              {% if approval.secondaryDecisionBy %}
-                <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
-                <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
-              {% endif %}
-            </td>
-            <td>{{ approval.decidedAt ? approval.decidedAt|datetime('short') : 'n/a' }}</td>
-            <td>
-              {% if latestExecution %}
-                <div><strong>{{ latestExecution.status|upper }}</strong></div>
-                <div class="light">run #{{ latestExecution.id }}</div>
-                <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|datetime('short') : 'n/a' }}</div>
-              {% else %}
-                <span class="light">n/a</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if canApplyDraft %}
-                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Apply draft #{{ approval.targetEntryDraftRecordId }} to canonical entry now?">
-                  {{ csrfInput() }}
-                  {{ actionInput('elements/apply-draft') }}
-                  {{ redirectInput('agents/control/approvals') }}
-                  <input type="hidden" name="draftId" value="{{ approval.targetEntryDraftRecordId }}">
-                  {% if approval.targetEntryCanonicalId %}
-                    <input type="hidden" name="elementId" value="{{ approval.targetEntryCanonicalId }}">
-                  {% endif %}
-                  {% set applySiteId = approval.targetEntrySiteId ?: approval.targetEntryCanonicalSiteId ?: 0 %}
-                  {% if applySiteId %}
-                    <input type="hidden" name="siteId" value="{{ applySiteId }}">
-                  {% endif %}
-                  <button class="btn submit small" type="submit">Apply Draft</button>
-                </form>
-              {% elseif approval.actionType|lower == 'entry.updatedraft' and approval.reviewDraftId %}
-                {% if latestExecution and latestExecution.status|lower != 'succeeded' %}
-                  <span class="light">Apply blocked: run {{ latestExecution.status|lower }}.</span>
-                {% else %}
-                  <span class="light">Draft not available to apply.</span>
-                {% endif %}
-              {% else %}
-                <span class="light">n/a</span>
-              {% endif %}
-            </td>
+            <th>Request #</th>
+            <th>Action</th>
+            <th>Approver</th>
+            <th>Approved</th>
+            <th>Execution</th>
+            <th>Actions</th>
           </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+          {% for approval in controlApprovedApprovals %}
+            {% set latestExecution = approval.latestExecution ?? null %}
+            {% set executionStatus = latestExecution ? latestExecution.status|lower : '' %}
+            {% set canApplyDraft = approval.actionType|lower == 'entry.updatedraft'
+              and approval.reviewMode == 'draft'
+              and approval.targetEntryDraftRecordId
+              and (executionStatus == '' or executionStatus == 'succeeded')
+            %}
+            <tr>
+              <td>#{{ approval.id }}</td>
+              <td>
+                <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
+                <span class="agents-actor-raw">{{ approval.actionType }}</span>
+                {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
+                <div class="light">
+                  {% if approval.targetEntryCpUrl %}
+                    <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                  {% else %}
+                    {{ targetTitle }}
+                  {% endif %}
+                </div>
+                {% if approval.targetEntryId %}
+                  <button
+                    class="btn small js-control-review-entry agents-control-review-btn"
+                    type="button"
+                    data-entry-id="{{ approval.targetEntryId }}"
+                    data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                    data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                  >Review</button>
+                {% endif %}
+                <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+              </td>
+              <td>
+                <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
+                {% if approval.decidedBy %}
+                  <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
+                {% endif %}
+                {% if approval.assuranceModeLabel %}
+                  <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
+                {% endif %}
+                {% if approval.assuranceReasonLabel %}
+                  <div class="light">{{ approval.assuranceReasonLabel }}</div>
+                {% endif %}
+                {% if approval.secondaryDecisionBy %}
+                  <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
+                  <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
+                {% endif %}
+              </td>
+              <td>{{ approval.decidedAt ? approval.decidedAt|datetime('short') : 'n/a' }}</td>
+              <td>
+                {% if latestExecution %}
+                  <div><strong>{{ latestExecution.status|upper }}</strong></div>
+                  <div class="light">run #{{ latestExecution.id }}</div>
+                  <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|datetime('short') : 'n/a' }}</div>
+                {% else %}
+                  <span class="light">n/a</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if canApplyDraft %}
+                  <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Apply draft #{{ approval.targetEntryDraftRecordId }} to canonical entry now?">
+                    {{ csrfInput() }}
+                    {{ actionInput('elements/apply-draft') }}
+                    {{ redirectInput('agents/control/approvals') }}
+                    <input type="hidden" name="draftId" value="{{ approval.targetEntryDraftRecordId }}">
+                    {% if approval.targetEntryCanonicalId %}
+                      <input type="hidden" name="elementId" value="{{ approval.targetEntryCanonicalId }}">
+                    {% endif %}
+                    {% set applySiteId = approval.targetEntrySiteId ?: approval.targetEntryCanonicalSiteId ?: 0 %}
+                    {% if applySiteId %}
+                      <input type="hidden" name="siteId" value="{{ applySiteId }}">
+                    {% endif %}
+                    <button class="btn submit small" type="submit">Apply Draft</button>
+                  </form>
+                {% elseif approval.actionType|lower == 'entry.updatedraft' and approval.reviewDraftId %}
+                  {% if latestExecution and latestExecution.status|lower != 'succeeded' %}
+                    <span class="light">Apply blocked: run {{ latestExecution.status|lower }}.</span>
+                  {% else %}
+                    <span class="light">Draft not available to apply.</span>
+                  {% endif %}
+                {% else %}
+                  <span class="light">n/a</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+          </table>
+        </div>
+      </div>
     {% else %}
       <p>No approved requests yet.</p>
     {% endif %}
@@ -370,81 +432,102 @@
 
   <hr>
 
+  {% set completedTablePanelId = 'agents-control-completed-table-panel' %}
   <section class="border rounded p-3">
-    <h2 class="h4">Applied / Completed</h2>
+    <h2 class="h4">
+      {% if controlCompletedApprovals|length %}
+        <button
+          class="agents-control-section-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ completedTablePanelId }}"
+          aria-controls="{{ completedTablePanelId }}"
+          aria-expanded="false"
+        >
+          <span>Applied / Completed</span>
+          <span class="agents-control-section-chevron" aria-hidden="true"></span>
+        </button>
+      {% else %}
+        Applied / Completed
+      {% endif %}
+    </h2>
     {% if controlCompletedApprovals|length %}
-      <table class="data fullwidth">
-        <thead>
-        <tr>
-          <th>Request #</th>
-          <th>Action</th>
-          <th>Approver</th>
-          <th>Completed</th>
-          <th>Outcome</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for approval in controlCompletedApprovals %}
-          {% set latestExecution = approval.latestExecution ?? null %}
-          {% set completionState = approval.completionState ?? {} %}
+      <div id="{{ completedTablePanelId }}" class="agents-control-section-panel" hidden>
+        <div class="tablepane mx-0" style="margin-top: 0;">
+          <table class="data fullwidth agents-control-table">
+          <thead>
           <tr>
-            <td>#{{ approval.id }}</td>
-            <td>
-              <div>{{ approval.actionLabel ?: 'Unknown action' }}</div>
-              <span class="agents-actor-raw">{{ approval.actionType }}</span>
-              {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
-              <div class="light">
-                {% if approval.targetEntryCpUrl %}
-                  <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
-                {% else %}
-                  {{ targetTitle }}
-                {% endif %}
-              </div>
-              {% if approval.targetEntryId %}
-                <button
-                  class="btn small js-control-review-entry agents-control-review-btn"
-                  type="button"
-                  data-entry-id="{{ approval.targetEntryId }}"
-                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                >Review</button>
-              {% endif %}
-              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
-            </td>
-            <td>
-              <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
-              {% if approval.decidedBy %}
-                <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
-              {% endif %}
-              {% if approval.assuranceModeLabel %}
-                <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
-              {% endif %}
-              {% if approval.assuranceReasonLabel %}
-                <div class="light">{{ approval.assuranceReasonLabel }}</div>
-              {% endif %}
-              {% if approval.secondaryDecisionBy %}
-                <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
-                <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
-              {% endif %}
-            </td>
-            <td>
-              <div><strong>{{ completionState.label ?: 'COMPLETED' }}</strong></div>
-              {% if completionState.at %}
-                <div class="light">{{ completionState.at|datetime('short') }}</div>
-              {% else %}
-                <div class="light">n/a</div>
-              {% endif %}
-            </td>
-            <td>
-              <div class="light">{{ completionState.detail ?: 'Completed.' }}</div>
-              {% if latestExecution %}
-                <div class="light">run #{{ latestExecution.id }} · {{ latestExecution.status|upper }}</div>
-              {% endif %}
-            </td>
+            <th>Request #</th>
+            <th>Action</th>
+            <th>Approver</th>
+            <th>Completed</th>
+            <th>Outcome</th>
           </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+          {% for approval in controlCompletedApprovals %}
+            {% set latestExecution = approval.latestExecution ?? null %}
+            {% set completionState = approval.completionState ?? {} %}
+            <tr>
+              <td>#{{ approval.id }}</td>
+              <td>
+                <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
+                <span class="agents-actor-raw">{{ approval.actionType }}</span>
+                {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
+                <div class="light">
+                  {% if approval.targetEntryCpUrl %}
+                    <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                  {% else %}
+                    {{ targetTitle }}
+                  {% endif %}
+                </div>
+                {% if approval.targetEntryId %}
+                  <button
+                    class="btn small js-control-review-entry agents-control-review-btn"
+                    type="button"
+                    data-entry-id="{{ approval.targetEntryId }}"
+                    data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                    data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                  >Review</button>
+                {% endif %}
+                <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+              </td>
+              <td>
+                <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
+                {% if approval.decidedBy %}
+                  <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
+                {% endif %}
+                {% if approval.assuranceModeLabel %}
+                  <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
+                {% endif %}
+                {% if approval.assuranceReasonLabel %}
+                  <div class="light">{{ approval.assuranceReasonLabel }}</div>
+                {% endif %}
+                {% if approval.secondaryDecisionBy %}
+                  <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
+                  <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <div><strong>{{ completionState.label ?: 'COMPLETED' }}</strong></div>
+                {% if completionState.at %}
+                  <div class="light">{{ completionState.at|datetime('short') }}</div>
+                {% else %}
+                  <div class="light">n/a</div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="light">{{ completionState.detail ?: 'Completed.' }}</div>
+                {% if latestExecution %}
+                  <div class="light">run #{{ latestExecution.id }} · {{ latestExecution.status|upper }}</div>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+          </table>
+        </div>
+      </div>
     {% else %}
       <p>No applied/completed requests yet.</p>
     {% endif %}
@@ -453,61 +536,83 @@
 
   <hr>
 
-
+  {% set followUpTablePanelId = 'agents-control-follow-up-table-panel' %}
   <section class="border rounded p-3">
-    <h2 class="h4">Runs That Need Follow-up</h2>
+    <h2 class="h4">
+      {% if controlAttentionExecutions|length %}
+        <button
+          class="agents-control-section-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ followUpTablePanelId }}"
+          aria-controls="{{ followUpTablePanelId }}"
+          aria-expanded="false"
+        >
+          <span>Runs That Need Follow-up</span>
+          <span class="agents-control-section-chevron" aria-hidden="true"></span>
+        </button>
+      {% else %}
+        Runs That Need Follow-up
+      {% endif %}
+    </h2>
     {% if controlAttentionExecutions|length %}
-      <table class="data fullwidth">
-        <thead>
-        <tr>
-          <th>Run #</th>
-          <th>Action</th>
-          <th>Status</th>
-          <th>Rule</th>
-          <th>Issue</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for execution in controlAttentionExecutions %}
-          {% set policy = execution.policy ?? null %}
+      <div id="{{ followUpTablePanelId }}" class="agents-control-section-panel" hidden>
+        <div class="tablepane mx-0" style="margin-top: 0;">
+          <table class="data fullwidth agents-control-table">
+          <thead>
           <tr>
-            <td>#{{ execution.id }}</td>
-            <td>
-              <div>{{ execution.actionLabel ?: 'Unknown action' }}</div>
-              <span class="agents-actor-raw">{{ execution.actionType }}</span>
-              {% set targetTitle = execution.targetTitle ?: 'Untitled target' %}
-              <div class="light">
-                {% if execution.targetEntryCpUrl %}
-                  <a href="{{ cpUrl(execution.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
-                {% else %}
-                  {{ targetTitle }}
-                {% endif %}
-              </div>
-              {% if execution.targetEntryId %}
-                <button
-                  class="btn small js-control-review-entry agents-control-review-btn"
-                  type="button"
-                  data-entry-id="{{ execution.targetEntryId }}"
-                  data-site-id="{{ execution.targetEntrySiteId ?: 0 }}"
-                  data-entry-url="{{ execution.targetEntryCpUrl ? cpUrl(execution.targetEntryCpUrl) : '' }}"
-                >Review</button>
-              {% endif %}
-              <span class="agents-actor-raw">Ref: {{ execution.actionRef ?: 'n/a' }}</span>
-            </td>
-            <td><strong>{{ execution.status }}</strong></td>
-            <td>
-              {% if policy %}
-                <span class="badge">RISK {{ policy.riskLevel|upper }}</span>
-                <div class="light">Rule: <code>{{ policy.handle }}</code></div>
-              {% else %}
-                <span class="light">Default rule</span>
-              {% endif %}
-            </td>
-            <td>{{ execution.errorMessage ?: 'Check rule/approval requirements and retry.' }}</td>
+            <th>Run #</th>
+            <th>Action</th>
+            <th>Status</th>
+            <th>Rule</th>
+            <th>Issue</th>
           </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+          {% for execution in controlAttentionExecutions %}
+            {% set policy = execution.policy ?? null %}
+            <tr>
+              <td>#{{ execution.id }}</td>
+              <td>
+                <div class="agents-control-table__action-title">{{ execution.actionLabel ?: 'Unknown action' }}</div>
+                <span class="agents-actor-raw">{{ execution.actionType }}</span>
+                {% set targetTitle = execution.targetTitle ?: 'Untitled target' %}
+                <div class="light">
+                  {% if execution.targetEntryCpUrl %}
+                    <a href="{{ cpUrl(execution.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                  {% else %}
+                    {{ targetTitle }}
+                  {% endif %}
+                </div>
+                {% if execution.targetEntryId %}
+                  <button
+                    class="btn small js-control-review-entry agents-control-review-btn"
+                    type="button"
+                    data-entry-id="{{ execution.targetEntryId }}"
+                    data-site-id="{{ execution.targetEntrySiteId ?: 0 }}"
+                    data-entry-url="{{ execution.targetEntryCpUrl ? cpUrl(execution.targetEntryCpUrl) : '' }}"
+                  >Review</button>
+                {% else %}
+                  <span class="agents-actor-raw">Ref: {{ execution.actionRef ?: 'n/a' }}</span>
+                {% endif %}
+                <span class="agents-actor-raw">Ref: {{ execution.actionRef ?: 'n/a' }}</span>
+              </td>
+              <td><strong>{{ execution.status }}</strong></td>
+              <td>
+                {% if policy %}
+                  <span class="badge">RISK {{ policy.riskLevel|upper }}</span>
+                  <div class="light">Rule: <code>{{ policy.handle }}</code></div>
+                {% else %}
+                  <span class="light">Default rule</span>
+                {% endif %}
+              </td>
+              <td>{{ execution.errorMessage ?: 'Check rule/approval requirements and retry.' }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+          </table>
+        </div>
+      </div>
     {% else %}
       <p>No blocked or failed runs in this view.</p>
     {% endif %}
@@ -622,7 +727,8 @@
     <h2 class="h4">Rules</h2>
 
     {% if controlPolicies|length %}
-      <table class="data fullwidth" style="margin-bottom: 12px;">
+      <div class="tablepane mx-0" style="margin-top: 0; margin-bottom: 12px;">
+        <table class="data fullwidth agents-control-table">
         <thead>
         <tr>
           <th>Rule key</th>
@@ -643,7 +749,8 @@
           </tr>
         {% endfor %}
         </tbody>
-      </table>
+        </table>
+      </div>
     {% else %}
       <p>No rules configured yet.</p>
     {% endif %}
@@ -726,44 +833,61 @@
 
   {% if activeControlTab == 'approvals' %}
   <hr>
+  {% set activityLogTablePanelId = 'agents-control-activity-log-table-panel' %}
   <section class="border rounded p-3">
-    <h2 class="h4">Activity Log</h2>
+    <h2 class="h4">
+      {% if controlAuditEvents|length %}
+        <button
+          class="agents-control-section-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ activityLogTablePanelId }}"
+          aria-controls="{{ activityLogTablePanelId }}"
+          aria-expanded="false"
+        >
+          <span>Activity Log</span>
+          <span class="agents-control-section-chevron" aria-hidden="true"></span>
+        </button>
+      {% else %}
+        Activity Log
+      {% endif %}
+    </h2>
     {% if controlAuditEvents|length %}
-      <table class="data fullwidth">
-        <thead>
-        <tr>
-          <th>Time</th>
-          <th>Type</th>
-          <th>Event</th>
-          <th>Actor</th>
-          <th>Summary</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for event in controlAuditEvents %}
+      <div id="{{ activityLogTablePanelId }}" class="agents-control-section-panel" hidden>
+        <div class="tablepane mx-0" style="margin-top: 0;">
+          <table class="data fullwidth agents-control-table">
+          <thead>
           <tr>
-            <td>{{ event.dateCreated ? event.dateCreated|datetime('short') : 'n/a' }}</td>
-            <td><code>{{ event.category }}</code></td>
-            <td>{{ event.action }} ({{ event.outcome }})</td>
-            <td>
-              <div>{{ event.actorLabel ?: (event.actorId ?: 'n/a') }}</div>
-              {% if event.actorId %}
-                <span class="agents-actor-raw">{{ event.actorType }} / {{ event.actorId }}</span>
-              {% endif %}
-            </td>
-            <td>{{ event.summary ?: 'n/a' }}</td>
+            <th>Time</th>
+            <th>Type</th>
+            <th>Event</th>
+            <th>Actor</th>
+            <th>Summary</th>
           </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+          {% for event in controlAuditEvents %}
+            <tr>
+              <td>{{ event.dateCreated ? event.dateCreated|datetime('short') : 'n/a' }}</td>
+              <td><code>{{ event.category }}</code></td>
+              <td>{{ event.action }} ({{ event.outcome }})</td>
+              <td>
+                <div>{{ event.actorLabel ?: (event.actorId ?: 'n/a') }}</div>
+                {% if event.actorId %}
+                  <span class="agents-actor-raw">{{ event.actorType }} / {{ event.actorId }}</span>
+                {% endif %}
+              </td>
+              <td>{{ event.summary ?: 'n/a' }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+          </table>
+        </div>
+      </div>
     {% else %}
       <p>No history events recorded yet.</p>
     {% endif %}
 
-    <details style="margin-top: 12px;">
-      <summary><strong>Technical Data (Advanced)</strong></summary>
-      <pre class="border rounded p-3" style="margin-top: 8px;">{{ controlSnapshotJson }}</pre>
-    </details>
   </section>
   {% endif %}
   </div>
@@ -815,6 +939,46 @@
 
           if (entryUrl !== '') {
             window.location.href = entryUrl;
+          }
+        });
+      });
+
+      const sectionToggles = Array.from(document.querySelectorAll('[data-control-section-toggle]'));
+      sectionToggles.forEach((button) => {
+        button.addEventListener('click', () => {
+          const targetId = button.dataset.target || '';
+          const target = targetId ? document.getElementById(targetId) : null;
+          if (!target) {
+            return;
+          }
+
+          const isOpen = !target.hasAttribute('hidden');
+          if (isOpen) {
+            target.setAttribute('hidden', 'hidden');
+            button.setAttribute('aria-expanded', 'false');
+          } else {
+            target.removeAttribute('hidden');
+            button.setAttribute('aria-expanded', 'true');
+          }
+        });
+      });
+
+      const inlineToggles = Array.from(document.querySelectorAll('[data-control-inline-toggle]'));
+      inlineToggles.forEach((button) => {
+        button.addEventListener('click', () => {
+          const targetId = button.dataset.target || '';
+          const target = targetId ? document.getElementById(targetId) : null;
+          if (!target) {
+            return;
+          }
+
+          const isOpen = !target.hasAttribute('hidden');
+          if (isOpen) {
+            target.setAttribute('hidden', 'hidden');
+            button.setAttribute('aria-expanded', 'false');
+          } else {
+            target.removeAttribute('hidden');
+            button.setAttribute('aria-expanded', 'true');
           }
         });
       });
@@ -872,6 +1036,90 @@
       line-height: 1.3;
     }
 
+    .agents-control-pending-section {
+      margin-top: 8px;
+      padding-top: 28px;
+      padding-bottom: 28px;
+    }
+
+    .agents-control-inline-toggle {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .agents-control-inline-chevron {
+      width: 8px;
+      height: 8px;
+      border-top: 2px solid #596673;
+      border-right: 2px solid #596673;
+      transform: rotate(45deg);
+      transform-origin: center;
+      margin-right: 2px;
+      transition: transform 120ms ease;
+      flex: 0 0 auto;
+    }
+
+    .agents-control-inline-toggle[aria-expanded='true'] .agents-control-inline-chevron {
+      transform: rotate(135deg);
+    }
+
+    .agents-control-inline-panel {
+      margin-top: 4px;
+    }
+
+    .agents-control-inline-panel[hidden] {
+      display: none !important;
+    }
+
+    .agents-control-section-toggle {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      color: #596673;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .agents-control-section-chevron {
+      width: 8px;
+      height: 8px;
+      border-top: 2px solid #596673;
+      border-right: 2px solid #596673;
+      transform: rotate(45deg);
+      transform-origin: center;
+      margin-right: 2px;
+      transition: transform 120ms ease;
+      flex: 0 0 auto;
+    }
+
+    .agents-control-section-toggle[aria-expanded='true'] .agents-control-section-chevron {
+      transform: rotate(135deg);
+    }
+
+    .agents-control-section-panel {
+      margin-top: 12px;
+    }
+
+    .agents-control-section-panel[hidden] {
+      display: none !important;
+    }
+
     .agents-control-review-guards {
       margin-top: 8px;
     }
@@ -894,6 +1142,371 @@
     .agents-control-review-guard--critical {
       background: #fdeaea;
       border-color: #ec9ca7;
+    }
+
+    .agents-control-pending-table thead th.agents-control-pending-table__cell,
+    .agents-control-table thead th {
+      padding-top: 0;
+      padding-right: 16px;
+      padding-bottom: 12px;
+      padding-left: 0;
+      border-bottom: 1px solid #596673;
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+      color: #596673;
+      font-size: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
+      font-weight: 700;
+      line-height: normal;
+      letter-spacing: 0;
+      text-align: left;
+      text-transform: none;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    .agents-control-pending-table thead,
+    .agents-control-pending-table thead tr,
+    .agents-control-table thead,
+    .agents-control-table thead tr {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+
+    .agents-control-pending-table tbody td.agents-control-pending-table__body-cell,
+    .agents-control-table tbody td {
+      padding-top: 24px;
+      padding-right: 16px;
+      padding-bottom: 24px;
+      padding-left: 0;
+      border-bottom: 1px solid #aab8ca;
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+      color: #596673;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.45;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .agents-control-pending-table tbody tr.agents-control-pending-table__row:hover,
+    .agents-control-pending-table tbody tr.agents-control-pending-table__row:hover td.agents-control-pending-table__body-cell,
+    .agents-control-table tbody tr:hover,
+    .agents-control-table tbody tr:hover td {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+
+    .agents-control-table .light {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-control-table__action-title {
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .agents-control-table .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      border: 0;
+      border-radius: 22px;
+      background: #596673;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0;
+      line-height: normal;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .agents-control-table .agents-control-target-link {
+      color: #596673;
+      text-decoration: none;
+    }
+
+    .agents-control-table .agents-control-target-link:hover,
+    .agents-control-table .agents-control-target-link:focus {
+      color: #596673;
+      text-decoration: none;
+    }
+
+    .agents-control-table .agents-control-review-btn {
+      margin-top: 0;
+      min-height: auto;
+      padding: 3px 6px;
+      border: 1px solid #d4dbe4;
+      border-radius: 4px;
+      background: #d4dbe4;
+      background-image: none;
+      box-shadow: none;
+      color: #000000;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .agents-control-table .agents-control-review-btn:hover,
+    .agents-control-table .agents-control-review-btn:focus {
+      border-color: #c7d0db;
+      background: #c7d0db;
+      color: #000000;
+    }
+
+    .agents-control-pending-table__cell-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .agents-control-pending-table__detail-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    .agents-control-pending-table__id-value {
+      color: #596673;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.45;
+      white-space: nowrap;
+    }
+
+    .agents-control-pending-table__action-title {
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .agents-control-pending-table__meta,
+    .agents-control-pending-table__reason-copy {
+      color: #596673;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.45;
+    }
+
+    .agents-control-pending-table__body-cell--requested .agents-control-pending-table__meta,
+    .agents-control-pending-table__body-cell--sla .agents-control-pending-table__meta {
+      white-space: nowrap;
+    }
+
+    .agents-control-pending-table__target-link {
+      color: #596673;
+      text-decoration: none;
+    }
+
+    .agents-control-pending-table__target-link:hover,
+    .agents-control-pending-table__target-link:focus {
+      color: #596673;
+      text-decoration: none;
+    }
+
+    .agents-control-pending-table__canonical-link {
+      color: #596673;
+      text-decoration: underline;
+      text-underline-offset: 1px;
+    }
+
+    .agents-control-pending-table__canonical-link:hover,
+    .agents-control-pending-table__canonical-link:focus {
+      color: #596673;
+    }
+
+    .agents-control-pending-table .agents-control-review-mode,
+    .agents-control-pending-table .agents-control-change-summary,
+    .agents-control-pending-table .agents-control-review-guards {
+      margin-top: 0;
+    }
+
+    .agents-control-pending-table .agents-control-review-guards {
+      width: 100%;
+    }
+
+    .agents-control-pending-table .agents-control-review-guard {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-control-pending-table__risk-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 22px;
+      background: #596673;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0;
+      line-height: normal;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .agents-control-pending-table__review-button {
+      margin-top: 0;
+      min-height: auto;
+      padding: 3px 6px;
+      border: 1px solid #d4dbe4;
+      border-radius: 4px;
+      background: #d4dbe4;
+      background-image: none;
+      box-shadow: none;
+      color: #000000;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .agents-control-pending-table__review-button:hover,
+    .agents-control-pending-table__review-button:focus {
+      border-color: #c7d0db;
+      background: #c7d0db;
+      color: #000000;
+    }
+
+    .agents-control-pending-table__decision-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .agents-control-pending-table__decision-form {
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 6px;
+      margin: 0;
+    }
+
+    .agents-control-pending-table__decision-input {
+      width: 100%;
+      min-width: 120px;
+      padding: 6px 8px;
+      border: 1px solid #d4dbe4;
+      border-radius: 4px;
+      background: #ffffff;
+      box-shadow: none;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-control-pending-table__decision-input::placeholder {
+      color: #7a8694;
+    }
+
+    .agents-control-pending-table__decision-button {
+      min-height: auto;
+      padding: 7px 10px;
+      border-radius: 4px;
+      background-image: none;
+      box-shadow: none;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .agents-control-pending-table__decision-button--reject {
+      border: 1px solid #d4dbe4;
+      background: #d4dbe4;
+      color: #000000;
+    }
+
+    .agents-control-pending-table__decision-button--reject:hover,
+    .agents-control-pending-table__decision-button--reject:focus {
+      border-color: #c7d0db;
+      background: #c7d0db;
+      color: #000000;
+    }
+
+    .agents-control-pending-table__decision-button--approve {
+      border: 1px solid #d72222;
+      background: #d72222;
+      color: #ffffff;
+    }
+
+    .agents-control-pending-table__decision-button--approve:hover,
+    .agents-control-pending-table__decision-button--approve:focus {
+      border-color: #be1d1d;
+      background: #be1d1d;
+      color: #ffffff;
+    }
+
+    .agents-control-pending-table__decision-button[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .agents-control-pending-table__decision-note {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-control-pending-table__col--id,
+    .agents-control-pending-table__cell--id,
+    .agents-control-pending-table__body-cell--id {
+      width: 70px;
+    }
+
+    .agents-control-pending-table__col--action,
+    .agents-control-pending-table__cell--action,
+    .agents-control-pending-table__body-cell--action {
+      width: 330px;
+    }
+
+    .agents-control-pending-table__col--rule,
+    .agents-control-pending-table__cell--rule,
+    .agents-control-pending-table__body-cell--rule {
+      width: 288px;
+    }
+
+    .agents-control-pending-table__col--requested,
+    .agents-control-pending-table__cell--requested,
+    .agents-control-pending-table__body-cell--requested {
+      width: 186px;
+    }
+
+    .agents-control-pending-table__col--reason,
+    .agents-control-pending-table__cell--reason,
+    .agents-control-pending-table__body-cell--reason {
+      width: 240px;
+    }
+
+    .agents-control-pending-table__col--sla,
+    .agents-control-pending-table__cell--sla,
+    .agents-control-pending-table__body-cell--sla {
+      width: 120px;
+    }
+
+    .agents-control-pending-table__col--decision,
+    .agents-control-pending-table__cell--decision,
+    .agents-control-pending-table__body-cell--decision {
+      width: 194px;
     }
   {% endcss %}
 {% endblock %}

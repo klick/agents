@@ -247,30 +247,32 @@
         </div>
 
         {% if reliabilityTopSignals|length %}
-          <table class="data fullwidth" style="margin-top: 12px;">
-            <thead>
-            <tr>
-              <th>Signal</th>
-              <th>Current</th>
-              <th>Trigger</th>
-              <th>Primary response</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for signal in reliabilityTopSignals %}
-              {% set signalThresholdLabel = signal.comparator ~ ' ' ~ (signal.severity == 'critical' ? signal.criticalThreshold : signal.warnThreshold) %}
+          <div class="tablepane mx-0" style="margin-top: 12px;">
+            <table class="data fullwidth">
+              <thead>
               <tr>
-                <td>
-                  <strong>{{ signal.label }}</strong><br>
-                  <span class="agents-subtle">{{ signal.severity|upper }}</span>
-                </td>
-                <td>{{ signal.value }}{% if signal.unit %} {{ signal.unit }}{% endif %}</td>
-                <td><code>{{ signalThresholdLabel }}</code></td>
-                <td>{{ signal.primaryResponse ?: 'Check observability runbook.' }}</td>
+                <th>Signal</th>
+                <th>Current</th>
+                <th>Trigger</th>
+                <th>Primary response</th>
               </tr>
-            {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+              {% for signal in reliabilityTopSignals %}
+                {% set signalThresholdLabel = signal.comparator ~ ' ' ~ (signal.severity == 'critical' ? signal.criticalThreshold : signal.warnThreshold) %}
+                <tr>
+                  <td>
+                    <strong>{{ signal.label }}</strong><br>
+                    <span class="agents-subtle">{{ signal.severity|upper }}</span>
+                  </td>
+                  <td>{{ signal.value }}{% if signal.unit %} {{ signal.unit }}{% endif %}</td>
+                  <td><code>{{ signalThresholdLabel }}</code></td>
+                  <td>{{ signal.primaryResponse ?: 'Check observability runbook.' }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% else %}
           <p class="agents-subtle" style="margin-top: 10px;">No warning or critical reliability signals detected.</p>
         {% endif %}
@@ -282,29 +284,31 @@
 
       <section class="border rounded p-3">
         <h2 class="h4">Score Breakdown</h2>
-        <table class="data fullwidth">
-          <thead>
-          <tr>
-            <th>Check</th>
-            <th>Weight</th>
-            <th>Result</th>
-            <th>Score</th>
-          </tr>
-          </thead>
-          <tbody>
-          {% for criterion in readinessDiagnostics.breakdown %}
+        <div class="tablepane mx-0" style="margin-top: 0;">
+          <table class="data fullwidth">
+            <thead>
             <tr>
-              <td>{{ criterion.label }}</td>
-              <td>{{ criterion.weight }}</td>
-              <td>
-                <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
-                {{ criterion.passed ? 'pass' : 'needs attention' }}
-              </td>
-              <td>{{ criterion.score }}</td>
+              <th>Check</th>
+              <th>Weight</th>
+              <th>Result</th>
+              <th>Score</th>
             </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+            {% for criterion in readinessDiagnostics.breakdown %}
+              <tr>
+                <td>{{ criterion.label }}</td>
+                <td>{{ criterion.weight }}</td>
+                <td>
+                  <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
+                  {{ criterion.passed ? 'pass' : 'needs attention' }}
+                </td>
+                <td>{{ criterion.score }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </section>
 
 
@@ -346,28 +350,30 @@
         </p>
 
         {% if consumerLagRows|length %}
-          <table class="data fullwidth">
-            <thead>
-            <tr>
-              <th>Integration</th>
-              <th>Resource</th>
-              <th>Checkpoint</th>
-              <th>Lag</th>
-              <th>Bucket</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for row in consumerLagRows|slice(0, 10) %}
+          <div class="tablepane mx-0" style="margin-top: 0;">
+            <table class="data fullwidth">
+              <thead>
               <tr>
-                <td><code>{{ row.integrationKey }}</code></td>
-                <td><code>{{ row.resourceType }}</code></td>
-                <td>{{ row.checkpointAt ?: 'n/a' }}</td>
-                <td>{{ row.lagSeconds }}s</td>
-                <td><strong>{{ row.lagBucket }}</strong></td>
+                <th>Integration</th>
+                <th>Resource</th>
+                <th>Checkpoint</th>
+                <th>Lag</th>
+                <th>Bucket</th>
               </tr>
-            {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+              {% for row in consumerLagRows|slice(0, 10) %}
+                <tr>
+                  <td><code>{{ row.integrationKey }}</code></td>
+                  <td><code>{{ row.resourceType }}</code></td>
+                  <td>{{ row.checkpointAt ?: 'n/a' }}</td>
+                  <td>{{ row.lagSeconds }}s</td>
+                  <td><strong>{{ row.lagBucket }}</strong></td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
           {% if consumerLagRows|length > 10 %}
             <p class="agents-subtle">Showing top 10 highest lag rows.</p>
           {% endif %}
@@ -436,28 +442,30 @@
 
       <section class="border rounded p-3">
         <h2 class="h4">Runbook & Alert Guidance</h2>
-        <table class="data fullwidth">
-          <thead>
-          <tr>
-            <th>Signal</th>
-            <th>Trigger</th>
-            <th>Primary response</th>
-          </tr>
-          </thead>
-          <tbody>
-          {% for signal in observabilitySummary.reliabilitySignals|default([]) %}
+        <div class="tablepane mx-0" style="margin-top: 0;">
+          <table class="data fullwidth">
+            <thead>
             <tr>
-              <td>{{ signal.label ?: signal.id }}</td>
-              <td>Warn: <code>{{ signal.comparator }} {{ signal.warnThreshold }}</code><br>Critical: <code>{{ signal.comparator }} {{ signal.criticalThreshold }}</code></td>
-              <td>{{ signal.primaryResponse ?: 'See observability runbook.' }}</td>
+              <th>Signal</th>
+              <th>Trigger</th>
+              <th>Primary response</th>
             </tr>
-          {% else %}
-            <tr>
-              <td colspan="3">No reliability threshold catalog available.</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+            {% for signal in observabilitySummary.reliabilitySignals|default([]) %}
+              <tr>
+                <td>{{ signal.label ?: signal.id }}</td>
+                <td>Warn: <code>{{ signal.comparator }} {{ signal.warnThreshold }}</code><br>Critical: <code>{{ signal.comparator }} {{ signal.criticalThreshold }}</code></td>
+                <td>{{ signal.primaryResponse ?: 'See observability runbook.' }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="3">No reliability threshold catalog available.</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {% if readinessDiagnostics.warnings|length %}
@@ -616,14 +624,16 @@
             <div class="agents-discovery-doc-details-row">
               <details class="agents-advanced agents-discovery-doc-details">
                 <summary><strong>Details</strong></summary>
-                <table class="data fullwidth" style="margin-top: 8px;">
-                  <tbody>
-                  <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
-                  <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
-                  <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
-                  <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
-                </tbody>
-                </table>
+                <div class="tablepane mx-0" style="margin-top: 8px;">
+                  <table class="data fullwidth">
+                    <tbody>
+                    <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
+                    <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
+                    <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
+                    <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
+                  </tbody>
+                  </table>
+                </div>
               </details>
             </div>
           </section>
@@ -784,43 +794,45 @@
         </form>
 
         {% if webhookDeadLetters|length %}
-          <table class="data fullwidth">
-            <thead>
-            <tr>
-              <th>ID</th>
-              <th>Event</th>
-              <th>Status</th>
-              <th>Attempts</th>
-              <th>Last Error</th>
-              <th>Updated</th>
-              <th>Replay</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for row in webhookDeadLetters %}
+          <div class="tablepane mx-0" style="margin-top: 0;">
+            <table class="data fullwidth">
+              <thead>
               <tr>
-                <td>#{{ row.id }}</td>
-                <td>
-                  <code>{{ row.eventId }}</code><br>
-                  <span class="light">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }} {{ row.action ? '(' ~ row.action ~ ')' : '' }}</span>
-                </td>
-                <td><strong>{{ row.status }}</strong></td>
-                <td>{{ row.attempts }}</td>
-                <td>{{ row.lastError ?: 'n/a' }}</td>
-                <td>{{ row.dateUpdated ?: row.dateCreated ?: 'n/a' }}</td>
-                <td>
-                  <form method="post" accept-charset="UTF-8">
-                    {{ csrfInput() }}
-                    {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-                    {{ redirectInput('agents/dashboard/security') }}
-                    <input type="hidden" name="id" value="{{ row.id }}">
-                    <button class="btn" type="submit">Replay</button>
-                  </form>
-                </td>
+                <th>ID</th>
+                <th>Event</th>
+                <th>Status</th>
+                <th>Attempts</th>
+                <th>Last Error</th>
+                <th>Updated</th>
+                <th>Replay</th>
               </tr>
-            {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+              {% for row in webhookDeadLetters %}
+                <tr>
+                  <td>#{{ row.id }}</td>
+                  <td>
+                    <code>{{ row.eventId }}</code><br>
+                    <span class="light">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }} {{ row.action ? '(' ~ row.action ~ ')' : '' }}</span>
+                  </td>
+                  <td><strong>{{ row.status }}</strong></td>
+                  <td>{{ row.attempts }}</td>
+                  <td>{{ row.lastError ?: 'n/a' }}</td>
+                  <td>{{ row.dateUpdated ?: row.dateCreated ?: 'n/a' }}</td>
+                  <td>
+                    <form method="post" accept-charset="UTF-8">
+                      {{ csrfInput() }}
+                      {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
+                      {{ redirectInput('agents/dashboard/security') }}
+                      <input type="hidden" name="id" value="{{ row.id }}">
+                      <button class="btn" type="submit">Replay</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% else %}
           <p>No dead-letter events.</p>
         {% endif %}

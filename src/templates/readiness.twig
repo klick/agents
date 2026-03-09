@@ -20,29 +20,31 @@
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
     <h2 class="h4">Score Breakdown</h2>
-    <table class="data fullwidth">
-      <thead>
-      <tr>
-        <th>Check</th>
-        <th>Weight</th>
-        <th>Result</th>
-        <th>Score</th>
-      </tr>
-      </thead>
-      <tbody>
-      {% for criterion in diagnostics.breakdown %}
+    <div class="tablepane mx-0" style="margin-top: 0;">
+      <table class="data fullwidth">
+        <thead>
         <tr>
-          <td>{{ criterion.label }}</td>
-          <td>{{ criterion.weight }}</td>
-          <td>
-            <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
-            {{ criterion.passed ? 'pass' : 'needs attention' }}
-          </td>
-          <td>{{ criterion.score }}</td>
+          <th>Check</th>
+          <th>Weight</th>
+          <th>Result</th>
+          <th>Score</th>
         </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+        {% for criterion in diagnostics.breakdown %}
+          <tr>
+            <td>{{ criterion.label }}</td>
+            <td>{{ criterion.weight }}</td>
+            <td>
+              <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
+              {{ criterion.passed ? 'pass' : 'needs attention' }}
+            </td>
+            <td>{{ criterion.score }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="border rounded p-3" style="margin-bottom: 16px;">
