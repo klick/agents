@@ -76,19 +76,16 @@ Requirements:
 - PHP `^8.2`
 - Craft CMS `^5.0`
 
-After Plugin Store publication:
+Install:
 
 ```bash
 composer require klick/agents:^0.10.6
 php craft plugin/install agents
 ```
 
-For monorepo development, the package can also be installed via path repository at `plugins/agents`.
-
 Recommended local workflow:
 
 - develop in a dedicated Craft sandbox (not production-bound project roots)
-- link plugin via local Composer path repo only in that sandbox
 - use the scripted bootstrap/fixture/smoke/release steps in [DEVELOPMENT.md](DEVELOPMENT.md)
 - restore production-bound projects to store-backed versions after local debugging
 
