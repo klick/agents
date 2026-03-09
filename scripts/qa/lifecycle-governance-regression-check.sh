@@ -28,11 +28,12 @@ CLI_CONTROLLER="$PLUGIN_ROOT/src/console/controllers/AgentsController.php"
 DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
 CREDENTIALS_TEMPLATE="$PLUGIN_ROOT/src/templates/credentials.twig"
 LIFECYCLE_SERVICE="$PLUGIN_ROOT/src/services/LifecycleGovernanceService.php"
-README_FILE="$PLUGIN_ROOT/README.md"
 VITEPRESS_LIFECYCLE_DOC="$PLUGIN_ROOT/docs/troubleshooting/agent-lifecycle-governance.md"
+CLI_DOC="$PLUGIN_ROOT/docs/cli/index.md"
 
 expect_file "$LIFECYCLE_SERVICE" "Lifecycle governance service"
 expect_file "$VITEPRESS_LIFECYCLE_DOC" "VitePress lifecycle governance doc"
+expect_file "$CLI_DOC" "CLI docs"
 
 expect_fixed "'lifecycleGovernanceService' => LifecycleGovernanceService::class" "$PLUGIN_FILE" "Plugin lifecycle service component missing"
 expect_fixed "public function getLifecycleGovernanceService(): LifecycleGovernanceService" "$PLUGIN_FILE" "Plugin lifecycle service getter missing"
@@ -53,8 +54,8 @@ expect_fixed "'lifecycleByCredentialId' => \$lifecycleByCredentialId" "$DASHBOAR
 
 expect_fixed "Lifecycle Governance" "$CREDENTIALS_TEMPLATE" "Credentials CP lifecycle summary section missing"
 
-expect_fixed "GET /lifecycle" "$README_FILE" "README lifecycle endpoint missing"
-expect_fixed "lifecycle:read" "$README_FILE" "README lifecycle scope missing"
-expect_fixed "craft agents/lifecycle-report" "$README_FILE" "README lifecycle CLI command missing"
+expect_fixed "GET /agents/v1/lifecycle" "$VITEPRESS_LIFECYCLE_DOC" "Lifecycle docs endpoint missing"
+expect_fixed "lifecycle:read" "$VITEPRESS_LIFECYCLE_DOC" "Lifecycle docs scope missing"
+expect_fixed "craft agents/lifecycle-report" "$CLI_DOC" "CLI docs lifecycle command missing"
 
 echo "PASS: lifecycle governance regression checks pass"

@@ -60,9 +60,9 @@ if grep -Eq "return '0\\.3\\.(0|3)'" "$PLUGIN_ROOT/src/services/ReadinessService
 fi
 pass "Migration safety checks pass"
 
-echo "[8/15] Required endpoint docs present"
-if ! grep -q "Base URL (this project):" README.md; then
-  fail "README is missing the API base URL declaration"
+echo "[8/15] README and docs references present"
+if ! grep -q "Public docs: https://marcusscheller.com/docs/agents/" README.md; then
+  fail "README is missing the public docs link"
 fi
 
 if ! grep -q '^/\.tmp/' .gitignore; then
@@ -73,11 +73,17 @@ if git ls-files -- '.tmp' '.tmp/*' | grep -q '.'; then
   fail "Tracked .tmp artifacts detected; /.tmp must remain hidden from release surfaces"
 fi
 
-for route in "GET /health" "GET /readiness" "GET /adoption/metrics" "GET /metrics" "GET /incidents" "GET /products" "GET /capabilities" "GET /openapi.json"; do
-  if ! grep -q "$route" README.md; then
-    fail "Missing endpoint in README: $route"
-  fi
-done
+if ! grep -q "composer require klick/agents" README.md; then
+  fail "README is missing the composer install command"
+fi
+
+if [[ ! -f "docs/api/endpoints.md" ]]; then
+  fail "Missing API endpoints docs: docs/api/endpoints.md"
+fi
+
+if [[ ! -f "docs/api/auth-and-scopes.md" ]]; then
+  fail "Missing auth/scopes docs: docs/api/auth-and-scopes.md"
+fi
 
 if [[ ! -f "docs/troubleshooting/observability-runbook.md" ]]; then
   fail "Missing observability runbook: docs/troubleshooting/observability-runbook.md"
@@ -87,7 +93,7 @@ if ! grep -q "Runbook & Alert Guidance" src/templates/dashboard.twig; then
   fail "Dashboard is missing Runbook & Alert Guidance section"
 fi
 
-pass "README documents required endpoints"
+pass "README and docs entry points are present"
 
 echo "[9/15] Webhook contract regression check"
 "$PLUGIN_ROOT/scripts/qa/webhook-regression-check.sh" >/dev/null

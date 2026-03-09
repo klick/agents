@@ -26,7 +26,7 @@ expect_fixed() {
 
 API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
 SECURITY_POLICY_SERVICE="$PLUGIN_ROOT/src/services/SecurityPolicyService.php"
-README_FILE="$PLUGIN_ROOT/README.md"
+CONFIG_DOC="$PLUGIN_ROOT/docs/get-started/configuration.md"
 
 expect_fixed "private function invalidQueryResponse(array \$errors): Response" "$API_CONTROLLER" "ApiController exposes shared invalid-query response helper"
 expect_fixed "private function validateProjectionAndFilterQueryParams(): array" "$API_CONTROLLER" "ApiController validates projection/filter query contracts"
@@ -48,6 +48,6 @@ expect_fixed "private function resolveBooleanRuntimeSetting(" "$SECURITY_POLICY_
 expect_fixed "private function resolvePositiveIntegerRuntimeSetting(" "$SECURITY_POLICY_SERVICE" "SecurityPolicyService resolves integer settings with profile defaults"
 expect_fixed "environmentProfile" "$SECURITY_POLICY_SERVICE" "SecurityPolicyService runtime config includes environment profile metadata"
 
-expect_fixed '`PLUGIN_AGENTS_ENV_PROFILE`' "$README_FILE" "README documents environment profile configuration"
+expect_fixed '`PLUGIN_AGENTS_ENV_PROFILE`' "$CONFIG_DOC" "Configuration docs document environment profile configuration"
 
 echo "Validation regression checks completed."
