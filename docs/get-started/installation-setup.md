@@ -3,7 +3,7 @@
 ## 1. Install the plugin
 
 ```bash
-composer require klick/agents:^0.10.8
+composer require klick/agents:^0.10.9
 php craft plugin/install agents
 ```
 
@@ -25,12 +25,12 @@ This creates plugin tables for:
 
 Primary route:
 
-- `admin/agents/dashboard/overview`
+- `admin/agents/readiness`
 
 Navigation entry points:
 
 - Sidebar: `Agents`
-- Plugin settings page (`admin/settings/plugins`) redirects to Dashboard overview
+- Plugin settings page (`admin/settings/plugins`) redirects to `Status`
 
 ## 4. Validate key endpoints
 

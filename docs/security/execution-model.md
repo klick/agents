@@ -18,7 +18,7 @@ Agents is the governed machine-access layer for Craft CMS and Craft Commerce.
 | Integration state API (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`, `/incidents`) | Production stable | Checkpoint/lag, schema/template contracts, lifecycle governance, and redacted runtime incident visibility. |
 | Discovery descriptors (`/capabilities`, `/openapi.json`, root aliases) | Production stable | Canonical machine contract discovery. |
 | Webhook delivery + DLQ replay (`/webhooks/dlq`, `/webhooks/dlq/replay`) | Production stable | Signed payloads, retries, dead-letter replay. |
-| Credential controls (scopes, targeted webhook subscriptions, TTL/reminders, IP allowlists) | Production stable | Managed in CP, enforced at runtime. |
+| Credential controls (scopes, targeted event-routing subscriptions, TTL/reminders, IP allowlists) | Production stable | Managed in CP, enforced at runtime. |
 | CLI (`craft agents/*`) | Production stable (ops tooling) | Operator/dev workflows; not runtime control plane. |
 | Discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`) | Optional stable feature | Public discovery docs, not the core trust boundary. |
 | Control-plane execution (`/control/*`, governed-write workflows) | Experimental | Enabled only by `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`. |

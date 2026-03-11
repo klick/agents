@@ -31,7 +31,7 @@ API discovery aliases:
 
 ## CP discovery operations
 
-Dashboard -> Discovery Docs tab provides:
+Top-level `Discovery Docs` in the Agents CP provides:
 
 - refresh all discovery docs
 - refresh only `llms.txt`

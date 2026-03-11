@@ -54,7 +54,7 @@ Fix:
 
 Fix path:
 
-1. Dashboard -> Discovery -> Refresh All
+1. Discovery Docs -> Refresh All
 2. If needed, clear discovery cache
 3. Use Craft Clear Caches utility -> `Agents discovery caches`
 

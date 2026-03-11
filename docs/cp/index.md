@@ -1,4 +1,4 @@
-# Dashboard & Control Panel
+# Status, Accounts, Discovery Docs & Approvals
 
 The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure discovery and reliability settings, and, when experimental writes are enabled, review governed approval and rule flows.
 
@@ -8,36 +8,40 @@ Agents CP is not a shell execution layer. Production behavior still flows throug
 
 The Agents CP subnav currently exposes:
 
-- **Dashboard**
-  - URL: `admin/agents` or `admin/agents/dashboard`
-  - local sidebar tabs: `Overview`, `Readiness`, `Discovery Docs`
-- **Control**
+- **Status**
+  - URL: `admin/agents/readiness`
+- **Approvals**
   - URL: `admin/agents/control`
   - shown only when governed-write CP is enabled
   - local sidebar tabs: `Approvals`, `Rules`
 - **Accounts**
   - URL: `admin/agents/credentials`
   - managed machine-account lifecycle and access controls
+- **Discovery Docs**
+  - URL: `admin/agents/discovery`
+  - discovery-doc editing, cache refresh, enable/disable, and technical status JSON
 - **Settings**
   - URL: `admin/agents/settings`
   - runtime switches, reliability thresholds, and config-lock visibility
 
 Legacy aliases still redirect for compatibility:
 
+- `admin/agents`
+- `admin/agents/dashboard`
 - `admin/agents/overview`
-- `admin/agents/readiness`
+- `admin/agents/dashboard/overview`
+- `admin/agents/dashboard/readiness`
 - `admin/agents/discovery`
+- `admin/agents/credentials/discovery` redirects to `Discovery Docs`
+- `admin/agents/dashboard/discovery`
 - `admin/agents/security` redirects to the security section inside `Readiness`
+- `admin/agents/dashboard/security` redirects to the security section inside `Readiness`
 - `admin/agents/health` redirects to Readiness
 
-## Dashboard
+## Status
 
-`Dashboard` is one CP section with three local tabs:
+`Status` is the primary runtime-operator surface:
 
-- **Overview**
-  - `At a Glance` metric strip
-  - `Diagnostics Bundle` download
-  - `Readiness Snapshot`
 - **Readiness**
   - state card with overall verdict (`Ready`, `Degraded`, `Blocked`, `Unproven`)
   - combined summary strip with shared operator dimensions:
@@ -57,26 +61,20 @@ Legacy aliases still redirect for compatibility:
   - legacy readiness/security deep-link anchors are preserved inside the merged cards for action-map compatibility
   - in-card `Action Mapping` table that renders only problematic signals
   - security-origin follow-up actions stay in the main readiness `Action Mapping` table
+  - `Diagnostics Bundle` download
   - separate dead-letter queue replay section for operational recovery
-- **Discovery Docs**
-  - `Quick Actions` for refresh and cache clear
-  - per-document cards for `llms.txt`, `llms-full.txt`, and `commerce.txt`
-  - inline preview/edit support where allowed
-  - per-document `Save`, `Reset`, `Refresh`, and `Enable/Disable` actions
-  - `Editing Path`
-  - technical status JSON
+
 This page is driven from runtime services, not hardcoded static status:
 
 - readiness and health summaries
 - sync-state lag summary
 - observability metrics snapshot
-- discovery-doc status
 - security posture
 - webhook dead-letter events
 
-## Control
+## Approvals
 
-`Control` is a separate CP section that appears only when the governed-write CP is enabled. In the current plugin, that follows the same experimental gate as governed-write APIs.
+`Approvals` is a separate CP section that appears only when the governed-write CP is enabled. In the current plugin, that follows the same experimental gate as governed-write APIs.
 
 Local tabs:
 
@@ -115,7 +113,7 @@ Current responsibilities:
   - owner metadata
   - pause/resume state
   - force-human-approval mode for write-capable accounts
-  - webhook resource/action subscriptions
+  - event routing interests (resource/action subscriptions)
   - TTL and reminder policy
   - IP allowlist
 - lifecycle risk details per account
@@ -123,6 +121,24 @@ Current responsibilities:
 - suggested account profiles for common integration shapes
 
 The visible page title is **Accounts**, and the route is `admin/agents/credentials`.
+
+## Discovery Docs
+
+Current responsibilities:
+
+- `Quick Actions` for refresh and cache clear
+- per-document cards for `llms.txt`, `llms-full.txt`, and `commerce.txt`
+- inline preview/edit support where allowed
+- per-document `Save`, `Reset`, `Refresh`, and `Enable/Disable` actions
+- `Editing Path`
+- technical status JSON
+
+This view is driven from discovery runtime services and settings:
+
+- discovery document status
+- discovery cache freshness
+- per-document enable/disable posture
+- inline custom-body overrides where allowed
 
 ## Settings
 
@@ -141,8 +157,8 @@ Current sections:
   - sync-state lag warn threshold
   - sync-state lag critical threshold
 - **Manual Fallback**
-  - `Allow manual control requests in Control tab`
-  - shown only when Control CP is available
+  - `Allow manual approval requests in Approvals`
+  - shown only when Approvals is available
 - **Configuration Locks**
   - explains when values are locked by env vars or `config/agents.php`
 
@@ -158,17 +174,17 @@ The current permission model is split into two groups:
   - rotate managed account tokens
   - revoke managed account tokens
   - delete managed accounts
-- **Agents Control**
-  - shown only when Control CP is enabled
-  - view control tab
-  - create and edit control rules
-  - approve and reject control requests
-  - run approved control actions
+- **Agents Approvals**
+  - shown only when Approvals is enabled
+  - view approvals tab
+  - create and edit approval rules
+  - approve and reject governed requests
+  - run approved governed actions
 
 In addition:
 
 - `Settings` actions require admin access
-- `Control` requires the corresponding Control permissions
+- `Approvals` requires the corresponding approvals permissions
 - `Accounts` actions require the corresponding Agents Access permissions
 
 ## Deep Links
@@ -176,13 +192,13 @@ In addition:
 Primary current routes:
 
 - `admin/agents`
-- `admin/agents/dashboard/overview`
-- `admin/agents/dashboard/readiness`
-- `admin/agents/dashboard/discovery`
-- `admin/agents/dashboard/security` redirects to `admin/agents/dashboard/readiness#securitySnapshotSection`
+- `admin/agents/readiness`
+- `admin/agents/credentials`
+- `admin/agents/discovery`
+- `admin/agents/credentials/discovery` redirects to `admin/agents/discovery`
+- `admin/agents/dashboard/security` redirects to `admin/agents/readiness#securitySnapshotSection`
 - `admin/agents/control/approvals`
 - `admin/agents/control/rules`
-- `admin/agents/credentials`
 - `admin/agents/settings`
 
 ## Runtime Boundary Reminder

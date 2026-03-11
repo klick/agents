@@ -23,16 +23,16 @@ Optional tuning:
 
 ## Subscription targeting (per agent)
 
-Managed agents can include optional webhook subscriptions:
+Managed accounts can include optional event-interest subscriptions:
 
 - resource types: `entry`, `product`, `order`
 - actions: `created`, `updated`, `deleted`
 
 Behavior:
 
-- if no keys define subscriptions, webhook delivery runs in firehose mode
-- if any key defines subscriptions, delivery switches to targeted mode and only matching events are sent
-- subscriptions are managed in `Agents -> Agents`
+- if no accounts define subscriptions, webhook delivery runs in firehose mode
+- if any account defines subscriptions, delivery switches to targeted mode and only matching events are sent
+- subscriptions are managed in `Agents -> Accounts`
 
 ## Signature headers
 

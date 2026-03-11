@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.10.9 (2026-03-11)
+
+- Reworked the top-level CP IA to `Status`, `Approvals`, `Accounts`, `Discovery Docs`, and `Settings`, removing local sidebars from the primary operator surfaces.
+- Added a `Ready to Connect` bootstrap verdict for fresh installs so healthy but inactive environments no longer default to `Unproven`.
+- Renamed the CP-facing `Control` surface to `Approvals` while keeping governed-write routes and redirects compatible.
+- Reframed account webhook subscriptions as event-interest routing and added a `Monthly Report Agent` starter template.
+
 ## 0.10.8 (2026-03-11)
 
 - Merged dashboard security posture fully into `Readiness`, with one combined state card, one action-mapping table, and a shared proof-card grid.

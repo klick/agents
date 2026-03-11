@@ -2,7 +2,7 @@
 
 Safe AI and automation APIs for Craft CMS and Craft Commerce.
 
-Current plugin version: **0.10.8**
+Current plugin version: **0.10.9**
 
 Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It is the governed machine-access layer for Craft CMS and Craft Commerce, combining scoped APIs, managed credentials, diagnostics, and optional approval controls so production behavior stays predictable, observable, and auditable.
 
@@ -22,7 +22,7 @@ Agents gives Craft a safe API and control plane for AI agents, automations, and 
 ## Installation
 
 ```bash
-composer require klick/agents:^0.10.8
+composer require klick/agents:^0.10.9
 php craft plugin/install agents
 ```
 

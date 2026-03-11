@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.9 - 2026-03-11
+
+### Changed
+
+- Reworked the top-level CP information architecture to `Status`, `Approvals`, `Accounts`, `Discovery Docs`, and `Settings`, removing local sidebars from `Status`, `Accounts`, and `Discovery Docs` and promoting Discovery Docs to its own top-level surface.
+- Added a first-run `Ready to Connect` bootstrap state for fresh installs so healthy but inactive environments no longer open on a pessimistic `Unproven` verdict.
+- Renamed the CP-facing `Control` surface to `Approvals` while preserving the underlying governed-write routes and compatibility redirects.
+- Reframed account-level webhook subscription copy as event-interest routing so operators can more clearly understand how external workers are selected and woken through the shared webhook destination.
+- Added a `Monthly Report Agent` managed-account template and tightened Discovery Docs/Status presentation to match the current CP direction.
+
 ## 0.10.8 - 2026-03-11
 
 ### Changed

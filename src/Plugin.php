@@ -49,7 +49,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.10.8';
+    public string $schemaVersion = '0.10.9';
 
     public static ?self $plugin = null;
 
@@ -101,20 +101,24 @@ class Plugin extends BasePlugin
         $item['label'] = 'Agents';
         $item['url'] = 'agents';
         $subnav = [
-            'dashboard' => [
-                'label' => 'Dashboard',
-                'url' => 'agents/dashboard',
+            'status' => [
+                'label' => 'Status',
+                'url' => 'agents/readiness',
             ],
         ];
         if ($this->isControlCpEnabled()) {
             $subnav['control'] = [
-                'label' => 'Control',
+                'label' => 'Approvals',
                 'url' => 'agents/control',
             ];
         }
         $subnav['credentials'] = [
             'label' => 'Accounts',
             'url' => 'agents/credentials',
+        ];
+        $subnav['discovery'] = [
+            'label' => 'Discovery Docs',
+            'url' => 'agents/discovery',
         ];
         $subnav['settings'] = [
             'label' => 'Settings',
@@ -132,10 +136,13 @@ class Plugin extends BasePlugin
                 'agents' => 'agents/dashboard/dashboard',
                 'agents/overview' => 'agents/dashboard/dashboard',
                 'agents/readiness' => 'agents/dashboard/dashboard',
+                'agents/status' => 'agents/dashboard/dashboard',
+                'agents/status/readiness' => 'agents/dashboard/dashboard',
                 'agents/discovery' => 'agents/dashboard/dashboard',
                 'agents/security' => 'agents/dashboard/dashboard',
                 'agents/settings' => 'agents/dashboard/settings',
                 'agents/credentials' => 'agents/dashboard/credentials',
+                'agents/credentials/discovery' => 'agents/dashboard/dashboard',
                 // Legacy aliases retained for backward-compatible deep links.
                 'agents/dashboard' => 'agents/dashboard/dashboard',
                 'agents/dashboard/overview' => 'agents/dashboard/dashboard',
@@ -452,12 +459,12 @@ class Plugin extends BasePlugin
 
     public function getSettingsResponse(): mixed
     {
-        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/dashboard/overview'));
+        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/readiness'));
     }
 
     public function getReadOnlySettingsResponse(): mixed
     {
-        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/dashboard/overview'));
+        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/readiness'));
     }
 
     private function registerDiscoveryInvalidationHooks(): void
@@ -587,16 +594,16 @@ class Plugin extends BasePlugin
                 ];
                 if ($this->isControlCpEnabled()) {
                     $event->permissions[] = [
-                        'heading' => 'Agents Control',
+                        'heading' => 'Agents Approvals',
                         'permissions' => [
                             self::PERMISSION_CONTROL_VIEW => [
-                                'label' => 'View control tab',
+                                'label' => 'View approvals tab',
                             ],
                             self::PERMISSION_CONTROL_POLICIES_MANAGE => [
-                                'label' => 'Create and edit control rules',
+                                'label' => 'Create and edit approval rules',
                             ],
                             self::PERMISSION_CONTROL_APPROVALS_MANAGE => [
-                                'label' => 'Approve and reject control requests',
+                                'label' => 'Approve and reject governed requests',
                             ],
                             self::PERMISSION_CONTROL_ACTIONS_EXECUTE => [
                                 'label' => 'Run approved control actions',

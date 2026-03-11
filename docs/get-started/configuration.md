@@ -52,7 +52,7 @@ Runtime model:
 ### Experimental surfaces
 
 - `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (default `false`)
-- Control CP (`agents/control/*`) follows `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (single gate).
+- Approvals CP (`agents/control/*`) follows `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (single gate).
 
 ## Environment profile defaults
 
@@ -87,9 +87,9 @@ Runtime precedence:
 
 ## Agent policy controls (CP)
 
-`Agents -> Agents` supports per-agent controls in addition to scopes:
+`Agents -> Accounts` supports per-account controls in addition to scopes:
 
-- webhook resource/action subscriptions
+- event routing interests (resource/action subscriptions)
 - optional credential TTL (days) and reminder window
 - IP allowlist (CIDR/IP entries)
 

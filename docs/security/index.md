@@ -1,6 +1,6 @@
 # Security
 
-Security posture is visible in Dashboard -> Security and enforced in runtime services.
+Security posture is visible in `Status -> Readiness` and enforced in runtime services.
 
 ## Execution trust boundary
 
@@ -68,7 +68,7 @@ Security posture now includes profile metadata for runtime introspection:
 
 These are visible in:
 
-- Dashboard -> Security
+- `Status -> Readiness`
 - `GET /agents/v1/capabilities` authentication metadata
 - `GET /agents/v1/health` / `GET /agents/v1/readiness`
 - diagnostics bundle output

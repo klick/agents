@@ -16,24 +16,28 @@ class DashboardController extends Controller
 {
     private const SESSION_REVEALED_CREDENTIAL = 'agents.revealedCredential';
     private const SESSION_CONTROL_SIMULATION = 'agents.controlSimulation';
-    private const DASHBOARD_TABS = ['overview', 'readiness', 'discovery'];
+    private const DASHBOARD_TABS = ['readiness', 'discovery'];
     private const CONTROL_TABS = ['approvals', 'rules'];
 
     public function actionIndex(): Response
     {
-        return $this->redirect('agents/dashboard/overview');
+        return $this->redirect('agents/readiness');
     }
 
     public function actionDashboard(): Response
     {
         $request = Craft::$app->getRequest();
         $pathInfo = trim((string)$request->getPathInfo(), '/');
-        if ($pathInfo === 'agents' || $pathInfo === 'agents/dashboard') {
-            return $this->redirect('agents/dashboard/overview');
+        if ($pathInfo === 'agents' || $pathInfo === 'agents/dashboard' || $pathInfo === 'agents/overview' || $pathInfo === 'agents/dashboard/overview') {
+            return $this->redirect('agents/readiness');
+        }
+
+        if ($pathInfo === 'agents/credentials/discovery' || $pathInfo === 'agents/dashboard/discovery') {
+            return $this->redirect('agents/discovery');
         }
 
         if ($pathInfo === 'agents/security' || $pathInfo === 'agents/dashboard/security') {
-            return $this->redirect('agents/dashboard/readiness#securitySnapshotSection');
+            return $this->redirect('agents/readiness#securitySnapshotSection');
         }
 
         $plugin = Plugin::getInstance();
@@ -43,9 +47,7 @@ class DashboardController extends Controller
         $readinessService = $plugin->getReadinessService();
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
         $activeDashboardTab = $this->resolveDashboardTab();
-        $dashboardTabs = $this->dashboardTabs();
 
-        $overviewReadiness = $readinessService->getReadinessDiagnostics();
         $readinessHealth = $readinessService->getHealthSummary();
         $readinessSummary = $readinessService->getReadinessSummary();
         $readinessDiagnostics = $readinessService->getReadinessDiagnostics();
@@ -86,18 +88,9 @@ class DashboardController extends Controller
 
         return $this->renderCpTemplate('agents/dashboard', [
             'activeDashboardTab' => $activeDashboardTab,
-            'dashboardTabs' => $dashboardTabs,
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
-            'overviewReadiness' => $overviewReadiness,
-            'overviewReadinessJson' => $this->prettyPrintJson($overviewReadiness['summary'] ?? []),
-            'discoveryEnabled' => [
-                'llms' => (bool)$settings->enableLlmsTxt,
-                'llmsFull' => (bool)$settings->enableLlmsFullTxt,
-                'commerce' => (bool)$settings->enableCommerceTxt,
-            ],
-            'webhookEnabled' => (bool)($securityPosture['webhook']['enabled'] ?? false),
             'securityWarningCounts' => (array)($securityPosture['warningCounts'] ?? []),
             'apiEndpoints' => $this->getApiEndpoints(),
             'discoveryEndpoints' => $this->getDiscoveryEndpoints(),
@@ -138,22 +131,22 @@ class DashboardController extends Controller
 
     public function actionOverview(): Response
     {
-        return $this->redirect('agents/dashboard/overview');
+        return $this->redirect('agents/readiness');
     }
 
     public function actionReadiness(): Response
     {
-        return $this->redirect('agents/dashboard/readiness');
+        return $this->redirect('agents/readiness');
     }
 
     public function actionDiscovery(): Response
     {
-        return $this->redirect('agents/dashboard/discovery');
+        return $this->redirect('agents/discovery');
     }
 
     public function actionSecurity(): Response
     {
-        return $this->redirect('agents/dashboard/readiness#securitySnapshotSection');
+        return $this->redirect('agents/readiness#securitySnapshotSection');
     }
 
     public function actionControl(): Response
@@ -419,7 +412,7 @@ class DashboardController extends Controller
 
     public function actionHealth(): Response
     {
-        return $this->redirect('agents/dashboard/readiness');
+        return $this->redirect('agents/readiness');
     }
 
     public function actionToggleEnabled(): Response
@@ -431,7 +424,7 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         if ((bool)$enabledState['locked']) {
             $this->setFailFlash('Agents enabled state is controlled by `PLUGIN_AGENTS_ENABLED` and cannot be changed from the Control Panel.');
-            return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
+            return $this->redirectToPostedUrl(null, 'agents/readiness');
         }
 
         $enabledRaw = strtolower(trim((string)$this->request->getBodyParam('enabled', '0')));
@@ -443,11 +436,11 @@ class DashboardController extends Controller
 
         if (!$saved) {
             $this->setFailFlash('Couldn’t save Agents settings.');
-            return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
+            return $this->redirectToPostedUrl(null, 'agents/readiness');
         }
 
         $this->setSuccessFlash($enabled ? 'Agents API enabled.' : 'Agents API disabled.');
-        return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
+        return $this->redirectToPostedUrl(null, 'agents/readiness');
     }
 
     public function actionSaveSettings(): Response
@@ -606,7 +599,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Discovery prewarm failed: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/dashboard/discovery');
+        return $this->redirectToPostedUrl(null, 'agents/discovery');
     }
 
     public function actionDownloadDiagnosticsBundle(): Response
@@ -631,7 +624,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to generate diagnostics bundle: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/dashboard/overview');
+        return $this->redirectToPostedUrl(null, 'agents/readiness');
     }
 
     public function actionClearDiscoveryCache(): Response
@@ -646,7 +639,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to clear discovery caches: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/dashboard/discovery');
+        return $this->redirectToPostedUrl(null, 'agents/discovery');
     }
 
     public function actionReplayWebhookDlq(): Response
@@ -670,13 +663,13 @@ class DashboardController extends Controller
                 $id = (int)$this->request->getBodyParam('id', 0);
                 if ($id <= 0) {
                     $this->setFailFlash('Missing dead-letter event ID.');
-                    return $this->redirectToPostedUrl(null, 'agents/dashboard/readiness');
+                    return $this->redirectToPostedUrl(null, 'agents/readiness');
                 }
 
                 $event = $service->replayDeadLetterEvent($id);
                 if (!is_array($event)) {
                     $this->setFailFlash('Dead-letter event not found.');
-                    return $this->redirectToPostedUrl(null, 'agents/dashboard/readiness');
+                    return $this->redirectToPostedUrl(null, 'agents/readiness');
                 }
 
                 $this->setSuccessFlash(sprintf('Dead-letter event #%d queued for replay.', $id));
@@ -689,7 +682,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to replay dead-letter event(s): ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/dashboard/readiness');
+        return $this->redirectToPostedUrl(null, 'agents/readiness');
     }
 
     public function actionCreateCredential(): Response
@@ -1363,15 +1356,6 @@ class DashboardController extends Controller
         ];
     }
 
-    private function dashboardTabs(): array
-    {
-        return [
-            ['key' => 'overview', 'label' => 'Overview', 'url' => 'agents/dashboard/overview'],
-            ['key' => 'readiness', 'label' => 'Readiness', 'url' => 'agents/dashboard/readiness'],
-            ['key' => 'discovery', 'label' => 'Discovery Docs', 'url' => 'agents/dashboard/discovery'],
-        ];
-    }
-
     private function controlTabs(): array
     {
         return [
@@ -1384,6 +1368,9 @@ class DashboardController extends Controller
     {
         $request = Craft::$app->getRequest();
         $tabFromQuery = strtolower(trim((string)$request->getQueryParam('tab', '')));
+        if ($tabFromQuery === 'overview') {
+            return 'readiness';
+        }
         if ($tabFromQuery === 'security') {
             return 'readiness';
         }
@@ -1392,11 +1379,23 @@ class DashboardController extends Controller
         }
 
         $pathInfo = trim((string)$request->getPathInfo(), '/');
-        if (preg_match('#^agents/dashboard/(overview|readiness|discovery)$#', $pathInfo, $matches) === 1) {
+        if ($pathInfo === 'agents/discovery' || $pathInfo === 'agents/credentials/discovery' || $pathInfo === 'agents/dashboard/discovery') {
+            return 'discovery';
+        }
+
+        if (preg_match('#^agents/(status|readiness|health)$#', $pathInfo) === 1) {
+            return 'readiness';
+        }
+
+        if (preg_match('#^agents/status/readiness$#', $pathInfo) === 1) {
+            return 'readiness';
+        }
+
+        if (preg_match('#^agents/dashboard/(readiness)$#', $pathInfo, $matches) === 1) {
             return (string)$matches[1];
         }
 
-        if (preg_match('#^agents/(overview|readiness|discovery)$#', $pathInfo, $matches) === 1) {
+        if (preg_match('#^agents/(readiness)$#', $pathInfo, $matches) === 1) {
             return (string)$matches[1];
         }
 
@@ -1404,11 +1403,7 @@ class DashboardController extends Controller
             return 'readiness';
         }
 
-        if ($pathInfo === 'agents/health') {
-            return 'readiness';
-        }
-
-        return 'overview';
+        return 'readiness';
     }
 
     private function resolveControlTab(): string

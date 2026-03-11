@@ -1,7 +1,7 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = "Agents Control" %}
+{% set title = "Agents Approvals" %}
 {% set selectedSubnavItem = "control" %}
 {% set controlHeadingByKey = {
   approvals: 'Approvals',
@@ -23,9 +23,9 @@
 {% endfor %}
 
 {% block sidebar %}
-  {% include "_includes/nav"
+      {% include "_includes/nav"
     with {
-      label: 'Control',
+      label: 'Approvals',
       items: controlSidebarNavItems,
       selectedItem: activeControlTab,
     }

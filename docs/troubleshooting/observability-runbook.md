@@ -6,7 +6,7 @@ Use this runbook when telemetry signals indicate runtime degradation.
 
 - `GET /agents/v1/metrics`
 - `GET /agents/v1/incidents` (`incidents:read`, strict-redacted)
-- Dashboard -> Readiness -> Telemetry Snapshot
+- Status -> Readiness -> Telemetry Snapshot
 - `GET /agents/v1/readiness`
 - `php craft agents/reliability-check --json=1`
 

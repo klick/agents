@@ -1,37 +1,15 @@
 {% extends "_layouts/cp" %}
-{% set title = "Agents Dashboard" %}
-{% set selectedSubnavItem = "dashboard" %}
+{% set title = activeDashboardTab == 'discovery' ? 'Discovery Docs' : 'Agents Status' %}
+{% set selectedSubnavItem = activeDashboardTab == 'discovery' ? 'discovery' : 'status' %}
 {% set dashboardHeadingByKey = {
-  overview: 'Overview',
-  readiness: 'Readiness',
+  readiness: 'Status',
   discovery: 'Discovery Docs',
 } %}
-{% set dashboardHeading = dashboardHeadingByKey[activeDashboardTab]|default('Overview') %}
+{% set dashboardHeading = dashboardHeadingByKey[activeDashboardTab]|default('Status') %}
 {% set tabIntroByKey = {
-  overview: 'Operate the runtime, verify what is enabled, and jump straight to the right place for each change.',
   readiness: 'Review runtime, integration, and security posture before integrations or releases.',
   discovery: 'Manage discovery document freshness and quickly inspect what external agents can read.',
 } %}
-{% set dashboardSidebarNavItems = {} %}
-{% for tab in dashboardTabs %}
-  {% set dashboardSidebarNavItems = dashboardSidebarNavItems|merge({
-    (tab.key): {
-      label: tab.label,
-      url: tab.url,
-    }
-  }) %}
-{% endfor %}
-
-{% block sidebar %}
-  {% include "_includes/nav"
-    with {
-      label: 'Dashboard',
-      items: dashboardSidebarNavItems,
-      selectedItem: activeDashboardTab,
-    }
-    only
-  %}
-{% endblock %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
@@ -42,91 +20,6 @@
   </div>
 
   <div class="agents-layout-stack">
-    {% if activeDashboardTab == 'overview' %}
-      {% set discoveryEnabledCount = (discoveryEnabled.llms ? 1 : 0) + (discoveryEnabled.llmsFull ? 1 : 0) + (discoveryEnabled.commerce ? 1 : 0) %}
-      {% set overviewReadinessScore = overviewReadiness.readinessScore|default(0) %}
-      {% set overviewWarnings = securityWarningCounts.warnings|default(0) %}
-      {% set overviewErrors = securityWarningCounts.errors|default(0) %}
-      {% set readinessMetricClass = overviewReadinessScore >= 100
-        ? 'agents-metric--good'
-        : (overviewReadinessScore >= 80 ? 'agents-metric--warn' : 'agents-metric--bad') %}
-      {% set warningMetricClass = overviewWarnings == 0
-        ? 'agents-metric--good'
-        : (overviewWarnings <= 3 ? 'agents-metric--warn' : 'agents-metric--bad') %}
-      {% set errorMetricClass = overviewErrors == 0
-        ? 'agents-metric--good'
-        : (overviewErrors == 1 ? 'agents-metric--warn' : 'agents-metric--bad') %}
-      {% set discoveryDocsMetricClass = discoveryEnabledCount >= 3
-        ? 'agents-metric--good'
-        : (discoveryEnabledCount > 0 ? 'agents-metric--warn' : 'agents-metric--bad') %}
-      {% set webhookDeliveryMetricClass = webhookEnabled
-        ? 'agents-metric--good'
-        : 'agents-metric--warn' %}
-
-      <section class="border rounded p-3">
-        <h2 class="h4">At a Glance</h2>
-        <div class="agents-overview-strip-wrap agents-metric-strip-wrap">
-          <div class="agents-overview-strip agents-metric-strip">
-          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ agentsEnabled ? 'agents-metric--good' : 'agents-metric--bad' }}">
-            <div class="label">Runtime state</div>
-            <div class="value" style="display: flex; align-items: center; gap: 8px;">
-              <span class="status {{ agentsEnabled ? 'enabled' : 'disabled' }}"></span>
-              {{ agentsEnabled ? 'Enabled' : 'Disabled' }}
-            </div>
-          </div>
-          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ readinessMetricClass }}">
-            <div class="label">Readiness score</div>
-            <div class="value">{{ overviewReadinessScore }}/100</div>
-          </div>
-          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ discoveryDocsMetricClass }}">
-            <div class="label">Discovery docs enabled</div>
-            <div class="value">{{ discoveryEnabledCount }}/3</div>
-          </div>
-          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ webhookDeliveryMetricClass }}">
-            <div class="label">Webhook delivery</div>
-            <div class="value">{{ webhookEnabled ? 'On' : 'Off' }}</div>
-          </div>
-          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ warningMetricClass }}">
-            <div class="label">Security warnings</div>
-            <div class="value">{{ overviewWarnings }}</div>
-          </div>
-          <div class="agents-metric agents-overview-strip-card agents-metric-strip-card {{ errorMetricClass }}">
-            <div class="label">Security errors</div>
-            <div class="value">{{ overviewErrors }}</div>
-          </div>
-          </div>
-        </div>
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3" id="diagnosticsBundleSection">
-        <h2 class="h4">Diagnostics Bundle</h2>
-        <form method="post" accept-charset="UTF-8">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
-          {{ redirectInput('agents/dashboard/overview') }}
-          <button class="btn submit" type="submit">Download Diagnostics Bundle (.json)</button>
-        </form>
-        <p class="agents-subtle">Runs auth/discovery/readiness/smoke checks and exports a support artifact for support handoff.</p>
-      </section>
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Readiness Snapshot</h2>
-        <p>Status: <strong>{{ overviewReadiness.status|default('unknown') }}</strong></p>
-        <p>Score: <strong>{{ overviewReadiness.readinessScore|default(0) }}</strong> / 100</p>
-        <details class="agents-advanced">
-          <summary><strong>Technical JSON</strong></summary>
-          <pre class="border rounded p-3">{{ overviewReadinessJson }}</pre>
-        </details>
-      </section>
-    {% endif %}
-
     {% if activeDashboardTab == 'readiness' %}
       {% set readinessPreviewState = (craft.app.request.getQueryParam('previewState') ?? '')|lower %}
       {% set readinessTabScore = readinessSummary.readinessScore|default(0) %}
@@ -274,6 +167,17 @@
         or reliabilitySignalsEvaluated == 0
         or (not readinessHasObservedTraffic)
         or (not readinessHasActiveCredentials) %}
+      {% set readinessBootstrapManagedCredentialCount = securityPosture.authentication.managedCredentialCount|default(0) %}
+      {% set readinessIsBootstrapState = (not readinessHasBlockingGate)
+        and (not readinessHasDegradedSignals)
+        and readinessMetricsCurrent
+        and reliabilitySignalsEvaluated > 0
+        and (not readinessHasObservedTraffic)
+        and (not readinessHasIntegrationTelemetry)
+        and (readinessBootstrapManagedCredentialCount == 0)
+        and (not webhookEnabledForReadiness)
+        and (not securityWebhookUrlConfigured)
+        and (not securityWebhookSecretConfigured) %}
       {% set readinessBlockingCount = 0 %}
       {% if not agentsEnabled %}
         {% set readinessBlockingCount = readinessBlockingCount + 1 %}
@@ -301,6 +205,12 @@
         {% set readinessStateLead = 'Agents is handling traffic, but some conditions need attention.' %}
         {% set readinessStateSubcopy = 'Review the affected areas below, then use the detailed sections for full context.' %}
         {% set readinessStateTone = 'warn' %}
+      {% elseif readinessIsBootstrapState %}
+        {% set readinessStateKey = 'setup' %}
+        {% set readinessStateLabel = 'Ready to Connect' %}
+        {% set readinessStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
+        {% set readinessStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
+        {% set readinessStateTone = 'good' %}
       {% elseif readinessHasLowConfidence %}
         {% set readinessStateKey = 'unproven' %}
         {% set readinessStateLabel = 'Unproven' %}
@@ -408,6 +318,15 @@
         : (readinessMetricsCurrent
           ? 'Monitoring is active, but recent traffic is limited'
           : 'Monitoring confidence is limited by stale metrics') %}
+      {% if readinessIsBootstrapState %}
+        {% set readinessTrafficLead = 'Waiting for first guarded traffic' %}
+        {% set readinessDeliveryLead = 'Webhook delivery is optional until you need push-based wake-ups' %}
+        {% set readinessIntegrationLead = 'No sync-state integrations connected yet' %}
+        {% set readinessCheckpointLine = 'Checkpoint telemetry will appear after the first sync worker connects' %}
+        {% set readinessCredentialLine = 'Create a managed account when you are ready to connect an external agent' %}
+        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
+        {% set readinessMonitoringLine = 'Monitoring is active and waiting for first runtime activity' %}
+      {% endif %}
       {% set readinessHardGateRuntimeLine = agentsEnabled ? 'Runtime is enabled' : 'Runtime is disabled' %}
       {% set readinessHardGateDatabaseLine = readinessDbAvailable ? 'Database connection available' : 'Database connection unavailable' %}
       {% set readinessHardGateServicesLine = readinessCoreServicesOk ? 'Core Craft services available' : 'One or more core Craft services need attention' %}
@@ -679,9 +598,9 @@
       {% set settingsUrl = cpUrl('agents/settings') %}
       {% set accountsUrl = cpUrl('agents/credentials') %}
       {% set attentionAccountsUrl = cpUrl('agents/credentials', { listFilter: 'attention', focusFirstVisible: 1 }) %}
-      {% set overviewUrl = cpUrl('agents/dashboard/overview') %}
-      {% set readinessUrl = cpUrl('agents/dashboard/readiness') %}
-      {% set securityUrl = cpUrl('agents/dashboard/readiness') %}
+      {% set readinessUrl = cpUrl('agents/readiness') %}
+      {% set overviewUrl = readinessUrl %}
+      {% set securityUrl = readinessUrl %}
       {% set readinessActionRows = [
         {
           signal: 'Runtime disabled',
@@ -978,6 +897,32 @@
           {% endif %}
         {% endfor %}
       {% endif %}
+      {% if readinessPreviewState == '' and readinessIsBootstrapState %}
+        {% set readinessActionRowsProblematic = [
+          {
+            signal: 'Managed accounts',
+            stateLabel: 'Not created',
+            stateTone: 'muted',
+            impact: 'Create a scoped managed account when you are ready to connect your first external agent or worker.',
+            primaryAction: 'Create managed account',
+            secondaryAction: 'Open Accounts',
+            primaryUrl: accountsUrl ~ '#addAgentSection',
+            secondaryUrl: accountsUrl ~ '#agentsCardList',
+            surface: 'Accounts',
+          },
+          {
+            signal: 'Webhook delivery',
+            stateLabel: 'Optional',
+            stateTone: 'muted',
+            impact: 'Enable webhook delivery if you want external workers to wake on content or commerce changes instead of polling.',
+            primaryAction: 'Review webhook posture',
+            secondaryAction: 'Open Settings',
+            primaryUrl: readinessUrl ~ '#webhookReliabilitySection',
+            secondaryUrl: settingsUrl ~ '#runtimeSwitchesSection',
+            surface: 'Status / Settings',
+          },
+        ] %}
+      {% endif %}
       {% set securityTokenRequired = securityPosture.authentication.required ?? false %}
       {% set securityQueryTokenEnabled = securityPosture.authentication.allowQueryToken ?? false %}
       {% set securityCredentialCount = securityPosture.authentication.credentialCount|default(0) %}
@@ -1088,6 +1033,18 @@
         {% set readinessConfidenceSummaryTone = 'muted' %}
         {% set readinessConfidenceSummaryLabel = 'Unproven' %}
       {% endif %}
+      {% if readinessIsBootstrapState %}
+        {% set readinessTrafficAccessSummaryTone = 'muted' %}
+        {% set readinessTrafficAccessSummaryLabel = 'Awaiting traffic' %}
+        {% set readinessDeliveryWebhooksSummaryTone = 'muted' %}
+        {% set readinessDeliveryWebhooksSummaryLabel = 'Optional' %}
+        {% set readinessIntegrationCapacitySummaryTone = 'muted' %}
+        {% set readinessIntegrationCapacitySummaryLabel = 'Optional' %}
+        {% set readinessCredentialsPolicySummaryTone = 'good' %}
+        {% set readinessCredentialsPolicySummaryLabel = 'Ready' %}
+        {% set readinessConfidenceSummaryTone = 'muted' %}
+        {% set readinessConfidenceSummaryLabel = 'Awaiting activity' %}
+      {% endif %}
       {% set readinessTrafficAccessProofTone = readinessTrafficAccessSummaryTone in ['warn', 'bad'] ? readinessTrafficAccessSummaryTone : 'good' %}
       {% set readinessDeliveryWebhooksProofTone = readinessDeliveryWebhooksSummaryTone in ['warn', 'bad'] ? readinessDeliveryWebhooksSummaryTone : 'good' %}
       {% set readinessIntegrationCapacityProofTone = readinessIntegrationCapacitySummaryTone in ['warn', 'bad'] ? readinessIntegrationCapacitySummaryTone : 'good' %}
@@ -1147,11 +1104,11 @@
             <section class="agents-readiness-ready-proof-card" id="readinessProofHardGates">
               <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessHardGateProofTone }}">Hard Gates</h3>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if not agentsEnabled %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessHardGateRuntimeLine }}</li>
-                <li{% if not readinessDbAvailable %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessHardGateDatabaseLine }}</li>
-                <li{% if not readinessCoreServicesOk %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessHardGateServicesLine }}</li>
-                <li{% if securityCredentialCount == 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessCredentialLine }}</li>
-                <li{% if readinessHasBlockingGate %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessHardGateStatusLine }}</li>
+                <li class="{{ not agentsEnabled ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateRuntimeLine }}</li>
+                <li class="{{ not readinessDbAvailable ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateDatabaseLine }}</li>
+                <li class="{{ not readinessCoreServicesOk ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateServicesLine }}</li>
+                <li class="{{ securityCredentialCount == 0 ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessCredentialLine }}</li>
+                <li class="{{ readinessHasBlockingGate ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateStatusLine }}</li>
               </ul>
             </section>
 
@@ -1172,10 +1129,10 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if not agentsEnabled or telemetryAuthFailures > 0 or telemetryForbidden > 0 or telemetryRateLimit > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessTrafficLead }}</li>
-                <li{% if securityAuthFailures > 0 or securityForbiddenTotal > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Auth failures / scope denials: <strong>{{ securityAuthFailures }}</strong> / <strong>{{ securityForbiddenTotal }}</strong></li>
-                <li{% if securityRateLimitDenied > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Rate-limit denials / server errors: <strong>{{ securityRateLimitDenied }}</strong> / <strong>{{ securityErrors5xx }}</strong></li>
-                <li{% if (not securityTokenRequired) or securityQueryTokenEnabled %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Token required / query-token auth: <strong>{{ securityTokenRequired ? 'yes' : 'no' }}</strong> / <strong>{{ securityQueryTokenEnabled ? 'enabled' : 'disabled' }}</strong></li>
+                <li{% if not agentsEnabled or telemetryAuthFailures > 0 or telemetryForbidden > 0 or telemetryRateLimit > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent and readinessHasObservedTraffic and telemetryErrors5xx == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessTrafficLead }}</li>
+                <li class="{{ securityAuthFailures > 0 or securityForbiddenTotal > 0 ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">Auth failures / scope denials: <strong>{{ securityAuthFailures }}</strong> / <strong>{{ securityForbiddenTotal }}</strong></li>
+                <li{% if securityRateLimitDenied > 0 or securityErrors5xx > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif securityRateLimitDenied == 0 and securityErrors5xx == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Rate-limit denials / server errors: <strong>{{ securityRateLimitDenied }}</strong> / <strong>{{ securityErrors5xx }}</strong></li>
+                <li class="{{ (not securityTokenRequired) or securityQueryTokenEnabled ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">Token required / query-token auth: <strong>{{ securityTokenRequired ? 'yes' : 'no' }}</strong> / <strong>{{ securityQueryTokenEnabled ? 'enabled' : 'disabled' }}</strong></li>
                 <li>Rate limit: <strong>{{ securityRateLimitPerMinute }}</strong> requests / {{ securityRateLimitWindowSeconds }}s</li>
               </ul>
             </section>
@@ -1197,9 +1154,9 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if (not webhookEnabledForReadiness) or securityWebhookMisconfigured or telemetryDlqFailed > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessDeliveryLead }}</li>
-                <li{% if securityWebhookMisconfigured %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Webhook enabled / URL / secret: <strong>{{ securityWebhookEnabled ? 'yes' : 'no' }}</strong> / <strong>{{ securityWebhookUrlConfigured ? 'yes' : 'no' }}</strong> / <strong>{{ securityWebhookSecretConfigured ? 'yes' : 'no' }}</strong></li>
-                <li>Failed events / latest update: <strong>{{ securityDlqCount }}</strong> / <strong>{{ securityLatestDlqUpdatedAt }}</strong></li>
+                <li{% if (not webhookEnabledForReadiness) or securityWebhookMisconfigured or telemetryDlqFailed > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessDeliveryLead }}</li>
+                <li{% if securityWebhookMisconfigured %} class="agents-readiness-ready-proof-line--alert"{% elseif securityWebhookEnabled and securityWebhookUrlConfigured and securityWebhookSecretConfigured %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Webhook enabled / URL / secret: <strong>{{ securityWebhookEnabled ? 'yes' : 'no' }}</strong> / <strong>{{ securityWebhookUrlConfigured ? 'yes' : 'no' }}</strong> / <strong>{{ securityWebhookSecretConfigured ? 'yes' : 'no' }}</strong></li>
+                <li{% if telemetryDlqFailed > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif webhookEnabledForReadiness and readinessMetricsCurrent and securityDlqCount == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Failed events / latest update: <strong>{{ securityDlqCount }}</strong> / <strong>{{ securityLatestDlqUpdatedAt }}</strong></li>
                 <li>Destination / timeout / attempts: <strong>{{ securityWebhookDestinationHost }}</strong> / {{ securityWebhookTimeoutSeconds }}s / {{ securityWebhookMaxAttempts }}</li>
               </ul>
             </section>
@@ -1220,12 +1177,12 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if readinessConsumerLagCriticalCount > 0 or readinessConsumerLagWarningCount > 0 or telemetryQueueDepth > 10 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessIntegrationLead }}</li>
-                <li{% if readinessConsumerLagCriticalCount > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessIntegrationLagLine }}</li>
-                <li{% if readinessConsumerLagCriticalCount > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessIntegrationStatusLine }}</li>
-                <li>{{ readinessCheckpointLine }}</li>
-                <li>{{ readinessCapacityLead }}</li>
-                <li{% if telemetryQueueDepth > 50 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Queue depth / backpressure: <strong>{{ telemetryQueueDepth }}</strong> / {{ readinessBackpressureLine }}</li>
+                <li{% if readinessConsumerLagCriticalCount > 0 or readinessConsumerLagWarningCount > 0 or telemetryQueueDepth > 10 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessHasIntegrationTelemetry and readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessIntegrationLead }}</li>
+                <li{% if readinessConsumerLagCriticalCount > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessHasIntegrationTelemetry and readinessConsumerLagWarningCount == 0 and telemetryConsumerLagMaxSeconds <= 60 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessIntegrationLagLine }}</li>
+                <li{% if readinessConsumerLagCriticalCount > 0 or readinessConsumerLagWarningCount > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessHasIntegrationTelemetry %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessIntegrationStatusLine }}</li>
+                <li{% if readinessHasIntegrationTelemetry %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessCheckpointLine }}</li>
+                <li{% if telemetryQueueDepth <= 10 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessCapacityLead }}</li>
+                <li{% if telemetryQueueDepth > 50 %} class="agents-readiness-ready-proof-line--alert"{% elseif telemetryQueueDepth <= 10 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Queue depth / backpressure: <strong>{{ telemetryQueueDepth }}</strong> / {{ readinessBackpressureLine }}</li>
               </ul>
             </section>
 
@@ -1249,13 +1206,13 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if securityCredentialCount == 0 or securityWarnings > 0 or securityErrors > 0 or not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Configured credentials: <strong>{{ securityCredentialCount }}</strong> total (<strong>{{ securityManagedCredentialCount }}</strong> managed, <strong>{{ securityEnvCredentialCount }}</strong> env)</li>
+                <li{% if securityCredentialCount == 0 or securityWarnings > 0 or securityErrors > 0 or not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityCredentialCount > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Configured credentials: <strong>{{ securityCredentialCount }}</strong> total (<strong>{{ securityManagedCredentialCount }}</strong> managed, <strong>{{ securityEnvCredentialCount }}</strong> env)</li>
                 <li>Active credentials / guarded requests: <strong>{{ securityActiveCredentials7d }}</strong> / <strong>{{ securityRequestsTotal }}</strong></li>
                 <li>Default scopes in runtime policy: <strong>{{ securityDefaultScopeCount }}</strong>{% if securityDefaultScopePreview %} ({{ securityDefaultScopePreview }}){% endif %}</li>
                 <li>Environment / profile: <strong>{{ securityPosture.environment|default('unknown') }}</strong> / <strong>{{ securityPosture.profile.name|default('unknown') }}</strong></li>
-                <li{% if not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Privacy redaction / defaults applied: <strong>{{ securityPrivacyRedaction ? 'enabled' : 'disabled' }}</strong> / <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></li>
-                <li{% if securityWarnings > 0 or securityErrors > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>Warnings / errors: <strong>{{ securityWarnings }}</strong> / <strong>{{ securityErrors }}</strong></li>
-                <li{% if securityWarningPreview|length %} class="agents-readiness-ready-proof-line--alert"{% endif %}>
+                <li{% if not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityPrivacyRedaction and securityPosture.profile.defaultsApplied %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Privacy redaction / defaults applied: <strong>{{ securityPrivacyRedaction ? 'enabled' : 'disabled' }}</strong> / <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></li>
+                <li{% if securityWarnings > 0 or securityErrors > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif securityWarnings == 0 and securityErrors == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Warnings / errors: <strong>{{ securityWarnings }}</strong> / <strong>{{ securityErrors }}</strong></li>
+                <li{% if securityWarningPreview|length %} class="agents-readiness-ready-proof-line--alert"{% else %} class="agents-readiness-ready-proof-line--ok"{% endif %}>
                   {% if securityWarningPreview|length %}
                     Latest warning: <strong>[{{ securityWarningPreview|first.level|upper }}]</strong> {{ securityWarningPreview|first.message }}
                   {% else %}
@@ -1281,13 +1238,13 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if (not readinessMetricsCurrent) or reliabilitySignalsCritical > 0 or reliabilitySignalsWarn > 0 or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials) %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessObservabilityLine }}</li>
+                <li{% if (not readinessMetricsCurrent) or reliabilitySignalsCritical > 0 or reliabilitySignalsWarn > 0 or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials) %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent and reliabilitySignalsEvaluated > 0 and readinessHasObservedTraffic and readinessHasActiveCredentials %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessObservabilityLine }}</li>
                 <li>Last evaluated: <strong>{{ readinessEvaluationLabel }}</strong></li>
-                <li>Signal window / metrics freshness: <strong>last 60 minutes</strong> / <strong>{{ readinessMetricsCurrent ? 'current' : 'stale' }}</strong></li>
-                <li>Confidence: <strong>{{ readinessConfidenceLabel }}</strong></li>
-                <li>{{ readinessReliabilityLine }}</li>
-                <li{% if reliabilitySignalsCritical > 0 %} class="agents-readiness-ready-proof-line--alert"{% endif %}>{{ readinessReliabilityStatusLine }}</li>
-                <li>{{ readinessMonitoringLine }}</li>
+                <li{% if not readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Signal window / metrics freshness: <strong>last 60 minutes</strong> / <strong>{{ readinessMetricsCurrent ? 'current' : 'stale' }}</strong></li>
+                <li{% if readinessConfidenceLabel == 'high' %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Confidence: <strong>{{ readinessConfidenceLabel }}</strong></li>
+                <li{% if reliabilitySignalsEvaluated == 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif reliabilitySignalsEvaluated > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessReliabilityLine }}</li>
+                <li{% if reliabilitySignalsCritical > 0 or reliabilitySignalsWarn > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif reliabilitySignalsEvaluated > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessReliabilityStatusLine }}</li>
+                <li{% if readinessHasObservedTraffic and readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessMonitoringLine }}</li>
               </ul>
             </section>
           </div>
@@ -1913,6 +1870,17 @@
         </dialog>
       </section>
 
+      <section class="border rounded p-3" id="diagnosticsBundleSection">
+        <h2 class="h4">Diagnostics Bundle</h2>
+        <form method="post" accept-charset="UTF-8">
+          {{ csrfInput() }}
+          {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
+          {{ redirectInput('agents/readiness') }}
+          <button class="btn submit" type="submit">Download Diagnostics Bundle (.json)</button>
+        </form>
+        <p class="agents-subtle">Runs auth, discovery, readiness, and smoke checks and exports a support artifact for support handoff.</p>
+      </section>
+
       {% if webhookDeadLetters|length %}
         <section class="border rounded p-3" id="webhookDlqDetailSection">
           <h2 class="h4">Webhook Dead-Letter Queue</h2>
@@ -1921,7 +1889,7 @@
           <form method="post" accept-charset="UTF-8" style="margin-bottom: 10px;">
             {{ csrfInput() }}
             {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-            {{ redirectInput('agents/dashboard/readiness') }}
+            {{ redirectInput('agents/readiness') }}
             <input type="hidden" name="mode" value="all">
             <input type="hidden" name="limit" value="25">
             <button class="btn" type="submit">Replay up to 25 failed events</button>
@@ -1956,7 +1924,7 @@
                     <form method="post" accept-charset="UTF-8">
                       {{ csrfInput() }}
                       {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-                      {{ redirectInput('agents/dashboard/readiness') }}
+                      {{ redirectInput('agents/readiness') }}
                       <input type="hidden" name="id" value="{{ row.id }}">
                       <button class="btn" type="submit">Replay</button>
                     </form>
@@ -1972,173 +1940,181 @@
     {% endif %}
 
     {% if activeDashboardTab == 'discovery' %}
-      <section class="border rounded p-3">
-        <h2 class="h4">Quick Actions</h2>
-        <div class="agents-actions" style="margin-bottom: 8px;">
-          <form method="post" accept-charset="UTF-8">
-            {{ csrfInput() }}
-            {{ actionInput('agents/dashboard/prewarm-discovery') }}
-            {{ redirectInput('agents/dashboard/discovery') }}
-            <input type="hidden" name="target" value="all">
-            <button class="btn submit" type="submit">Refresh All</button>
-          </form>
-          <form method="post" accept-charset="UTF-8">
-            {{ csrfInput() }}
-            {{ actionInput('agents/dashboard/prewarm-discovery') }}
-            {{ redirectInput('agents/dashboard/discovery') }}
-            <input type="hidden" name="target" value="llms">
-            <button class="btn" type="submit">Refresh llms.txt</button>
-          </form>
-          <form method="post" accept-charset="UTF-8">
-            {{ csrfInput() }}
-            {{ actionInput('agents/dashboard/prewarm-discovery') }}
-            {{ redirectInput('agents/dashboard/discovery') }}
-            <input type="hidden" name="target" value="llms-full">
-            <button class="btn" type="submit">Refresh llms-full.txt</button>
-          </form>
-          <form method="post" accept-charset="UTF-8">
-            {{ csrfInput() }}
-            {{ actionInput('agents/dashboard/prewarm-discovery') }}
-            {{ redirectInput('agents/dashboard/discovery') }}
-            <input type="hidden" name="target" value="commerce">
-            <button class="btn" type="submit">Refresh commerce.txt</button>
-          </form>
-          <form method="post" accept-charset="UTF-8">
-            {{ csrfInput() }}
-            {{ actionInput('agents/dashboard/clear-discovery-cache') }}
-            {{ redirectInput('agents/dashboard/discovery') }}
-            <button class="btn" type="submit">Clear cache</button>
-          </form>
-        </div>
-        <p class="agents-subtle">Refresh cache after content or settings changes.</p>
-      </section>
-
-      <div class="agents-discovery-doc-grid">
-        {% for key, document in discoveryStatus.documents %}
-          {% set discoveryKey = key|default('') %}
-          {% set bodyFieldName = discoveryKey == 'llms' ? 'llmsTxtBody' : (discoveryKey == 'commerce' ? 'commerceTxtBody' : '') %}
-          {% set bodyLock = discoveryKey == 'llms'
-            ? (discoverySettingsLocks.llmsTxtBodySettingLocked ?? false)
-            : (discoveryKey == 'commerce' ? (discoverySettingsLocks.commerceTxtBodySettingLocked ?? false) : true) %}
-          {% set canEditBody = bodyFieldName != '' and not bodyLock %}
-          {% set configuredBody = bodyFieldName != '' ? (attribute(discoverySettings, bodyFieldName)|default('')) : '' %}
-          {% set bodyValue = (document.body is defined and document.body is not same as(null)) ? document.body : '' %}
-          {% set previewValue = bodyValue != '' ? bodyValue : (configuredBody != '' ? configuredBody : (document.preview ?: '# Disabled')) %}
-          {% set refreshTarget = discoveryKey == 'llms' ? 'llms' : (discoveryKey == 'commerce' ? 'commerce' : 'llms-full') %}
-          {% set toggleEnableField = discoveryKey == 'llms' ? 'enableLlmsTxt' : (discoveryKey == 'commerce' ? 'enableCommerceTxt' : 'enableLlmsFullTxt') %}
-
-          <section class="agents-discovery-doc-card">
-            <div class="agents-discovery-doc-card-head">
-              <h2 class="agents-discovery-doc-card-title">{{ document.name }}</h2>
-              <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
-            </div>
-
-            <div class="agents-discovery-doc-meta">
-              <div><strong>URL:</strong> <a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.path }}</a></div>
-              <div><strong>Last Modified:</strong> <span>{{ document.lastModified ?: 'n/a' }}</span></div>
-              <div><strong>Cache TTL:</strong> <span>{{ document.cacheTtlSeconds }} seconds</span></div>
-            </div>
-
-            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-editor" id="discovery-editor-{{ discoveryKey }}">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/save-settings') }}
-              {{ redirectInput('agents/dashboard/discovery') }}
-              <textarea
-                class="agents-discovery-doc-preview"
-                name="{{ bodyFieldName ?: '_readonlyPreview' }}"
-                rows="12"
-                {% if not canEditBody %}readonly{% endif %}
-              >{{ previewValue }}</textarea>
-              {% if bodyFieldName == '' %}
-                <p class="agents-subtle" style="margin: 8px 0 0;">This document is generated-only and cannot be edited inline.</p>
-              {% elseif bodyLock %}
-                <p class="agents-subtle" style="margin: 8px 0 0;">Inline edit is locked by <code>config/agents.php</code>.</p>
-              {% endif %}
-
-            </form>
-
-            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-reset-{{ discoveryKey }}">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/save-settings') }}
-              {{ redirectInput('agents/dashboard/discovery') }}
-              <input type="hidden" name="resetDiscoveryBodyTarget" value="{{ discoveryKey == 'commerce' ? 'commerce' : 'llms' }}">
-            </form>
-            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-refresh-{{ discoveryKey }}">
+      <div class="agents-discovery-content-wrap">
+        <section class="border rounded p-3">
+          <h2 class="h4">Quick Actions</h2>
+          <div class="agents-actions" style="margin-bottom: 8px;">
+            <form method="post" accept-charset="UTF-8">
               {{ csrfInput() }}
               {{ actionInput('agents/dashboard/prewarm-discovery') }}
-              {{ redirectInput('agents/dashboard/discovery') }}
-              <input type="hidden" name="target" value="{{ refreshTarget }}">
+              {{ redirectInput('agents/discovery') }}
+              <input type="hidden" name="target" value="all">
+              <button class="btn submit" type="submit">Refresh All</button>
             </form>
-            <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-toggle-{{ discoveryKey }}">
+            <form method="post" accept-charset="UTF-8">
               {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/save-settings') }}
-              {{ redirectInput('agents/dashboard/discovery') }}
-              <input type="hidden" name="{{ toggleEnableField }}" value="{{ document.enabled ? 0 : 1 }}">
+              {{ actionInput('agents/dashboard/prewarm-discovery') }}
+              {{ redirectInput('agents/discovery') }}
+              <input type="hidden" name="target" value="llms">
+              <button class="btn" type="submit">Refresh llms.txt</button>
             </form>
+            <form method="post" accept-charset="UTF-8">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/prewarm-discovery') }}
+              {{ redirectInput('agents/discovery') }}
+              <input type="hidden" name="target" value="llms-full">
+              <button class="btn" type="submit">Refresh llms-full.txt</button>
+            </form>
+            <form method="post" accept-charset="UTF-8">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/prewarm-discovery') }}
+              {{ redirectInput('agents/discovery') }}
+              <input type="hidden" name="target" value="commerce">
+              <button class="btn" type="submit">Refresh commerce.txt</button>
+            </form>
+            <form method="post" accept-charset="UTF-8">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/clear-discovery-cache') }}
+              {{ redirectInput('agents/discovery') }}
+              <button class="btn" type="submit">Clear cache</button>
+            </form>
+          </div>
+          <p class="agents-subtle">Refresh cache after content or settings changes.</p>
+        </section>
 
-            <div class="agents-discovery-doc-actions">
-              {% if canEditBody %}
-                <button class="btn submit" type="submit" form="discovery-editor-{{ discoveryKey }}">Save</button>
-              {% endif %}
-              <div class="agents-discovery-doc-btn-group">
+        <div class="agents-discovery-doc-grid">
+          {% for key, document in discoveryStatus.documents %}
+            {% set discoveryKey = key|default('') %}
+            {% set bodyFieldName = discoveryKey == 'llms' ? 'llmsTxtBody' : (discoveryKey == 'commerce' ? 'commerceTxtBody' : '') %}
+            {% set bodyLock = discoveryKey == 'llms'
+              ? (discoverySettingsLocks.llmsTxtBodySettingLocked ?? false)
+              : (discoveryKey == 'commerce' ? (discoverySettingsLocks.commerceTxtBodySettingLocked ?? false) : true) %}
+            {% set canEditBody = bodyFieldName != '' and not bodyLock %}
+            {% set configuredBody = bodyFieldName != '' ? (attribute(discoverySettings, bodyFieldName)|default('')) : '' %}
+            {% set bodyValue = (document.body is defined and document.body is not same as(null)) ? document.body : '' %}
+            {% set previewValue = bodyValue != '' ? bodyValue : (configuredBody != '' ? configuredBody : (document.preview ?: '# Disabled')) %}
+            {% set refreshTarget = discoveryKey == 'llms' ? 'llms' : (discoveryKey == 'commerce' ? 'commerce' : 'llms-full') %}
+            {% set toggleEnableField = discoveryKey == 'llms' ? 'enableLlmsTxt' : (discoveryKey == 'commerce' ? 'enableCommerceTxt' : 'enableLlmsFullTxt') %}
+
+            <section class="agents-discovery-doc-card">
+              <div class="agents-discovery-doc-card-head">
+                <h2 class="agents-discovery-doc-card-title">{{ document.name }}</h2>
+                <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
+              </div>
+
+              <div class="agents-discovery-doc-meta">
+                <div><strong>URL:</strong> <a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.path }}</a></div>
+                <div><strong>Last Modified:</strong> <span>{{ document.lastModified ?: 'n/a' }}</span></div>
+                <div><strong>Cache TTL:</strong> <span>{{ document.cacheTtlSeconds }} seconds</span></div>
+              </div>
+
+              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-editor" id="discovery-editor-{{ discoveryKey }}">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/save-settings') }}
+                {{ redirectInput('agents/discovery') }}
+                <textarea
+                  class="agents-discovery-doc-preview"
+                  name="{{ bodyFieldName ?: '_readonlyPreview' }}"
+                  rows="12"
+                  {% if not canEditBody %}readonly{% endif %}
+                >{{ previewValue }}</textarea>
+                {% if bodyFieldName == '' %}
+                  <p class="agents-subtle" style="margin: 8px 0 0;">This document is generated-only and cannot be edited inline.</p>
+                {% elseif bodyLock %}
+                  <p class="agents-subtle" style="margin: 8px 0 0;">Inline edit is locked by <code>config/agents.php</code>.</p>
+                {% endif %}
+
+              </form>
+
+              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-reset-{{ discoveryKey }}">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/save-settings') }}
+                {{ redirectInput('agents/discovery') }}
+                <input type="hidden" name="resetDiscoveryBodyTarget" value="{{ discoveryKey == 'commerce' ? 'commerce' : 'llms' }}">
+              </form>
+              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-refresh-{{ discoveryKey }}">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/prewarm-discovery') }}
+                {{ redirectInput('agents/discovery') }}
+                <input type="hidden" name="target" value="{{ refreshTarget }}">
+              </form>
+              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-toggle-{{ discoveryKey }}">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/save-settings') }}
+                {{ redirectInput('agents/discovery') }}
+                <input type="hidden" name="{{ toggleEnableField }}" value="{{ document.enabled ? 0 : 1 }}">
+              </form>
+
+              <div class="agents-discovery-doc-actions">
+                {% if canEditBody %}
+                  <button class="btn submit" type="submit" form="discovery-editor-{{ discoveryKey }}">Save</button>
+                {% endif %}
+                <div class="agents-discovery-doc-btn-group">
+                  <button
+                    class="btn agents-discovery-doc-btn"
+                    type="submit"
+                    form="discovery-reset-{{ discoveryKey }}"
+                    {% if bodyFieldName == '' or bodyLock %}disabled{% endif %}
+                  >Reset</button>
+                  <button class="btn agents-discovery-doc-btn" type="submit" form="discovery-refresh-{{ discoveryKey }}">Refresh</button>
+                </div>
                 <button
                   class="btn agents-discovery-doc-btn"
                   type="submit"
-                  form="discovery-reset-{{ discoveryKey }}"
-                  {% if bodyFieldName == '' or bodyLock %}disabled{% endif %}
-                >Reset</button>
-                <button class="btn agents-discovery-doc-btn" type="submit" form="discovery-refresh-{{ discoveryKey }}">Refresh</button>
+                  form="discovery-toggle-{{ discoveryKey }}"
+                >{{ document.enabled ? 'Disable' : 'Enable' }}</button>
               </div>
-              <button
-                class="btn agents-discovery-doc-btn"
-                type="submit"
-                form="discovery-toggle-{{ discoveryKey }}"
-              >{{ document.enabled ? 'Disable' : 'Enable' }}</button>
-            </div>
 
-            <div class="agents-discovery-doc-details-row">
-              <details class="agents-advanced agents-discovery-doc-details">
-                <summary><strong>Details</strong></summary>
-                <div class="tablepane mx-0" style="margin-top: 8px;">
-                  <table class="data fullwidth">
-                    <tbody>
-                    <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
-                    <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
-                    <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
-                    <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
-                  </tbody>
-                  </table>
-                </div>
-              </details>
-            </div>
-          </section>
-        {% endfor %}
+              <div class="agents-discovery-doc-details-row">
+                <details class="agents-advanced agents-discovery-doc-details">
+                  <summary><strong>Details</strong></summary>
+                  <div class="tablepane mx-0" style="margin-top: 8px;">
+                    <table class="data fullwidth">
+                      <tbody>
+                      <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
+                      <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
+                      <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
+                      <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
+                    </tbody>
+                    </table>
+                  </div>
+                </details>
+              </div>
+            </section>
+          {% endfor %}
+        </div>
+
+        <section class="border rounded p-3">
+          <h2 class="h4">Editing Path</h2>
+          <ul class="agents-link-list">
+            <li>Edit <code>llms.txt</code> and <code>commerce.txt</code> directly in the cards above.</li>
+            <li>Use <code>config/agents.php</code> when you need environment-level overrides/lock-state.</li>
+            <li>Use this tab for refresh and verification only.</li>
+            <li>Do not place secrets in discovery documents.</li>
+          </ul>
+        </section>
+
+
+        <hr>
+
+
+        <section class="border rounded p-3">
+          <details class="agents-advanced">
+            <summary><strong>Discovery Docs Status (Technical JSON)</strong></summary>
+            <pre class="border rounded p-3">{{ discoveryStatusJson }}</pre>
+          </details>
+        </section>
       </div>
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Editing Path</h2>
-        <ul class="agents-link-list">
-          <li>Edit <code>llms.txt</code> and <code>commerce.txt</code> directly in the cards above.</li>
-          <li>Use <code>config/agents.php</code> when you need environment-level overrides/lock-state.</li>
-          <li>Use this tab for refresh and verification only.</li>
-          <li>Do not place secrets in discovery documents.</li>
-        </ul>
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <details class="agents-advanced">
-          <summary><strong>Discovery Docs Status (Technical JSON)</strong></summary>
-          <pre class="border rounded p-3">{{ discoveryStatusJson }}</pre>
-        </details>
-      </section>
     {% endif %}
   </div>
 
   {% css %}
+    .agents-discovery-content-wrap {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
     .agents-discovery-doc-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -2574,6 +2550,22 @@
 
     .agents-readiness-ready-proof-line--alert {
       color: var(--agents-readiness-alert-color);
+    }
+
+    .agents-readiness-ready-proof-line--ok {
+      white-space: normal;
+    }
+
+    .agents-readiness-ready-proof-line--ok::after {
+      content: '';
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-left: 6px;
+      vertical-align: -1px;
+      background-color: #000000;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 24 4 15 5.414 13.586 13 21.171 26.586 7.586 28 9 13 24z'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 24 4 15 5.414 13.586 13 21.171 26.586 7.586 28 9 13 24z'/%3E%3C/svg%3E") center / contain no-repeat;
     }
 
     .agents-readiness-ready-proof-trigger {
