@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.7 - 2026-03-11
+
+### Changed
+
+- Reworked the Dashboard `Readiness` view into an operator state card with summary strips, structured proof panels, and a filtered action-mapping table that only appears when signals need follow-up.
+- Reworked the Dashboard `Security` view to use the same state-card and action-mapping model while preserving dead-letter queue replay operations below the summary surface.
+- Added focused deep-link support on Accounts cards so dashboard remediation links can open and highlight the most relevant machine account context.
+- Added stable section anchors for Dashboard and Settings surfaces and updated dashboard regression checks to match the current card-based CP architecture.
+
+### Fixed
+
+- Fixed the Security dashboard dead-letter queue summary so an empty queue no longer throws a Twig runtime error when rendering the latest-update field.
+
 ## 0.10.6 - 2026-03-09
 
 ### Changed

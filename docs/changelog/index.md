@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.10.7 (2026-03-11)
+
+- Reworked Dashboard `Readiness` into a state-card-driven operator surface with integrated action mapping.
+- Reworked Dashboard `Security` to match the same operator model while keeping dead-letter queue replay actions below the summary card.
+- Added account-card focus deep links so remediation links can jump operators into the relevant Accounts context.
+- Fixed the Security dashboard dead-letter queue summary so an empty queue no longer causes a Twig render error.
+
 ## 0.10.6 (2026-03-09)
 
 - Refined Control CP tables to use a more consistent Waiting for Decision-derived header and body treatment across approvals, follow-up, activity, and rules views.

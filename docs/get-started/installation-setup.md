@@ -3,7 +3,7 @@
 ## 1. Install the plugin
 
 ```bash
-composer require klick/agents:^0.10.6
+composer require klick/agents:^0.10.7
 php craft plugin/install agents
 ```
 
@@ -57,4 +57,4 @@ Set at least one credential source:
 
 - `PLUGIN_AGENTS_API_TOKEN`
 - `PLUGIN_AGENTS_API_CREDENTIALS`
-- Managed key from CP `Agents -> Agents`
+- Managed key from CP `Agents -> Accounts`

@@ -41,9 +41,9 @@ expect_fixed "'reliability.signals'" "$PLUGIN_ROOT/src/services/DiagnosticsBundl
 expect_fixed "'reliability' => \$reliabilitySnapshot" "$PLUGIN_ROOT/src/services/DiagnosticsBundleService.php" "Diagnostics snapshots missing reliability entry"
 expect_fixed "'reliabilityStatus' => (string)(\$reliability['status'] ?? 'ok')" "$PLUGIN_ROOT/src/controllers/DashboardController.php" "Dashboard summary missing reliability status"
 
-expect_fixed "Needs Attention Now" "$PLUGIN_ROOT/src/templates/dashboard.twig" "Dashboard readiness is missing reliability triage section"
-expect_fixed "Runbook & Alert Guidance" "$PLUGIN_ROOT/src/templates/dashboard.twig" "Dashboard runbook section missing"
-expect_fixed "observabilitySummary.reliabilitySignals|default([])" "$PLUGIN_ROOT/src/templates/dashboard.twig" "Dashboard runbook section is not driven by reliability signals"
+expect_fixed "id=\"readinessStateCard\"" "$PLUGIN_ROOT/src/templates/dashboard.twig" "Dashboard readiness state card missing"
+expect_fixed "id=\"readinessActionMappingSection\"" "$PLUGIN_ROOT/src/templates/dashboard.twig" "Dashboard readiness action mapping missing"
+expect_fixed "readinessReliabilityStatusLine" "$PLUGIN_ROOT/src/templates/dashboard.twig" "Dashboard readiness card is not driven by reliability signals"
 expect_fixed "reliabilityConsumerLagWarnSeconds" "$PLUGIN_ROOT/src/models/Settings.php" "Settings model missing configurable reliability warn threshold"
 expect_fixed "reliabilityConsumerLagCriticalSeconds" "$PLUGIN_ROOT/src/models/Settings.php" "Settings model missing configurable reliability critical threshold"
 expect_fixed "consumerLagThresholds()" "$PLUGIN_ROOT/src/services/ReliabilitySignalService.php" "Reliability service missing configurable consumer lag thresholds"

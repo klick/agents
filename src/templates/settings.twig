@@ -12,7 +12,7 @@
 {% set reliabilityConsumerLagWarnSecondsLocked = reliabilityConsumerLagWarnSecondsLocked ?? false %}
 {% set reliabilityConsumerLagCriticalSecondsLocked = reliabilityConsumerLagCriticalSecondsLocked ?? false %}
 
-<section class="border rounded p-3">
+<section class="border rounded p-3" id="runtimeSwitchesSection">
   <h2 class="h4">Runtime Switches</h2>
   <p class="agents-subtle">Turn public surfaces on or off. Some controls may be locked by environment or config.</p>
 
@@ -98,7 +98,7 @@
 <hr>
 
 
-<section class="border rounded p-3">
+<section class="border rounded p-3" id="reliabilityThresholdsSection">
   <h2 class="h4">Reliability Thresholds</h2>
   <p class="agents-subtle">Tune reliability alert sensitivity for your sync cadence.</p>
 
@@ -131,7 +131,7 @@
 
 
 {% if requestsFeatureEnabled %}
-  <section class="border rounded p-3">
+  <section class="border rounded p-3" id="manualFallbackSection">
     <h2 class="h4">Manual Fallback</h2>
     <p class="agents-subtle">Keep this off for agent-first workflows. Enable only if operators must create requests manually.</p>
 
@@ -148,7 +148,7 @@
 {% endif %}
 
 {% if agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
-  <section class="border rounded p-3 warning">
+  <section class="border rounded p-3 warning" id="configurationLocksSection">
     <h2 class="h4">Configuration Locks</h2>
     {% if agentsEnabledLocked %}
       <p>`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>

@@ -39,15 +39,18 @@ Legacy aliases still redirect for compatibility:
   - `Diagnostics Bundle` download
   - `Readiness Snapshot`
 - **Readiness**
-  - `Readiness Summary`
-  - `Needs Attention Now`
-  - `Score Breakdown`
-  - `Component Checks`
-  - `Sync State Lag`
-  - `Telemetry Snapshot`
-  - `Runbook & Alert Guidance`
-  - `Warnings`
-  - `Advanced Diagnostics`
+  - state card with overall verdict (`Ready`, `Degraded`, `Blocked`, `Unproven`)
+  - four-part summary strip for traffic, delivery, integration, and security posture
+  - `Details +` disclosure with eight proof panels:
+    - `Delivery Health`
+    - `Evaluation`
+    - `Hard Gates`
+    - `Traffic Health`
+    - `Integration Health`
+    - `Security Posture`
+    - `Capacity / Runtime`
+    - `Observability`
+  - in-card `Action Mapping` table that renders only problematic signals
 - **Discovery Docs**
   - `Quick Actions` for refresh and cache clear
   - per-document cards for `llms.txt`, `llms-full.txt`, and `commerce.txt`
@@ -56,12 +59,19 @@ Legacy aliases still redirect for compatibility:
   - `Editing Path`
   - technical status JSON
 - **Security**
-  - `Security Snapshot`
-  - `Environment Profile`
-  - `Auth and Rate Posture`
-  - `Webhook Reliability`
-  - dead-letter queue visibility and replay actions
-  - `Warnings`
+  - state card with overall verdict (`Good`, `Needs Attention`, `Blocked`, `Unproven`)
+  - four-part summary strip for auth/rate, credentials, webhook reliability, and policy/environment posture
+  - `Details +` disclosure with eight proof panels:
+    - `Auth / Rate Posture`
+    - `Credential Inventory`
+    - `Policy / Environment`
+    - `Runtime Signals`
+    - `Webhook Reliability`
+    - `Dead-Letter Queue`
+    - `Credential Activity`
+    - `Security Warnings`
+  - in-card `Action Mapping` table that renders only problematic signals
+  - separate dead-letter queue replay section for operational recovery
   - technical posture JSON
 
 This page is driven from runtime services, not hardcoded static status:

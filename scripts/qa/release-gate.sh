@@ -89,8 +89,12 @@ if [[ ! -f "docs/troubleshooting/observability-runbook.md" ]]; then
   fail "Missing observability runbook: docs/troubleshooting/observability-runbook.md"
 fi
 
-if ! grep -q "Runbook & Alert Guidance" src/templates/dashboard.twig; then
-  fail "Dashboard is missing Runbook & Alert Guidance section"
+if ! grep -q 'id="readinessStateCard"' src/templates/dashboard.twig; then
+  fail "Dashboard is missing readiness state card"
+fi
+
+if ! grep -q 'id="readinessActionMappingSection"' src/templates/dashboard.twig; then
+  fail "Dashboard is missing readiness action mapping section"
 fi
 
 pass "README and docs entry points are present"

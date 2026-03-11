@@ -38,8 +38,10 @@
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
-  <h1>{{ dashboardHeading }}</h1>
-  <p class="agents-page-intro">{{ tabIntroByKey[activeDashboardTab] ?? 'Operator dashboard for governed runtime workflows.' }}</p>
+  <div class="agents-page-header">
+    <h1>{{ dashboardHeading }}</h1>
+    <p class="agents-page-intro">{{ tabIntroByKey[activeDashboardTab] ?? 'Operator dashboard for governed runtime workflows.' }}</p>
+  </div>
 
   <div class="agents-layout-stack">
     {% if activeDashboardTab == 'overview' %}
@@ -102,7 +104,7 @@
       <hr>
 
 
-      <section class="border rounded p-3">
+      <section class="border rounded p-3" id="diagnosticsBundleSection">
         <h2 class="h4">Diagnostics Bundle</h2>
         <form method="post" accept-charset="UTF-8">
           {{ csrfInput() }}
@@ -128,6 +130,7 @@
     {% endif %}
 
     {% if activeDashboardTab == 'readiness' %}
+      {% set readinessPreviewState = (craft.app.request.getQueryParam('previewState') ?? '')|lower %}
       {% set readinessTabScore = readinessSummary.readinessScore|default(0) %}
       {% set readinessTabStatus = (readinessSummary.status|default('unknown'))|lower %}
       {% set readinessTabWarnings = readinessDiagnostics.warnings|length %}
@@ -190,310 +193,877 @@
       {% set reliabilityStatusClass = reliabilityStatus == 'critical'
         ? 'agents-metric--bad'
         : (reliabilityStatus == 'warn' ? 'agents-metric--warn' : 'agents-metric--good') %}
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Readiness Summary</h2>
-        <div class="agents-metric-strip-wrap">
-          <div class="agents-metric-strip">
-          <div class="agents-metric agents-metric-strip-card {{ readinessTabScoreClass }}">
-            <div class="label">Overall score</div>
-            <div class="value">{{ readinessTabScore }}/100</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ readinessTabStatusClass }}">
-            <div class="label">Status</div>
-            <div class="value">{{ readinessSummary.status|default('unknown') }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ readinessTabWarningsClass }}">
-            <div class="label">Warnings</div>
-            <div class="value">{{ readinessTabWarnings }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ readinessTabConsumerCountClass }}">
-            <div class="label">Sync integrations</div>
-            <div class="value">{{ readinessTabConsumerCount }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ readinessTabLagClass }}">
-            <div class="label">Max lag</div>
-            <div class="value">{{ readinessTabMaxLagSeconds }}s</div>
-          </div>
-          </div>
-        </div>
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Needs Attention Now</h2>
-        <div class="agents-metric-strip-wrap">
-          <div class="agents-metric-strip">
-          <div class="agents-metric agents-metric-strip-card {{ reliabilityStatusClass }}">
-            <div class="label">Reliability status</div>
-            <div class="value">{{ reliabilityStatus|upper }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ reliabilitySignalsCritical > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
-            <div class="label">Critical signals</div>
-            <div class="value">{{ reliabilitySignalsCritical }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ reliabilitySignalsWarn > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
-            <div class="label">Warning signals</div>
-            <div class="value">{{ reliabilitySignalsWarn }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ reliabilitySignalsEvaluated > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
-            <div class="label">Signals evaluated</div>
-            <div class="value">{{ reliabilitySignalsEvaluated }}</div>
-          </div>
-          </div>
-        </div>
-
-        {% if reliabilityTopSignals|length %}
-          <div class="tablepane mx-0" style="margin-top: 12px;">
-            <table class="data fullwidth">
-              <thead>
-              <tr>
-                <th>Signal</th>
-                <th>Current</th>
-                <th>Trigger</th>
-                <th>Primary response</th>
-              </tr>
-              </thead>
-              <tbody>
-              {% for signal in reliabilityTopSignals %}
-                {% set signalThresholdLabel = signal.comparator ~ ' ' ~ (signal.severity == 'critical' ? signal.criticalThreshold : signal.warnThreshold) %}
-                <tr>
-                  <td>
-                    <strong>{{ signal.label }}</strong><br>
-                    <span class="agents-subtle">{{ signal.severity|upper }}</span>
-                  </td>
-                  <td>{{ signal.value }}{% if signal.unit %} {{ signal.unit }}{% endif %}</td>
-                  <td><code>{{ signalThresholdLabel }}</code></td>
-                  <td>{{ signal.primaryResponse ?: 'Check observability runbook.' }}</td>
-                </tr>
-              {% endfor %}
-              </tbody>
-            </table>
-          </div>
+      {% set securityCredentialCount = securityPosture.authentication.credentialCount|default(0) %}
+      {% set securityTokenRequired = securityPosture.authentication.required ?? false %}
+      {% set securityPrivacyEnabled = securityPosture.privacy.redactEmail ?? false %}
+      {% set webhookEnabledForReadiness = securityPosture.webhook.enabled ?? false %}
+      {% set readinessDbAvailable = readinessDiagnostics.componentChecks.systemComponents.db ?? false %}
+      {% set readinessCacheAvailable = readinessDiagnostics.componentChecks.systemComponents.cache ?? false %}
+      {% set readinessUsersAvailable = readinessDiagnostics.componentChecks.systemComponents.users ?? false %}
+      {% set readinessCoreServicesOk = readinessDbAvailable and readinessCacheAvailable and readinessUsersAvailable %}
+      {% set readinessSecurityWarnings = securityWarningCounts.warnings|default(0) %}
+      {% set readinessSecurityErrors = securityWarningCounts.errors|default(0) %}
+      {% set readinessConsumerLagWarningCount = consumerLagSummary.warning|default(0) %}
+      {% set readinessConsumerLagCriticalCount = consumerLagSummary.critical|default(0) %}
+      {% set readinessHasIntegrationTelemetry = readinessTabConsumerCount > 0 or consumerLagRows|length > 0 %}
+      {% set readinessGeneratedAt = observabilitySummary.generatedAt|default(readinessSummary.generatedAt|default('')) %}
+      {% set readinessGeneratedAtTimestamp = readinessGeneratedAt ? readinessGeneratedAt|date('U') : 0 %}
+      {% set readinessNowTimestamp = 'now'|date('U') %}
+      {% set readinessEvaluatedAgeSeconds = readinessGeneratedAtTimestamp > 0 ? (readinessNowTimestamp - readinessGeneratedAtTimestamp) : null %}
+      {% set readinessMetricsCurrent = readinessEvaluatedAgeSeconds is not same as(null) and readinessEvaluatedAgeSeconds >= 0 and readinessEvaluatedAgeSeconds <= 300 %}
+      {% set readinessHasObservedTraffic = telemetryRequestsTotal > 0 %}
+      {% set readinessHasActiveCredentials = telemetryActiveCredentials7d > 0 %}
+      {% set readinessEvaluationLabel = 'unknown' %}
+      {% if readinessEvaluatedAgeSeconds is not same as(null) %}
+        {% if readinessEvaluatedAgeSeconds < 60 %}
+          {% set readinessEvaluationLabel = 'just now' %}
+        {% elseif readinessEvaluatedAgeSeconds < 3600 %}
+          {% set readinessMinutesAgo = (readinessEvaluatedAgeSeconds / 60)|round(0, 'floor') %}
+          {% set readinessEvaluationLabel = readinessMinutesAgo ~ ' minute' ~ (readinessMinutesAgo == 1 ? '' : 's') ~ ' ago' %}
+        {% elseif readinessEvaluatedAgeSeconds < 86400 %}
+          {% set readinessHoursAgo = (readinessEvaluatedAgeSeconds / 3600)|round(0, 'floor') %}
+          {% set readinessEvaluationLabel = readinessHoursAgo ~ ' hour' ~ (readinessHoursAgo == 1 ? '' : 's') ~ ' ago' %}
         {% else %}
-          <p class="agents-subtle" style="margin-top: 10px;">No warning or critical reliability signals detected.</p>
+          {% set readinessDaysAgo = (readinessEvaluatedAgeSeconds / 86400)|round(0, 'floor') %}
+          {% set readinessEvaluationLabel = readinessDaysAgo ~ ' day' ~ (readinessDaysAgo == 1 ? '' : 's') ~ ' ago' %}
         {% endif %}
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Score Breakdown</h2>
-        <div class="tablepane mx-0" style="margin-top: 0;">
-          <table class="data fullwidth">
-            <thead>
-            <tr>
-              <th>Check</th>
-              <th>Weight</th>
-              <th>Result</th>
-              <th>Score</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for criterion in readinessDiagnostics.breakdown %}
-              <tr>
-                <td>{{ criterion.label }}</td>
-                <td>{{ criterion.weight }}</td>
-                <td>
-                  <span class="status {{ criterion.passed ? 'enabled' : 'disabled' }}"></span>
-                  {{ criterion.passed ? 'pass' : 'needs attention' }}
-                </td>
-                <td>{{ criterion.score }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Component Checks</h2>
-        <div class="agents-two-col">
-          <div>
-            <span class="agents-kicker">System components</span>
-            <ul class="agents-link-list">
-              {% for key, value in readinessDiagnostics.componentChecks.systemComponents %}
-                <li>{{ key }}: <strong>{{ value ? 'ok' : 'unavailable' }}</strong></li>
-              {% endfor %}
-            </ul>
-          </div>
-          <div>
-            <span class="agents-kicker">Plugin checks</span>
-            <ul class="agents-link-list">
-              {% for key, value in readinessDiagnostics.componentChecks.enabledPlugins %}
-                <li>{{ key }}: <strong>{{ value ? 'enabled' : 'disabled' }}</strong></li>
-              {% endfor %}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Sync State Lag</h2>
-        <p class="agents-subtle">
-          Healthy: <strong>{{ consumerLagSummary.healthy|default(0) }}</strong>,
-          warning: <strong>{{ consumerLagSummary.warning|default(0) }}</strong>,
-          critical: <strong>{{ consumerLagSummary.critical|default(0) }}</strong>.
-        </p>
-
-        {% if consumerLagRows|length %}
-          <div class="tablepane mx-0" style="margin-top: 0;">
-            <table class="data fullwidth">
-              <thead>
-              <tr>
-                <th>Integration</th>
-                <th>Resource</th>
-                <th>Checkpoint</th>
-                <th>Lag</th>
-                <th>Bucket</th>
-              </tr>
-              </thead>
-              <tbody>
-              {% for row in consumerLagRows|slice(0, 10) %}
-                <tr>
-                  <td><code>{{ row.integrationKey }}</code></td>
-                  <td><code>{{ row.resourceType }}</code></td>
-                  <td>{{ row.checkpointAt ?: 'n/a' }}</td>
-                  <td>{{ row.lagSeconds }}s</td>
-                  <td><strong>{{ row.lagBucket }}</strong></td>
-                </tr>
-              {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% if consumerLagRows|length > 10 %}
-            <p class="agents-subtle">Showing top 10 highest lag rows.</p>
+      {% endif %}
+      {% set readinessHasTrafficIssues = telemetryAuthFailures > 0
+        or telemetryForbidden > 0
+        or telemetryRateLimit > 0
+        or telemetryErrors5xx > 0 %}
+      {% set readinessHasDeliveryIssues = webhookEnabledForReadiness and telemetryDlqFailed > 0 %}
+      {% set readinessHasIntegrationIssues = readinessConsumerLagWarningCount > 0
+        or readinessConsumerLagCriticalCount > 0
+        or telemetryConsumerLagMaxSeconds > 60 %}
+      {% set readinessHasSecurityIssues = readinessSecurityWarnings > 0 or readinessSecurityErrors > 0 %}
+      {% set readinessHasCapacityIssues = telemetryQueueDepth > 10 %}
+      {% set readinessHasBlockingGate = (not agentsEnabled) or (not readinessDbAvailable) or securityCredentialCount == 0 %}
+      {% set readinessHasDegradedSignals = readinessTabWarnings > 0
+        or reliabilityStatus in ['warn', 'critical']
+        or reliabilitySignalsWarn > 0
+        or reliabilitySignalsCritical > 0
+        or readinessHasTrafficIssues
+        or readinessHasDeliveryIssues
+        or readinessHasIntegrationIssues
+        or readinessHasSecurityIssues
+        or readinessHasCapacityIssues %}
+      {% set readinessHasLowConfidence = (not readinessMetricsCurrent)
+        or reliabilitySignalsEvaluated == 0
+        or (not readinessHasObservedTraffic)
+        or (not readinessHasActiveCredentials) %}
+      {% set readinessBlockingCount = 0 %}
+      {% if not agentsEnabled %}
+        {% set readinessBlockingCount = readinessBlockingCount + 1 %}
+      {% endif %}
+      {% if not readinessDbAvailable %}
+        {% set readinessBlockingCount = readinessBlockingCount + 1 %}
+      {% endif %}
+      {% if securityCredentialCount == 0 %}
+        {% set readinessBlockingCount = readinessBlockingCount + 1 %}
+      {% endif %}
+      {% set readinessStateKey = 'ready' %}
+      {% set readinessStateLabel = 'Ready' %}
+      {% set readinessStateLead = 'Ready for machine traffic' %}
+      {% set readinessStateSubcopy = 'No issues need attention right now.' %}
+      {% set readinessStateTone = 'good' %}
+      {% if readinessHasBlockingGate %}
+        {% set readinessStateKey = 'blocked' %}
+        {% set readinessStateLabel = 'Blocked' %}
+        {% set readinessStateLead = 'Agents is not operationally fit for live machine traffic.' %}
+        {% set readinessStateSubcopy = 'Resolve the blocking issues below before trusting this environment for production traffic.' %}
+        {% set readinessStateTone = 'bad' %}
+      {% elseif readinessHasDegradedSignals %}
+        {% set readinessStateKey = 'degraded' %}
+        {% set readinessStateLabel = 'Degraded' %}
+        {% set readinessStateLead = 'Agents is handling traffic, but some conditions need attention.' %}
+        {% set readinessStateSubcopy = 'Review the affected areas below, then use the detailed sections for full context.' %}
+        {% set readinessStateTone = 'warn' %}
+      {% elseif readinessHasLowConfidence %}
+        {% set readinessStateKey = 'unproven' %}
+        {% set readinessStateLabel = 'Unproven' %}
+        {% set readinessStateLead = 'No blocking issues were detected, but live-readiness confidence is limited.' %}
+        {% set readinessStateSubcopy = 'Recent traffic, credential activity, or observability freshness is too thin for a high-confidence assessment.' %}
+        {% set readinessStateTone = 'muted' %}
+      {% endif %}
+      {% set readinessShowReadyState = readinessStateKey == 'ready' %}
+      {% set readinessConfidenceLabel = readinessHasObservedTraffic and readinessHasActiveCredentials and readinessMetricsCurrent
+        ? 'high'
+        : 'limited' %}
+      {% set readinessTrafficLead = 'Guarded requests observed in the last 60 minutes' %}
+      {% if not agentsEnabled %}
+        {% set readinessTrafficLead = 'Runtime is disabled, so guarded traffic is blocked' %}
+      {% elseif not readinessMetricsCurrent %}
+        {% set readinessTrafficLead = 'Recent traffic metrics are stale' %}
+      {% elseif not readinessHasObservedTraffic %}
+        {% set readinessTrafficLead = 'No guarded requests observed in the last 60 minutes' %}
+      {% elseif telemetryErrors5xx > 0 %}
+        {% set readinessTrafficLead = 'Server errors are occurring on guarded routes' %}
+      {% elseif telemetryAuthFailures > 0 or telemetryForbidden > 0 or telemetryRateLimit > 0 %}
+        {% set readinessTrafficLead = 'Guarded traffic is seeing auth, scope, or rate-limit issues' %}
+      {% endif %}
+      {% set readinessDeliveryLead = 'Webhook delivery path is operational' %}
+      {% if not webhookEnabledForReadiness %}
+        {% set readinessDeliveryLead = 'Webhook delivery is not enabled for this environment' %}
+      {% elseif telemetryDlqFailed > 0 %}
+        {% set readinessDeliveryLead = 'Webhook delivery failures need replay or investigation' %}
+      {% elseif not readinessMetricsCurrent %}
+        {% set readinessDeliveryLead = 'Delivery metrics are stale' %}
+      {% endif %}
+      {% set readinessDeliverySummary = 'No recent delivery failures detected' %}
+      {% if not webhookEnabledForReadiness %}
+        {% set readinessDeliverySummary = 'No delivery path is configured in this environment' %}
+      {% elseif telemetryDlqFailed > 0 %}
+        {% set readinessDeliverySummary = telemetryDlqFailed ~ ' failed event' ~ (telemetryDlqFailed == 1 ? '' : 's') ~ ' need attention' %}
+      {% endif %}
+      {% set readinessIntegrationLead = 'No sync-state integrations are configured' %}
+      {% if readinessConsumerLagCriticalCount > 0 %}
+        {% set readinessIntegrationLead = 'One or more integrations are in critical lag' %}
+      {% elseif readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60 %}
+        {% set readinessIntegrationLead = 'One or more integrations are lagging behind' %}
+      {% elseif readinessHasIntegrationTelemetry %}
+        {% set readinessIntegrationLead = readinessMetricsCurrent ? 'Sync-state checkpoints are reporting' : 'Integration lag metrics are stale' %}
+      {% endif %}
+      {% set readinessIntegrationLagLine = 'Max sync lag is below warning threshold' %}
+      {% if readinessConsumerLagCriticalCount > 0 %}
+        {% set readinessIntegrationLagLine = readinessConsumerLagCriticalCount ~ ' critical lag issue' ~ (readinessConsumerLagCriticalCount == 1 ? '' : 's') ~ ' detected' %}
+      {% elseif readinessConsumerLagWarningCount > 0 %}
+        {% set readinessIntegrationLagLine = readinessConsumerLagWarningCount ~ ' warning lag issue' ~ (readinessConsumerLagWarningCount == 1 ? '' : 's') ~ ' detected' %}
+      {% elseif telemetryConsumerLagMaxSeconds > 60 %}
+        {% set readinessIntegrationLagLine = 'Max sync lag is above warning threshold' %}
+      {% endif %}
+      {% set readinessIntegrationStatusLine = 'No integrations are in warning or critical lag' %}
+      {% if readinessConsumerLagWarningCount > 0 or readinessConsumerLagCriticalCount > 0 %}
+        {% set readinessIntegrationStatusLine = 'Review lagging integrations in the table below' %}
+      {% endif %}
+      {% set readinessCheckpointLine = readinessHasIntegrationTelemetry
+        ? 'Checkpoint telemetry available'
+        : 'Checkpoint telemetry has not been submitted yet' %}
+      {% set readinessCredentialLine = 'Runtime credentials available for access' %}
+      {% if securityCredentialCount == 0 %}
+        {% set readinessCredentialLine = 'No runtime credentials configured' %}
+      {% elseif (securityPosture.authentication.managedCredentialCount|default(0)) > 0 %}
+        {% set readinessCredentialLine = 'Managed credentials available for runtime access' %}
+      {% endif %}
+      {% set readinessCapacityLead = telemetryQueueDepth > 10
+        ? 'Queue depth is elevated and may slow runtime work'
+        : 'Queue depth is within normal range' %}
+      {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+      {% if telemetryQueueDepth > 50 %}
+        {% set readinessBackpressureLine = 'Runtime backpressure is likely' %}
+      {% elseif telemetryQueueDepth > 10 %}
+        {% set readinessBackpressureLine = 'Runtime backpressure is building' %}
+      {% endif %}
+      {% set readinessCapacityLine = readinessHasActiveCredentials
+        ? 'Active credentials seen in the last 7 days'
+        : 'No recent credential usage observed' %}
+      {% set readinessTokenLine = securityTokenRequired
+        ? 'Token authentication required'
+        : 'Token requirement is relaxed for this environment' %}
+      {% set readinessPrivacyLine = securityPrivacyEnabled
+        ? 'Default privacy protections active'
+        : 'Privacy redaction is not enabled' %}
+      {% set readinessSecurityStatusLine = readinessHasSecurityIssues
+        ? 'Security warnings need review'
+        : 'No active security warnings' %}
+      {% set readinessObservabilityLine = readinessMetricsCurrent
+        ? 'Runtime metrics snapshot available'
+        : 'Runtime metrics snapshot is stale or missing' %}
+      {% set readinessReliabilityLine = reliabilitySignalsEvaluated > 0
+        ? 'Reliability thresholds evaluated'
+        : 'Reliability thresholds have not been evaluated recently' %}
+      {% set readinessReliabilityStatusLine = 'No warning or critical reliability signals detected' %}
+      {% if reliabilitySignalsCritical > 0 %}
+        {% set readinessReliabilityStatusLine = reliabilitySignalsCritical ~ ' critical reliability signal' ~ (reliabilitySignalsCritical == 1 ? '' : 's') ~ ' detected' %}
+      {% elseif reliabilitySignalsWarn > 0 %}
+        {% set readinessReliabilityStatusLine = reliabilitySignalsWarn ~ ' warning reliability signal' ~ (reliabilitySignalsWarn == 1 ? '' : 's') ~ ' detected' %}
+      {% endif %}
+      {% set readinessMonitoringLine = readinessHasObservedTraffic and readinessMetricsCurrent
+        ? 'Monitoring is active for live traffic'
+        : (readinessMetricsCurrent
+          ? 'Monitoring is active, but recent traffic is limited'
+          : 'Monitoring confidence is limited by stale metrics') %}
+      {% set readinessHardGateRuntimeLine = agentsEnabled ? 'Runtime is enabled' : 'Runtime is disabled' %}
+      {% set readinessHardGateDatabaseLine = readinessDbAvailable ? 'Database connection available' : 'Database connection unavailable' %}
+      {% set readinessHardGateServicesLine = readinessCoreServicesOk ? 'Core Craft services available' : 'One or more core Craft services need attention' %}
+      {% set readinessHardGateStatusLine = readinessHasBlockingGate
+        ? readinessBlockingCount ~ ' blocking issue' ~ (readinessBlockingCount == 1 ? '' : 's') ~ ' detected'
+        : 'No blocking configuration issues detected' %}
+      {% set readinessTrafficSummaryTone = 'good' %}
+      {% set readinessTrafficSummaryLabel = 'Good' %}
+      {% if (not agentsEnabled) or (not readinessDbAvailable) %}
+        {% set readinessTrafficSummaryTone = 'bad' %}
+        {% set readinessTrafficSummaryLabel = 'Blocked' %}
+      {% elseif readinessHasTrafficIssues %}
+        {% set readinessTrafficSummaryTone = 'warn' %}
+        {% set readinessTrafficSummaryLabel = 'Needs attention' %}
+      {% elseif (not readinessMetricsCurrent) or (not readinessHasObservedTraffic) %}
+        {% set readinessTrafficSummaryTone = 'muted' %}
+        {% set readinessTrafficSummaryLabel = 'Unproven' %}
+      {% endif %}
+      {% set readinessDeliverySummaryTone = 'good' %}
+      {% set readinessDeliverySummaryLabel = 'Good' %}
+      {% if not webhookEnabledForReadiness %}
+        {% set readinessDeliverySummaryTone = 'muted' %}
+        {% set readinessDeliverySummaryLabel = 'Not enabled' %}
+      {% elseif telemetryDlqFailed > 0 %}
+        {% set readinessDeliverySummaryTone = 'warn' %}
+        {% set readinessDeliverySummaryLabel = 'Needs attention' %}
+      {% elseif not readinessMetricsCurrent %}
+        {% set readinessDeliverySummaryTone = 'muted' %}
+        {% set readinessDeliverySummaryLabel = 'Unproven' %}
+      {% endif %}
+      {% set readinessIntegrationSummaryTone = 'good' %}
+      {% set readinessIntegrationSummaryLabel = 'Good' %}
+      {% if not readinessHasIntegrationTelemetry %}
+        {% set readinessIntegrationSummaryTone = 'muted' %}
+        {% set readinessIntegrationSummaryLabel = 'Not enabled' %}
+      {% elseif readinessHasIntegrationIssues %}
+        {% set readinessIntegrationSummaryTone = 'warn' %}
+        {% set readinessIntegrationSummaryLabel = 'Needs attention' %}
+      {% elseif not readinessMetricsCurrent %}
+        {% set readinessIntegrationSummaryTone = 'muted' %}
+        {% set readinessIntegrationSummaryLabel = 'Unproven' %}
+      {% endif %}
+      {% set readinessSecuritySummaryTone = 'good' %}
+      {% set readinessSecuritySummaryLabel = 'Good' %}
+      {% if securityCredentialCount == 0 %}
+        {% set readinessSecuritySummaryTone = 'bad' %}
+        {% set readinessSecuritySummaryLabel = 'Blocked' %}
+      {% elseif readinessHasSecurityIssues %}
+        {% set readinessSecuritySummaryTone = 'warn' %}
+        {% set readinessSecuritySummaryLabel = 'Needs attention' %}
+      {% elseif not readinessHasActiveCredentials %}
+        {% set readinessSecuritySummaryTone = 'muted' %}
+        {% set readinessSecuritySummaryLabel = 'Unproven' %}
+      {% endif %}
+      {% set readinessEvaluationProofTone = 'good' %}
+      {% if not readinessMetricsCurrent or reliabilitySignalsEvaluated == 0 %}
+        {% set readinessEvaluationProofTone = 'warn' %}
+      {% endif %}
+      {% set readinessHardGateProofTone = readinessHasBlockingGate ? 'bad' : 'good' %}
+      {% set readinessTrafficProofTone = readinessTrafficSummaryTone in ['warn', 'bad'] ? readinessTrafficSummaryTone : 'good' %}
+      {% set readinessDeliveryProofTone = readinessDeliverySummaryTone in ['warn', 'bad'] ? readinessDeliverySummaryTone : 'good' %}
+      {% set readinessIntegrationProofTone = readinessIntegrationSummaryTone in ['warn', 'bad'] ? readinessIntegrationSummaryTone : 'good' %}
+      {% set readinessSecurityProofTone = readinessSecuritySummaryTone in ['warn', 'bad'] ? readinessSecuritySummaryTone : 'good' %}
+      {% set readinessCapacityProofTone = telemetryQueueDepth > 50 ? 'bad' : (telemetryQueueDepth > 10 ? 'warn' : 'good') %}
+      {% set readinessObservabilityProofTone = reliabilitySignalsCritical > 0
+        ? 'bad'
+        : ((not readinessMetricsCurrent) or reliabilitySignalsWarn > 0 or reliabilitySignalsEvaluated == 0 ? 'warn' : 'good') %}
+      {% set readinessPreviewModeEnabled = readinessPreviewState in ['ready', 'degraded', 'blocked', 'unproven'] %}
+      {% if readinessPreviewState == 'ready' %}
+        {% set readinessStateKey = 'ready' %}
+        {% set readinessStateLabel = 'Ready' %}
+        {% set readinessStateLead = 'Ready for machine traffic.' %}
+        {% set readinessStateSubcopy = 'No issues need attention right now.' %}
+        {% set readinessStateTone = 'good' %}
+        {% set readinessShowReadyState = true %}
+        {% set readinessConfidenceLabel = 'high' %}
+        {% set readinessTrafficLead = 'Guarded requests observed in the last 60 minutes' %}
+        {% set readinessDeliveryLead = 'Webhook delivery path is operational' %}
+        {% set readinessDeliverySummary = 'No recent delivery failures detected' %}
+        {% set readinessIntegrationLead = 'Sync-state checkpoints are reporting' %}
+        {% set readinessIntegrationLagLine = 'Max sync lag is below warning threshold' %}
+        {% set readinessIntegrationStatusLine = 'No integrations are in warning or critical lag' %}
+        {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
+        {% set readinessCredentialLine = 'Managed credentials available for runtime access' %}
+        {% set readinessCapacityLead = 'Queue depth is within normal range' %}
+        {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+        {% set readinessCapacityLine = 'Active credentials seen in the last 7 days' %}
+        {% set readinessTokenLine = 'Token authentication required' %}
+        {% set readinessPrivacyLine = 'Default privacy protections active' %}
+        {% set readinessSecurityStatusLine = 'No active security warnings' %}
+        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
+        {% set readinessReliabilityLine = 'Reliability thresholds evaluated' %}
+        {% set readinessReliabilityStatusLine = 'No warning or critical reliability signals detected' %}
+        {% set readinessMonitoringLine = 'Monitoring is active for live traffic' %}
+        {% set readinessHardGateRuntimeLine = 'Runtime is enabled' %}
+        {% set readinessHardGateDatabaseLine = 'Database connection available' %}
+        {% set readinessHardGateServicesLine = 'Core Craft services available' %}
+        {% set readinessHardGateStatusLine = 'No blocking configuration issues detected' %}
+        {% set readinessTrafficSummaryTone = 'good' %}
+        {% set readinessTrafficSummaryLabel = 'Good' %}
+        {% set readinessDeliverySummaryTone = 'good' %}
+        {% set readinessDeliverySummaryLabel = 'Good' %}
+        {% set readinessIntegrationSummaryTone = 'good' %}
+        {% set readinessIntegrationSummaryLabel = 'Good' %}
+        {% set readinessSecuritySummaryTone = 'good' %}
+        {% set readinessSecuritySummaryLabel = 'Good' %}
+        {% set readinessEvaluationProofTone = 'good' %}
+        {% set readinessHardGateProofTone = 'good' %}
+        {% set readinessTrafficProofTone = 'good' %}
+        {% set readinessDeliveryProofTone = 'good' %}
+        {% set readinessIntegrationProofTone = 'good' %}
+        {% set readinessSecurityProofTone = 'good' %}
+        {% set readinessCapacityProofTone = 'good' %}
+        {% set readinessObservabilityProofTone = 'good' %}
+      {% elseif readinessPreviewState == 'degraded' %}
+        {% set readinessStateKey = 'degraded' %}
+        {% set readinessStateLabel = 'Degraded' %}
+        {% set readinessStateLead = 'Agents is handling traffic, but some conditions need attention.' %}
+        {% set readinessStateSubcopy = 'Review the affected areas below, then use the detailed sections for full context.' %}
+        {% set readinessStateTone = 'warn' %}
+        {% set readinessShowReadyState = false %}
+        {% set readinessConfidenceLabel = 'high' %}
+        {% set readinessTrafficLead = 'Guarded traffic is seeing auth, scope, or rate-limit issues' %}
+        {% set readinessDeliveryLead = 'Webhook delivery is not enabled for this environment' %}
+        {% set readinessDeliverySummary = 'No delivery path is configured in this environment' %}
+        {% set readinessIntegrationLead = 'One or more integrations are lagging behind' %}
+        {% set readinessIntegrationLagLine = 'Max sync lag is above warning threshold' %}
+        {% set readinessIntegrationStatusLine = 'Review lagging integrations in the table below' %}
+        {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
+        {% set readinessCredentialLine = 'Managed credentials available for runtime access' %}
+        {% set readinessCapacityLead = 'Queue depth is within normal range' %}
+        {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+        {% set readinessCapacityLine = 'Active credentials seen in the last 7 days' %}
+        {% set readinessTokenLine = 'Token authentication required' %}
+        {% set readinessPrivacyLine = 'Default privacy protections active' %}
+        {% set readinessSecurityStatusLine = 'No active security warnings' %}
+        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
+        {% set readinessReliabilityLine = 'Reliability thresholds evaluated' %}
+        {% set readinessReliabilityStatusLine = '1 warning reliability signal detected' %}
+        {% set readinessMonitoringLine = 'Monitoring is active for live traffic' %}
+        {% set readinessHardGateRuntimeLine = 'Runtime is enabled' %}
+        {% set readinessHardGateDatabaseLine = 'Database connection available' %}
+        {% set readinessHardGateServicesLine = 'Core Craft services available' %}
+        {% set readinessHardGateStatusLine = 'No blocking configuration issues detected' %}
+        {% set readinessTrafficSummaryTone = 'warn' %}
+        {% set readinessTrafficSummaryLabel = 'Needs attention' %}
+        {% set readinessDeliverySummaryTone = 'muted' %}
+        {% set readinessDeliverySummaryLabel = 'Not enabled' %}
+        {% set readinessIntegrationSummaryTone = 'warn' %}
+        {% set readinessIntegrationSummaryLabel = 'Needs attention' %}
+        {% set readinessSecuritySummaryTone = 'good' %}
+        {% set readinessSecuritySummaryLabel = 'Good' %}
+        {% set readinessEvaluationProofTone = 'good' %}
+        {% set readinessHardGateProofTone = 'good' %}
+        {% set readinessTrafficProofTone = 'warn' %}
+        {% set readinessDeliveryProofTone = 'good' %}
+        {% set readinessIntegrationProofTone = 'warn' %}
+        {% set readinessSecurityProofTone = 'good' %}
+        {% set readinessCapacityProofTone = 'good' %}
+        {% set readinessObservabilityProofTone = 'warn' %}
+      {% elseif readinessPreviewState == 'blocked' %}
+        {% set readinessStateKey = 'blocked' %}
+        {% set readinessStateLabel = 'Blocked' %}
+        {% set readinessStateLead = 'Agents is not operationally fit for live machine traffic.' %}
+        {% set readinessStateSubcopy = 'Resolve the blocking issues below before trusting this environment for production traffic.' %}
+        {% set readinessStateTone = 'bad' %}
+        {% set readinessShowReadyState = false %}
+        {% set readinessConfidenceLabel = 'limited' %}
+        {% set readinessTrafficLead = 'Runtime is disabled, so guarded traffic is blocked' %}
+        {% set readinessDeliveryLead = 'Webhook delivery is not enabled for this environment' %}
+        {% set readinessDeliverySummary = 'No delivery path is configured in this environment' %}
+        {% set readinessIntegrationLead = 'One or more integrations are lagging behind' %}
+        {% set readinessIntegrationLagLine = 'Max sync lag is above warning threshold' %}
+        {% set readinessIntegrationStatusLine = 'Review lagging integrations in the table below' %}
+        {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
+        {% set readinessCredentialLine = 'No runtime credentials configured' %}
+        {% set readinessCapacityLead = 'Queue depth is elevated and may slow runtime work' %}
+        {% set readinessBackpressureLine = 'Runtime backpressure is building' %}
+        {% set readinessCapacityLine = 'No recent credential usage observed' %}
+        {% set readinessTokenLine = 'Token authentication required' %}
+        {% set readinessPrivacyLine = 'Default privacy protections active' %}
+        {% set readinessSecurityStatusLine = 'Security warnings need review' %}
+        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
+        {% set readinessReliabilityLine = 'Reliability thresholds evaluated' %}
+        {% set readinessReliabilityStatusLine = '1 warning reliability signal detected' %}
+        {% set readinessMonitoringLine = 'Monitoring is active, but recent traffic is limited' %}
+        {% set readinessHardGateRuntimeLine = 'Runtime is disabled' %}
+        {% set readinessHardGateDatabaseLine = 'Database connection available' %}
+        {% set readinessHardGateServicesLine = 'One or more core Craft services need attention' %}
+        {% set readinessHardGateStatusLine = '2 blocking issues detected' %}
+        {% set readinessTrafficSummaryTone = 'bad' %}
+        {% set readinessTrafficSummaryLabel = 'Blocked' %}
+        {% set readinessDeliverySummaryTone = 'muted' %}
+        {% set readinessDeliverySummaryLabel = 'Not enabled' %}
+        {% set readinessIntegrationSummaryTone = 'warn' %}
+        {% set readinessIntegrationSummaryLabel = 'Needs attention' %}
+        {% set readinessSecuritySummaryTone = 'bad' %}
+        {% set readinessSecuritySummaryLabel = 'Blocked' %}
+        {% set readinessEvaluationProofTone = 'warn' %}
+        {% set readinessHardGateProofTone = 'bad' %}
+        {% set readinessTrafficProofTone = 'bad' %}
+        {% set readinessDeliveryProofTone = 'good' %}
+        {% set readinessIntegrationProofTone = 'warn' %}
+        {% set readinessSecurityProofTone = 'bad' %}
+        {% set readinessCapacityProofTone = 'warn' %}
+        {% set readinessObservabilityProofTone = 'warn' %}
+      {% elseif readinessPreviewState == 'unproven' %}
+        {% set readinessStateKey = 'unproven' %}
+        {% set readinessStateLabel = 'Unproven' %}
+        {% set readinessStateLead = 'No blocking issues were detected, but live-readiness confidence is limited.' %}
+        {% set readinessStateSubcopy = 'Recent traffic, credential activity, or observability freshness is too thin for a high-confidence assessment.' %}
+        {% set readinessStateTone = 'muted' %}
+        {% set readinessShowReadyState = false %}
+        {% set readinessConfidenceLabel = 'limited' %}
+        {% set readinessTrafficLead = 'No guarded requests observed in the last 60 minutes' %}
+        {% set readinessDeliveryLead = 'Webhook delivery is not enabled for this environment' %}
+        {% set readinessDeliverySummary = 'No delivery path is configured in this environment' %}
+        {% set readinessIntegrationLead = 'No sync-state integrations are configured' %}
+        {% set readinessIntegrationLagLine = 'Checkpoint telemetry has not been submitted yet' %}
+        {% set readinessIntegrationStatusLine = 'No integrations are in warning or critical lag' %}
+        {% set readinessCheckpointLine = 'Checkpoint telemetry has not been submitted yet' %}
+        {% set readinessCredentialLine = 'No recent credential usage observed' %}
+        {% set readinessCapacityLead = 'Queue depth is within normal range' %}
+        {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+        {% set readinessCapacityLine = 'No recent credential usage observed' %}
+        {% set readinessTokenLine = 'Token authentication required' %}
+        {% set readinessPrivacyLine = 'Default privacy protections active' %}
+        {% set readinessSecurityStatusLine = 'No active security warnings' %}
+        {% set readinessObservabilityLine = 'Runtime metrics snapshot is stale or missing' %}
+        {% set readinessReliabilityLine = 'Reliability thresholds have not been evaluated recently' %}
+        {% set readinessReliabilityStatusLine = 'No warning or critical reliability signals detected' %}
+        {% set readinessMonitoringLine = 'Monitoring confidence is limited by stale metrics' %}
+        {% set readinessHardGateRuntimeLine = 'Runtime is enabled' %}
+        {% set readinessHardGateDatabaseLine = 'Database connection available' %}
+        {% set readinessHardGateServicesLine = 'Core Craft services available' %}
+        {% set readinessHardGateStatusLine = 'No blocking configuration issues detected' %}
+        {% set readinessTrafficSummaryTone = 'muted' %}
+        {% set readinessTrafficSummaryLabel = 'Unproven' %}
+        {% set readinessDeliverySummaryTone = 'muted' %}
+        {% set readinessDeliverySummaryLabel = 'Not enabled' %}
+        {% set readinessIntegrationSummaryTone = 'muted' %}
+        {% set readinessIntegrationSummaryLabel = 'Not enabled' %}
+        {% set readinessSecuritySummaryTone = 'muted' %}
+        {% set readinessSecuritySummaryLabel = 'Unproven' %}
+        {% set readinessEvaluationProofTone = 'warn' %}
+        {% set readinessHardGateProofTone = 'good' %}
+        {% set readinessTrafficProofTone = 'good' %}
+        {% set readinessDeliveryProofTone = 'good' %}
+        {% set readinessIntegrationProofTone = 'good' %}
+        {% set readinessSecurityProofTone = 'good' %}
+        {% set readinessCapacityProofTone = 'good' %}
+        {% set readinessObservabilityProofTone = 'warn' %}
+      {% endif %}
+      {% set settingsUrl = cpUrl('agents/settings') %}
+      {% set accountsUrl = cpUrl('agents/credentials') %}
+      {% set attentionAccountsUrl = cpUrl('agents/credentials', { listFilter: 'attention', focusFirstVisible: 1 }) %}
+      {% set overviewUrl = cpUrl('agents/dashboard/overview') %}
+      {% set readinessUrl = cpUrl('agents/dashboard/readiness') %}
+      {% set securityUrl = cpUrl('agents/dashboard/security') %}
+      {% set readinessActionRows = [
+        {
+          signal: 'Runtime disabled',
+          stateLabel: not agentsEnabled ? 'Blocked' : 'Clear',
+          stateTone: not agentsEnabled ? 'bad' : 'muted',
+          impact: 'Guarded machine traffic cannot run while the runtime is disabled.',
+          primaryAction: 'Open plugin settings',
+          secondaryAction: 'Review environment override',
+          primaryUrl: settingsUrl ~ '#runtimeSwitchesSection',
+          secondaryUrl: settingsUrl ~ '#configurationLocksSection',
+          surface: 'Settings',
+        },
+        {
+          signal: 'No runtime credentials',
+          stateLabel: securityCredentialCount == 0 ? 'Blocked' : 'Clear',
+          stateTone: securityCredentialCount == 0 ? 'bad' : 'muted',
+          impact: 'No managed or runtime credentials are available for machine access.',
+          primaryAction: 'Create managed account',
+          secondaryAction: 'Open Accounts',
+          primaryUrl: accountsUrl ~ '#addAgentSection',
+          secondaryUrl: accountsUrl ~ '#agentsCardList',
+          surface: 'Accounts',
+        },
+        {
+          signal: 'Security warnings',
+          stateLabel: readinessHasSecurityIssues ? 'Needs attention' : 'Clear',
+          stateTone: readinessHasSecurityIssues ? 'warn' : 'muted',
+          impact: 'Auth or privacy posture may drift from production expectations.',
+          primaryAction: 'Open Security',
+          secondaryAction: 'Review warnings',
+          primaryUrl: securityUrl ~ '#securitySnapshotSection',
+          secondaryUrl: securityUrl ~ '#securityWarningsSection',
+          surface: 'Security',
+        },
+        {
+          signal: 'Auth failures',
+          stateLabel: telemetryAuthFailures > 0 ? 'Needs attention' : 'Clear',
+          stateTone: telemetryAuthFailures > 0 ? 'warn' : 'muted',
+          impact: 'Credentials may be invalid or clients may be misconfigured.',
+          primaryAction: 'Review credentials',
+          secondaryAction: 'Inspect denied requests',
+          primaryUrl: attentionAccountsUrl ~ '#agentsCardList',
+          secondaryUrl: securityUrl ~ '#authRatePostureSection',
+          surface: 'Accounts',
+        },
+        {
+          signal: 'Scope denials',
+          stateLabel: telemetryForbidden > 0 ? 'Needs attention' : 'Clear',
+          stateTone: telemetryForbidden > 0 ? 'warn' : 'muted',
+          impact: 'One or more credentials cannot complete their expected requests.',
+          primaryAction: 'Inspect scopes',
+          secondaryAction: 'Open Accounts',
+          primaryUrl: securityUrl ~ '#authRatePostureSection',
+          secondaryUrl: accountsUrl ~ '#agentsCardList',
+          surface: 'Accounts',
+        },
+        {
+          signal: 'Rate-limit denials',
+          stateLabel: telemetryRateLimit > 0 ? 'Needs attention' : 'Clear',
+          stateTone: telemetryRateLimit > 0 ? 'warn' : 'muted',
+          impact: 'Clients may be overrunning policy limits and throttling themselves.',
+          primaryAction: 'Review rate-limit posture',
+          secondaryAction: 'Open Security',
+          primaryUrl: securityUrl ~ '#authRatePostureSection',
+          secondaryUrl: securityUrl ~ '#securitySnapshotSection',
+          surface: 'Security',
+        },
+        {
+          signal: 'Server errors (5xx)',
+          stateLabel: telemetryErrors5xx > 0 ? 'Needs attention' : 'Clear',
+          stateTone: telemetryErrors5xx > 0 ? 'warn' : 'muted',
+          impact: 'Runtime requests are failing and need diagnostics or rollback.',
+          primaryAction: 'Download diagnostics bundle',
+          secondaryAction: 'Review observability',
+          primaryUrl: overviewUrl ~ '#diagnosticsBundleSection',
+          secondaryUrl: readinessUrl ~ '#readinessProofObservability',
+          surface: 'Readiness / External',
+        },
+        {
+          signal: 'Webhook DLQ failures',
+          stateLabel: not webhookEnabledForReadiness ? 'Not enabled' : (telemetryDlqFailed > 0 ? 'Needs attention' : 'Clear'),
+          stateTone: not webhookEnabledForReadiness ? 'muted' : (telemetryDlqFailed > 0 ? 'warn' : 'muted'),
+          impact: 'Subscribers may miss changes until failed deliveries are replayed.',
+          primaryAction: 'Replay failed deliveries',
+          secondaryAction: 'Open Security',
+          primaryUrl: securityUrl ~ '#webhookReliabilitySection',
+          secondaryUrl: securityUrl ~ '#securitySnapshotSection',
+          surface: 'Security',
+        },
+        {
+          signal: 'Sync lag',
+          stateLabel: not readinessHasIntegrationTelemetry ? 'Not enabled' : (readinessConsumerLagCriticalCount > 0 ? 'Blocked' : ((readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60) ? 'Needs attention' : 'Clear')),
+          stateTone: not readinessHasIntegrationTelemetry ? 'muted' : (readinessConsumerLagCriticalCount > 0 ? 'bad' : ((readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60) ? 'warn' : 'muted')),
+          impact: 'Downstream systems may be operating on stale Craft or Commerce data.',
+          primaryAction: 'Review lagging integrations',
+          secondaryAction: 'Open lag details',
+          primaryUrl: readinessUrl ~ '#readinessProofIntegrationHealth',
+          secondaryUrl: settingsUrl ~ '#reliabilityThresholdsSection',
+          surface: 'Readiness / External',
+        },
+        {
+          signal: 'Queue depth high',
+          stateLabel: telemetryQueueDepth > 50 ? 'Blocked' : (telemetryQueueDepth > 10 ? 'Needs attention' : 'Clear'),
+          stateTone: telemetryQueueDepth > 50 ? 'bad' : (telemetryQueueDepth > 10 ? 'warn' : 'muted'),
+          impact: 'Backpressure may delay runtime work and follow-up processing.',
+          primaryAction: 'Open queue runbook',
+          secondaryAction: 'Check workers',
+          primaryUrl: readinessUrl ~ '#readinessProofCapacityRuntime',
+          secondaryUrl: readinessUrl ~ '#readinessProofObservability',
+          surface: 'External',
+        },
+        {
+          signal: 'Stale or low-confidence observability',
+          stateLabel: ((not readinessMetricsCurrent) or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials)) ? 'Unproven' : 'Clear',
+          stateTone: ((not readinessMetricsCurrent) or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials)) ? 'warn' : 'muted',
+          impact: 'The readiness verdict is less trustworthy because signal quality is weak.',
+          primaryAction: 'Recheck readiness',
+          secondaryAction: 'Inspect observability',
+          primaryUrl: readinessUrl ~ '#readinessStateCard',
+          secondaryUrl: readinessUrl ~ '#readinessProofObservability',
+          surface: 'Readiness',
+        },
+      ] %}
+      {% set readinessActionRowsProblematic = [] %}
+      {% if readinessPreviewState == 'ready' %}
+        {% set readinessActionRowsProblematic = [] %}
+      {% elseif readinessPreviewState == 'degraded' %}
+        {% set readinessActionRowsProblematic = [
+          {
+            signal: 'Auth failures',
+            stateLabel: 'Needs attention',
+            stateTone: 'warn',
+            impact: 'Credentials may be invalid or clients may be misconfigured.',
+            primaryAction: 'Review credentials',
+            secondaryAction: 'Inspect denied requests',
+            primaryUrl: attentionAccountsUrl ~ '#agentsCardList',
+            secondaryUrl: securityUrl ~ '#authRatePostureSection',
+            surface: 'Accounts',
+          },
+          {
+            signal: 'Webhook DLQ failures',
+            stateLabel: 'Not enabled',
+            stateTone: 'muted',
+            impact: 'Subscribers may miss changes until webhook delivery is enabled.',
+            primaryAction: 'Open Security',
+            secondaryAction: 'Review webhook posture',
+            primaryUrl: securityUrl ~ '#webhookReliabilitySection',
+            secondaryUrl: securityUrl ~ '#securitySnapshotSection',
+            surface: 'Security',
+          },
+          {
+            signal: 'Sync lag',
+            stateLabel: 'Needs attention',
+            stateTone: 'warn',
+            impact: 'Downstream systems may be operating on stale Craft or Commerce data.',
+            primaryAction: 'Review lagging integrations',
+            secondaryAction: 'Open lag details',
+            primaryUrl: readinessUrl ~ '#readinessProofIntegrationHealth',
+            secondaryUrl: settingsUrl ~ '#reliabilityThresholdsSection',
+            surface: 'Readiness / External',
+          },
+        ] %}
+      {% elseif readinessPreviewState == 'blocked' %}
+        {% set readinessActionRowsProblematic = [
+          {
+            signal: 'Runtime disabled',
+            stateLabel: 'Blocked',
+            stateTone: 'bad',
+            impact: 'Guarded machine traffic cannot run while the runtime is disabled.',
+            primaryAction: 'Open plugin settings',
+            secondaryAction: 'Review environment override',
+            primaryUrl: settingsUrl ~ '#runtimeSwitchesSection',
+            secondaryUrl: settingsUrl ~ '#configurationLocksSection',
+            surface: 'Settings',
+          },
+          {
+            signal: 'No runtime credentials',
+            stateLabel: 'Blocked',
+            stateTone: 'bad',
+            impact: 'No managed or runtime credentials are available for machine access.',
+            primaryAction: 'Create managed account',
+            secondaryAction: 'Open Accounts',
+            primaryUrl: accountsUrl ~ '#addAgentSection',
+            secondaryUrl: accountsUrl ~ '#agentsCardList',
+            surface: 'Accounts',
+          },
+          {
+            signal: 'Security warnings',
+            stateLabel: 'Needs attention',
+            stateTone: 'warn',
+            impact: 'Auth or privacy posture may drift from production expectations.',
+            primaryAction: 'Open Security',
+            secondaryAction: 'Review warnings',
+            primaryUrl: securityUrl ~ '#securitySnapshotSection',
+            secondaryUrl: securityUrl ~ '#securityWarningsSection',
+            surface: 'Security',
+          },
+          {
+            signal: 'Sync lag',
+            stateLabel: 'Needs attention',
+            stateTone: 'warn',
+            impact: 'Downstream systems may be operating on stale Craft or Commerce data.',
+            primaryAction: 'Review lagging integrations',
+            secondaryAction: 'Open lag details',
+            primaryUrl: readinessUrl ~ '#readinessProofIntegrationHealth',
+            secondaryUrl: settingsUrl ~ '#reliabilityThresholdsSection',
+            surface: 'Readiness / External',
+          },
+        ] %}
+      {% elseif readinessPreviewState == 'unproven' %}
+        {% set readinessActionRowsProblematic = [
+          {
+            signal: 'Webhook DLQ failures',
+            stateLabel: 'Not enabled',
+            stateTone: 'muted',
+            impact: 'No delivery path is configured in this environment.',
+            primaryAction: 'Open Security',
+            secondaryAction: 'Review webhook posture',
+            primaryUrl: securityUrl ~ '#webhookReliabilitySection',
+            secondaryUrl: securityUrl ~ '#securitySnapshotSection',
+            surface: 'Security',
+          },
+          {
+            signal: 'Sync lag',
+            stateLabel: 'Not enabled',
+            stateTone: 'muted',
+            impact: 'No sync-state telemetry is available yet for downstream systems.',
+            primaryAction: 'Review lagging integrations',
+            secondaryAction: 'Open reliability thresholds',
+            primaryUrl: readinessUrl ~ '#readinessProofIntegrationHealth',
+            secondaryUrl: settingsUrl ~ '#reliabilityThresholdsSection',
+            surface: 'Readiness / External',
+          },
+          {
+            signal: 'Stale or low-confidence observability',
+            stateLabel: 'Unproven',
+            stateTone: 'warn',
+            impact: 'The readiness verdict is less trustworthy because signal quality is weak.',
+            primaryAction: 'Recheck readiness',
+            secondaryAction: 'Inspect observability',
+            primaryUrl: readinessUrl ~ '#readinessStateCard',
+            secondaryUrl: readinessUrl ~ '#readinessProofObservability',
+            surface: 'Readiness',
+          },
+        ] %}
+      {% else %}
+        {% for row in readinessActionRows %}
+          {% if (row.stateLabel|lower) != 'clear' %}
+            {% set readinessActionRowsProblematic = readinessActionRowsProblematic|merge([row]) %}
           {% endif %}
-        {% else %}
-          <p>No sync-state checkpoint telemetry submitted yet.</p>
-        {% endif %}
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Telemetry Snapshot</h2>
-        <p class="agents-subtle">Derived from the runtime observability surface (`GET /agents/v1/metrics`). Generated at {{ observabilitySummary.generatedAt|default('n/a') }}.</p>
-        <div class="agents-metric-strip-wrap">
-          <div class="agents-metric-strip">
-          <div class="agents-metric agents-metric-strip-card {{ telemetryRequestsClass }}">
-            <div class="label">Guarded requests</div>
-            <div class="value">{{ telemetryRequestsTotal }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryAuthFailuresClass }}">
-            <div class="label">Auth failures</div>
-            <div class="value">{{ telemetryAuthFailures }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryForbiddenClass }}">
-            <div class="label">Scope denials (403)</div>
-            <div class="value">{{ telemetryForbidden }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryRateLimitClass }}">
-            <div class="label">Rate-limit denials</div>
-            <div class="value">{{ telemetryRateLimit }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryErrors5xxClass }}">
-            <div class="label">Server errors (5xx)</div>
-            <div class="value">{{ telemetryErrors5xx }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryQueueDepthClass }}">
-            <div class="label">Queue depth</div>
-            <div class="value">{{ telemetryQueueDepth }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryDlqFailedClass }}">
-            <div class="label">DLQ failed events</div>
-            <div class="value">{{ telemetryDlqFailed }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryConsumerLagClass }}">
-            <div class="label">Max sync-state lag</div>
-            <div class="value">{{ telemetryConsumerLagMaxSeconds }}s</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ telemetryActiveCredentialsClass }}">
-            <div class="label">Active credentials (7d)</div>
-            <div class="value">{{ telemetryActiveCredentials7d }}</div>
-          </div>
-          </div>
-        </div>
-
-        <details class="agents-advanced" style="margin-top: 8px;">
-          <summary><strong>Telemetry JSON (Technical)</strong></summary>
-          <pre class="border rounded p-3">{{ observabilitySnapshotJson }}</pre>
-        </details>
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Runbook & Alert Guidance</h2>
-        <div class="tablepane mx-0" style="margin-top: 0;">
-          <table class="data fullwidth">
-            <thead>
-            <tr>
-              <th>Signal</th>
-              <th>Trigger</th>
-              <th>Primary response</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for signal in observabilitySummary.reliabilitySignals|default([]) %}
-              <tr>
-                <td>{{ signal.label ?: signal.id }}</td>
-                <td>Warn: <code>{{ signal.comparator }} {{ signal.warnThreshold }}</code><br>Critical: <code>{{ signal.comparator }} {{ signal.criticalThreshold }}</code></td>
-                <td>{{ signal.primaryResponse ?: 'See observability runbook.' }}</td>
-              </tr>
-            {% else %}
-              <tr>
-                <td colspan="3">No reliability threshold catalog available.</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {% if readinessDiagnostics.warnings|length %}
-        <section class="border rounded p-3 warning">
-          <h2 class="h4">Warnings</h2>
-          <ul class="agents-link-list">
-            {% for warning in readinessDiagnostics.warnings %}
-              <li>{{ warning }}</li>
-            {% endfor %}
-          </ul>
-        </section>
+        {% endfor %}
       {% endif %}
 
-      <section class="border rounded p-3">
-        <h2 class="h4">Advanced Diagnostics</h2>
-        <details class="agents-advanced" style="margin-bottom: 8px;">
-          <summary><strong>Health Data (Technical JSON)</strong></summary>
-          <pre class="border rounded p-3">{{ readinessHealthJson }}</pre>
-        </details>
-        <details class="agents-advanced" style="margin-bottom: 8px;">
-          <summary><strong>Readiness Data (Technical JSON)</strong></summary>
-          <pre class="border rounded p-3">{{ readinessSummaryJson }}</pre>
-        </details>
-        <details class="agents-advanced">
-          <summary><strong>Diagnostics (Technical JSON)</strong></summary>
-          <pre class="border rounded p-3">{{ readinessDiagnosticsJson }}</pre>
+      <section class="border p-0 agents-readiness-ready-card agents-readiness-ready-card--{{ readinessStateTone }}" id="readinessStateCard">
+        <div class="agents-readiness-ready-top">
+          <div class="agents-readiness-ready-heading">
+            <span class="agents-readiness-ready-lamp agents-readiness-ready-lamp--{{ readinessStateTone }}" aria-hidden="true"></span>
+            <span class="agents-readiness-ready-label">{{ readinessStateLabel }}</span>
+          </div>
+          <p class="agents-readiness-ready-copy">
+            {{ readinessStateLead }}
+            <br>
+            {{ readinessStateSubcopy }}
+            <br>
+            Last evaluated {{ readinessEvaluationLabel }}.
+          </p>
+        </div>
+
+        <div class="agents-readiness-ready-summary" role="list" aria-label="Readiness summary">
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Traffic Health</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessTrafficSummaryTone }}">{{ readinessTrafficSummaryLabel }}</strong>
+          </div>
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Delivery Health</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessDeliverySummaryTone }}">{{ readinessDeliverySummaryLabel }}</strong>
+          </div>
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Integration Health</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessIntegrationSummaryTone }}">{{ readinessIntegrationSummaryLabel }}</strong>
+          </div>
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Security Posture</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessSecuritySummaryTone }}">{{ readinessSecuritySummaryLabel }}</strong>
+          </div>
+        </div>
+
+        <details class="agents-readiness-ready-details" open>
+          <summary><span>Details +</span></summary>
+          <div class="agents-readiness-ready-grid">
+            <section class="agents-readiness-ready-proof-card" id="readinessProofDeliveryHealth">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessDeliveryProofTone }}">Delivery Health</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>{{ readinessDeliveryLead }}</li>
+                <li>Failed DLQ events: <strong>{{ telemetryDlqFailed }}</strong></li>
+                <li>{{ telemetryDlqFailed > 0 ? 'Replay queue needs attention' : 'Replay queue clear' }}</li>
+                <li>{{ readinessDeliverySummary }}</li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="readinessProofEvaluation">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessEvaluationProofTone }}">Evaluation</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Last evaluated: <strong>{{ readinessEvaluationLabel }}</strong></li>
+                <li>Signal window: <strong>last 60 minutes</strong></li>
+                <li>Metrics freshness: <strong>{{ readinessMetricsCurrent ? 'current' : 'stale' }}</strong></li>
+                <li>Confidence: <strong>{{ readinessConfidenceLabel }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="readinessProofHardGates">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessHardGateProofTone }}">Hard Gates</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>{{ readinessHardGateRuntimeLine }}</li>
+                <li>{{ readinessHardGateDatabaseLine }}</li>
+                <li>{{ readinessHardGateServicesLine }}</li>
+                <li>{{ readinessHardGateStatusLine }}</li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="readinessProofTrafficHealth">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessTrafficProofTone }}">Traffic Health</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>{{ readinessTrafficLead }}</li>
+                <li>Auth failures: <strong>{{ telemetryAuthFailures }}</strong></li>
+                <li>Scope denials: <strong>{{ telemetryForbidden }}</strong></li>
+                <li>Rate-limit denials: <strong>{{ telemetryRateLimit }}</strong></li>
+                <li>Server errors (5xx): <strong>{{ telemetryErrors5xx }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="readinessProofIntegrationHealth">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessIntegrationProofTone }}">Integration Health</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>{{ readinessIntegrationLead }}</li>
+                <li>{{ readinessIntegrationLagLine }}</li>
+                <li>{{ readinessIntegrationStatusLine }}</li>
+                <li>{{ readinessCheckpointLine }}</li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="readinessProofSecurityPosture">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessSecurityProofTone }}">Security Posture</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>{{ readinessTokenLine }}</li>
+                <li>{{ readinessSecurityStatusLine }}</li>
+                <li>{{ readinessPrivacyLine }}</li>
+                <li>{{ readinessCredentialLine }}</li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="readinessProofCapacityRuntime">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessCapacityProofTone }}">Capacity / Runtime</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>{{ readinessCapacityLead }}</li>
+                <li>{{ readinessBackpressureLine }}</li>
+                <li>{{ readinessCapacityLine }}</li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="readinessProofObservability">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessObservabilityProofTone }}">Observability</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>{{ readinessObservabilityLine }}</li>
+                <li>{{ readinessReliabilityLine }}</li>
+                <li>{{ readinessReliabilityStatusLine }}</li>
+                <li>{{ readinessMonitoringLine }}</li>
+              </ul>
+            </section>
+          </div>
+
+          {% if readinessActionRowsProblematic|length %}
+            <div class="agents-readiness-actions-block" id="readinessActionMappingSection">
+              <div class="agents-readiness-actions-head">
+                <h2 class="agents-readiness-actions-title">Action Mapping</h2>
+              </div>
+
+              <div class="agents-readiness-actions-table-wrap">
+                <table class="agents-readiness-actions-table" role="table">
+                  <colgroup>
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--signal">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--state">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--impact">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--action">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--surface">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th scope="col">Signal</th>
+                      <th scope="col">Current state</th>
+                      <th scope="col">Impact</th>
+                      <th scope="col">Recommended Action</th>
+                      <th scope="col">Surface</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in readinessActionRowsProblematic %}
+                      <tr data-state-tone="{{ row.stateTone }}">
+                        <td><strong class="agents-readiness-actions-signal">{{ row.signal }}</strong></td>
+                        <td>
+                          <strong class="agents-readiness-actions-state agents-readiness-actions-state--{{ row.stateTone }}">{{ row.stateLabel }}</strong>
+                        </td>
+                        <td>{{ row.impact }}</td>
+                        <td>
+                          <a href="{{ row.primaryUrl }}" class="agents-readiness-actions-primary"><strong>{{ row.primaryAction }}</strong></a>
+                          <a href="{{ row.secondaryUrl }}" class="agents-readiness-actions-secondary">{{ row.secondaryAction }}</a>
+                        </td>
+                        <td>{{ row.surface }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {% endif %}
         </details>
       </section>
+
     {% endif %}
 
     {% if activeDashboardTab == 'discovery' %}
@@ -664,136 +1234,461 @@
 
     {% if activeDashboardTab == 'security' %}
       {% set securityTokenRequired = securityPosture.authentication.required ?? false %}
+      {% set securityRequestedRequireToken = securityPosture.authentication.requestedRequireToken ?? false %}
+      {% set securityTokenForcedInProd = securityPosture.authentication.tokenRequirementForcedInProd ?? false %}
+      {% set securityQueryTokenEnabled = securityPosture.authentication.allowQueryToken ?? false %}
+      {% set securityFailOnMissingTokenInProd = securityPosture.authentication.failOnMissingTokenInProd ?? false %}
       {% set securityCredentialCount = securityPosture.authentication.credentialCount|default(0) %}
+      {% set securityEnvCredentialCount = securityPosture.authentication.envCredentialCount|default(0) %}
+      {% set securityManagedCredentialCount = securityPosture.authentication.managedCredentialCount|default(0) %}
+      {% set securityDefaultScopes = securityPosture.authentication.tokenScopes|default([]) %}
+      {% set securityDefaultScopeCount = securityDefaultScopes|length %}
+      {% set securityDefaultScopePreview = securityDefaultScopes|slice(0, 3)|join(', ') %}
       {% set securityWarnings = securityPosture.warningCounts.warnings|default(0) %}
       {% set securityErrors = securityPosture.warningCounts.errors|default(0) %}
+      {% set securityPrivacyRedaction = securityPosture.privacy.redactEmail ?? false %}
+      {% set securityWebhookEnabled = securityPosture.webhook.enabled ?? false %}
+      {% set securityWebhookUrlConfigured = securityPosture.webhook.urlConfigured ?? false %}
+      {% set securityWebhookSecretConfigured = securityPosture.webhook.secretConfigured ?? false %}
+      {% set securityWebhookDestinationHost = securityPosture.webhook.destinationHost ?: 'n/a' %}
+      {% set securityWebhookTimeoutSeconds = securityPosture.webhook.timeoutSeconds|default(0) %}
+      {% set securityWebhookMaxAttempts = securityPosture.webhook.maxAttempts|default(0) %}
+      {% set securityRateLimitPerMinute = securityPosture.rateLimit.perMinute|default(0) %}
+      {% set securityRateLimitWindowSeconds = securityPosture.rateLimit.windowSeconds|default(0) %}
       {% set securityDlqCount = webhookDeadLetters|length %}
-      {% set securityTokenRequiredClass = securityTokenRequired ? 'agents-metric--good' : 'agents-metric--bad' %}
-      {% set securityCredentialCountClass = securityCredentialCount > 0 ? 'agents-metric--good' : 'agents-metric--bad' %}
-      {% set securityWarningsClass = securityWarnings == 0
-        ? 'agents-metric--good'
-        : (securityWarnings <= 3 ? 'agents-metric--warn' : 'agents-metric--bad') %}
-      {% set securityErrorsClass = securityErrors == 0
-        ? 'agents-metric--good'
-        : (securityErrors == 1 ? 'agents-metric--warn' : 'agents-metric--bad') %}
-      {% set securityDlqClass = securityDlqCount == 0
-        ? 'agents-metric--good'
-        : (securityDlqCount <= 10 ? 'agents-metric--warn' : 'agents-metric--bad') %}
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Security Snapshot</h2>
-        <div class="agents-metric-strip-wrap">
-          <div class="agents-metric-strip">
-          <div class="agents-metric agents-metric-strip-card {{ securityTokenRequiredClass }}">
-            <div class="label">Token required</div>
-            <div class="value">{{ securityTokenRequired ? 'Yes' : 'No' }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ securityCredentialCountClass }}">
-            <div class="label">Active credentials</div>
-            <div class="value">{{ securityCredentialCount }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ securityWarningsClass }}">
-            <div class="label">Warnings</div>
-            <div class="value">{{ securityWarnings }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ securityErrorsClass }}">
-            <div class="label">Errors</div>
-            <div class="value">{{ securityErrors }}</div>
-          </div>
-          <div class="agents-metric agents-metric-strip-card {{ securityDlqClass }}">
-            <div class="label">DLQ events</div>
-            <div class="value">{{ securityDlqCount }}</div>
-          </div>
-          </div>
-        </div>
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Environment Profile</h2>
-        <ul class="agents-link-list">
-          <li>Environment: <strong>{{ securityPosture.environment|default('unknown') }}</strong></li>
-          <li>Profile: <strong>{{ securityPosture.profile.name|default('unknown') }}</strong></li>
-          <li>Profile source: <strong>{{ securityPosture.profile.source|default('unknown') }}</strong></li>
-          <li>Profile defaults applied: <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></li>
-          <li>Effective policy version: <strong>{{ securityPosture.profile.effectivePolicyVersion|default('n/a') }}</strong></li>
-        </ul>
-        {% if securityPosture.profile.defaultsAppliedFields|length %}
-          <p class="agents-subtle" style="margin-top: 8px;">
-            Profile default fields: <strong>{{ securityPosture.profile.defaultsAppliedFields|join(', ') }}</strong>
-          </p>
+      {% set securityActiveCredentials7d = observabilitySummary.activeCredentials7d|default(0) %}
+      {% set securityAuthFailures = observabilitySummary.authFailuresTotal|default(0) %}
+      {% set securityForbiddenTotal = observabilitySummary.forbiddenTotal|default(0) %}
+      {% set securityRateLimitDenied = observabilitySummary.rateLimitExceededTotal|default(0) %}
+      {% set securityErrors5xx = observabilitySummary.errors5xxTotal|default(0) %}
+      {% set securityRequestsTotal = observabilitySummary.requestsTotal|default(0) %}
+      {% set securityGeneratedAt = observabilitySummary.generatedAt|default('') %}
+      {% set securityGeneratedAtTimestamp = securityGeneratedAt ? securityGeneratedAt|date('U') : 0 %}
+      {% set securityNowTimestamp = 'now'|date('U') %}
+      {% set securityEvaluatedAgeSeconds = securityGeneratedAtTimestamp > 0 ? (securityNowTimestamp - securityGeneratedAtTimestamp) : null %}
+      {% set securityEvaluationLabel = 'unknown' %}
+      {% if securityEvaluatedAgeSeconds is not same as(null) %}
+        {% if securityEvaluatedAgeSeconds < 60 %}
+          {% set securityEvaluationLabel = 'just now' %}
+        {% elseif securityEvaluatedAgeSeconds < 3600 %}
+          {% set securityMinutesAgo = (securityEvaluatedAgeSeconds / 60)|round(0, 'floor') %}
+          {% set securityEvaluationLabel = securityMinutesAgo ~ ' minute' ~ (securityMinutesAgo == 1 ? '' : 's') ~ ' ago' %}
+        {% elseif securityEvaluatedAgeSeconds < 86400 %}
+          {% set securityHoursAgo = (securityEvaluatedAgeSeconds / 3600)|round(0, 'floor') %}
+          {% set securityEvaluationLabel = securityHoursAgo ~ ' hour' ~ (securityHoursAgo == 1 ? '' : 's') ~ ' ago' %}
+        {% else %}
+          {% set securityDaysAgo = (securityEvaluatedAgeSeconds / 86400)|round(0, 'floor') %}
+          {% set securityEvaluationLabel = securityDaysAgo ~ ' day' ~ (securityDaysAgo == 1 ? '' : 's') ~ ' ago' %}
         {% endif %}
-      </section>
+      {% endif %}
+      {% set securityConfidenceLabel = securityCredentialCount > 0 and securityActiveCredentials7d > 0 and securityRequestsTotal > 0 ? 'high' : 'limited' %}
+      {% set securityWebhookMisconfigured = (securityWebhookUrlConfigured and not securityWebhookSecretConfigured) or ((not securityWebhookUrlConfigured) and securityWebhookSecretConfigured) %}
+      {% set securityHasRuntimeSignalIssues = securityAuthFailures > 0 or securityForbiddenTotal > 0 or securityRateLimitDenied > 0 or securityErrors5xx > 0 %}
+      {% set securityAuthSummaryTone = 'good' %}
+      {% set securityAuthSummaryLabel = 'Good' %}
+      {% if (not securityTokenRequired) or securityQueryTokenEnabled or securityHasRuntimeSignalIssues %}
+        {% set securityAuthSummaryTone = 'warn' %}
+        {% set securityAuthSummaryLabel = 'Needs attention' %}
+      {% endif %}
+      {% set securityCredentialSummaryTone = 'good' %}
+      {% set securityCredentialSummaryLabel = 'Good' %}
+      {% if securityTokenRequired and securityCredentialCount == 0 %}
+        {% set securityCredentialSummaryTone = 'bad' %}
+        {% set securityCredentialSummaryLabel = 'Blocked' %}
+      {% elseif securityCredentialCount > 0 and securityActiveCredentials7d == 0 %}
+        {% set securityCredentialSummaryTone = 'muted' %}
+        {% set securityCredentialSummaryLabel = 'Unproven' %}
+      {% endif %}
+      {% set securityPolicySummaryTone = 'good' %}
+      {% set securityPolicySummaryLabel = 'Good' %}
+      {% if securityErrors > 0 %}
+        {% set securityPolicySummaryTone = 'bad' %}
+        {% set securityPolicySummaryLabel = 'Blocked' %}
+      {% elseif securityWarnings > 0 or not securityPrivacyRedaction %}
+        {% set securityPolicySummaryTone = 'warn' %}
+        {% set securityPolicySummaryLabel = 'Needs attention' %}
+      {% endif %}
+      {% set securityWebhookSummaryTone = 'good' %}
+      {% set securityWebhookSummaryLabel = 'Good' %}
+      {% if not securityWebhookEnabled and not securityWebhookUrlConfigured and not securityWebhookSecretConfigured %}
+        {% set securityWebhookSummaryTone = 'muted' %}
+        {% set securityWebhookSummaryLabel = 'Not enabled' %}
+      {% elseif securityWebhookMisconfigured or securityDlqCount > 0 %}
+        {% set securityWebhookSummaryTone = 'warn' %}
+        {% set securityWebhookSummaryLabel = 'Needs attention' %}
+      {% endif %}
+      {% set securityHasBlockingIssues = securityPolicySummaryTone == 'bad' or securityCredentialSummaryTone == 'bad' %}
+      {% set securityHasDegradedSignals = (not securityHasBlockingIssues) and (
+        securityAuthSummaryTone == 'warn'
+        or securityPolicySummaryTone == 'warn'
+        or securityWebhookSummaryTone == 'warn'
+      ) %}
+      {% set securityHasLowConfidence = (not securityHasBlockingIssues) and (not securityHasDegradedSignals) and securityCredentialSummaryTone == 'muted' %}
+      {% set securityStateKey = 'ready' %}
+      {% set securityStateLabel = 'Good' %}
+      {% set securityStateLead = 'Security posture is aligned for governed machine access.' %}
+      {% set securityStateSubcopy = 'Token enforcement, credential coverage, and webhook posture do not need attention right now.' %}
+      {% set securityStateTone = 'good' %}
+      {% if securityHasBlockingIssues %}
+        {% set securityStateKey = 'blocked' %}
+        {% set securityStateLabel = 'Blocked' %}
+        {% set securityStateLead = 'Security posture is not acceptable for trusted machine traffic.' %}
+        {% set securityStateSubcopy = 'Resolve the blocking issues below before treating this environment as safely operational.' %}
+        {% set securityStateTone = 'bad' %}
+      {% elseif securityHasDegradedSignals %}
+        {% set securityStateKey = 'degraded' %}
+        {% set securityStateLabel = 'Needs Attention' %}
+        {% set securityStateLead = 'Security posture is working, but one or more controls need follow-up.' %}
+        {% set securityStateSubcopy = 'Review the affected areas below, then use the action map to route the next operator step.' %}
+        {% set securityStateTone = 'warn' %}
+      {% elseif securityHasLowConfidence %}
+        {% set securityStateKey = 'unproven' %}
+        {% set securityStateLabel = 'Unproven' %}
+        {% set securityStateLead = 'No blocking issue is visible, but recent credential and traffic evidence is thin.' %}
+        {% set securityStateSubcopy = 'Treat this verdict as low-confidence until machine access has been exercised recently.' %}
+        {% set securityStateTone = 'muted' %}
+      {% endif %}
+      {% set securityAuthProofTone = securityAuthSummaryTone in ['warn', 'bad'] ? securityAuthSummaryTone : 'good' %}
+      {% set securityCredentialProofTone = securityCredentialSummaryTone in ['warn', 'bad'] ? securityCredentialSummaryTone : 'good' %}
+      {% set securityPolicyProofTone = securityPolicySummaryTone in ['warn', 'bad'] ? securityPolicySummaryTone : 'good' %}
+      {% set securityRuntimeSignalsProofTone = securityErrors5xx > 0
+        ? 'bad'
+        : ((securityAuthFailures > 0 or securityForbiddenTotal > 0 or securityRateLimitDenied > 0) ? 'warn' : 'good') %}
+      {% set securityWebhookProofTone = securityWebhookSummaryTone in ['warn', 'bad'] ? securityWebhookSummaryTone : 'good' %}
+      {% set securityDlqProofTone = securityDlqCount > 0 ? 'warn' : 'good' %}
+      {% set securityActivityProofTone = (securityActiveCredentials7d > 0 and securityRequestsTotal > 0) ? 'good' : 'warn' %}
+      {% set securityWarningsProofTone = securityErrors > 0 ? 'bad' : (securityWarnings > 0 ? 'warn' : 'good') %}
+      {% set securitySettingsUrl = cpUrl('agents/settings') %}
+      {% set securityAccountsUrl = cpUrl('agents/credentials') %}
+      {% set securityAttentionAccountsUrl = cpUrl('agents/credentials', { listFilter: 'attention', focusFirstVisible: 1 }) %}
+      {% set securityDashboardUrl = cpUrl('agents/dashboard/security') %}
+      {% set securityActionRows = [
+        {
+          signal: 'Token enforcement relaxed',
+          stateLabel: not securityTokenRequired ? 'Needs attention' : 'Clear',
+          stateTone: not securityTokenRequired ? 'warn' : 'muted',
+          impact: 'Requests can reach guarded surfaces without the standard token requirement.',
+          primaryAction: 'Open plugin settings',
+          secondaryAction: 'Review configuration locks',
+          primaryUrl: securitySettingsUrl ~ '#runtimeSwitchesSection',
+          secondaryUrl: securitySettingsUrl ~ '#configurationLocksSection',
+          surface: 'Settings',
+        },
+        {
+          signal: 'No runtime credentials',
+          stateLabel: securityTokenRequired and securityCredentialCount == 0 ? 'Blocked' : 'Clear',
+          stateTone: securityTokenRequired and securityCredentialCount == 0 ? 'bad' : 'muted',
+          impact: 'Token enforcement cannot succeed because no usable credentials are configured.',
+          primaryAction: 'Create managed account',
+          secondaryAction: 'Open Accounts',
+          primaryUrl: securityAccountsUrl ~ '#addAgentSection',
+          secondaryUrl: securityAccountsUrl ~ '#agentsCardList',
+          surface: 'Accounts',
+        },
+        {
+          signal: 'Query-token transport',
+          stateLabel: securityQueryTokenEnabled ? 'Needs attention' : 'Clear',
+          stateTone: securityQueryTokenEnabled ? 'warn' : 'muted',
+          impact: 'Tokens can be exposed through URLs, referrers, and copied links when query transport is enabled.',
+          primaryAction: 'Open plugin settings',
+          secondaryAction: 'Review auth posture',
+          primaryUrl: securitySettingsUrl ~ '#runtimeSwitchesSection',
+          secondaryUrl: securityDashboardUrl ~ '#authRatePostureSection',
+          surface: 'Settings / Security',
+        },
+        {
+          signal: 'Privacy redaction disabled',
+          stateLabel: not securityPrivacyRedaction ? 'Needs attention' : 'Clear',
+          stateTone: not securityPrivacyRedaction ? 'warn' : 'muted',
+          impact: 'Sensitive address and order context may be returned with less protection than expected.',
+          primaryAction: 'Review policy posture',
+          secondaryAction: 'Inspect configuration locks',
+          primaryUrl: securityDashboardUrl ~ '#authRatePostureSection',
+          secondaryUrl: securitySettingsUrl ~ '#configurationLocksSection',
+          surface: 'Security / Settings',
+        },
+        {
+          signal: 'Auth failures',
+          stateLabel: securityAuthFailures > 0 ? 'Needs attention' : 'Clear',
+          stateTone: securityAuthFailures > 0 ? 'warn' : 'muted',
+          impact: 'Credentials may be invalid or clients may be misconfigured.',
+          primaryAction: 'Review credentials',
+          secondaryAction: 'Inspect auth posture',
+          primaryUrl: securityAttentionAccountsUrl ~ '#agentsCardList',
+          secondaryUrl: securityDashboardUrl ~ '#authRatePostureSection',
+          surface: 'Accounts / Security',
+        },
+        {
+          signal: 'Scope denials',
+          stateLabel: securityForbiddenTotal > 0 ? 'Needs attention' : 'Clear',
+          stateTone: securityForbiddenTotal > 0 ? 'warn' : 'muted',
+          impact: 'One or more credentials cannot complete their expected requests.',
+          primaryAction: 'Inspect scopes',
+          secondaryAction: 'Open Accounts',
+          primaryUrl: securityDashboardUrl ~ '#authRatePostureSection',
+          secondaryUrl: securityAccountsUrl ~ '#agentsCardList',
+          surface: 'Security / Accounts',
+        },
+        {
+          signal: 'Rate-limit denials',
+          stateLabel: securityRateLimitDenied > 0 ? 'Needs attention' : 'Clear',
+          stateTone: securityRateLimitDenied > 0 ? 'warn' : 'muted',
+          impact: 'Clients may be overrunning policy limits and throttling themselves.',
+          primaryAction: 'Review auth / rate posture',
+          secondaryAction: 'Inspect runtime signals',
+          primaryUrl: securityDashboardUrl ~ '#authRatePostureSection',
+          secondaryUrl: securityDashboardUrl ~ '#securityRuntimeSignalsSection',
+          surface: 'Security',
+        },
+        {
+          signal: 'Webhook configuration',
+          stateLabel: securityWebhookMisconfigured ? 'Needs attention' : 'Clear',
+          stateTone: securityWebhookMisconfigured ? 'warn' : 'muted',
+          impact: 'Webhook delivery is partially configured and cannot operate safely until both URL and secret are present.',
+          primaryAction: 'Review webhook posture',
+          secondaryAction: 'Inspect configuration locks',
+          primaryUrl: securityDashboardUrl ~ '#webhookReliabilitySection',
+          secondaryUrl: securitySettingsUrl ~ '#configurationLocksSection',
+          surface: 'Security / Settings',
+        },
+        {
+          signal: 'Failed DLQ events',
+          stateLabel: securityDlqCount > 0 ? 'Needs attention' : 'Clear',
+          stateTone: securityDlqCount > 0 ? 'warn' : 'muted',
+          impact: 'Final webhook delivery failures require replay or investigation.',
+          primaryAction: 'Open replay queue',
+          secondaryAction: 'Review webhook posture',
+          primaryUrl: securityDashboardUrl ~ '#webhookDlqDetailSection',
+          secondaryUrl: securityDashboardUrl ~ '#webhookReliabilitySection',
+          surface: 'Security',
+        },
+        {
+          signal: 'Security warnings',
+          stateLabel: securityErrors > 0 ? 'Blocked' : (securityWarnings > 0 ? 'Needs attention' : 'Clear'),
+          stateTone: securityErrors > 0 ? 'bad' : (securityWarnings > 0 ? 'warn' : 'muted'),
+          impact: 'Policy warnings or errors indicate the runtime posture no longer matches expected production safeguards.',
+          primaryAction: 'Review warnings',
+          secondaryAction: 'Review environment profile',
+          primaryUrl: securityDashboardUrl ~ '#securityWarningsSection',
+          secondaryUrl: securityDashboardUrl ~ '#environmentProfileSection',
+          surface: 'Security',
+        },
+        {
+          signal: 'Low recent credential activity',
+          stateLabel: securityCredentialCount > 0 and securityActiveCredentials7d == 0 ? 'Unproven' : 'Clear',
+          stateTone: securityCredentialCount > 0 and securityActiveCredentials7d == 0 ? 'muted' : 'muted',
+          impact: 'Security posture is harder to trust when credentials have not been exercised recently.',
+          primaryAction: 'Open Accounts',
+          secondaryAction: 'Review runtime signals',
+          primaryUrl: securityAccountsUrl ~ '#agentsCardList',
+          secondaryUrl: securityDashboardUrl ~ '#securityCredentialActivitySection',
+          surface: 'Accounts / Security',
+        },
+      ] %}
+      {% set securityActionRowsProblematic = [] %}
+      {% for row in securityActionRows %}
+        {% if (row.stateLabel|lower) != 'clear' %}
+          {% set securityActionRowsProblematic = securityActionRowsProblematic|merge([row]) %}
+        {% endif %}
+      {% endfor %}
+      {% set securityWarningPreview = securityPosture.warnings|default([])|slice(0, 4) %}
+      {% set securityLatestDlqRow = webhookDeadLetters|first %}
+      {% set securityLatestDlqUpdatedAt = 'n/a' %}
+      {% if securityLatestDlqRow and securityLatestDlqRow.dateUpdated is defined and securityLatestDlqRow.dateUpdated %}
+        {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateUpdated %}
+      {% elseif securityLatestDlqRow and securityLatestDlqRow.dateCreated is defined and securityLatestDlqRow.dateCreated %}
+        {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateCreated %}
+      {% endif %}
 
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Auth and Rate Posture</h2>
-        <div class="agents-two-col">
-          <div>
-            <span class="agents-kicker">Authentication</span>
-            <ul class="agents-link-list">
-              <li>Token required: <strong>{{ securityPosture.authentication.required ? 'yes' : 'no' }}</strong></li>
-              <li>Configured requirement: <strong>{{ securityPosture.authentication.requestedRequireToken ? 'yes' : 'no' }}</strong></li>
-              <li>Forced in production: <strong>{{ securityPosture.authentication.tokenRequirementForcedInProd ? 'yes' : 'no' }}</strong></li>
-              <li>Allow query-token auth: <strong>{{ securityPosture.authentication.allowQueryToken ? 'enabled' : 'disabled' }}</strong></li>
-              <li>Fail in production when token missing: <strong>{{ securityPosture.authentication.failOnMissingTokenInProd ? 'yes' : 'no' }}</strong></li>
-              <li>Env credentials: <strong>{{ securityPosture.authentication.envCredentialCount|default(0) }}</strong></li>
-              <li>Managed CP credentials: <strong>{{ securityPosture.authentication.managedCredentialCount|default(0) }}</strong></li>
-            </ul>
+      <section class="border p-0 agents-readiness-ready-card agents-readiness-ready-card--{{ securityStateTone }}" id="securitySnapshotSection">
+        <div class="agents-readiness-ready-top">
+          <div class="agents-readiness-ready-heading">
+            <span class="agents-readiness-ready-lamp agents-readiness-ready-lamp--{{ securityStateTone }}" aria-hidden="true"></span>
+            <span class="agents-readiness-ready-label">{{ securityStateLabel }}</span>
           </div>
-          <div>
-            <span class="agents-kicker">Rate limit and privacy</span>
-            <ul class="agents-link-list">
-              <li>Rate limit: <strong>{{ securityPosture.rateLimit.perMinute }}</strong> requests / {{ securityPosture.rateLimit.windowSeconds }}s</li>
-              <li>Email redaction: <strong>{{ securityPosture.privacy.redactEmail ? 'enabled' : 'disabled' }}</strong></li>
-              <li>Default scopes listed in runtime policy</li>
-            </ul>
-            <details class="agents-advanced" style="margin-top: 8px;">
-              <summary><strong>Default token scopes</strong></summary>
-              <ul class="agents-link-list" style="margin-top: 8px;">
-                {% for scope in securityPosture.authentication.tokenScopes %}
-                  <li>{{ scope }}</li>
-                {% endfor %}
-              </ul>
-            </details>
+          <p class="agents-readiness-ready-copy">
+            {{ securityStateLead }}
+            <br>
+            {{ securityStateSubcopy }}
+            <br>
+            Last evaluated {{ securityEvaluationLabel }}.
+          </p>
+        </div>
+
+        <div class="agents-readiness-ready-summary" role="list" aria-label="Security summary">
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Auth / Rate</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ securityAuthSummaryTone }}">{{ securityAuthSummaryLabel }}</strong>
+          </div>
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Credentials</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ securityCredentialSummaryTone }}">{{ securityCredentialSummaryLabel }}</strong>
+          </div>
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Webhook Reliability</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ securityWebhookSummaryTone }}">{{ securityWebhookSummaryLabel }}</strong>
+          </div>
+          <div class="agents-readiness-ready-summary-item" role="listitem">
+            <span class="agents-readiness-ready-summary-label">Policy / Environment</span>
+            <span class="agents-readiness-ready-summary-arrow" aria-hidden="true">→</span>
+            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ securityPolicySummaryTone }}">{{ securityPolicySummaryLabel }}</strong>
           </div>
         </div>
+
+        <details class="agents-readiness-ready-details" open>
+          <summary><span>Details +</span></summary>
+          <div class="agents-readiness-ready-grid">
+            <section class="agents-readiness-ready-proof-card" id="authRatePostureSection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityAuthProofTone }}">Auth / Rate Posture</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Token required: <strong>{{ securityTokenRequired ? 'yes' : 'no' }}</strong></li>
+                <li>Query-token auth: <strong>{{ securityQueryTokenEnabled ? 'enabled' : 'disabled' }}</strong></li>
+                <li>Rate limit: <strong>{{ securityRateLimitPerMinute }}</strong> requests / {{ securityRateLimitWindowSeconds }}s</li>
+                <li>Email redaction: <strong>{{ securityPrivacyRedaction ? 'enabled' : 'disabled' }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="securityCredentialInventorySection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityCredentialProofTone }}">Credential Inventory</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Configured credentials: <strong>{{ securityCredentialCount }}</strong></li>
+                <li>Managed CP credentials: <strong>{{ securityManagedCredentialCount }}</strong></li>
+                <li>Env credentials: <strong>{{ securityEnvCredentialCount }}</strong></li>
+                <li>Default scopes in runtime policy: <strong>{{ securityDefaultScopeCount }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="environmentProfileSection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityPolicyProofTone }}">Policy / Environment</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Environment: <strong>{{ securityPosture.environment|default('unknown') }}</strong></li>
+                <li>Profile: <strong>{{ securityPosture.profile.name|default('unknown') }}</strong> ({{ securityPosture.profile.source|default('unknown') }})</li>
+                <li>Defaults applied: <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></li>
+                <li>Effective policy version: <strong>{{ securityPosture.profile.effectivePolicyVersion|default('n/a') }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="securityRuntimeSignalsSection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityRuntimeSignalsProofTone }}">Runtime Signals</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Auth failures: <strong>{{ securityAuthFailures }}</strong></li>
+                <li>Scope denials: <strong>{{ securityForbiddenTotal }}</strong></li>
+                <li>Rate-limit denials: <strong>{{ securityRateLimitDenied }}</strong></li>
+                <li>Server errors (5xx): <strong>{{ securityErrors5xx }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="webhookReliabilitySection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityWebhookProofTone }}">Webhook Reliability</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Webhook enabled: <strong>{{ securityWebhookEnabled ? 'yes' : 'no' }}</strong></li>
+                <li>URL configured: <strong>{{ securityWebhookUrlConfigured ? 'yes' : 'no' }}</strong></li>
+                <li>Secret configured: <strong>{{ securityWebhookSecretConfigured ? 'yes' : 'no' }}</strong></li>
+                <li>Host / timeout: <strong>{{ securityWebhookDestinationHost }}</strong> / {{ securityWebhookTimeoutSeconds }}s</li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="webhookDlqOverviewSection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityDlqProofTone }}">Dead-Letter Queue</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Failed events: <strong>{{ securityDlqCount }}</strong></li>
+                <li>{{ securityDlqCount > 0 ? 'Replay controls available below' : 'No failed webhook events detected' }}</li>
+                <li>Max attempts: <strong>{{ securityWebhookMaxAttempts }}</strong></li>
+                <li>Latest update: <strong>{{ securityLatestDlqUpdatedAt }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="securityCredentialActivitySection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityActivityProofTone }}">Credential Activity</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                <li>Last evaluated: <strong>{{ securityEvaluationLabel }}</strong></li>
+                <li>Active credentials in last 7 days: <strong>{{ securityActiveCredentials7d }}</strong></li>
+                <li>Observed guarded requests: <strong>{{ securityRequestsTotal }}</strong></li>
+                <li>Confidence: <strong>{{ securityConfidenceLabel }}</strong></li>
+              </ul>
+            </section>
+
+            <section class="agents-readiness-ready-proof-card" id="securityWarningsSection">
+              <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ securityWarningsProofTone }}">Security Warnings</h3>
+              <ul class="agents-readiness-ready-proof-list">
+                {% if securityWarningPreview|length %}
+                  {% for warning in securityWarningPreview %}
+                    <li><strong>[{{ warning.level|upper }}]</strong> {{ warning.message }}</li>
+                  {% endfor %}
+                {% else %}
+                  <li>No active security warnings.</li>
+                  <li>Errors: <strong>{{ securityErrors }}</strong></li>
+                  <li>Warnings: <strong>{{ securityWarnings }}</strong></li>
+                  <li>Requested token requirement: <strong>{{ securityRequestedRequireToken ? 'yes' : 'no' }}</strong></li>
+                {% endif %}
+              </ul>
+            </section>
+          </div>
+
+          {% if securityActionRowsProblematic|length %}
+            <div class="agents-readiness-actions-block" id="securityActionMappingSection">
+              <div class="agents-readiness-actions-head">
+                <h2 class="agents-readiness-actions-title">Action Mapping</h2>
+              </div>
+
+              <div class="agents-readiness-actions-table-wrap">
+                <table class="agents-readiness-actions-table" role="table">
+                  <colgroup>
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--signal">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--state">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--impact">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--action">
+                    <col class="agents-readiness-actions-col agents-readiness-actions-col--surface">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th scope="col">Signal</th>
+                      <th scope="col">Current state</th>
+                      <th scope="col">Impact</th>
+                      <th scope="col">Recommended Action</th>
+                      <th scope="col">Surface</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in securityActionRowsProblematic %}
+                      <tr data-state-tone="{{ row.stateTone }}">
+                        <td><strong class="agents-readiness-actions-signal">{{ row.signal }}</strong></td>
+                        <td>
+                          <strong class="agents-readiness-actions-state agents-readiness-actions-state--{{ row.stateTone }}">{{ row.stateLabel }}</strong>
+                        </td>
+                        <td>{{ row.impact }}</td>
+                        <td>
+                          <a href="{{ row.primaryUrl }}" class="agents-readiness-actions-primary"><strong>{{ row.primaryAction }}</strong></a>
+                          <a href="{{ row.secondaryUrl }}" class="agents-readiness-actions-secondary">{{ row.secondaryAction }}</a>
+                        </td>
+                        <td>{{ row.surface }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {% endif %}
+        </details>
       </section>
 
+      {% if webhookDeadLetters|length %}
+        <section class="border rounded p-3" id="webhookDlqDetailSection">
+          <h2 class="h4">Webhook Dead-Letter Queue</h2>
+          <p class="agents-subtle">Final delivery failures are stored here and can be replayed.</p>
 
-      <hr>
+          <form method="post" accept-charset="UTF-8" style="margin-bottom: 10px;">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
+            {{ redirectInput('agents/dashboard/security') }}
+            <input type="hidden" name="mode" value="all">
+            <input type="hidden" name="limit" value="25">
+            <button class="btn" type="submit">Replay up to 25 failed events</button>
+          </form>
 
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Webhook Reliability</h2>
-        <ul class="agents-link-list" style="margin-bottom: 12px;">
-          <li>Webhook enabled: <strong>{{ securityPosture.webhook.enabled ? 'yes' : 'no' }}</strong></li>
-          <li>Webhook URL configured: <strong>{{ securityPosture.webhook.urlConfigured ? 'yes' : 'no' }}</strong></li>
-          <li>Webhook secret configured: <strong>{{ securityPosture.webhook.secretConfigured ? 'yes' : 'no' }}</strong></li>
-          <li>Destination host: <strong>{{ securityPosture.webhook.destinationHost ?: 'n/a' }}</strong></li>
-          <li>Timeout seconds: <strong>{{ securityPosture.webhook.timeoutSeconds }}</strong></li>
-          <li>Max attempts: <strong>{{ securityPosture.webhook.maxAttempts }}</strong></li>
-        </ul>
-
-        <h3 class="h5">Dead-Letter Queue</h3>
-        <p class="agents-subtle">Final delivery failures are stored here and can be replayed.</p>
-
-        <form method="post" accept-charset="UTF-8" style="margin-bottom: 10px;">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-          {{ redirectInput('agents/dashboard/security') }}
-          <input type="hidden" name="mode" value="all">
-          <input type="hidden" name="limit" value="25">
-          <button class="btn" type="submit">Replay up to 25 failed events</button>
-        </form>
-
-        {% if webhookDeadLetters|length %}
           <div class="tablepane mx-0" style="margin-top: 0;">
             <table class="data fullwidth">
               <thead>
@@ -833,31 +1728,8 @@
               </tbody>
             </table>
           </div>
-        {% else %}
-          <p>No dead-letter events.</p>
-        {% endif %}
-      </section>
-
-
-      <hr>
-
-
-      <section class="border rounded p-3">
-        <h2 class="h4">Warnings</h2>
-        {% if securityPosture.warnings|length %}
-          <ul class="agents-link-list">
-            {% for warning in securityPosture.warnings %}
-              <li><strong>[{{ warning.level|upper }}]</strong> {{ warning.message }}</li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p>No active security warnings.</p>
-        {% endif %}
-      </section>
-
-
-      <hr>
-
+        </section>
+      {% endif %}
 
       <section class="border rounded p-3">
         <details class="agents-advanced">
@@ -1006,6 +1878,376 @@
       font-size: 14px;
       font-weight: 600;
       white-space: nowrap;
+    }
+
+    .agents-readiness-ready-card {
+      --agents-readiness-accent: #108e80;
+      --agents-readiness-border: #c8d0da;
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      border: 1px solid var(--agents-readiness-border);
+      border-radius: 3px;
+      background: #fff;
+      box-shadow: none;
+      overflow: hidden;
+    }
+
+    .agents-readiness-actions-state {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .agents-readiness-actions-state--good {
+      color: #108e80;
+    }
+
+    .agents-readiness-actions-state--warn {
+      color: #c58a1b;
+    }
+
+    .agents-readiness-actions-state--bad {
+      color: #c24f42;
+    }
+
+    .agents-readiness-actions-state--muted {
+      color: #6d7782;
+    }
+
+    .agents-readiness-ready-card--warn {
+      --agents-readiness-accent: #c58a1b;
+    }
+
+    .agents-readiness-ready-card--bad {
+      --agents-readiness-accent: #c24f42;
+    }
+
+    .agents-readiness-ready-card--muted {
+      --agents-readiness-accent: #6d7782;
+    }
+
+    .agents-readiness-ready-top {
+      padding: 24px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--agents-readiness-border);
+      text-align: center;
+    }
+
+    .agents-readiness-ready-heading {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .agents-readiness-ready-lamp {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: var(--agents-readiness-accent);
+      flex: 0 0 auto;
+    }
+
+    .agents-readiness-ready-label {
+      color: #596673;
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.01em;
+    }
+
+    .agents-readiness-ready-copy {
+      margin: 0;
+      color: #596673;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .agents-readiness-ready-summary {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: stretch;
+      gap: 0;
+      background: transparent;
+      border-bottom: 1px solid var(--agents-readiness-border);
+    }
+
+    .agents-readiness-ready-summary-item {
+      flex: 0 0 auto;
+      min-width: 0;
+      padding: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 12px;
+      border-right: 1px solid var(--agents-readiness-border);
+      background: #fff;
+      color: #596673;
+      font-size: 14px;
+      line-height: 1.2;
+      text-align: center;
+    }
+
+    .agents-readiness-ready-summary-item:first-child {
+      border-left: 1px solid var(--agents-readiness-border);
+    }
+
+    .agents-readiness-ready-summary-label,
+    .agents-readiness-ready-summary-arrow {
+      font-weight: 400;
+    }
+
+    .agents-readiness-ready-summary-value {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .agents-readiness-ready-summary-value--good {
+      color: #108e80;
+    }
+
+    .agents-readiness-ready-summary-value--warn {
+      color: #c58a1b;
+    }
+
+    .agents-readiness-ready-summary-value--bad {
+      color: #c24f42;
+    }
+
+    .agents-readiness-ready-summary-value--muted {
+      color: #6d7782;
+    }
+
+    .agents-readiness-ready-details > summary {
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .agents-readiness-ready-details > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .agents-readiness-ready-details[open] > summary {
+      border-bottom: 1px solid var(--agents-readiness-border);
+    }
+
+    .agents-readiness-ready-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--agents-readiness-border);
+    }
+
+    .agents-readiness-ready-proof-card {
+      min-width: 0;
+      padding: 12px;
+      background: #fff;
+      color: #596673;
+    }
+
+    .agents-readiness-ready-proof-title {
+      margin: 0 0 6px;
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-readiness-ready-proof-title--warn {
+      color: #c58a1b;
+    }
+
+    .agents-readiness-ready-proof-title--bad {
+      color: #c24f42;
+    }
+
+    .agents-readiness-ready-proof-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .agents-readiness-ready-proof-list li + li {
+      margin-top: 1px;
+    }
+
+    .agents-readiness-actions-block {
+      border-top: 1px solid var(--agents-readiness-border);
+    }
+
+    .agents-readiness-actions-head {
+      padding: 24px 12px 12px;
+      border-bottom: 1px solid var(--agents-readiness-border);
+      text-align: center;
+    }
+
+    .agents-readiness-actions-title {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-readiness-actions-copy {
+      margin: 2px 0 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .agents-readiness-actions-table-wrap {
+      padding: 24px 12px 0;
+      overflow-x: auto;
+    }
+
+    .agents-readiness-actions-table {
+      width: 100%;
+      min-width: 1240px;
+      border-collapse: collapse;
+      table-layout: fixed;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-readiness-actions-col--signal {
+      width: 11.69%;
+    }
+
+    .agents-readiness-actions-col--state {
+      width: 21.43%;
+    }
+
+    .agents-readiness-actions-col--impact {
+      width: 32.47%;
+    }
+
+    .agents-readiness-actions-col--action {
+      width: 18.83%;
+    }
+
+    .agents-readiness-actions-col--surface {
+      width: 15.58%;
+    }
+
+    .agents-readiness-actions-table th,
+    .agents-readiness-actions-table td {
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .agents-readiness-actions-table th {
+      padding: 0 0 12px;
+    }
+
+    .agents-readiness-actions-table tbody td {
+      padding-top: 24px;
+      padding-bottom: 24px;
+    }
+
+    .agents-readiness-actions-table th + th,
+    .agents-readiness-actions-table td + td {
+      padding-left: 16px;
+    }
+
+    .agents-readiness-actions-table thead th {
+      border-bottom: 1px solid #596673;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-readiness-actions-table tbody td {
+      border-bottom: 1px solid var(--agents-readiness-border);
+      color: #596673;
+    }
+
+    .agents-readiness-actions-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .agents-readiness-actions-signal {
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-readiness-actions-primary,
+    .agents-readiness-actions-secondary {
+      display: block;
+      text-decoration: none;
+    }
+
+    .agents-readiness-actions-primary {
+      color: #2563eb;
+      line-height: 1.25;
+    }
+
+    .agents-readiness-actions-secondary {
+      margin-top: 2px;
+      color: #596673;
+      line-height: 1.25;
+    }
+
+    @media (max-width: 1023px) {
+      .agents-readiness-ready-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 767px) {
+      .agents-readiness-ready-top {
+        padding: 20px 12px;
+      }
+
+      .agents-readiness-ready-label {
+        font-size: 30px;
+      }
+
+      .agents-readiness-ready-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-readiness-ready-summary {
+        flex-direction: column;
+      }
+
+      .agents-readiness-ready-summary-item {
+        width: 100%;
+        justify-content: flex-start;
+        text-align: left;
+      }
+
+      .agents-readiness-actions-table-wrap {
+        padding-top: 12px;
+      }
     }
   {% endcss %}
 {% endblock %}
