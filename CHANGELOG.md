@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.10.8 - 2026-03-11
+
+### Changed
+
+- Merged dashboard security posture fully into `Readiness`, so operators now work from one combined state card, one action-mapping table, and one shared proof-card grid.
+- Replaced the separate security summary/proof surfaces with merged proof-card detail dialogs for `Traffic / Access`, `Delivery / Webhooks`, `Integration / Capacity`, `Credentials / Policy`, and `Confidence / Observability`.
+- Removed the standalone `Security` dashboard tab while preserving legacy route and anchor compatibility inside the merged `Readiness` surface.
+- Tightened the merged readiness card styling to match the current Figma direction for the top signal header, summary strip, proof-card borders, and embedded detail actions.
+- Removed the readiness-page security technical JSON section now that security posture is represented through the merged proof-card and detail-dialog model.
+
 ## 0.10.7 - 2026-03-11
 
 ### Changed

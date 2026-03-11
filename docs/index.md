@@ -4,7 +4,7 @@ Safe AI and automation APIs for Craft CMS and Craft Commerce.
 
 Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It provides one governed machine-access layer with scoped APIs, managed credentials, diagnostics, and optional approval controls, so production behavior stays predictable, observable, and auditable.
 
-Current plugin version: **0.10.7**
+Current plugin version: **0.10.8**
 
 ## Why Teams Use Agents
 
@@ -67,7 +67,7 @@ Current plugin version: **0.10.7**
   - idempotent action execution
   - immutable audit trail
 - Craft CP operations:
-  - Dashboard tabs (Overview, Readiness, Discovery Docs, Security)
+  - Dashboard tabs (Overview, Readiness, Discovery Docs), with security posture merged into Readiness
   - Settings (including editable `llms.txt` and `commerce.txt` custom bodies)
   - Accounts (scopes, webhook subscriptions, TTL/reminder, IP allowlists, pause/resume)
 

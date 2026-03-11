@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.10.8 (2026-03-11)
+
+- Merged dashboard security posture fully into `Readiness`, with one combined state card, one action-mapping table, and a shared proof-card grid.
+- Added proof-card detail dialogs for `Traffic / Access`, `Delivery / Webhooks`, `Integration / Capacity`, `Credentials / Policy`, and `Confidence / Observability`.
+- Removed the standalone `Security` dashboard tab while keeping legacy route compatibility through readiness redirects and preserved anchors.
+- Removed the readiness-page security technical JSON section in favor of the merged proof-card/detail-dialog model.
+
 ## 0.10.7 (2026-03-11)
 
 - Reworked Dashboard `Readiness` into a state-card-driven operator surface with integrated action mapping.

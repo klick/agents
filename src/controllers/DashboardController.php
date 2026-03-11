@@ -16,7 +16,7 @@ class DashboardController extends Controller
 {
     private const SESSION_REVEALED_CREDENTIAL = 'agents.revealedCredential';
     private const SESSION_CONTROL_SIMULATION = 'agents.controlSimulation';
-    private const DASHBOARD_TABS = ['overview', 'readiness', 'discovery', 'security'];
+    private const DASHBOARD_TABS = ['overview', 'readiness', 'discovery'];
     private const CONTROL_TABS = ['approvals', 'rules'];
 
     public function actionIndex(): Response
@@ -30,6 +30,10 @@ class DashboardController extends Controller
         $pathInfo = trim((string)$request->getPathInfo(), '/');
         if ($pathInfo === 'agents' || $pathInfo === 'agents/dashboard') {
             return $this->redirect('agents/dashboard/overview');
+        }
+
+        if ($pathInfo === 'agents/security' || $pathInfo === 'agents/dashboard/security') {
+            return $this->redirect('agents/dashboard/readiness#securitySnapshotSection');
         }
 
         $plugin = Plugin::getInstance();
@@ -129,7 +133,6 @@ class DashboardController extends Controller
             'observabilitySnapshotJson' => $this->prettyPrintJson($observabilitySnapshot),
             'webhookDeadLetters' => $webhookDeadLetters,
             'securityPosture' => $securityPosture,
-            'securityPostureJson' => $this->prettyPrintJson($securityPosture),
         ]);
     }
 
@@ -150,7 +153,7 @@ class DashboardController extends Controller
 
     public function actionSecurity(): Response
     {
-        return $this->redirect('agents/dashboard/security');
+        return $this->redirect('agents/dashboard/readiness#securitySnapshotSection');
     }
 
     public function actionControl(): Response
@@ -667,13 +670,13 @@ class DashboardController extends Controller
                 $id = (int)$this->request->getBodyParam('id', 0);
                 if ($id <= 0) {
                     $this->setFailFlash('Missing dead-letter event ID.');
-                    return $this->redirectToPostedUrl(null, 'agents/dashboard/security');
+                    return $this->redirectToPostedUrl(null, 'agents/dashboard/readiness');
                 }
 
                 $event = $service->replayDeadLetterEvent($id);
                 if (!is_array($event)) {
                     $this->setFailFlash('Dead-letter event not found.');
-                    return $this->redirectToPostedUrl(null, 'agents/dashboard/security');
+                    return $this->redirectToPostedUrl(null, 'agents/dashboard/readiness');
                 }
 
                 $this->setSuccessFlash(sprintf('Dead-letter event #%d queued for replay.', $id));
@@ -686,7 +689,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to replay dead-letter event(s): ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/dashboard/security');
+        return $this->redirectToPostedUrl(null, 'agents/dashboard/readiness');
     }
 
     public function actionCreateCredential(): Response
@@ -1366,7 +1369,6 @@ class DashboardController extends Controller
             ['key' => 'overview', 'label' => 'Overview', 'url' => 'agents/dashboard/overview'],
             ['key' => 'readiness', 'label' => 'Readiness', 'url' => 'agents/dashboard/readiness'],
             ['key' => 'discovery', 'label' => 'Discovery Docs', 'url' => 'agents/dashboard/discovery'],
-            ['key' => 'security', 'label' => 'Security', 'url' => 'agents/dashboard/security'],
         ];
     }
 
@@ -1382,17 +1384,24 @@ class DashboardController extends Controller
     {
         $request = Craft::$app->getRequest();
         $tabFromQuery = strtolower(trim((string)$request->getQueryParam('tab', '')));
+        if ($tabFromQuery === 'security') {
+            return 'readiness';
+        }
         if (in_array($tabFromQuery, self::DASHBOARD_TABS, true)) {
             return $tabFromQuery;
         }
 
         $pathInfo = trim((string)$request->getPathInfo(), '/');
-        if (preg_match('#^agents/dashboard/(overview|readiness|discovery|security)$#', $pathInfo, $matches) === 1) {
+        if (preg_match('#^agents/dashboard/(overview|readiness|discovery)$#', $pathInfo, $matches) === 1) {
             return (string)$matches[1];
         }
 
-        if (preg_match('#^agents/(overview|readiness|discovery|security)$#', $pathInfo, $matches) === 1) {
+        if (preg_match('#^agents/(overview|readiness|discovery)$#', $pathInfo, $matches) === 1) {
             return (string)$matches[1];
+        }
+
+        if ($pathInfo === 'agents/security' || $pathInfo === 'agents/dashboard/security') {
+            return 'readiness';
         }
 
         if ($pathInfo === 'agents/health') {

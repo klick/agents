@@ -10,7 +10,7 @@ The Agents CP subnav currently exposes:
 
 - **Dashboard**
   - URL: `admin/agents` or `admin/agents/dashboard`
-  - local sidebar tabs: `Overview`, `Readiness`, `Discovery Docs`, `Security`
+  - local sidebar tabs: `Overview`, `Readiness`, `Discovery Docs`
 - **Control**
   - URL: `admin/agents/control`
   - shown only when governed-write CP is enabled
@@ -27,12 +27,12 @@ Legacy aliases still redirect for compatibility:
 - `admin/agents/overview`
 - `admin/agents/readiness`
 - `admin/agents/discovery`
-- `admin/agents/security`
+- `admin/agents/security` redirects to the security section inside `Readiness`
 - `admin/agents/health` redirects to Readiness
 
 ## Dashboard
 
-`Dashboard` is one CP section with four local tabs:
+`Dashboard` is one CP section with three local tabs:
 
 - **Overview**
   - `At a Glance` metric strip
@@ -40,17 +40,24 @@ Legacy aliases still redirect for compatibility:
   - `Readiness Snapshot`
 - **Readiness**
   - state card with overall verdict (`Ready`, `Degraded`, `Blocked`, `Unproven`)
-  - four-part summary strip for traffic, delivery, integration, and security posture
-  - `Details +` disclosure with eight proof panels:
-    - `Delivery Health`
-    - `Evaluation`
+  - combined summary strip with shared operator dimensions:
     - `Hard Gates`
-    - `Traffic Health`
-    - `Integration Health`
-    - `Security Posture`
-    - `Capacity / Runtime`
-    - `Observability`
+    - `Traffic / Access`
+    - `Delivery / Webhooks`
+    - `Integration / Capacity`
+    - `Credentials / Policy`
+    - `Confidence / Observability`
+  - `Details +` disclosure with merged proof panels:
+    - `Hard Gates`
+    - `Traffic / Access`
+    - `Delivery / Webhooks`
+    - `Integration / Capacity`
+    - `Credentials / Policy`
+    - `Confidence / Observability`
+  - legacy readiness/security deep-link anchors are preserved inside the merged cards for action-map compatibility
   - in-card `Action Mapping` table that renders only problematic signals
+  - security-origin follow-up actions stay in the main readiness `Action Mapping` table
+  - separate dead-letter queue replay section for operational recovery
 - **Discovery Docs**
   - `Quick Actions` for refresh and cache clear
   - per-document cards for `llms.txt`, `llms-full.txt`, and `commerce.txt`
@@ -58,22 +65,6 @@ Legacy aliases still redirect for compatibility:
   - per-document `Save`, `Reset`, `Refresh`, and `Enable/Disable` actions
   - `Editing Path`
   - technical status JSON
-- **Security**
-  - state card with overall verdict (`Good`, `Needs Attention`, `Blocked`, `Unproven`)
-  - four-part summary strip for auth/rate, credentials, webhook reliability, and policy/environment posture
-  - `Details +` disclosure with eight proof panels:
-    - `Auth / Rate Posture`
-    - `Credential Inventory`
-    - `Policy / Environment`
-    - `Runtime Signals`
-    - `Webhook Reliability`
-    - `Dead-Letter Queue`
-    - `Credential Activity`
-    - `Security Warnings`
-  - in-card `Action Mapping` table that renders only problematic signals
-  - separate dead-letter queue replay section for operational recovery
-  - technical posture JSON
-
 This page is driven from runtime services, not hardcoded static status:
 
 - readiness and health summaries
@@ -188,7 +179,7 @@ Primary current routes:
 - `admin/agents/dashboard/overview`
 - `admin/agents/dashboard/readiness`
 - `admin/agents/dashboard/discovery`
-- `admin/agents/dashboard/security`
+- `admin/agents/dashboard/security` redirects to `admin/agents/dashboard/readiness#securitySnapshotSection`
 - `admin/agents/control/approvals`
 - `admin/agents/control/rules`
 - `admin/agents/credentials`
