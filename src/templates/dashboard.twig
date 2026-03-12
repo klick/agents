@@ -323,7 +323,7 @@
         {% set readinessDeliveryLead = 'Webhook delivery is optional until you need push-based wake-ups' %}
         {% set readinessIntegrationLead = 'No sync-state integrations connected yet' %}
         {% set readinessCheckpointLine = 'Checkpoint telemetry will appear after the first sync worker connects' %}
-        {% set readinessCredentialLine = 'Create a managed account when you are ready to connect an external agent' %}
+        {% set readinessCredentialLine = 'Create a managed account when you are ready to connect an agent' %}
         {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
         {% set readinessMonitoringLine = 'Monitoring is active and waiting for first runtime activity' %}
       {% endif %}
@@ -1295,6 +1295,15 @@
               </div>
             </div>
           {% endif %}
+
+          <section class="agents-diagnostics-bundle-card" id="diagnosticsBundleSection">
+            <form method="post" accept-charset="UTF-8" class="agents-diagnostics-bundle-form">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
+              {{ redirectInput('agents/readiness') }}
+              <button class="btn agents-diagnostics-bundle-button" type="submit">Download Diagnostics Bundle (.json)</button>
+            </form>
+          </section>
         </details>
 
         <dialog class="agents-readiness-detail-dialog" id="trafficAccessDetailDialog" data-agents-detail-dialog aria-labelledby="trafficAccessDetailDialogTitle">
@@ -1870,17 +1879,6 @@
         </dialog>
       </section>
 
-      <section class="border rounded p-3" id="diagnosticsBundleSection">
-        <h2 class="h4">Diagnostics Bundle</h2>
-        <form method="post" accept-charset="UTF-8">
-          {{ csrfInput() }}
-          {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
-          {{ redirectInput('agents/readiness') }}
-          <button class="btn submit" type="submit">Download Diagnostics Bundle (.json)</button>
-        </form>
-        <p class="agents-subtle">Runs auth, discovery, readiness, and smoke checks and exports a support artifact for support handoff.</p>
-      </section>
-
       {% if webhookDeadLetters|length %}
         <section class="border rounded p-3" id="webhookDlqDetailSection">
           <h2 class="h4">Webhook Dead-Letter Queue</h2>
@@ -2129,7 +2127,7 @@
 
     .agents-discovery-doc-card {
       border: 1px solid #bfc9d6;
-      border-radius: 6px;
+      border-radius: 3px;
       background: #ffffff;
       box-shadow: 0 4px 4px rgba(0, 0, 0, 0.06);
       overflow: hidden;
@@ -2208,7 +2206,7 @@
       box-shadow: none;
       background: #d4dbe4;
       color: #000000;
-      border-radius: 4px;
+      border-radius: 3px;
       padding: 7px 10px;
       font-size: 12px;
       line-height: 1;
@@ -2232,7 +2230,7 @@
     .agents-discovery-doc-btn-group {
       display: inline-flex;
       align-items: center;
-      border-radius: 4px;
+      border-radius: 3px;
       overflow: hidden;
     }
 
@@ -2322,6 +2320,7 @@
       align-items: center;
       justify-content: flex-start;
       gap: 12px;
+      color: var(--agents-readiness-accent);
     }
 
     .agents-readiness-ready-lamp {
@@ -2333,7 +2332,7 @@
     }
 
     .agents-readiness-ready-label {
-      color: #596673;
+      color: inherit;
       font-size: 32px;
       font-weight: 800;
       line-height: 1;
@@ -2589,7 +2588,7 @@
     .agents-readiness-ready-proof-trigger:focus-visible {
       outline: 2px solid #1c6fdc;
       outline-offset: 2px;
-      border-radius: 2px;
+      border-radius: 3px;
     }
 
     .agents-readiness-ready-proof-trigger-hint {
@@ -2613,7 +2612,7 @@
       margin: auto;
       padding: 0;
       border: 1px solid var(--agents-readiness-border);
-      border-radius: 6px;
+      border-radius: 3px;
       color: #596673;
       background: #ffffff;
       box-shadow: 0 24px 48px rgba(25, 39, 52, 0.28);
@@ -2662,7 +2661,7 @@
       margin: 0;
       padding: 8px 10px;
       border: 1px solid var(--agents-readiness-border);
-      border-radius: 4px;
+      border-radius: 3px;
       background: #ffffff;
       color: #596673;
       font-size: 12px;
@@ -2699,7 +2698,7 @@
       min-width: 0;
       padding: 12px;
       border: 1px solid var(--agents-readiness-border);
-      border-radius: 4px;
+      border-radius: 3px;
       background: #ffffff;
     }
 
@@ -2860,7 +2859,7 @@
       justify-content: center;
       padding: 8px 10px;
       border: 1px solid var(--agents-readiness-border);
-      border-radius: 4px;
+      border-radius: 3px;
       background: #f8fafc;
       color: #273340;
       font-size: 12px;
@@ -2878,6 +2877,47 @@
     }
 
     .agents-readiness-detail-action:focus-visible {
+      outline: 2px solid #1c6fdc;
+      outline-offset: 2px;
+    }
+
+    .agents-diagnostics-bundle-card {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 12px;
+      border-top: 1px solid #bbc7d5;
+      background: #ffffff;
+    }
+
+    .agents-diagnostics-bundle-form {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    .agents-diagnostics-bundle-button.btn {
+      min-height: auto;
+      padding: 7px 10px;
+      border: 0;
+      border-radius: 3px;
+      background: #d4dbe4;
+      background-image: none;
+      box-shadow: none;
+      color: #000000;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .agents-diagnostics-bundle-button.btn:hover,
+    .agents-diagnostics-bundle-button.btn:focus-visible {
+      background: #c6cfda;
+      color: #000000;
+    }
+
+    .agents-diagnostics-bundle-button.btn:focus-visible {
       outline: 2px solid #1c6fdc;
       outline-offset: 2px;
     }
