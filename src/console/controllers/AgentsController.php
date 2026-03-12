@@ -24,7 +24,6 @@ class AgentsController extends Controller
     public string $section = '';
     public string $type = '';
     public string $templateId = '';
-    public string $target = 'all';
     public bool $strict = false;
 
     public function init(): void
@@ -46,8 +45,7 @@ class AgentsController extends Controller
             'section-list' => array_merge($options, ['json']),
             'template-catalog' => array_merge($options, ['templateId', 'json']),
             'starter-packs' => array_merge($options, ['templateId', 'json']),
-            'discovery-prewarm' => array_merge($options, ['target', 'json']),
-            'auth-check', 'discovery-check', 'readiness-check', 'reliability-check', 'lifecycle-report', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
+            'auth-check', 'readiness-check', 'reliability-check', 'lifecycle-report', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
         };
     }
@@ -274,30 +272,6 @@ class AgentsController extends Controller
         return ExitCode::OK;
     }
 
-    public function actionDiscoveryPrewarm(): int
-    {
-        $payload = Plugin::getInstance()->getDiscoveryTxtService()->prewarm($this->target);
-
-        if ($this->json) {
-            return $this->emitJson($payload);
-        }
-
-        $this->stdout(sprintf("Target: %s\n", (string)($payload['target'] ?? 'all')));
-        $this->stdout(sprintf("Generated: %s\n", (string)($payload['generatedAt'] ?? '')));
-        foreach (($payload['documents'] ?? []) as $name => $document) {
-            $this->stdout(sprintf(
-                "- %s enabled=%s bytes=%d etag=%s lastModified=%s\n",
-                (string)$name,
-                !empty($document['enabled']) ? 'true' : 'false',
-                (int)($document['bytes'] ?? 0),
-                (string)($document['etag'] ?? ''),
-                (string)($document['lastModified'] ?? '')
-            ));
-        }
-
-        return ExitCode::OK;
-    }
-
     public function actionAuthCheck(): int
     {
         $service = Plugin::getInstance()->getSecurityPolicyService();
@@ -339,65 +313,6 @@ class AgentsController extends Controller
         return $this->emitCheckResult('auth-check', $details, $errors, $warnings);
     }
 
-    public function actionDiscoveryCheck(): int
-    {
-        $service = Plugin::getInstance()->getDiscoveryTxtService();
-        // Force a fresh render so checks validate current template output, not stale cache.
-        $service->prewarm('all');
-        $status = $service->getDiscoveryStatus();
-        $settings = Plugin::getInstance()->getSettings();
-
-        $errors = [];
-        $warnings = [];
-        $documents = (array)($status['documents'] ?? []);
-
-        foreach ($documents as $key => $document) {
-            $name = (string)($document['name'] ?? $key);
-            $enabled = (bool)($document['enabled'] ?? false);
-            $bytes = (int)($document['bytes'] ?? 0);
-            $url = trim((string)($document['url'] ?? ''));
-            if (!$enabled) {
-                if ($key === 'llmsFull') {
-                    continue;
-                }
-                $warnings[] = sprintf('%s is disabled.', $name);
-                continue;
-            }
-
-            if ($bytes <= 0) {
-                $errors[] = sprintf('%s is enabled but empty.', $name);
-            }
-            if ($url === '') {
-                $errors[] = sprintf('%s is enabled but URL is missing.', $name);
-            }
-        }
-
-        $hasCustomLlmsBody = trim((string)($settings->llmsTxtBody ?? '')) !== '';
-        if (
-            !$hasCustomLlmsBody &&
-            (bool)($settings->enableLlmsTxt ?? false) &&
-            (bool)($settings->llmsIncludeAgentsLinks ?? false)
-        ) {
-            $llmsDocument = $service->getLlmsTxtDocument();
-            $llmsBody = (string)($llmsDocument['body'] ?? '');
-            if ($llmsBody === '') {
-                $errors[] = 'llms.txt body is missing while llms.txt is enabled.';
-            } else {
-                foreach ([
-                    '/agents/v1/capabilities',
-                    '/agents/v1/openapi.json',
-                    '/agents/v1/auth/whoami',
-                ] as $requiredPath) {
-                    if (!str_contains($llmsBody, $requiredPath)) {
-                        $errors[] = sprintf('llms.txt is missing expected discovery link: %s', $requiredPath);
-                    }
-                }
-            }
-        }
-
-        return $this->emitCheckResult('discovery-check', $status, $errors, $warnings);
-    }
-
     public function actionReadinessCheck(): int
     {
         $service = Plugin::getInstance()->getReadinessService();
@@ -432,7 +347,6 @@ class AgentsController extends Controller
     public function actionSmoke(): int
     {
         $readinessService = Plugin::getInstance()->getReadinessService();
-        $discoveryService = Plugin::getInstance()->getDiscoveryTxtService();
         $commerceEnabled = Plugin::getInstance()->isCommercePluginEnabled();
 
         $errors = [];
@@ -440,7 +354,6 @@ class AgentsController extends Controller
 
         $sections = $readinessService->getSectionsList();
         $entries = $readinessService->getEntriesList(['limit' => 1, 'status' => 'live']);
-        $discoveryStatus = $discoveryService->getDiscoveryStatus();
         $readiness = $readinessService->getReadinessDiagnostics();
 
         $sectionErrors = (array)($sections['meta']['errors'] ?? []);
@@ -484,7 +397,6 @@ class AgentsController extends Controller
                     'count' => (int)($entries['meta']['count'] ?? 0),
                     'errors' => $entryErrors,
                 ],
-                'discovery' => $discoveryStatus,
                 'readiness' => [
                     'status' => (string)($readiness['status'] ?? 'unknown'),
                     'readinessScore' => (int)($readiness['readinessScore'] ?? 0),

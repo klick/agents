@@ -14,6 +14,48 @@ Optional tuning:
 - `PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS` (default `5`, max `60`)
 - `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default `3`, max `10`)
 
+These can also be referenced from `Agents -> Settings -> Webhooks` using env-aware fields. Prefer storing real values in the environment and keeping the Settings fields as `$PLUGIN_AGENTS_*` references.
+
+## Dev-only test sink
+
+For local/dev inspection without a real external receiver:
+
+- set `PLUGIN_AGENTS_WEBHOOK_TEST_SINK=true`
+- keep Craft `devMode` enabled
+- `PLUGIN_AGENTS_WEBHOOK_URL` and `PLUGIN_AGENTS_WEBHOOK_SECRET` remain the normal runtime webhook settings
+- only point `PLUGIN_AGENTS_WEBHOOK_URL` at the sink URL shown in `Agents -> Status` in local/dev
+- keep `PLUGIN_AGENTS_WEBHOOK_SECRET` configured so signatures can be verified
+
+The sink is a local capture endpoint:
+
+- route: `/agents/dev/webhook-test-sink`
+- it stores recent deliveries for inspection in `Agents -> Status`
+- it is intentionally unavailable outside explicit dev-mode opt-in
+- `Send test webhook` issues a one-click local delivery through the real signing + HTTP delivery path
+- do not route production webhook delivery to the local sink
+
+## Manual CP check
+
+For a quick operator/dev verification pass:
+
+1. set `PLUGIN_AGENTS_WEBHOOK_TEST_SINK=true`
+2. keep Craft `devMode` enabled
+3. temporarily point the normal runtime `PLUGIN_AGENTS_WEBHOOK_URL` at the sink URL shown in `Agents -> Status`
+4. confirm `Webhook Test Sink` appears in `Agents -> Status`
+5. click `Send test webhook` for a one-click delivery check, or save an entry/product/order and run `php craft queue/run` for a real content-triggered event
+6. confirm the sink section shows:
+   - captured count
+   - valid count
+   - last captured timestamp
+   - routing mode / matched credential handles
+   - payload preview
+7. use `Clear captures` to reset the local inspection history
+
+Automated QA scenarios are available in:
+
+- `scripts/qa/webhook-test-sink-smoke.sh`
+- `scripts/qa/webhook-test-sink-e2e.sh`
+
 ## Delivery model
 
 - webhook jobs are queued

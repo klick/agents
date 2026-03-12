@@ -16,42 +16,29 @@ class DashboardController extends Controller
 {
     private const SESSION_REVEALED_CREDENTIAL = 'agents.revealedCredential';
     private const SESSION_CONTROL_SIMULATION = 'agents.controlSimulation';
-    private const DASHBOARD_TABS = ['readiness', 'discovery'];
     private const CONTROL_TABS = ['approvals', 'rules'];
 
     public function actionIndex(): Response
     {
-        return $this->redirect('agents/readiness');
+        return $this->redirect('agents/status');
     }
 
     public function actionDashboard(): Response
     {
         $request = Craft::$app->getRequest();
         $pathInfo = trim((string)$request->getPathInfo(), '/');
-        if ($pathInfo === 'agents' || $pathInfo === 'agents/dashboard' || $pathInfo === 'agents/overview' || $pathInfo === 'agents/dashboard/overview') {
-            return $this->redirect('agents/readiness');
-        }
-
-        if ($pathInfo === 'agents/credentials/discovery' || $pathInfo === 'agents/dashboard/discovery') {
-            return $this->redirect('agents/discovery');
-        }
-
-        if ($pathInfo === 'agents/security' || $pathInfo === 'agents/dashboard/security') {
-            return $this->redirect('agents/readiness#securitySnapshotSection');
+        if ($pathInfo === 'agents') {
+            return $this->redirect('agents/status');
         }
 
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
-        $settings = $this->getSettingsModel();
-        $settingsOverrides = $this->getSettingsOverrides();
         $readinessService = $plugin->getReadinessService();
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
-        $activeDashboardTab = $this->resolveDashboardTab();
 
         $readinessHealth = $readinessService->getHealthSummary();
         $readinessSummary = $readinessService->getReadinessSummary();
         $readinessDiagnostics = $readinessService->getReadinessDiagnostics();
-        $discoveryStatus = $plugin->getDiscoveryTxtService()->getDiscoveryStatus();
         $consumerLagSnapshot = [
             'summary' => [
                 'count' => 0,
@@ -73,6 +60,34 @@ class DashboardController extends Controller
         } catch (Throwable $e) {
             Craft::warning('Unable to load webhook DLQ events for CP: ' . $e->getMessage(), __METHOD__);
         }
+        $webhookTestSinkSnapshot = [
+            'config' => [
+                'requested' => false,
+                'devMode' => false,
+                'enabled' => false,
+                'path' => 'agents/dev/webhook-test-sink',
+                'url' => '',
+                'webhookUrlConfigured' => false,
+                'webhookSecretConfigured' => false,
+                'webhookUrlMatchesSink' => false,
+                'storageReady' => false,
+                'retentionLimit' => 200,
+            ],
+            'summary' => [
+                'total' => 0,
+                'valid' => 0,
+                'invalid' => 0,
+                'unsigned' => 0,
+                'secretMissing' => 0,
+                'lastCapturedAt' => null,
+            ],
+            'events' => [],
+        ];
+        try {
+            $webhookTestSinkSnapshot = $plugin->getWebhookTestSinkService()->getCpSnapshot(20);
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load webhook test sink snapshot for CP: ' . $e->getMessage(), __METHOD__);
+        }
         $observabilitySnapshot = [
             'service' => 'agents',
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
@@ -87,66 +102,41 @@ class DashboardController extends Controller
         $observabilitySummary = $this->buildObservabilitySummary($observabilitySnapshot);
 
         return $this->renderCpTemplate('agents/dashboard', [
-            'activeDashboardTab' => $activeDashboardTab,
+            'activeDashboardTab' => 'readiness',
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
             'securityWarningCounts' => (array)($securityPosture['warningCounts'] ?? []),
             'apiEndpoints' => $this->getApiEndpoints(),
-            'discoveryEndpoints' => $this->getDiscoveryEndpoints(),
             'readinessHealth' => $readinessHealth,
             'readinessSummary' => $readinessSummary,
             'readinessDiagnostics' => $readinessDiagnostics,
             'readinessHealthJson' => $this->prettyPrintJson($readinessHealth),
             'readinessSummaryJson' => $this->prettyPrintJson($readinessSummary),
             'readinessDiagnosticsJson' => $this->prettyPrintJson($readinessDiagnostics),
-            'discoveryStatus' => $discoveryStatus,
-            'discoveryStatusJson' => $this->prettyPrintJson($discoveryStatus),
-            'discoveryConfig' => [
-                'llmsEnabled' => (bool)$settings->enableLlmsTxt,
-                'llmsFullEnabled' => (bool)$settings->enableLlmsFullTxt,
-                'commerceEnabled' => (bool)$settings->enableCommerceTxt,
-                'llmsTtl' => (int)$settings->llmsTxtCacheTtl,
-                'commerceTtl' => (int)$settings->commerceTxtCacheTtl,
-            ],
-            'discoverySettings' => [
-                'llmsTxtBody' => (string)$settings->llmsTxtBody,
-                'commerceTxtBody' => (string)$settings->commerceTxtBody,
-            ],
-            'discoverySettingsLocks' => [
-                'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
-                'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
-                'commerceTxtSettingLocked' => (bool)($settingsOverrides['enableCommerceTxt'] ?? false),
-                'llmsTxtBodySettingLocked' => (bool)($settingsOverrides['llmsTxtBody'] ?? false),
-                'commerceTxtBodySettingLocked' => (bool)($settingsOverrides['commerceTxtBody'] ?? false),
-            ],
             'consumerLagSummary' => (array)($consumerLagSnapshot['summary'] ?? []),
             'consumerLagRows' => (array)($consumerLagSnapshot['rows'] ?? []),
             'observabilitySummary' => $observabilitySummary,
             'observabilitySnapshotJson' => $this->prettyPrintJson($observabilitySnapshot),
             'webhookDeadLetters' => $webhookDeadLetters,
+            'webhookTestSinkSnapshot' => $webhookTestSinkSnapshot,
             'securityPosture' => $securityPosture,
         ]);
     }
 
     public function actionOverview(): Response
     {
-        return $this->redirect('agents/readiness');
+        return $this->redirect('agents/status');
     }
 
     public function actionReadiness(): Response
     {
-        return $this->redirect('agents/readiness');
-    }
-
-    public function actionDiscovery(): Response
-    {
-        return $this->redirect('agents/discovery');
+        return $this->redirect('agents/status');
     }
 
     public function actionSecurity(): Response
     {
-        return $this->redirect('agents/readiness#securitySnapshotSection');
+        return $this->redirect('agents/status#securitySnapshotSection');
     }
 
     public function actionControl(): Response
@@ -230,7 +220,7 @@ class DashboardController extends Controller
             }
         }
 
-        return $this->renderCpTemplate('agents/control', [
+        return $this->renderCpTemplate('agents/approvals', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'controlSummary' => (array)($snapshot['summary'] ?? []),
@@ -275,9 +265,8 @@ class DashboardController extends Controller
             'writesExperimentalLockSource' => (string)($writesState['source'] ?? ''),
             'controlCpEnabled' => $plugin->isControlCpEnabled(),
             'credentialUsageIndicatorSettingLocked' => (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false),
-            'llmsTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsTxt'] ?? false),
-            'llmsFullTxtSettingLocked' => (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false),
-            'commerceTxtSettingLocked' => (bool)($settingsOverrides['enableCommerceTxt'] ?? false),
+            'webhookUrlSettingLocked' => (bool)($settingsOverrides['webhookUrl'] ?? false),
+            'webhookSecretSettingLocked' => (bool)($settingsOverrides['webhookSecret'] ?? false),
             'reliabilityConsumerLagWarnSecondsLocked' => (bool)($settingsOverrides['reliabilityConsumerLagWarnSeconds'] ?? false),
             'reliabilityConsumerLagCriticalSecondsLocked' => (bool)($settingsOverrides['reliabilityConsumerLagCriticalSeconds'] ?? false),
         ]);
@@ -339,7 +328,7 @@ class DashboardController extends Controller
             }
         }
 
-        return $this->renderCpTemplate('agents/credentials', [
+        return $this->renderCpTemplate('agents/accounts', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'credentialUsageIndicatorEnabled' => (bool)$this->getSettingsModel()->enableCredentialUsageIndicator,
@@ -412,7 +401,7 @@ class DashboardController extends Controller
 
     public function actionHealth(): Response
     {
-        return $this->redirect('agents/readiness');
+        return $this->redirect('agents/status');
     }
 
     public function actionToggleEnabled(): Response
@@ -424,7 +413,7 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         if ((bool)$enabledState['locked']) {
             $this->setFailFlash('Agents enabled state is controlled by `PLUGIN_AGENTS_ENABLED` and cannot be changed from the Control Panel.');
-            return $this->redirectToPostedUrl(null, 'agents/readiness');
+            return $this->redirectToPostedUrl(null, 'agents/status');
         }
 
         $enabledRaw = strtolower(trim((string)$this->request->getBodyParam('enabled', '0')));
@@ -436,11 +425,11 @@ class DashboardController extends Controller
 
         if (!$saved) {
             $this->setFailFlash('Couldn’t save Agents settings.');
-            return $this->redirectToPostedUrl(null, 'agents/readiness');
+            return $this->redirectToPostedUrl(null, 'agents/status');
         }
 
         $this->setSuccessFlash($enabled ? 'Agents API enabled.' : 'Agents API disabled.');
-        return $this->redirectToPostedUrl(null, 'agents/readiness');
+        return $this->redirectToPostedUrl(null, 'agents/status');
     }
 
     public function actionSaveSettings(): Response
@@ -453,16 +442,12 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         $writesState = $plugin->getWritesExperimentalState();
         $settingsOverrides = $this->getSettingsOverrides();
-        $resetDiscoveryBodyTarget = strtolower(trim((string)$this->request->getBodyParam('resetDiscoveryBodyTarget', '')));
-        $llmsLocked = (bool)($settingsOverrides['enableLlmsTxt'] ?? false);
-        $llmsFullLocked = (bool)($settingsOverrides['enableLlmsFullTxt'] ?? false);
-        $commerceLocked = (bool)($settingsOverrides['enableCommerceTxt'] ?? false);
         $writesConfigLocked = (bool)($settingsOverrides['enableWritesExperimental'] ?? false);
         $writesEnvLocked = (bool)($writesState['locked'] ?? false);
         $writesLocked = $writesConfigLocked || $writesEnvLocked;
         $credentialUsageIndicatorLocked = (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false);
-        $llmsBodyLocked = (bool)($settingsOverrides['llmsTxtBody'] ?? false);
-        $commerceBodyLocked = (bool)($settingsOverrides['commerceTxtBody'] ?? false);
+        $webhookUrlLocked = (bool)($settingsOverrides['webhookUrl'] ?? false);
+        $webhookSecretLocked = (bool)($settingsOverrides['webhookSecret'] ?? false);
         $consumerLagWarnLocked = (bool)($settingsOverrides['reliabilityConsumerLagWarnSeconds'] ?? false);
         $consumerLagCriticalLocked = (bool)($settingsOverrides['reliabilityConsumerLagCriticalSeconds'] ?? false);
 
@@ -479,21 +464,12 @@ class DashboardController extends Controller
         $settingsData['enableCredentialUsageIndicator'] = $credentialUsageIndicatorLocked
             ? (bool)$settings->enableCredentialUsageIndicator
             : $this->parseBooleanBodyParam('enableCredentialUsageIndicator', (bool)$settings->enableCredentialUsageIndicator);
-        $settingsData['enableLlmsTxt'] = $llmsLocked
-            ? (bool)$settings->enableLlmsTxt
-            : $this->parseBooleanBodyParam('enableLlmsTxt', (bool)$settings->enableLlmsTxt);
-        $settingsData['enableLlmsFullTxt'] = $llmsFullLocked
-            ? (bool)$settings->enableLlmsFullTxt
-            : $this->parseBooleanBodyParam('enableLlmsFullTxt', (bool)$settings->enableLlmsFullTxt);
-        $settingsData['enableCommerceTxt'] = $commerceLocked
-            ? (bool)$settings->enableCommerceTxt
-            : $this->parseBooleanBodyParam('enableCommerceTxt', (bool)$settings->enableCommerceTxt);
-        $settingsData['llmsTxtBody'] = $llmsBodyLocked
-            ? (string)$settings->llmsTxtBody
-            : $this->parseStringBodyParam('llmsTxtBody', (string)$settings->llmsTxtBody);
-        $settingsData['commerceTxtBody'] = $commerceBodyLocked
-            ? (string)$settings->commerceTxtBody
-            : $this->parseStringBodyParam('commerceTxtBody', (string)$settings->commerceTxtBody);
+        $settingsData['webhookUrl'] = $webhookUrlLocked
+            ? (string)$settings->webhookUrl
+            : $this->parseStringBodyParam('webhookUrl', (string)$settings->webhookUrl);
+        $settingsData['webhookSecret'] = $webhookSecretLocked
+            ? (string)$settings->webhookSecret
+            : $this->parseStringBodyParam('webhookSecret', (string)$settings->webhookSecret);
         $settingsData['reliabilityConsumerLagWarnSeconds'] = $consumerLagWarnLocked
             ? $settings->reliabilityConsumerLagWarnSeconds
             : $this->parseEnvAwareIntegerSetting('reliabilityConsumerLagWarnSeconds', $settings->reliabilityConsumerLagWarnSeconds, 0, 604800);
@@ -514,20 +490,11 @@ class DashboardController extends Controller
             }
         }
 
-        if ($resetDiscoveryBodyTarget === 'llms' && !$llmsBodyLocked) {
-            $settingsData['llmsTxtBody'] = '';
-        }
-        if ($resetDiscoveryBodyTarget === 'commerce' && !$commerceBodyLocked) {
-            $settingsData['commerceTxtBody'] = '';
-        }
-
         $saved = Craft::$app->getPlugins()->savePluginSettings($plugin, $settingsData);
         if (!$saved) {
             $this->setFailFlash('Couldn’t save Agents settings.');
             return $this->redirectToPostedUrl(null, 'agents/settings');
         }
-
-        $plugin->getDiscoveryTxtService()->invalidateAllCaches();
 
         $notes = [];
         if ((bool)$enabledState['locked']) {
@@ -539,23 +506,14 @@ class DashboardController extends Controller
         if ($writesConfigLocked) {
             $notes[] = '`enableWritesExperimental` is controlled by `config/agents.php`.';
         }
-        if ($llmsLocked) {
-            $notes[] = '`enableLlmsTxt` is controlled by `config/agents.php`.';
-        }
-        if ($llmsFullLocked) {
-            $notes[] = '`enableLlmsFullTxt` is controlled by `config/agents.php`.';
-        }
-        if ($commerceLocked) {
-            $notes[] = '`enableCommerceTxt` is controlled by `config/agents.php`.';
-        }
         if ($credentialUsageIndicatorLocked) {
             $notes[] = '`enableCredentialUsageIndicator` is controlled by `config/agents.php`.';
         }
-        if ($llmsBodyLocked) {
-            $notes[] = '`llmsTxtBody` is controlled by `config/agents.php`.';
+        if ($webhookUrlLocked) {
+            $notes[] = '`webhookUrl` is controlled by `config/agents.php`.';
         }
-        if ($commerceBodyLocked) {
-            $notes[] = '`commerceTxtBody` is controlled by `config/agents.php`.';
+        if ($webhookSecretLocked) {
+            $notes[] = '`webhookSecret` is controlled by `config/agents.php`.';
         }
         if ($consumerLagWarnLocked) {
             $notes[] = '`reliabilityConsumerLagWarnSeconds` is controlled by `config/agents.php`.';
@@ -569,37 +527,11 @@ class DashboardController extends Controller
 
         if (!empty($notes)) {
             $this->setSuccessFlash('Agents settings saved. ' . implode(' ', $notes));
-        } elseif ($resetDiscoveryBodyTarget === 'llms' && !$llmsBodyLocked) {
-            $this->setSuccessFlash('Agents settings saved. `llms.txt` custom body reset to generated default.');
-        } elseif ($resetDiscoveryBodyTarget === 'commerce' && !$commerceBodyLocked) {
-            $this->setSuccessFlash('Agents settings saved. `commerce.txt` custom body reset to generated default.');
         } else {
             $this->setSuccessFlash('Agents settings saved.');
         }
 
         return $this->redirectToPostedUrl(null, 'agents/settings');
-    }
-
-    public function actionPrewarmDiscovery(): Response
-    {
-        $this->requirePostRequest();
-        $this->requireAdmin();
-
-        $target = strtolower(trim((string)$this->request->getBodyParam('target', 'all')));
-        if (!in_array($target, ['all', 'llms', 'llms-full', 'commerce'], true)) {
-            $target = 'all';
-        }
-
-        try {
-            $result = Plugin::getInstance()->getDiscoveryTxtService()->prewarm($target);
-            $documents = implode(', ', array_keys((array)($result['documents'] ?? [])));
-            $suffix = $documents !== '' ? ' Generated: ' . $documents . '.' : '';
-            $this->setSuccessFlash(sprintf('Discovery prewarm complete for `%s`.%s', $target, $suffix));
-        } catch (Throwable $e) {
-            $this->setFailFlash('Discovery prewarm failed: ' . $e->getMessage());
-        }
-
-        return $this->redirectToPostedUrl(null, 'agents/discovery');
     }
 
     public function actionDownloadDiagnosticsBundle(): Response
@@ -624,22 +556,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to generate diagnostics bundle: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/readiness');
-    }
-
-    public function actionClearDiscoveryCache(): Response
-    {
-        $this->requirePostRequest();
-        $this->requireAdmin();
-
-        try {
-            Plugin::getInstance()->getDiscoveryTxtService()->invalidateAllCaches();
-            $this->setSuccessFlash('Discovery caches cleared.');
-        } catch (Throwable $e) {
-            $this->setFailFlash('Unable to clear discovery caches: ' . $e->getMessage());
-        }
-
-        return $this->redirectToPostedUrl(null, 'agents/discovery');
+        return $this->redirectToPostedUrl(null, 'agents/status');
     }
 
     public function actionReplayWebhookDlq(): Response
@@ -663,13 +580,13 @@ class DashboardController extends Controller
                 $id = (int)$this->request->getBodyParam('id', 0);
                 if ($id <= 0) {
                     $this->setFailFlash('Missing dead-letter event ID.');
-                    return $this->redirectToPostedUrl(null, 'agents/readiness');
+                    return $this->redirectToPostedUrl(null, 'agents/status');
                 }
 
                 $event = $service->replayDeadLetterEvent($id);
                 if (!is_array($event)) {
                     $this->setFailFlash('Dead-letter event not found.');
-                    return $this->redirectToPostedUrl(null, 'agents/readiness');
+                    return $this->redirectToPostedUrl(null, 'agents/status');
                 }
 
                 $this->setSuccessFlash(sprintf('Dead-letter event #%d queued for replay.', $id));
@@ -682,7 +599,49 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to replay dead-letter event(s): ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/readiness');
+        return $this->redirectToPostedUrl(null, 'agents/status');
+    }
+
+    public function actionClearWebhookTestSink(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        try {
+            $deleted = Plugin::getInstance()->getWebhookTestSinkService()->clearCapturedEvents();
+            $this->setSuccessFlash(sprintf('Cleared %d captured webhook test-sink event%s.', $deleted, $deleted === 1 ? '' : 's'));
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to clear webhook test-sink events: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/status');
+    }
+
+    public function actionSendWebhookTestSinkDelivery(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        try {
+            $result = Plugin::getInstance()->getWebhookTestSinkService()->sendTestDelivery();
+            $captured = is_array($result['captured'] ?? null) ? (array)$result['captured'] : null;
+            $eventId = trim((string)($result['eventId'] ?? ''));
+
+            if ($captured !== null) {
+                $this->setSuccessFlash(sprintf(
+                    'Sent test webhook `%s` and captured it as event #%d (%s).',
+                    $eventId,
+                    (int)($captured['id'] ?? 0),
+                    (string)($captured['verificationStatus'] ?? 'unknown')
+                ));
+            } else {
+                $this->setSuccessFlash(sprintf('Sent test webhook `%s` to the local sink.', $eventId));
+            }
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to send test webhook: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/status');
     }
 
     public function actionCreateCredential(): Response
@@ -746,7 +705,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to create account: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionUpdateCredential(): Response
@@ -783,7 +742,7 @@ class DashboardController extends Controller
 
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing account ID.');
-            return $this->redirectToPostedUrl(null, 'agents/credentials');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
 
         try {
@@ -800,7 +759,7 @@ class DashboardController extends Controller
             );
             if (!is_array($credential)) {
                 $this->setFailFlash('Account not found.');
-                return $this->redirectToPostedUrl(null, 'agents/credentials');
+                return $this->redirectToPostedUrl(null, 'agents/accounts');
             }
 
             $this->setSuccessFlash(sprintf('Account `%s` updated.', (string)($credential['handle'] ?? 'credential')));
@@ -808,7 +767,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to update account: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionRotateCredential(): Response
@@ -822,14 +781,14 @@ class DashboardController extends Controller
 
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing account ID.');
-            return $this->redirectToPostedUrl(null, 'agents/credentials');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
                 $this->setFailFlash('Account not found.');
-                return $this->redirectToPostedUrl(null, 'agents/credentials');
+                return $this->redirectToPostedUrl(null, 'agents/accounts');
             }
 
             $credential = (array)($result['credential'] ?? []);
@@ -845,7 +804,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to rotate account token: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionRevokeCredential(): Response
@@ -856,7 +815,7 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing account ID.');
-            return $this->redirectToPostedUrl(null, 'agents/credentials');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
 
         try {
@@ -870,7 +829,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to revoke account token: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionPauseCredential(): Response
@@ -881,7 +840,7 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing account ID.');
-            return $this->redirectToPostedUrl(null, 'agents/credentials');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
 
         try {
@@ -895,7 +854,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to pause account: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionResumeCredential(): Response
@@ -906,7 +865,7 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing account ID.');
-            return $this->redirectToPostedUrl(null, 'agents/credentials');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
 
         try {
@@ -920,7 +879,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to resume account: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionRevokeAndRotateCredential(): Response
@@ -934,14 +893,14 @@ class DashboardController extends Controller
 
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing account ID.');
-            return $this->redirectToPostedUrl(null, 'agents/credentials');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
 
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
                 $this->setFailFlash('Account not found.');
-                return $this->redirectToPostedUrl(null, 'agents/credentials');
+                return $this->redirectToPostedUrl(null, 'agents/accounts');
             }
 
             $credential = (array)($result['credential'] ?? []);
@@ -957,7 +916,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to revoke and rotate account token: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionDeleteCredential(): Response
@@ -968,7 +927,7 @@ class DashboardController extends Controller
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         if ($credentialId <= 0) {
             $this->setFailFlash('Missing account ID.');
-            return $this->redirectToPostedUrl(null, 'agents/credentials');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
 
         try {
@@ -982,7 +941,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to delete account: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/credentials');
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
     public function actionUpsertControlPolicy(): Response
@@ -1011,7 +970,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to save rule: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/control');
+        return $this->redirectToPostedUrl(null, 'agents/approvals');
     }
 
     public function actionRequestControlApproval(): Response
@@ -1023,7 +982,7 @@ class DashboardController extends Controller
         $settings = $this->getSettingsModel();
         if (!(bool)$settings->allowCpApprovalRequests) {
             $this->setFailFlash('Manual form is off (agent-first mode). Ask your integration to submit the request via API.');
-            return $this->redirectToPostedUrl(null, 'agents/control');
+            return $this->redirectToPostedUrl(null, 'agents/approvals');
         }
 
         $service = Plugin::getInstance()->getControlPlaneService();
@@ -1073,7 +1032,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to create request: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/control');
+        return $this->redirectToPostedUrl(null, 'agents/approvals');
     }
 
     public function actionDecideControlApproval(): Response
@@ -1087,12 +1046,12 @@ class DashboardController extends Controller
         $decision = (string)$this->request->getBodyParam('decision', '');
         if ($approvalId <= 0) {
             $this->setFailFlash('Missing request number.');
-            return $this->redirectToPostedUrl(null, 'agents/control');
+            return $this->redirectToPostedUrl(null, 'agents/approvals');
         }
 
         if (strtolower(trim($decision)) === 'approved' && !$this->canControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE)) {
             $this->setFailFlash('You need execute permission to approve requests, because approval runs the action immediately when threshold is met.');
-            return $this->redirectToPostedUrl(null, 'agents/control');
+            return $this->redirectToPostedUrl(null, 'agents/approvals');
         }
 
         try {
@@ -1105,7 +1064,7 @@ class DashboardController extends Controller
 
             if (!is_array($approval)) {
                 $this->setFailFlash('Request not found.');
-                return $this->redirectToPostedUrl(null, 'agents/control');
+                return $this->redirectToPostedUrl(null, 'agents/approvals');
             }
 
             $decisionStatus = (string)($approval['status'] ?? 'pending');
@@ -1168,7 +1127,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to save decision: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/control');
+        return $this->redirectToPostedUrl(null, 'agents/approvals');
     }
 
     public function actionExecuteControlAction(): Response
@@ -1225,7 +1184,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to run action: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/control');
+        return $this->redirectToPostedUrl(null, 'agents/approvals');
     }
 
     public function actionExecuteApprovedControlAction(): Response
@@ -1238,7 +1197,7 @@ class DashboardController extends Controller
         $approvalId = (int)$this->request->getBodyParam('approvalId', 0);
         if ($approvalId <= 0) {
             $this->setFailFlash('Missing request number.');
-            return $this->redirectToPostedUrl(null, 'agents/control');
+            return $this->redirectToPostedUrl(null, 'agents/approvals');
         }
 
         try {
@@ -1270,7 +1229,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to run approved request: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/control');
+        return $this->redirectToPostedUrl(null, 'agents/approvals');
     }
 
     public function actionSimulateControlAction(): Response
@@ -1312,7 +1271,7 @@ class DashboardController extends Controller
             $this->setFailFlash('Unable to run policy simulator: ' . $e->getMessage());
         }
 
-        return $this->redirectToPostedUrl(null, 'agents/control');
+        return $this->redirectToPostedUrl(null, 'agents/approvals');
     }
 
     private function getApiEndpoints(): array
@@ -1347,63 +1306,12 @@ class DashboardController extends Controller
         return $endpoints;
     }
 
-    private function getDiscoveryEndpoints(): array
-    {
-        return [
-            '/llms.txt',
-            '/llms-full.txt',
-            '/commerce.txt',
-        ];
-    }
-
     private function controlTabs(): array
     {
         return [
-            ['key' => 'approvals', 'label' => 'Approvals', 'url' => 'agents/control/approvals'],
-            ['key' => 'rules', 'label' => 'Rules', 'url' => 'agents/control/rules'],
+            ['key' => 'approvals', 'label' => 'Approvals', 'url' => 'agents/approvals/approvals'],
+            ['key' => 'rules', 'label' => 'Rules', 'url' => 'agents/approvals/rules'],
         ];
-    }
-
-    private function resolveDashboardTab(): string
-    {
-        $request = Craft::$app->getRequest();
-        $tabFromQuery = strtolower(trim((string)$request->getQueryParam('tab', '')));
-        if ($tabFromQuery === 'overview') {
-            return 'readiness';
-        }
-        if ($tabFromQuery === 'security') {
-            return 'readiness';
-        }
-        if (in_array($tabFromQuery, self::DASHBOARD_TABS, true)) {
-            return $tabFromQuery;
-        }
-
-        $pathInfo = trim((string)$request->getPathInfo(), '/');
-        if ($pathInfo === 'agents/discovery' || $pathInfo === 'agents/credentials/discovery' || $pathInfo === 'agents/dashboard/discovery') {
-            return 'discovery';
-        }
-
-        if (preg_match('#^agents/(status|readiness|health)$#', $pathInfo) === 1) {
-            return 'readiness';
-        }
-
-        if (preg_match('#^agents/status/readiness$#', $pathInfo) === 1) {
-            return 'readiness';
-        }
-
-        if (preg_match('#^agents/dashboard/(readiness)$#', $pathInfo, $matches) === 1) {
-            return (string)$matches[1];
-        }
-
-        if (preg_match('#^agents/(readiness)$#', $pathInfo, $matches) === 1) {
-            return (string)$matches[1];
-        }
-
-        if ($pathInfo === 'agents/security' || $pathInfo === 'agents/dashboard/security') {
-            return 'readiness';
-        }
-
-        return 'readiness';
     }
 
     private function resolveControlTab(): string
@@ -1415,7 +1323,7 @@ class DashboardController extends Controller
         }
 
         $pathInfo = trim((string)$request->getPathInfo(), '/');
-        if (preg_match('#^agents/control/(approvals|rules)$#', $pathInfo, $matches) === 1) {
+        if (preg_match('#^agents/approvals/(approvals|rules)$#', $pathInfo, $matches) === 1) {
             return (string)$matches[1];
         }
 
@@ -1738,11 +1646,8 @@ class DashboardController extends Controller
         return [
             'enableWritesExperimental' => array_key_exists('enableWritesExperimental', $config),
             'enableCredentialUsageIndicator' => array_key_exists('enableCredentialUsageIndicator', $config),
-            'enableLlmsTxt' => array_key_exists('enableLlmsTxt', $config),
-            'enableLlmsFullTxt' => array_key_exists('enableLlmsFullTxt', $config),
-            'enableCommerceTxt' => array_key_exists('enableCommerceTxt', $config),
-            'llmsTxtBody' => array_key_exists('llmsTxtBody', $config),
-            'commerceTxtBody' => array_key_exists('commerceTxtBody', $config),
+            'webhookUrl' => array_key_exists('webhookUrl', $config),
+            'webhookSecret' => array_key_exists('webhookSecret', $config),
             'reliabilityConsumerLagWarnSeconds' => array_key_exists('reliabilityConsumerLagWarnSeconds', $config),
             'reliabilityConsumerLagCriticalSeconds' => array_key_exists('reliabilityConsumerLagCriticalSeconds', $config),
         ];

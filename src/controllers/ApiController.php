@@ -8,7 +8,6 @@ use Klick\Agents\services\ObservabilityMetricsService;
 use craft\web\Controller;
 use yii\caching\CacheInterface;
 use yii\mutex\Mutex;
-use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 class ApiController extends Controller
@@ -79,60 +78,6 @@ class ApiController extends Controller
     public $enableCsrfValidation = false;
     // Keep explicit support flag for parity checks and future controller compatibility.
     protected array|bool|int $supportsCsrfValidation = false;
-
-    public function actionLlmsTxt(): Response
-    {
-        if (($methodResponse = $this->enforceReadRequest()) !== null) {
-            return $methodResponse;
-        }
-
-        if (!Plugin::getInstance()->isAgentsEnabled()) {
-            return $this->serviceDisabledResponse();
-        }
-
-        $document = Plugin::getInstance()->getDiscoveryTxtService()->getLlmsTxtDocument();
-        if ($document === null) {
-            throw new NotFoundHttpException('Not found.');
-        }
-
-        return $this->respondWithDiscoveryDocument($document);
-    }
-
-    public function actionLlmsFullTxt(): Response
-    {
-        if (($methodResponse = $this->enforceReadRequest()) !== null) {
-            return $methodResponse;
-        }
-
-        if (!Plugin::getInstance()->isAgentsEnabled()) {
-            return $this->serviceDisabledResponse();
-        }
-
-        $document = Plugin::getInstance()->getDiscoveryTxtService()->getLlmsFullTxtDocument();
-        if ($document === null) {
-            throw new NotFoundHttpException('Not found.');
-        }
-
-        return $this->respondWithDiscoveryDocument($document);
-    }
-
-    public function actionCommerceTxt(): Response
-    {
-        if (($methodResponse = $this->enforceReadRequest()) !== null) {
-            return $methodResponse;
-        }
-
-        if (!Plugin::getInstance()->isAgentsEnabled()) {
-            return $this->serviceDisabledResponse();
-        }
-
-        $document = Plugin::getInstance()->getDiscoveryTxtService()->getCommerceTxtDocument();
-        if ($document === null) {
-            throw new NotFoundHttpException('Not found.');
-        }
-
-        return $this->respondWithDiscoveryDocument($document);
-    }
 
     public function actionHealth(): Response
     {
@@ -1415,9 +1360,6 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/control/audit', 'requiredScopes' => ['control:audit:read']],
             ['method' => 'GET', 'path' => '/webhooks/dlq', 'requiredScopes' => ['webhooks:dlq:read']],
             ['method' => 'POST', 'path' => '/webhooks/dlq/replay', 'requiredScopes' => ['webhooks:dlq:replay']],
-            ['method' => 'GET', 'path' => '/llms.txt', 'public' => true],
-            ['method' => 'GET', 'path' => '/llms-full.txt', 'public' => true],
-            ['method' => 'GET', 'path' => '/commerce.txt', 'public' => true],
         ];
         if (!$this->isWritesExperimentalEnabled()) {
             $endpoints = array_values(array_filter(
@@ -1463,9 +1405,7 @@ class ApiController extends Controller
                 'agents/entry-list',
                 'agents/entry-show',
                 'agents/section-list',
-                'agents/discovery-prewarm',
                 'agents/auth-check',
-                'agents/discovery-check',
                 'agents/readiness-check',
                 'agents/reliability-check',
                 'agents/lifecycle-report',
@@ -2187,9 +2127,6 @@ class ApiController extends Controller
                 ]),
                 'x-required-scopes' => ['webhooks:dlq:replay'],
             ]],
-            '/llms.txt' => ['get' => ['summary' => 'Public llms.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
-            '/llms-full.txt' => ['get' => ['summary' => 'Public llms-full.txt extended discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
-            '/commerce.txt' => ['get' => ['summary' => 'Public commerce.txt discovery surface', 'responses' => ['200' => ['description' => 'OK'], '404' => ['description' => 'Disabled'], '503' => ['description' => 'Service disabled']]]],
         ];
         if (!$this->isWritesExperimentalEnabled()) {
             foreach ($this->controlOpenApiPaths() as $path) {
@@ -2214,12 +2151,11 @@ class ApiController extends Controller
             'info' => [
                 'title' => 'Agents API',
                 'version' => $pluginVersion,
-                'description' => 'Agent discovery and control-plane API for read surfaces plus governed policy/approval/action workflows.',
+                'description' => 'Governed agent access and control-plane API for read surfaces plus policy/approval/action workflows.',
             ],
             'servers' => [
                 ['url' => $apiServerUrl, 'description' => 'Absolute API base (GPT/Actions-friendly)'],
                 ['url' => '/agents/v1', 'description' => 'Primary API'],
-                ['url' => '/', 'description' => 'Site root discovery files'],
             ],
             'x-discovery-aliases' => [
                 '/capabilities' => '/agents/v1/capabilities',
@@ -3069,11 +3005,6 @@ class ApiController extends Controller
 
         Craft::warning('Agents rate-limit lock unavailable; failing closed for this request.', __METHOD__);
         return $limit + 1;
-    }
-
-    private function enforceReadRequest(): ?Response
-    {
-        return $this->enforceRequestMethod(['GET', 'HEAD']);
     }
 
     private function enforceWriteRequestContract(): ?Response
@@ -5251,57 +5182,6 @@ class ApiController extends Controller
         return $this->jsonResponse($payload);
     }
 
-    private function respondWithDiscoveryDocument(array $document): Response
-    {
-        $etagHash = (string)($document['etag'] ?? '');
-        if ($etagHash === '') {
-            $etagHash = sha1((string)($document['body'] ?? ''));
-        }
-        $etag = '"' . $etagHash . '"';
-        $lastModified = (int)($document['lastModified'] ?? time());
-        $maxAge = max(0, (int)($document['maxAge'] ?? 0));
-
-        $response = $this->response;
-        $response->format = Response::FORMAT_RAW;
-        $response->headers->set('Content-Type', 'text/plain; charset=utf-8');
-        $response->headers->set('ETag', $etag);
-        $response->headers->set('Last-Modified', gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
-        $response->headers->set('Cache-Control', 'public, max-age=' . $maxAge);
-
-        if ($this->isNotModified($etag, $lastModified)) {
-            $response->setStatusCode(304);
-            $response->content = '';
-            return $this->attachRequestId($response);
-        }
-
-        $response->setStatusCode(200);
-        $response->content = (string)($document['body'] ?? '');
-        return $this->attachRequestId($response);
-    }
-
-    private function isNotModified(string $etag, int $lastModified): bool
-    {
-        $request = Craft::$app->getRequest();
-        $ifNoneMatch = trim((string)$request->getHeaders()->get('If-None-Match', ''));
-        if ($ifNoneMatch !== '') {
-            foreach (explode(',', $ifNoneMatch) as $candidate) {
-                $candidate = trim($candidate);
-                if ($candidate === '*' || $candidate === $etag || $candidate === 'W/' . $etag) {
-                    return true;
-                }
-            }
-        }
-
-        $ifModifiedSince = trim((string)$request->getHeaders()->get('If-Modified-Since', ''));
-        if ($ifModifiedSince !== '') {
-            $ifModifiedSinceTs = strtotime($ifModifiedSince);
-            if ($ifModifiedSinceTs !== false && $ifModifiedSinceTs >= $lastModified) {
-                return true;
-            }
-        }
-
-        return false;
-    }
     private function jsonResponse(array $payload): Response
     {
         $response = $this->asJson($payload);

@@ -1,22 +1,15 @@
 {% extends "_layouts/cp" %}
-{% set title = activeDashboardTab == 'discovery' ? 'Discovery Docs' : 'Agents Status' %}
-{% set selectedSubnavItem = activeDashboardTab == 'discovery' ? 'discovery' : 'status' %}
-{% set dashboardHeadingByKey = {
-  readiness: 'Status',
-  discovery: 'Discovery Docs',
-} %}
-{% set dashboardHeading = dashboardHeadingByKey[activeDashboardTab]|default('Status') %}
-{% set tabIntroByKey = {
-  readiness: 'Review runtime, integration, and security posture before integrations or releases.',
-  discovery: 'Manage discovery document freshness and quickly inspect what external agents can read.',
-} %}
+{% set title = 'Agents Status' %}
+{% set selectedSubnavItem = 'status' %}
+{% set dashboardHeading = 'Status' %}
+{% set tabIntro = 'Review runtime, integration, and security posture before integrations or releases.' %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
   <div class="agents-page-header">
     <h1>{{ dashboardHeading }}</h1>
-    <p class="agents-page-intro">{{ tabIntroByKey[activeDashboardTab] ?? 'Operator dashboard for governed runtime workflows.' }}</p>
+    <p class="agents-page-intro">{{ tabIntro }}</p>
   </div>
 
   <div class="agents-layout-stack">
@@ -107,6 +100,59 @@
       {% set securityWebhookSecretConfigured = securityPosture.webhook.secretConfigured ?? false %}
       {% set securityWebhookMisconfigured = (securityWebhookUrlConfigured and not securityWebhookSecretConfigured) or ((not securityWebhookUrlConfigured) and securityWebhookSecretConfigured) %}
       {% set webhookEnabledForReadiness = securityPosture.webhook.enabled ?? false %}
+      {% set webhookTestSinkConfig = webhookTestSinkSnapshot.config|default({}) %}
+      {% set webhookTestSinkSummary = webhookTestSinkSnapshot.summary|default({}) %}
+      {% set webhookTestSinkEvents = webhookTestSinkSnapshot.events|default([]) %}
+      {% set webhookTestSinkEnabled = webhookTestSinkConfig.enabled ?? false %}
+      {% set webhookTestSinkRequested = webhookTestSinkConfig.requested ?? false %}
+      {% set webhookTestSinkVisible = (webhookTestSinkConfig.devMode ?? false) or webhookTestSinkRequested %}
+      {% set webhookTestSinkStorageReady = webhookTestSinkConfig.storageReady ?? false %}
+      {% set webhookTestSinkUrl = webhookTestSinkConfig.url ?? '' %}
+      {% set webhookTestSinkWebhookUrlMatches = webhookTestSinkConfig.webhookUrlMatchesSink ?? false %}
+      {% set webhookTestSinkWebhookUrlConfigured = webhookTestSinkConfig.webhookUrlConfigured ?? false %}
+      {% set webhookTestSinkWebhookSecretConfigured = webhookTestSinkConfig.webhookSecretConfigured ?? false %}
+      {% set webhookTestSinkWebhookTargetLabel = webhookTestSinkWebhookUrlMatches ? 'pointing to sink' : (webhookTestSinkWebhookUrlConfigured ? 'configured elsewhere' : 'not configured') %}
+      {% set webhookTestSinkWebhookSecretLabel = webhookTestSinkWebhookSecretConfigured ? 'set' : 'missing' %}
+      {% set webhookTestSinkRetentionLimit = webhookTestSinkConfig.retentionLimit ?? 200 %}
+      {% set webhookTestSinkTotal = webhookTestSinkSummary.total|default(0) %}
+      {% set webhookTestSinkValid = webhookTestSinkSummary.valid|default(0) %}
+      {% set webhookTestSinkInvalid = webhookTestSinkSummary.invalid|default(0) %}
+      {% set webhookTestSinkUnsigned = webhookTestSinkSummary.unsigned|default(0) %}
+      {% set webhookTestSinkLastCapturedAt = webhookTestSinkSummary.lastCapturedAt ?: '' %}
+      {% set webhookTestSinkCanSend = webhookTestSinkEnabled and webhookTestSinkStorageReady and webhookTestSinkWebhookUrlMatches and webhookTestSinkWebhookSecretConfigured %}
+      {% set webhookTestSinkState = 'configured' %}
+      {% set webhookTestSinkStateTone = 'good' %}
+      {% set webhookTestSinkStatusLine = 'Last captured: ' ~ (webhookTestSinkLastCapturedAt ?: 'none yet') %}
+      {% set webhookTestSinkNotice = '' %}
+      {% set webhookTestSinkEmptyCopy = 'No deliveries captured yet. Click Send test webhook or trigger a real content event and run the queue.' %}
+      {% if not webhookTestSinkRequested %}
+        {% set webhookTestSinkState = 'setup' %}
+        {% set webhookTestSinkStateTone = 'muted' %}
+        {% set webhookTestSinkStatusLine = 'Status: Enable PLUGIN_AGENTS_WEBHOOK_TEST_SINK=true to turn on local capture in dev.' %}
+        {% set webhookTestSinkNotice = 'The sink is opt-in. It reuses the normal runtime webhook URL and secret, so only point the runtime webhook target at the sink in local/dev.' %}
+        {% set webhookTestSinkEmptyCopy = 'The sink is not enabled yet.' %}
+      {% elseif not webhookTestSinkEnabled %}
+        {% set webhookTestSinkState = 'dev-disabled' %}
+        {% set webhookTestSinkStateTone = 'warn' %}
+        {% set webhookTestSinkStatusLine = 'Status: Requested, but Craft devMode is off.' %}
+        {% set webhookTestSinkNotice = 'The sink only runs when devMode is enabled. Leave production webhook delivery pointed at the real receiver.' %}
+        {% set webhookTestSinkEmptyCopy = 'Captures are unavailable until devMode is enabled.' %}
+      {% elseif not webhookTestSinkStorageReady %}
+        {% set webhookTestSinkState = 'storage' %}
+        {% set webhookTestSinkStateTone = 'warn' %}
+        {% set webhookTestSinkStatusLine = 'Status: Storage unavailable until plugin migrations are applied.' %}
+        {% set webhookTestSinkNotice = 'Run plugin migrations to create the local capture table before using the sink.' %}
+        {% set webhookTestSinkEmptyCopy = 'Captures are unavailable until sink storage is ready.' %}
+      {% elseif not webhookTestSinkWebhookUrlMatches or not webhookTestSinkWebhookSecretConfigured %}
+        {% set webhookTestSinkState = 'misconfigured' %}
+        {% set webhookTestSinkStateTone = 'warn' %}
+        {% set webhookTestSinkStatusLine = 'Status: Runtime webhook transport is not fully pointed at the local sink.' %}
+        {% set webhookTestSinkNotice = 'Runtime target is ' ~ webhookTestSinkWebhookTargetLabel ~ ' and secret is ' ~ webhookTestSinkWebhookSecretLabel ~ '. Point the runtime webhook URL at the sink URL below and keep the webhook secret configured to enable one-click test delivery.' %}
+        {% set webhookTestSinkEmptyCopy = 'Captures will appear here once delivery is routed to the sink.' %}
+      {% elseif webhookTestSinkTotal == 0 %}
+        {% set webhookTestSinkState = 'empty' %}
+        {% set webhookTestSinkStateTone = 'muted' %}
+      {% endif %}
       {% set readinessDbAvailable = readinessDiagnostics.componentChecks.systemComponents.db ?? false %}
       {% set readinessCacheAvailable = readinessDiagnostics.componentChecks.systemComponents.cache ?? false %}
       {% set readinessUsersAvailable = readinessDiagnostics.componentChecks.systemComponents.users ?? false %}
@@ -167,17 +213,14 @@
         or reliabilitySignalsEvaluated == 0
         or (not readinessHasObservedTraffic)
         or (not readinessHasActiveCredentials) %}
-      {% set readinessBootstrapManagedCredentialCount = securityPosture.authentication.managedCredentialCount|default(0) %}
+      {% set readinessOnlyBootstrapGaps = (not readinessHasObservedTraffic)
+        and (not readinessHasActiveCredentials)
+        and (not readinessHasIntegrationTelemetry) %}
       {% set readinessIsBootstrapState = (not readinessHasBlockingGate)
         and (not readinessHasDegradedSignals)
         and readinessMetricsCurrent
         and reliabilitySignalsEvaluated > 0
-        and (not readinessHasObservedTraffic)
-        and (not readinessHasIntegrationTelemetry)
-        and (readinessBootstrapManagedCredentialCount == 0)
-        and (not webhookEnabledForReadiness)
-        and (not securityWebhookUrlConfigured)
-        and (not securityWebhookSecretConfigured) %}
+        and readinessOnlyBootstrapGaps %}
       {% set readinessBlockingCount = 0 %}
       {% if not agentsEnabled %}
         {% set readinessBlockingCount = readinessBlockingCount + 1 %}
@@ -248,7 +291,7 @@
       {% elseif telemetryDlqFailed > 0 %}
         {% set readinessDeliverySummary = telemetryDlqFailed ~ ' failed event' ~ (telemetryDlqFailed == 1 ? '' : 's') ~ ' need attention' %}
       {% endif %}
-      {% set readinessIntegrationLead = 'No sync-state integrations are configured' %}
+      {% set readinessIntegrationLead = 'Sync-state reporting is optional until you connect a worker' %}
       {% if readinessConsumerLagCriticalCount > 0 %}
         {% set readinessIntegrationLead = 'One or more integrations are in critical lag' %}
       {% elseif readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60 %}
@@ -270,7 +313,7 @@
       {% endif %}
       {% set readinessCheckpointLine = readinessHasIntegrationTelemetry
         ? 'Checkpoint telemetry available'
-        : 'Checkpoint telemetry has not been submitted yet' %}
+        : 'Checkpoint telemetry will appear after the first sync worker connects' %}
       {% set readinessCredentialLine = 'Runtime credentials available for access' %}
       {% if securityCredentialCount == 0 %}
         {% set readinessCredentialLine = 'No runtime credentials configured' %}
@@ -596,9 +639,9 @@
         'Webhook configuration',
       ] %}
       {% set settingsUrl = cpUrl('agents/settings') %}
-      {% set accountsUrl = cpUrl('agents/credentials') %}
-      {% set attentionAccountsUrl = cpUrl('agents/credentials', { listFilter: 'attention', focusFirstVisible: 1 }) %}
-      {% set readinessUrl = cpUrl('agents/readiness') %}
+      {% set accountsUrl = cpUrl('agents/accounts') %}
+      {% set attentionAccountsUrl = cpUrl('agents/accounts', { listFilter: 'attention', focusFirstVisible: 1 }) %}
+      {% set readinessUrl = cpUrl('agents/status') %}
       {% set overviewUrl = readinessUrl %}
       {% set securityUrl = readinessUrl %}
       {% set readinessActionRows = [
@@ -736,11 +779,13 @@
         },
         {
           signal: 'Sync lag',
-          stateLabel: not readinessHasIntegrationTelemetry ? 'Not enabled' : (readinessConsumerLagCriticalCount > 0 ? 'Blocked' : ((readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60) ? 'Needs attention' : 'Clear')),
+          stateLabel: not readinessHasIntegrationTelemetry ? 'Optional' : (readinessConsumerLagCriticalCount > 0 ? 'Blocked' : ((readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60) ? 'Needs attention' : 'Clear')),
           stateTone: not readinessHasIntegrationTelemetry ? 'muted' : (readinessConsumerLagCriticalCount > 0 ? 'bad' : ((readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60) ? 'warn' : 'muted')),
-          impact: 'Downstream systems may be operating on stale Craft or Commerce data.',
-          primaryAction: 'Review lagging integrations',
-          secondaryAction: 'Open lag details',
+          impact: not readinessHasIntegrationTelemetry
+            ? 'Connect a sync worker only if you want checkpoint-based lag visibility for downstream systems.'
+            : 'Downstream systems may be operating on stale Craft or Commerce data.',
+          primaryAction: not readinessHasIntegrationTelemetry ? 'Review integration detail' : 'Review lagging integrations',
+          secondaryAction: not readinessHasIntegrationTelemetry ? 'Open reliability thresholds' : 'Open lag details',
           primaryUrl: readinessUrl ~ '#readinessProofIntegrationHealth',
           secondaryUrl: settingsUrl ~ '#reliabilityThresholdsSection',
           surface: 'Readiness / External',
@@ -857,28 +902,6 @@
       {% elseif readinessPreviewState == 'unproven' %}
         {% set readinessActionRowsProblematic = [
           {
-            signal: 'Webhook DLQ failures',
-            stateLabel: 'Not enabled',
-            stateTone: 'muted',
-            impact: 'No delivery path is configured in this environment.',
-            primaryAction: 'Review security detail',
-            secondaryAction: 'Review webhook posture',
-            primaryUrl: securityUrl ~ '#webhookReliabilitySection',
-            secondaryUrl: securityUrl ~ '#securitySnapshotSection',
-            surface: 'Readiness / Security',
-          },
-          {
-            signal: 'Sync lag',
-            stateLabel: 'Not enabled',
-            stateTone: 'muted',
-            impact: 'No sync-state telemetry is available yet for downstream systems.',
-            primaryAction: 'Review lagging integrations',
-            secondaryAction: 'Open reliability thresholds',
-            primaryUrl: readinessUrl ~ '#readinessProofIntegrationHealth',
-            secondaryUrl: settingsUrl ~ '#reliabilityThresholdsSection',
-            surface: 'Readiness / External',
-          },
-          {
             signal: 'Stale or low-confidence observability',
             stateLabel: 'Unproven',
             stateTone: 'warn',
@@ -892,7 +915,7 @@
         ] %}
       {% else %}
         {% for row in readinessActionRows %}
-          {% if (row.stateLabel|lower) != 'clear' %}
+          {% if (row.stateLabel|lower) not in ['clear', 'optional'] %}
             {% set readinessActionRowsProblematic = readinessActionRowsProblematic|merge([row]) %}
           {% endif %}
         {% endfor %}
@@ -1007,7 +1030,7 @@
         {% set readinessIntegrationCapacitySummaryLabel = 'Needs attention' %}
       {% elseif not readinessHasIntegrationTelemetry %}
         {% set readinessIntegrationCapacitySummaryTone = 'muted' %}
-        {% set readinessIntegrationCapacitySummaryLabel = 'Not enabled' %}
+        {% set readinessIntegrationCapacitySummaryLabel = 'Optional' %}
       {% elseif not readinessMetricsCurrent %}
         {% set readinessIntegrationCapacitySummaryTone = 'muted' %}
         {% set readinessIntegrationCapacitySummaryLabel = 'Unproven' %}
@@ -1043,7 +1066,7 @@
         {% set readinessCredentialsPolicySummaryTone = 'good' %}
         {% set readinessCredentialsPolicySummaryLabel = 'Ready' %}
         {% set readinessConfidenceSummaryTone = 'muted' %}
-        {% set readinessConfidenceSummaryLabel = 'Awaiting activity' %}
+        {% set readinessConfidenceSummaryLabel = 'Unproven' %}
       {% endif %}
       {% set readinessTrafficAccessProofTone = readinessTrafficAccessSummaryTone in ['warn', 'bad'] ? readinessTrafficAccessSummaryTone : 'good' %}
       {% set readinessDeliveryWebhooksProofTone = readinessDeliveryWebhooksSummaryTone in ['warn', 'bad'] ? readinessDeliveryWebhooksSummaryTone : 'good' %}
@@ -1300,7 +1323,7 @@
             <form method="post" accept-charset="UTF-8" class="agents-diagnostics-bundle-form">
               {{ csrfInput() }}
               {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
-              {{ redirectInput('agents/readiness') }}
+              {{ redirectInput('agents/status') }}
               <button class="btn agents-diagnostics-bundle-button" type="submit">Download Diagnostics Bundle (.json)</button>
             </form>
           </section>
@@ -1519,6 +1542,9 @@
               <div class="agents-readiness-detail-actions">
                 <a href="{{ readinessUrl ~ '#webhookReliabilitySection' }}" class="agents-readiness-detail-action">Review webhook posture</a>
                 <a href="{{ securityUrl ~ '#webhookDlqDetailSection' }}" class="agents-readiness-detail-action">Open dead-letter queue</a>
+                {% if webhookTestSinkVisible %}
+                  <a href="{{ readinessUrl ~ '#webhookTestSinkSection' }}" class="agents-readiness-detail-action">Open test sink</a>
+                {% endif %}
                 <a href="{{ overviewUrl ~ '#diagnosticsBundleSection' }}" class="agents-readiness-detail-action">Download diagnostics bundle</a>
               </div>
             </div>
@@ -1887,7 +1913,7 @@
           <form method="post" accept-charset="UTF-8" style="margin-bottom: 10px;">
             {{ csrfInput() }}
             {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-            {{ redirectInput('agents/readiness') }}
+            {{ redirectInput('agents/status') }}
             <input type="hidden" name="mode" value="all">
             <input type="hidden" name="limit" value="25">
             <button class="btn" type="submit">Replay up to 25 failed events</button>
@@ -1922,7 +1948,7 @@
                     <form method="post" accept-charset="UTF-8">
                       {{ csrfInput() }}
                       {{ actionInput('agents/dashboard/replay-webhook-dlq') }}
-                      {{ redirectInput('agents/readiness') }}
+                      {{ redirectInput('agents/status') }}
                       <input type="hidden" name="id" value="{{ row.id }}">
                       <button class="btn" type="submit">Replay</button>
                     </form>
@@ -1935,323 +1961,160 @@
         </section>
       {% endif %}
 
-    {% endif %}
-
-    {% if activeDashboardTab == 'discovery' %}
-      <div class="agents-discovery-content-wrap">
-        <section class="border rounded p-3">
-          <h2 class="h4">Quick Actions</h2>
-          <div class="agents-actions" style="margin-bottom: 8px;">
-            <form method="post" accept-charset="UTF-8">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/prewarm-discovery') }}
-              {{ redirectInput('agents/discovery') }}
-              <input type="hidden" name="target" value="all">
-              <button class="btn submit" type="submit">Refresh All</button>
-            </form>
-            <form method="post" accept-charset="UTF-8">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/prewarm-discovery') }}
-              {{ redirectInput('agents/discovery') }}
-              <input type="hidden" name="target" value="llms">
-              <button class="btn" type="submit">Refresh llms.txt</button>
-            </form>
-            <form method="post" accept-charset="UTF-8">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/prewarm-discovery') }}
-              {{ redirectInput('agents/discovery') }}
-              <input type="hidden" name="target" value="llms-full">
-              <button class="btn" type="submit">Refresh llms-full.txt</button>
-            </form>
-            <form method="post" accept-charset="UTF-8">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/prewarm-discovery') }}
-              {{ redirectInput('agents/discovery') }}
-              <input type="hidden" name="target" value="commerce">
-              <button class="btn" type="submit">Refresh commerce.txt</button>
-            </form>
-            <form method="post" accept-charset="UTF-8">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/clear-discovery-cache') }}
-              {{ redirectInput('agents/discovery') }}
-              <button class="btn" type="submit">Clear cache</button>
-            </form>
+      {% if webhookTestSinkVisible %}
+        <section class="agents-webhook-test-sink-card border rounded p-0" id="webhookTestSinkSection">
+          <div class="agents-webhook-test-sink-top">
+            <div class="agents-webhook-test-sink-header">
+              <h2 class="agents-webhook-test-sink-title">Webhook Test Sink</h2>
+              <p class="agents-webhook-test-sink-copy">Dev-only local receiver for inspecting outbound webhook deliveries before wiring a real automation endpoint.</p>
+            </div>
+            {% if webhookTestSinkRequested %}
+              <div class="agents-webhook-test-sink-actions">
+                <form method="post" accept-charset="UTF-8" class="agents-webhook-test-sink-action-form">
+                  {{ csrfInput() }}
+                  {{ actionInput('agents/dashboard/send-webhook-test-sink-delivery') }}
+                  {{ redirectInput('agents/status#webhookTestSinkSection') }}
+                  <button class="btn agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkCanSend %} disabled{% endif %}>Send test webhook</button>
+                </form>
+                <form method="post" accept-charset="UTF-8" class="agents-webhook-test-sink-action-form">
+                  {{ csrfInput() }}
+                  {{ actionInput('agents/dashboard/clear-webhook-test-sink') }}
+                  {{ redirectInput('agents/status#webhookTestSinkSection') }}
+                  <button class="btn agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkStorageReady or webhookTestSinkTotal == 0 %} disabled{% endif %}>Clear captures</button>
+                </form>
+              </div>
+            {% endif %}
+            <p class="agents-webhook-test-sink-status agents-webhook-test-sink-status--{{ webhookTestSinkStateTone }}">{{ webhookTestSinkStatusLine }}</p>
           </div>
-          <p class="agents-subtle">Refresh cache after content or settings changes.</p>
-        </section>
 
-        <div class="agents-discovery-doc-grid">
-          {% for key, document in discoveryStatus.documents %}
-            {% set discoveryKey = key|default('') %}
-            {% set bodyFieldName = discoveryKey == 'llms' ? 'llmsTxtBody' : (discoveryKey == 'commerce' ? 'commerceTxtBody' : '') %}
-            {% set bodyLock = discoveryKey == 'llms'
-              ? (discoverySettingsLocks.llmsTxtBodySettingLocked ?? false)
-              : (discoveryKey == 'commerce' ? (discoverySettingsLocks.commerceTxtBodySettingLocked ?? false) : true) %}
-            {% set canEditBody = bodyFieldName != '' and not bodyLock %}
-            {% set configuredBody = bodyFieldName != '' ? (attribute(discoverySettings, bodyFieldName)|default('')) : '' %}
-            {% set bodyValue = (document.body is defined and document.body is not same as(null)) ? document.body : '' %}
-            {% set previewValue = bodyValue != '' ? bodyValue : (configuredBody != '' ? configuredBody : (document.preview ?: '# Disabled')) %}
-            {% set refreshTarget = discoveryKey == 'llms' ? 'llms' : (discoveryKey == 'commerce' ? 'commerce' : 'llms-full') %}
-            {% set toggleEnableField = discoveryKey == 'llms' ? 'enableLlmsTxt' : (discoveryKey == 'commerce' ? 'enableCommerceTxt' : 'enableLlmsFullTxt') %}
+          <div class="agents-webhook-test-sink-row agents-webhook-test-sink-row--url">
+            <span class="agents-webhook-test-sink-row-label">Sink URL:</span>
+            <code class="agents-webhook-test-sink-url">{{ webhookTestSinkUrl }}</code>
+          </div>
 
-            <section class="agents-discovery-doc-card">
-              <div class="agents-discovery-doc-card-head">
-                <h2 class="agents-discovery-doc-card-title">{{ document.name }}</h2>
-                <span class="status {{ document.enabled ? 'enabled' : 'disabled' }}"></span>
+          {% if webhookTestSinkState != 'configured' and webhookTestSinkNotice %}
+            <div class="agents-webhook-test-sink-row agents-webhook-test-sink-row--notice agents-webhook-test-sink-row--notice-{{ webhookTestSinkStateTone }}">
+              <p class="agents-webhook-test-sink-notice-copy">{{ webhookTestSinkNotice }}</p>
+            </div>
+          {% endif %}
+
+          <div class="agents-webhook-test-sink-captures">
+            <div class="agents-webhook-test-sink-captures-head">
+              <h3 class="agents-webhook-test-sink-captures-title">Captures:</h3>
+            </div>
+
+            {% if webhookTestSinkStorageReady and webhookTestSinkEvents|length %}
+              <div class="agents-webhook-test-sink-table-wrap">
+                <table class="agents-webhook-test-sink-table">
+                  <colgroup>
+                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--id">
+                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--event">
+                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--verification">
+                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--routing">
+                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--captured">
+                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--payload">
+                  </colgroup>
+                  <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Event</th>
+                    <th>Verification</th>
+                    <th>Routing</th>
+                    <th>Captured</th>
+                    <th>Payload</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {% for row in webhookTestSinkEvents %}
+                    {% set verificationTone = row.verificationStatus == 'valid'
+                      ? 'agents-status-chip--good'
+                      : (row.verificationStatus == 'invalid' ? 'agents-status-chip--bad' : 'agents-status-chip--muted') %}
+                    {% set routingLabel = row.subscriptionMode ?: 'n/a' %}
+                    <tr>
+                      <td>#{{ row.id }}</td>
+                      <td>
+                        <div class="agents-webhook-test-sink-event-stack">
+                          <span class="agents-webhook-test-sink-event-id">{{ row.eventId ?: 'n/a' }}</span>
+                          <span class="agents-webhook-test-sink-event-copy">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }}{{ row.action ? ' (' ~ row.action ~ ')' : '' }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="agents-webhook-test-sink-verification-stack">
+                          <span class="agents-status-chip {{ verificationTone }}">{{ row.verificationStatus }}</span>
+                          <span class="agents-webhook-test-sink-detail-copy">{{ row.requestMethod }} / {{ row.payloadBytes }} bytes</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="agents-webhook-test-sink-routing-stack">
+                          <strong class="agents-webhook-test-sink-routing-label">{{ routingLabel }}</strong>
+                          {% if row.subscriptionCredentialHandles|length %}
+                            <span class="agents-webhook-test-sink-detail-copy">{{ row.subscriptionCredentialHandles|join(', ') }}</span>
+                          {% endif %}
+                        </div>
+                      </td>
+                      <td>{{ row.dateCreated ?: 'n/a' }}</td>
+                      <td>
+                        <button
+                          type="button"
+                          class="agents-webhook-test-sink-payload-trigger"
+                          data-agents-detail-open="webhookTestSinkPayloadDialog"
+                          data-agents-payload-source="webhookTestSinkPayload-{{ row.id }}"
+                          data-agents-payload-title="Webhook Payload"
+                          data-agents-payload-copy="{{ (row.eventId ?: 'n/a') ~ ' · ' ~ (row.resourceType ?: 'resource') ~ ':' ~ (row.resourceId ?: 'n/a') ~ (row.action ? ' (' ~ row.action ~ ')' : '') ~ ' · ' ~ row.requestMethod ~ ' / ' ~ row.payloadBytes ~ ' bytes · ' ~ (row.dateCreated ?: 'n/a') }}"
+                          aria-haspopup="dialog"
+                          aria-controls="webhookTestSinkPayloadDialog"
+                        >› VIEW</button>
+                        <script type="application/json" id="webhookTestSinkPayload-{{ row.id }}">{{ row.payloadJson }}</script>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                  </tbody>
+                </table>
               </div>
-
-              <div class="agents-discovery-doc-meta">
-                <div><strong>URL:</strong> <a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.path }}</a></div>
-                <div><strong>Last Modified:</strong> <span>{{ document.lastModified ?: 'n/a' }}</span></div>
-                <div><strong>Cache TTL:</strong> <span>{{ document.cacheTtlSeconds }} seconds</span></div>
-              </div>
-
-              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-editor" id="discovery-editor-{{ discoveryKey }}">
-                {{ csrfInput() }}
-                {{ actionInput('agents/dashboard/save-settings') }}
-                {{ redirectInput('agents/discovery') }}
-                <textarea
-                  class="agents-discovery-doc-preview"
-                  name="{{ bodyFieldName ?: '_readonlyPreview' }}"
-                  rows="12"
-                  {% if not canEditBody %}readonly{% endif %}
-                >{{ previewValue }}</textarea>
-                {% if bodyFieldName == '' %}
-                  <p class="agents-subtle" style="margin: 8px 0 0;">This document is generated-only and cannot be edited inline.</p>
-                {% elseif bodyLock %}
-                  <p class="agents-subtle" style="margin: 8px 0 0;">Inline edit is locked by <code>config/agents.php</code>.</p>
+            {% else %}
+              <div class="agents-webhook-test-sink-empty">
+                <p class="agents-webhook-test-sink-empty-copy">{{ webhookTestSinkEmptyCopy }}</p>
+                {% if webhookTestSinkStorageReady %}
+                  <p class="agents-webhook-test-sink-empty-meta">Captured / valid / invalid / unsigned: <strong>{{ webhookTestSinkTotal }}</strong> / <strong>{{ webhookTestSinkValid }}</strong> / <strong>{{ webhookTestSinkInvalid }}</strong> / <strong>{{ webhookTestSinkUnsigned }}</strong></p>
                 {% endif %}
-
-              </form>
-
-              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-reset-{{ discoveryKey }}">
-                {{ csrfInput() }}
-                {{ actionInput('agents/dashboard/save-settings') }}
-                {{ redirectInput('agents/discovery') }}
-                <input type="hidden" name="resetDiscoveryBodyTarget" value="{{ discoveryKey == 'commerce' ? 'commerce' : 'llms' }}">
-              </form>
-              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-refresh-{{ discoveryKey }}">
-                {{ csrfInput() }}
-                {{ actionInput('agents/dashboard/prewarm-discovery') }}
-                {{ redirectInput('agents/discovery') }}
-                <input type="hidden" name="target" value="{{ refreshTarget }}">
-              </form>
-              <form method="post" accept-charset="UTF-8" class="agents-discovery-doc-inline-form" id="discovery-toggle-{{ discoveryKey }}">
-                {{ csrfInput() }}
-                {{ actionInput('agents/dashboard/save-settings') }}
-                {{ redirectInput('agents/discovery') }}
-                <input type="hidden" name="{{ toggleEnableField }}" value="{{ document.enabled ? 0 : 1 }}">
-              </form>
-
-              <div class="agents-discovery-doc-actions">
-                {% if canEditBody %}
-                  <button class="btn submit" type="submit" form="discovery-editor-{{ discoveryKey }}">Save</button>
-                {% endif %}
-                <div class="agents-discovery-doc-btn-group">
-                  <button
-                    class="btn agents-discovery-doc-btn"
-                    type="submit"
-                    form="discovery-reset-{{ discoveryKey }}"
-                    {% if bodyFieldName == '' or bodyLock %}disabled{% endif %}
-                  >Reset</button>
-                  <button class="btn agents-discovery-doc-btn" type="submit" form="discovery-refresh-{{ discoveryKey }}">Refresh</button>
-                </div>
-                <button
-                  class="btn agents-discovery-doc-btn"
-                  type="submit"
-                  form="discovery-toggle-{{ discoveryKey }}"
-                >{{ document.enabled ? 'Disable' : 'Enable' }}</button>
               </div>
+            {% endif %}
+          </div>
 
-              <div class="agents-discovery-doc-details-row">
-                <details class="agents-advanced agents-discovery-doc-details">
-                  <summary><strong>Details</strong></summary>
-                  <div class="tablepane mx-0" style="margin-top: 8px;">
-                    <table class="data fullwidth">
-                      <tbody>
-                      <tr><th>URL</th><td><a href="{{ document.url }}" target="_blank" rel="noopener">{{ document.url }}</a></td></tr>
-                      <tr><th>ETag</th><td>{{ document.etag ?: 'n/a' }}</td></tr>
-                      <tr><th>Bytes</th><td>{{ document.bytes }}</td></tr>
-                      <tr><th>Lines</th><td>{{ document.lineCount }}</td></tr>
-                    </tbody>
-                    </table>
-                  </div>
-                </details>
-              </div>
-            </section>
-          {% endfor %}
-        </div>
-
-        <section class="border rounded p-3">
-          <h2 class="h4">Editing Path</h2>
-          <ul class="agents-link-list">
-            <li>Edit <code>llms.txt</code> and <code>commerce.txt</code> directly in the cards above.</li>
-            <li>Use <code>config/agents.php</code> when you need environment-level overrides/lock-state.</li>
-            <li>Use this tab for refresh and verification only.</li>
-            <li>Do not place secrets in discovery documents.</li>
-          </ul>
+          <div class="agents-webhook-test-sink-footer">
+            <ul class="agents-link-list agents-webhook-test-sink-notes">
+              <li><code>PLUGIN_AGENTS_WEBHOOK_URL</code> and <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> are the normal runtime webhook settings.</li>
+              <li>Only point <code>PLUGIN_AGENTS_WEBHOOK_URL</code> at the sink URL above in local/dev.</li>
+              <li>Keep <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> configured so signatures can be verified.</li>
+              <li>Use <strong>Send test webhook</strong> for a one-click local delivery check, or save an entry/product/order to test a real content-triggered event.</li>
+              <li>The sink keeps the latest {{ webhookTestSinkRetentionLimit }} captured deliveries.</li>
+            </ul>
+          </div>
         </section>
 
+        <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--payload" id="webhookTestSinkPayloadDialog" data-agents-detail-dialog aria-labelledby="webhookTestSinkPayloadDialogTitle">
+          <div class="agents-readiness-detail-dialog-shell">
+            <div class="agents-readiness-detail-dialog-head">
+              <div class="agents-readiness-detail-dialog-heading">
+                <h2 class="agents-readiness-detail-dialog-title" id="webhookTestSinkPayloadDialogTitle">Webhook Payload</h2>
+                <p class="agents-readiness-detail-dialog-copy" id="webhookTestSinkPayloadDialogCopy">Captured webhook payload.</p>
+              </div>
+              <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close webhook payload detail">Close</button>
+            </div>
+            <div class="agents-readiness-detail-dialog-body">
+              <div class="agents-webhook-test-sink-payload">
+                <pre class="border rounded p-3" id="webhookTestSinkPayloadDialogBody">{}</pre>
+              </div>
+            </div>
+          </div>
+        </dialog>
+      {% endif %}
 
-        <hr>
-
-
-        <section class="border rounded p-3">
-          <details class="agents-advanced">
-            <summary><strong>Discovery Docs Status (Technical JSON)</strong></summary>
-            <pre class="border rounded p-3">{{ discoveryStatusJson }}</pre>
-          </details>
-        </section>
-      </div>
     {% endif %}
+
   </div>
 
   {% css %}
-    .agents-discovery-content-wrap {
-      width: 100%;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .agents-discovery-doc-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-    }
-
-    @media (min-width: 960px) {
-      .agents-discovery-doc-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    .agents-discovery-doc-card {
-      border: 1px solid #bfc9d6;
-      border-radius: 3px;
-      background: #ffffff;
-      box-shadow: 0 4px 4px rgba(0, 0, 0, 0.06);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .agents-discovery-doc-card-head {
-      padding: 12px 12px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .agents-discovery-doc-card-title {
-      margin: 0;
-      font-size: 18px;
-      line-height: 1.2;
-      font-weight: 700;
-      color: #596673;
-    }
-
-    .agents-discovery-doc-meta {
-      padding: 0 12px 20px;
-      display: grid;
-      gap: 4px;
-      font-size: 12px;
-      line-height: 1.35;
-      color: #596673;
-    }
-
-    .agents-discovery-doc-editor {
-      margin: 0;
-      padding: 0;
-      display: block;
-    }
-
-    .agents-discovery-doc-preview {
-      width: 100%;
-      min-height: 220px;
-      border: 0;
-      border-radius: 0;
-      background: #e5ebf2;
-      color: inherit;
-      padding: 12px;
-      resize: vertical;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-      font-size: 12px;
-      line-height: 1.35;
-      box-shadow: none;
-    }
-
-    .agents-discovery-doc-preview[readonly] {
-      background: #e3e9f0;
-      cursor: default;
-    }
-
-    .agents-discovery-doc-actions {
-      padding: 10px 12px 8px;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 8px;
-      flex-wrap: nowrap;
-      white-space: nowrap;
-    }
-
-    .agents-discovery-doc-inline-form {
-      margin: 0;
-      display: inline-flex;
-    }
-
-    .agents-discovery-doc-btn.btn {
-      border: 0;
-      box-shadow: none;
-      background: #d4dbe4;
-      color: #000000;
-      border-radius: 3px;
-      padding: 7px 10px;
-      font-size: 12px;
-      line-height: 1;
-      min-height: 30px;
-      white-space: nowrap;
-    }
-
-    .agents-discovery-doc-btn.btn:hover,
-    .agents-discovery-doc-btn.btn:focus {
-      background: #c6cfda;
-      color: #000000;
-    }
-
-    .agents-discovery-doc-btn.btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-      background: #d4dbe4;
-      color: #000000;
-    }
-
-    .agents-discovery-doc-btn-group {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 3px;
-      overflow: hidden;
-    }
-
-    .agents-discovery-doc-btn-group .agents-discovery-doc-btn.btn + .agents-discovery-doc-btn.btn {
-      margin-left: 1px;
-    }
-
-    .agents-discovery-doc-btn-group .agents-discovery-doc-btn.btn {
-      border-radius: 0;
-    }
-
-    .agents-discovery-doc-details-row {
-      padding: 0 12px 12px;
-    }
-
-    .agents-discovery-doc-details-row .agents-advanced > summary {
-      font-size: 14px;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
     .agents-readiness-ready-card {
       --agents-readiness-accent: #108e80;
       --agents-readiness-alert-color: #c24f42;
@@ -2917,6 +2780,368 @@
       color: #000000;
     }
 
+    .agents-webhook-test-sink-card {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #ffffff;
+      color: #596673;
+    }
+
+    .agents-webhook-test-sink-top {
+      display: grid;
+      gap: 6px 12px;
+      padding: 24px 12px;
+      border-bottom: 1px solid #bbc7d5;
+    }
+
+    .agents-webhook-test-sink-header {
+      min-width: 0;
+    }
+
+    .agents-webhook-test-sink-title {
+      margin: 0;
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-webhook-test-sink-copy {
+      margin: 6px 0 0;
+      color: #596673;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-test-sink-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 0;
+      grid-row: 1 / span 2;
+      grid-column: 2;
+    }
+
+    .agents-webhook-test-sink-action-form {
+      margin: 0;
+    }
+
+    .agents-webhook-test-sink-button.btn {
+      min-height: auto;
+      padding: 7px 10px;
+      border: 0;
+      border-radius: 3px;
+      background: #d4dbe4;
+      background-image: none;
+      box-shadow: none;
+      color: #000000;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .agents-webhook-test-sink-button.btn:hover,
+    .agents-webhook-test-sink-button.btn:focus-visible {
+      background: #c6cfda;
+      color: #000000;
+    }
+
+    .agents-webhook-test-sink-button.btn[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .agents-webhook-test-sink-status {
+      margin: 0;
+      color: #000000;
+      font-size: 12px;
+      line-height: 1.45;
+      grid-column: 1;
+    }
+
+    .agents-webhook-test-sink-status--good {
+      color: #000000;
+    }
+
+    .agents-webhook-test-sink-status--muted {
+      color: #596673;
+    }
+
+    .agents-webhook-test-sink-status--warn {
+      color: #c58a1b;
+    }
+
+    .agents-webhook-test-sink-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid #bbc7d5;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-test-sink-row--notice {
+      align-items: flex-start;
+    }
+
+    .agents-webhook-test-sink-row--notice-muted {
+      background: #f8fafc;
+    }
+
+    .agents-webhook-test-sink-row--notice-warn {
+      background: rgba(197, 138, 27, 0.08);
+    }
+
+    .agents-webhook-test-sink-row-label {
+      flex: 0 0 auto;
+      color: #596673;
+      font-weight: 700;
+    }
+
+    .agents-webhook-test-sink-url {
+      min-width: 0;
+      color: #c58a1b;
+      font-family: var(--code-font, 'Fira Code', monospace);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-webhook-test-sink-notice-copy {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-test-sink-captures {
+      padding: 12px 0;
+    }
+
+    .agents-webhook-test-sink-captures-head {
+      padding: 0 12px 12px;
+    }
+
+    .agents-webhook-test-sink-captures-title {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-webhook-test-sink-table-wrap {
+      padding: 6px 12px 0;
+      overflow-x: auto;
+    }
+
+    .agents-webhook-test-sink-table {
+      width: 100%;
+      min-width: 1120px;
+      border-collapse: collapse;
+      table-layout: fixed;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-test-sink-table th {
+      padding: 0 0 12px;
+      border-bottom: 1px solid #596673;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: left;
+    }
+
+    .agents-webhook-test-sink-table td {
+      padding: 12px 0;
+      border-bottom: 1px solid #aab8ca;
+      vertical-align: top;
+    }
+
+    .agents-webhook-test-sink-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .agents-webhook-test-sink-col--id {
+      width: 7%;
+    }
+
+    .agents-webhook-test-sink-col--event {
+      width: 43%;
+    }
+
+    .agents-webhook-test-sink-col--verification {
+      width: 14%;
+    }
+
+    .agents-webhook-test-sink-col--routing {
+      width: 14%;
+    }
+
+    .agents-webhook-test-sink-col--captured {
+      width: 14%;
+    }
+
+    .agents-webhook-test-sink-col--payload {
+      width: 8%;
+    }
+
+    .agents-webhook-test-sink-event-stack,
+    .agents-webhook-test-sink-verification-stack,
+    .agents-webhook-test-sink-routing-stack {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .agents-webhook-test-sink-verification-stack .agents-status-chip {
+      justify-self: start;
+      width: auto;
+    }
+
+    .agents-webhook-test-sink-event-id {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+      text-transform: uppercase;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-webhook-test-sink-event-copy,
+    .agents-webhook-test-sink-detail-copy {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-webhook-test-sink-routing-label {
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.24;
+      text-transform: lowercase;
+    }
+
+    .agents-webhook-test-sink-payload-trigger {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .agents-webhook-test-sink-payload-trigger:hover,
+    .agents-webhook-test-sink-payload-trigger:focus-visible {
+      color: #273340;
+      text-decoration: underline;
+    }
+
+    .agents-webhook-test-sink-payload-trigger:focus-visible {
+      outline: 2px solid #1c6fdc;
+      outline-offset: 2px;
+      border-radius: 3px;
+    }
+
+    .agents-webhook-test-sink-empty {
+      padding: 6px 12px 0;
+    }
+
+    .agents-webhook-test-sink-empty-copy,
+    .agents-webhook-test-sink-empty-meta {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-test-sink-empty-meta {
+      margin-top: 6px;
+    }
+
+    .agents-webhook-test-sink-footer {
+      padding: 12px;
+      border-top: 1px solid #bbc7d5;
+    }
+
+    .agents-webhook-test-sink-notes {
+      margin: 0;
+      color: #596673;
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-test-sink-payload {
+      margin-top: 8px;
+    }
+
+    .agents-readiness-detail-dialog--payload .agents-readiness-detail-dialog-shell {
+      display: flex;
+      flex-direction: column;
+      max-height: min(88vh, 960px);
+    }
+
+    .agents-readiness-detail-dialog--payload .agents-readiness-detail-dialog-body {
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .agents-readiness-detail-dialog--payload .agents-webhook-test-sink-payload {
+      margin-top: 0;
+      min-height: 0;
+    }
+
+    .agents-readiness-detail-dialog--payload #webhookTestSinkPayloadDialogBody {
+      margin: 0;
+      max-width: 100%;
+      overflow: auto;
+    }
+
+    .agents-status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 20px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .agents-status-chip--good {
+      background: rgba(16, 142, 128, 0.12);
+      color: #108e80;
+    }
+
+    .agents-status-chip--bad {
+      background: rgba(194, 79, 66, 0.12);
+      color: #c24f42;
+    }
+
+    .agents-status-chip--muted {
+      background: rgba(89, 102, 115, 0.12);
+      color: #596673;
+    }
+
     .agents-diagnostics-bundle-button.btn:focus-visible {
       outline: 2px solid #1c6fdc;
       outline-offset: 2px;
@@ -3079,6 +3304,25 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
+      .agents-webhook-test-sink-top {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-webhook-test-sink-actions {
+        grid-row: auto;
+        grid-column: 1;
+        justify-content: flex-start;
+      }
+
+      .agents-webhook-test-sink-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .agents-webhook-test-sink-table {
+        min-width: 960px;
+      }
+
       .agents-readiness-ready-grid > .agents-readiness-ready-proof-card {
         border-top: 1px solid var(--agents-readiness-border);
         border-bottom: 1px solid var(--agents-readiness-border);
@@ -3182,6 +3426,18 @@
       .agents-readiness-actions-table-wrap {
         padding-top: 12px;
       }
+
+      .agents-webhook-test-sink-top {
+        padding: 20px 12px;
+      }
+
+      .agents-webhook-test-sink-actions {
+        width: 100%;
+      }
+
+      .agents-webhook-test-sink-table {
+        min-width: 840px;
+      }
     }
   {% endcss %}
 
@@ -3200,6 +3456,32 @@
         const closeButton = dialog.querySelector('[data-agents-detail-close]');
         if (closeButton) {
           window.requestAnimationFrame(() => closeButton.focus());
+        }
+      };
+
+      const hydrateWebhookPayloadDialog = (dialog, trigger) => {
+        if (!dialog || !trigger || dialog.id !== 'webhookTestSinkPayloadDialog') {
+          return;
+        }
+
+        const sourceId = trigger.getAttribute('data-agents-payload-source');
+        const title = trigger.getAttribute('data-agents-payload-title') || 'Webhook Payload';
+        const copy = trigger.getAttribute('data-agents-payload-copy') || 'Captured webhook payload.';
+        const source = sourceId ? document.getElementById(sourceId) : null;
+        const payload = source ? source.textContent || '{}' : '{}';
+
+        const titleEl = dialog.querySelector('#webhookTestSinkPayloadDialogTitle');
+        const copyEl = dialog.querySelector('#webhookTestSinkPayloadDialogCopy');
+        const bodyEl = dialog.querySelector('#webhookTestSinkPayloadDialogBody');
+
+        if (titleEl) {
+          titleEl.textContent = title;
+        }
+        if (copyEl) {
+          copyEl.textContent = copy;
+        }
+        if (bodyEl) {
+          bodyEl.textContent = payload;
         }
       };
 
@@ -3269,6 +3551,7 @@
           }
 
           event.preventDefault();
+          hydrateWebhookPayloadDialog(dialog, openButton);
           openDialogs.set(dialog, openButton);
           if (hasNativeDialog) {
             if (!dialog.open) {

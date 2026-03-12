@@ -1,7 +1,7 @@
 # Roadmap
 
-Last updated: 2026-03-11  
-Current release: `v0.10.9`
+Last updated: 2026-03-12  
+Current release: `v0.20.0`
 
 ## Direction
 

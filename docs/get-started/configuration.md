@@ -6,7 +6,7 @@ Runtime model:
 
 - API routes are the production execution surface.
 - CLI commands are operator/developer tools.
-- Discovery docs are optional public discovery features.
+- `/capabilities` and `/openapi.json` are the canonical machine-readable contract descriptors.
 
 ## Environment Variables
 
@@ -48,11 +48,12 @@ Runtime model:
 - `PLUGIN_AGENTS_WEBHOOK_SECRET`
 - `PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS` (default `5`)
 - `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default `3`)
+- `PLUGIN_AGENTS_WEBHOOK_TEST_SINK` (default `false`, dev-only local capture endpoint)
 
 ### Experimental surfaces
 
 - `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (default `false`)
-- Approvals CP (`agents/control/*`) follows `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (single gate).
+- Approvals CP (`agents/approvals/*`) follows `PLUGIN_AGENTS_WRITES_EXPERIMENTAL`.
 
 ## Environment profile defaults
 
@@ -80,8 +81,8 @@ Runtime precedence:
 
 - API availability (`enabled`) unless env-locked by `PLUGIN_AGENTS_ENABLED`
 - live agent usage indicator (`enableCredentialUsageIndicator`)
-- discovery file switches (`llms.txt`, `llms-full.txt`, `commerce.txt`)
-- custom discovery body overrides (`llmsTxtBody`, `commerceTxtBody`) with reset actions
+- webhook target + signing secret as env-aware refs (`webhookUrl`, `webhookSecret`)
+- sync-state lag thresholds (`reliabilityConsumerLagWarnSeconds`, `reliabilityConsumerLagCriticalSeconds`)
 
 `config/agents.php` can override these settings; when overridden, CP fields are shown as locked.
 

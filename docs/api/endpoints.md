@@ -57,12 +57,6 @@ Root aliases (guarded, same auth/scope behavior):
 - `GET /capabilities` -> `/agents/v1/capabilities`
 - `GET /openapi.json` -> `/agents/v1/openapi.json`
 
-Public discovery docs (when enabled):
-
-- `GET /llms.txt`
-- `GET /llms-full.txt`
-- `GET /commerce.txt`
-
 ## Webhook reliability endpoints
 
 - `GET /webhooks/dlq`
@@ -422,7 +416,6 @@ Example response (`200`, abbreviated):
     "checks": {
       "auth": { "status": "ok" },
       "readiness": { "status": "ok" },
-      "discovery": { "status": "ok" },
       "smoke": { "status": "ok" }
     }
   },

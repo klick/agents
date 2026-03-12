@@ -213,8 +213,9 @@ class SecurityPolicyService extends Component
             $profileDefaultsAppliedFields
         );
 
-        $webhookUrl = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_URL'));
-        $webhookSecret = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_SECRET'));
+        $webhookTransport = $this->resolveWebhookTransportSettings();
+        $webhookUrl = trim((string)($webhookTransport['url'] ?? ''));
+        $webhookSecret = trim((string)($webhookTransport['secret'] ?? ''));
         $webhookTimeoutSeconds = $this->resolvePositiveIntegerRuntimeSetting(
             'PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS',
             (int)$profileDefaults['webhookTimeoutSeconds'],
@@ -264,6 +265,8 @@ class SecurityPolicyService extends Component
             'webhookUrlConfigured' => $webhookUrl !== '',
             'webhookSecretConfigured' => $webhookSecret !== '',
             'webhookEnabled' => $webhookUrl !== '' && $webhookSecret !== '',
+            'webhookUrl' => $webhookUrl,
+            'webhookSecret' => $webhookSecret,
             'webhookUrlHost' => $this->extractUrlHost($webhookUrl),
             'webhookTimeoutSeconds' => $webhookTimeoutSeconds,
             'webhookMaxAttempts' => $webhookMaxAttempts,
@@ -453,6 +456,32 @@ class SecurityPolicyService extends Component
         }
 
         return $fallbackDefault;
+    }
+
+    private function resolveWebhookTransportSettings(): array
+    {
+        $plugin = Plugin::getInstance();
+        $settings = $plugin?->getSettings();
+
+        return [
+            'url' => $this->resolveEnvAwareStringSetting($settings?->webhookUrl ?? '$PLUGIN_AGENTS_WEBHOOK_URL'),
+            'secret' => $this->resolveEnvAwareStringSetting($settings?->webhookSecret ?? '$PLUGIN_AGENTS_WEBHOOK_SECRET'),
+        ];
+    }
+
+    private function resolveEnvAwareStringSetting(mixed $value): string
+    {
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return '';
+        }
+
+        $resolved = App::parseEnv($raw);
+        if (is_scalar($resolved)) {
+            return trim((string)$resolved);
+        }
+
+        return $raw;
     }
 
     private function resolveEnvironmentProfile(string $environment): array

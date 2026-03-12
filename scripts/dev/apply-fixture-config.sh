@@ -55,32 +55,7 @@ mkdir -p "$CRAFT_PROJECT_DIR/config"
 cat > "$CRAFT_PROJECT_DIR/config/agents.php" <<'PHP'
 <?php
 
-return [
-    'enableLlmsTxt' => true,
-    'enableCommerceTxt' => true,
-    'llmsSiteSummary' => 'Local deterministic fixture summary for agent development.',
-    'llmsIncludeAgentsLinks' => true,
-    'llmsIncludeSitemapLink' => true,
-    'llmsLinks' => [
-        ['label' => 'Fixture Help', 'url' => '/help'],
-    ],
-    'commerceSummary' => 'Local deterministic commerce fixture metadata.',
-    'commerceCatalogUrl' => '/agents/v1/products?status=live&limit=50',
-    'commercePolicyUrls' => [
-        'shipping' => '/shipping',
-        'returns' => '/returns',
-        'payment' => '/payment',
-    ],
-    'commerceSupport' => [
-        'email' => 'support@example.test',
-        'phone' => '+1-555-0100',
-        'url' => '/contact',
-    ],
-    'commerceAttributes' => [
-        'currency' => 'USD',
-        'region' => 'US',
-    ],
-];
+return [];
 PHP
 
 echo "Applied deterministic plugin fixture config to: $CRAFT_PROJECT_DIR"

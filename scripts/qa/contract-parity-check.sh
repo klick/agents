@@ -88,7 +88,7 @@ cut -d' ' -f2 "$capabilities_endpoints" | LC_ALL=C sort -u >"$capabilities_paths
 
 {
   perl -ne 'if (/\x27agents\/v1(\/[^'"'"']+)\x27\s*=>/) { print "$1\n"; }' "$PLUGIN_FILE"
-  perl -ne 'if (/^\s*\x27(llms(?:-full)?\.txt|commerce\.txt)\x27\s*=>/) { print "/$1\n"; }' "$PLUGIN_FILE"
+  perl -ne 'if (/^\s*\x27(capabilities|openapi\.json)\x27\s*=>/) { print "/$1\n"; }' "$PLUGIN_FILE"
 } | LC_ALL=C sort -u >"$routes_paths"
 
 awk '

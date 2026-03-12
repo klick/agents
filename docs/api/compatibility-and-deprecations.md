@@ -7,10 +7,8 @@ This policy defines what integration clients can rely on.
 - Production stable:
   - read/sync endpoints (`/health`, `/readiness`, `/auth/whoami`, `/products`, `/variants*`, `/subscriptions*`, `/transfers*`, `/donations*`, `/orders*`, `/entries*`, `/assets*`, `/categories*`, `/tags*`, `/global-sets*`, `/addresses*`, `/content-blocks*`, `/users*`, `/changes`, `/sections`)
   - integration-state endpoints (`/sync-state/lag`, `/sync-state/checkpoint`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`, `/incidents`)
-  - descriptors (`/capabilities`, `/openapi.json`, root aliases)
+  - contract descriptors (`/capabilities`, `/openapi.json`, root aliases)
   - webhook reliability endpoints (`/webhooks/dlq`, `/webhooks/dlq/replay`)
-- Optional stable:
-  - discovery docs (`/llms.txt`, `/llms-full.txt`, `/commerce.txt`)
 - Experimental:
   - `/control/*` behind `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`
 
@@ -22,7 +20,7 @@ This policy defines what integration clients can rely on.
 - Deterministic error envelope remains stable:
   - `error.code`, `error.message`, `requestId`
 - Scope names remain stable once published for stable surfaces.
-- Existing behavior may tighten only for security/reliability reasons (for example stricter validation), and will be documented in changelog notes.
+- Existing behavior may tighten only for security/reliability reasons, and will be documented in changelog notes.
 
 ## Deprecation process
 
@@ -49,7 +47,7 @@ This policy defines what integration clients can rely on.
 ## Experimental surface policy
 
 - Experimental features can change faster and may receive breaking changes in minor releases.
-- Experimental scopes/routes are omitted from discovery descriptors when the feature flag is disabled.
+- Experimental scopes/routes are omitted from descriptors when the feature flag is disabled.
 
 ## Client implementation guidance
 

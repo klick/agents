@@ -2,6 +2,14 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.20.0 (2026-03-12)
+
+- Added a dev-only `Webhook Test Sink` with local capture history, signature verification, CP inspection, and a one-click `Send test webhook` flow for local webhook validation.
+- Added env-aware webhook URL and secret fields in Settings so the runtime transport can be configured from the CP with normal Craft env-var handling.
+- Realigned the CP IA and canonical routes around `Status`, `Approvals`, `Accounts`, and `Settings`, using `/status`, `/approvals`, and `/accounts` as the visible paths.
+- Improved first-run Status posture with `Ready to Connect`, optional sync-state until configured, and a dedicated diagnostics bundle card.
+- Removed Discovery Docs from the core plugin surface, routes, generated files, diagnostics bundle, and public docs.
+
 ## 0.10.9 (2026-03-11)
 
 - Reworked the top-level CP IA to `Status`, `Approvals`, `Accounts`, `Discovery Docs`, and `Settings`, removing local sidebars from the primary operator surfaces.

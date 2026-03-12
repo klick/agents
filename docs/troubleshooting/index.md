@@ -50,14 +50,6 @@ Fix:
 
 - assign scope to credential (env credential definition or managed key)
 
-## Discovery output appears stale
-
-Fix path:
-
-1. Discovery Docs -> Refresh All
-2. If needed, clear discovery cache
-3. Use Craft Clear Caches utility -> `Agents discovery caches`
-
 ## Telemetry alert triage
 
 Use the dedicated runbook when metric thresholds are breached:

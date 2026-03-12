@@ -3,7 +3,7 @@
 ## 1. Install the plugin
 
 ```bash
-composer require klick/agents:^0.10.9
+composer require klick/agents:^0.20.0
 php craft plugin/install agents
 ```
 
@@ -15,17 +15,18 @@ php craft up
 
 This creates plugin tables for:
 
-- managed agents
+- managed accounts
 - internal control policies
 - approvals
 - execution ledger
 - audit log
+- webhook test sink captures (dev-only)
 
 ## 3. Open the Control Panel
 
 Primary route:
 
-- `admin/agents/readiness`
+- `admin/agents/status`
 
 Navigation entry points:
 
@@ -33,12 +34,6 @@ Navigation entry points:
 - Plugin settings page (`admin/settings/plugins`) redirects to `Status`
 
 ## 4. Validate key endpoints
-
-Public discovery (if enabled):
-
-- `GET /llms.txt`
-- `GET /llms-full.txt`
-- `GET /commerce.txt`
 
 API:
 

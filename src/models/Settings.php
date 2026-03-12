@@ -10,33 +10,17 @@ class Settings extends Model
     public bool $enableWritesExperimental = false;
     public bool $allowCpApprovalRequests = false;
     public bool $enableCredentialUsageIndicator = true;
-    public bool $enableLlmsTxt = true;
-    public bool $enableLlmsFullTxt = false;
-    public bool $enableCommerceTxt = true;
-    public int $llmsTxtCacheTtl = 86400;
-    public int $commerceTxtCacheTtl = 3600;
-    public string $llmsTxtBody = '';
-    public string $llmsSiteSummary = '';
-    public bool $llmsIncludeAgentsLinks = true;
-    public bool $llmsIncludeSitemapLink = true;
-    public array $llmsLinks = [];
-    public string $commerceTxtBody = '';
-    public string $commerceSummary = '';
-    public array $commercePolicyUrls = [];
-    public array $commerceSupport = [];
-    public array $commerceAttributes = [];
-    public string $commerceCatalogUrl = '/agents/v1/products?status=live&limit=200';
+    public string $webhookUrl = '$PLUGIN_AGENTS_WEBHOOK_URL';
+    public string $webhookSecret = '$PLUGIN_AGENTS_WEBHOOK_SECRET';
     public int|string $reliabilityConsumerLagWarnSeconds = 300;
     public int|string $reliabilityConsumerLagCriticalSeconds = 900;
 
     public function rules(): array
     {
         return [
-            [['enabled', 'enableWritesExperimental', 'allowCpApprovalRequests', 'enableCredentialUsageIndicator', 'enableLlmsTxt', 'enableLlmsFullTxt', 'enableCommerceTxt', 'llmsIncludeAgentsLinks', 'llmsIncludeSitemapLink'], 'boolean'],
-            [['llmsTxtCacheTtl', 'commerceTxtCacheTtl'], 'integer', 'min' => 0, 'max' => 604800],
+            [['enabled', 'enableWritesExperimental', 'allowCpApprovalRequests', 'enableCredentialUsageIndicator'], 'boolean'],
             [['reliabilityConsumerLagWarnSeconds', 'reliabilityConsumerLagCriticalSeconds'], 'safe'],
-            [['llmsTxtBody', 'llmsSiteSummary', 'commerceTxtBody', 'commerceSummary', 'commerceCatalogUrl'], 'string'],
-            [['llmsLinks', 'commercePolicyUrls', 'commerceSupport', 'commerceAttributes'], 'safe'],
+            [['webhookUrl', 'webhookSecret'], 'string'],
         ];
     }
 }

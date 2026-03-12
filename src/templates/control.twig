@@ -2,7 +2,7 @@
 {% import "_includes/forms" as forms %}
 
 {% set title = "Agents Approvals" %}
-{% set selectedSubnavItem = "control" %}
+{% set selectedSubnavItem = "approvals" %}
 {% set controlHeadingByKey = {
   approvals: 'Approvals',
   rules: 'Rules',
@@ -261,7 +261,7 @@
                     <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-control-pending-table__decision-form" data-confirm-message="Reject request #{{ approval.id }} ({{ approval.actionType }})?">
                       {{ csrfInput() }}
                       {{ actionInput('agents/dashboard/decide-control-approval') }}
-                      {{ redirectInput('agents/control') }}
+                      {{ redirectInput('agents/approvals') }}
                       <input type="hidden" name="approvalId" value="{{ approval.id }}">
                       <input type="hidden" name="decision" value="rejected">
                       <input class="agents-control-pending-table__decision-input" type="text" name="decisionReason" placeholder="Reason for rejection">
@@ -270,7 +270,7 @@
                     <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-control-pending-table__decision-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})? It will execute automatically once required approvals are complete.">
                       {{ csrfInput() }}
                       {{ actionInput('agents/dashboard/decide-control-approval') }}
-                      {{ redirectInput('agents/control') }}
+                      {{ redirectInput('agents/approvals') }}
                       <input type="hidden" name="approvalId" value="{{ approval.id }}">
                       <input type="hidden" name="decision" value="approved">
                       <input class="agents-control-pending-table__decision-input" type="text" name="decisionReason" placeholder="Optional note">
@@ -398,7 +398,7 @@
                   <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Apply draft #{{ approval.targetEntryDraftRecordId }} to canonical entry now?">
                     {{ csrfInput() }}
                     {{ actionInput('elements/apply-draft') }}
-                    {{ redirectInput('agents/control/approvals') }}
+                    {{ redirectInput('agents/approvals/approvals') }}
                     <input type="hidden" name="draftId" value="{{ approval.targetEntryDraftRecordId }}">
                     {% if approval.targetEntryCanonicalId %}
                       <input type="hidden" name="elementId" value="{{ approval.targetEntryCanonicalId }}">
@@ -630,7 +630,7 @@
       <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Run dry-run simulation?">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/simulate-control-action') }}
-        {{ redirectInput('agents/control/rules') }}
+        {{ redirectInput('agents/approvals/rules') }}
 
         {{ forms.textField({
           label: 'Action name',
@@ -762,7 +762,7 @@
           <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
             {{ csrfInput() }}
             {{ actionInput('agents/dashboard/upsert-control-policy') }}
-            {{ redirectInput('agents/control/rules') }}
+            {{ redirectInput('agents/approvals/rules') }}
 
             {{ forms.textField({
               label: 'Rule key',

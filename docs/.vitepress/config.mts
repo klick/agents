@@ -59,7 +59,6 @@ export default defineConfig({
       {
         text: 'Operations',
         items: [
-          { text: 'Discovery Files', link: '/discovery/' },
           { text: 'Security', link: '/security/' },
           { text: 'Execution Model', link: '/security/execution-model' },
           { text: 'Webhooks', link: '/webhooks/' },

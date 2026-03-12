@@ -5,7 +5,6 @@ namespace Klick\Agents\services;
 use Craft;
 use craft\base\Component;
 use Klick\Agents\Plugin;
-use Klick\Agents\models\Settings;
 use Throwable;
 
 class DiagnosticsBundleService extends Component
@@ -24,11 +23,6 @@ class DiagnosticsBundleService extends Component
             ];
         }
 
-        $settings = $plugin->getSettings();
-        if (!$settings instanceof Settings) {
-            $settings = new Settings();
-        }
-
         $securityService = $plugin->getSecurityPolicyService();
         $runtimeConfig = $securityService->getRuntimeConfig();
         $defaultScopes = (array)($runtimeConfig['tokenScopes'] ?? []);
@@ -36,7 +30,6 @@ class DiagnosticsBundleService extends Component
         $collectionErrors = [];
 
         $readinessService = $plugin->getReadinessService();
-        $discoveryService = $plugin->getDiscoveryTxtService();
         $consumerLagService = $plugin->getConsumerLagService();
         $webhookService = $plugin->getWebhookService();
         $observabilityService = $plugin->getObservabilityMetricsService();
@@ -83,12 +76,6 @@ class DiagnosticsBundleService extends Component
             []
         );
 
-        $discoveryStatus = $this->capture(
-            'discovery.status',
-            fn(): array => $discoveryService->getDiscoveryStatus(),
-            $collectionErrors,
-            []
-        );
         $consumerLagSnapshot = $this->capture(
             'consumers.lag',
             fn(): array => $consumerLagService->getLagSummary(200),
@@ -168,14 +155,11 @@ class DiagnosticsBundleService extends Component
             'auth' => $this->captureCheck('auth-check', function() use ($securityService): array {
                 return $this->collectAuthCheck($securityService);
             }),
-            'discovery' => $this->captureCheck('discovery-check', function() use ($discoveryService, $settings): array {
-                return $this->collectDiscoveryCheck($discoveryService, $settings);
-            }),
             'readiness' => $this->captureCheck('readiness-check', function() use ($readinessService): array {
                 return $this->collectReadinessCheck($readinessService);
             }),
-            'smoke' => $this->captureCheck('smoke', function() use ($plugin, $readinessService, $discoveryService): array {
-                return $this->collectSmokeCheck($plugin, $readinessService, $discoveryService);
+            'smoke' => $this->captureCheck('smoke', function() use ($plugin, $readinessService): array {
+                return $this->collectSmokeCheck($plugin, $readinessService);
             }),
         ];
         $checkSummary = $this->buildCheckSummary($checks);
@@ -204,7 +188,7 @@ class DiagnosticsBundleService extends Component
                 'included' => [
                     'credential counts and scope grants',
                     'diagnostic warnings/errors',
-                    'endpoint/discovery metadata',
+                    'endpoint metadata',
                 ],
             ],
             'runtime' => [
@@ -241,7 +225,6 @@ class DiagnosticsBundleService extends Component
                     'summary' => $readinessSummary,
                     'diagnostics' => $readinessDiagnostics,
                 ],
-                'discovery' => $discoveryStatus,
                 'consumers' => $consumerLagSnapshot,
                 'webhooks' => $deadLetterSummary,
                 'observability' => $observabilitySnapshot,
@@ -331,62 +314,6 @@ class DiagnosticsBundleService extends Component
         return $this->formatCheckResult('auth-check', $details, $errors, $warnings);
     }
 
-    private function collectDiscoveryCheck(DiscoveryTxtService $service, Settings $settings): array
-    {
-        $service->prewarm('all');
-        $status = $service->getDiscoveryStatus();
-
-        $errors = [];
-        $warnings = [];
-        $documents = (array)($status['documents'] ?? []);
-
-        foreach ($documents as $key => $document) {
-            $name = (string)($document['name'] ?? $key);
-            $enabled = (bool)($document['enabled'] ?? false);
-            $bytes = (int)($document['bytes'] ?? 0);
-            $url = trim((string)($document['url'] ?? ''));
-            if (!$enabled) {
-                if ($key === 'llmsFull') {
-                    continue;
-                }
-                $warnings[] = sprintf('%s is disabled.', $name);
-                continue;
-            }
-
-            if ($bytes <= 0) {
-                $errors[] = sprintf('%s is enabled but empty.', $name);
-            }
-            if ($url === '') {
-                $errors[] = sprintf('%s is enabled but URL is missing.', $name);
-            }
-        }
-
-        $hasCustomLlmsBody = trim((string)$settings->llmsTxtBody) !== '';
-        if (
-            !$hasCustomLlmsBody &&
-            (bool)$settings->enableLlmsTxt &&
-            (bool)$settings->llmsIncludeAgentsLinks
-        ) {
-            $llmsDocument = $service->getLlmsTxtDocument();
-            $llmsBody = (string)($llmsDocument['body'] ?? '');
-            if ($llmsBody === '') {
-                $errors[] = 'llms.txt body is missing while llms.txt is enabled.';
-            } else {
-                foreach ([
-                    '/agents/v1/capabilities',
-                    '/agents/v1/openapi.json',
-                    '/agents/v1/auth/whoami',
-                ] as $requiredPath) {
-                    if (!str_contains($llmsBody, $requiredPath)) {
-                        $errors[] = sprintf('llms.txt is missing expected discovery link: %s', $requiredPath);
-                    }
-                }
-            }
-        }
-
-        return $this->formatCheckResult('discovery-check', $status, $errors, $warnings);
-    }
-
     private function collectReadinessCheck(ReadinessService $service): array
     {
         $diagnostics = $service->getReadinessDiagnostics();
@@ -418,8 +345,7 @@ class DiagnosticsBundleService extends Component
 
     private function collectSmokeCheck(
         Plugin $plugin,
-        ReadinessService $readinessService,
-        DiscoveryTxtService $discoveryService
+        ReadinessService $readinessService
     ): array {
         $commerceEnabled = $plugin->isCommercePluginEnabled();
 
@@ -428,7 +354,6 @@ class DiagnosticsBundleService extends Component
 
         $sections = $readinessService->getSectionsList();
         $entries = $readinessService->getEntriesList(['limit' => 1, 'status' => 'live']);
-        $discoveryStatus = $discoveryService->getDiscoveryStatus();
         $readiness = $readinessService->getReadinessDiagnostics();
 
         $sectionErrors = (array)($sections['meta']['errors'] ?? []);
@@ -472,7 +397,6 @@ class DiagnosticsBundleService extends Component
                     'count' => (int)($entries['meta']['count'] ?? 0),
                     'errors' => $entryErrors,
                 ],
-                'discovery' => $discoveryStatus,
                 'readiness' => [
                     'status' => (string)($readiness['status'] ?? 'unknown'),
                     'readinessScore' => (int)($readiness['readinessScore'] ?? 0),

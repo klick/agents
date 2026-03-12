@@ -7,7 +7,7 @@ Agents exposes the governed machine-access layer for Craft CMS and Craft Commerc
 The API provides:
 
 - structured read and sync surfaces for content and commerce data
-- discovery descriptors for capability and contract negotiation
+- contract descriptors for capability and schema negotiation
 - integration state surfaces for sync-state, schema, lifecycle, and incidents
 - governed control-plane actions when experimental writes are enabled
 
@@ -18,7 +18,7 @@ Runtime trust boundary:
 - plugin runtime does not execute agent shell commands
 - CLI commands are operator and developer tools (`craft agents/*`)
 
-## Discovery descriptors
+## Contract descriptors
 
 - `GET /agents/v1/capabilities`
 - `GET /agents/v1/openapi.json`
@@ -26,14 +26,6 @@ Runtime trust boundary:
 - aliases: `GET /capabilities`, `GET /openapi.json`
 
 These describe available endpoints, scopes, auth posture, field projections, and error taxonomy for integration clients.
-
-## Public discovery files
-
-- `GET /llms.txt`
-- `GET /llms-full.txt`
-- `GET /commerce.txt`
-
-These are root-level and public when enabled. They are discovery aids, not the core trust boundary.
 
 Agent-focused Markdown handbook:
 

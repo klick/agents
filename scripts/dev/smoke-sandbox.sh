@@ -29,17 +29,17 @@ request_status() {
 echo "Running security regression checks..."
 "$PLUGIN_ROOT/scripts/security-regression-check.sh" "$BASE_URL" "$TOKEN"
 
-echo "Running discovery surface checks..."
-status="$(request_status "$BASE_URL/llms.txt")"
+echo "Running contract alias checks..."
+status="$(request_status "$BASE_URL/capabilities")"
 if [[ "$status" != "200" ]]; then
-  fail "Expected 200 from /llms.txt, got $status"
+  fail "Expected 200 from /capabilities, got $status"
 fi
-pass "llms.txt reachable"
+pass "capabilities alias reachable"
 
-status="$(request_status "$BASE_URL/commerce.txt")"
+status="$(request_status "$BASE_URL/openapi.json")"
 if [[ "$status" != "200" ]]; then
-  fail "Expected 200 from /commerce.txt, got $status"
+  fail "Expected 200 from /openapi.json, got $status"
 fi
-pass "commerce.txt reachable"
+pass "openapi alias reachable"
 
 echo "Sandbox smoke checks completed."

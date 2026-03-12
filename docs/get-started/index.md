@@ -11,13 +11,13 @@ Agents is the governed machine-access layer for Craft CMS and Craft Commerce. St
 ## Install
 
 ```bash
-composer require klick/agents:^0.10.9
+composer require klick/agents:^0.20.0
 php craft plugin/install agents
 ```
 
 ## Verify
 
-- Open CP: `admin/agents/readiness`
+- Open CP: `admin/agents/status`
 - Confirm service state and readiness score
 - Hit `GET /agents/v1/health`
 - Hit `GET /agents/v1/schema` with a token that has `schema:read`
@@ -28,9 +28,8 @@ php craft plugin/install agents
 - Set environment variables in `.env` / `config/agents.php`
 - Configure API credentials (scopes + optional TTL/IP allowlists)
 - Treat credentials as machine identities with the minimum scopes each integration needs
-- Review discovery docs (`llms.txt`, `llms-full.txt`, `commerce.txt`)
 - Use starter packs for copy/paste integration bootstrap (`/api/starter-packs`)
-- Review webhook scopes before production
+- Review webhook scopes and delivery posture before production
 
 See:
 

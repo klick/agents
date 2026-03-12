@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.20.0 - 2026-03-12
+
+### Added
+
+- Added a dev-only `Webhook Test Sink` with local capture storage, signature verification, CP inspection, a one-click `Send test webhook` action, and scripted smoke/E2E validation helpers for local webhook development.
+- Added env-aware webhook target and signing-secret fields to Settings so runtime webhook transport can be configured from the CP using Craft-native env/alias inputs.
+
+### Changed
+
+- Realigned the CP information architecture and canonical routes around `Status`, `Approvals`, `Accounts`, and `Settings`, with the visible paths now using `/status`, `/approvals`, and `/accounts`.
+- Hardened first-run operator UX so healthy fresh installs bias toward `Ready to Connect`, treat sync-state as optional until configured, and keep confidence gaps visible without making the whole page pessimistic.
+- Reworked the webhook test sink into a dedicated Status card with capture-state handling, payload drill-down, and clearer dev-only/runtime-target copy.
+- Standardized rectangular CP card surfaces to a `3px` radius and tightened Status card composition, diagnostics-bundle placement, and proof/action affordances.
+- Removed Discovery Docs from the core plugin surface, including CP UI, routes, generated discovery files, diagnostics references, and docs coverage.
+
+### Fixed
+
+- Fixed the webhook payload dialog so long payloads scroll inside the modal instead of expanding the entire overlay.
+
 ## 0.10.9 - 2026-03-11
 
 ### Changed

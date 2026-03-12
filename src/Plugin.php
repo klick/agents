@@ -10,11 +10,9 @@ use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
-use craft\events\RegisterCacheOptionsEvent;
 use craft\events\ModelEvent;
 use craft\elements\Entry;
 use craft\services\UserPermissions;
-use craft\utilities\ClearCaches;
 use craft\web\UrlManager;
 use craft\web\View;
 use yii\base\Event;
@@ -24,7 +22,6 @@ use Klick\Agents\services\ControlPlaneService;
 use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiagnosticsBundleService;
-use Klick\Agents\services\DiscoveryTxtService;
 use Klick\Agents\services\IncidentFeedService;
 use Klick\Agents\services\LifecycleGovernanceService;
 use Klick\Agents\services\ObservabilityMetricsService;
@@ -34,6 +31,7 @@ use Klick\Agents\services\SecurityPolicyService;
 use Klick\Agents\services\StarterPackService;
 use Klick\Agents\services\TemplateCatalogService;
 use Klick\Agents\services\WebhookService;
+use Klick\Agents\services\WebhookTestSinkService;
 
 class Plugin extends BasePlugin
 {
@@ -49,7 +47,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.10.9';
+    public string $schemaVersion = '0.20.0';
 
     public static ?self $plugin = null;
 
@@ -60,7 +58,6 @@ class Plugin extends BasePlugin
         self::$plugin = $this;
         $this->setComponents([
             'readinessService' => ReadinessService::class,
-            'discoveryTxtService' => DiscoveryTxtService::class,
             'securityPolicyService' => SecurityPolicyService::class,
             'webhookService' => WebhookService::class,
             'credentialService' => CredentialService::class,
@@ -74,10 +71,9 @@ class Plugin extends BasePlugin
             'incidentFeedService' => IncidentFeedService::class,
             'templateCatalogService' => TemplateCatalogService::class,
             'starterPackService' => StarterPackService::class,
+            'webhookTestSinkService' => WebhookTestSinkService::class,
         ]);
-        $this->registerDiscoveryInvalidationHooks();
         $this->registerWebhookEventHooks();
-        $this->registerCacheUtilityHooks();
         $this->registerPermissionHooks();
         $this->logSecurityConfigurationWarnings();
 
@@ -103,22 +99,18 @@ class Plugin extends BasePlugin
         $subnav = [
             'status' => [
                 'label' => 'Status',
-                'url' => 'agents/readiness',
+                'url' => 'agents/status',
             ],
         ];
         if ($this->isControlCpEnabled()) {
-            $subnav['control'] = [
+            $subnav['approvals'] = [
                 'label' => 'Approvals',
-                'url' => 'agents/control',
+                'url' => 'agents/approvals',
             ];
         }
-        $subnav['credentials'] = [
+        $subnav['accounts'] = [
             'label' => 'Accounts',
-            'url' => 'agents/credentials',
-        ];
-        $subnav['discovery'] = [
-            'label' => 'Discovery Docs',
-            'url' => 'agents/discovery',
+            'url' => 'agents/accounts',
         ];
         $subnav['settings'] = [
             'label' => 'Settings',
@@ -134,27 +126,14 @@ class Plugin extends BasePlugin
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function(RegisterUrlRulesEvent $event): void {
             $rules = [
                 'agents' => 'agents/dashboard/dashboard',
-                'agents/overview' => 'agents/dashboard/dashboard',
-                'agents/readiness' => 'agents/dashboard/dashboard',
                 'agents/status' => 'agents/dashboard/dashboard',
-                'agents/status/readiness' => 'agents/dashboard/dashboard',
-                'agents/discovery' => 'agents/dashboard/dashboard',
-                'agents/security' => 'agents/dashboard/dashboard',
                 'agents/settings' => 'agents/dashboard/settings',
-                'agents/credentials' => 'agents/dashboard/credentials',
-                'agents/credentials/discovery' => 'agents/dashboard/dashboard',
-                // Legacy aliases retained for backward-compatible deep links.
-                'agents/dashboard' => 'agents/dashboard/dashboard',
-                'agents/dashboard/overview' => 'agents/dashboard/dashboard',
-                'agents/dashboard/readiness' => 'agents/dashboard/dashboard',
-                'agents/dashboard/discovery' => 'agents/dashboard/dashboard',
-                'agents/dashboard/security' => 'agents/dashboard/dashboard',
-                'agents/health' => 'agents/dashboard/health',
+                'agents/accounts' => 'agents/dashboard/credentials',
             ];
             if ($this->isControlCpEnabled()) {
-                $rules['agents/control'] = 'agents/dashboard/control';
-                $rules['agents/control/approvals'] = 'agents/dashboard/control';
-                $rules['agents/control/rules'] = 'agents/dashboard/control';
+                $rules['agents/approvals'] = 'agents/dashboard/control';
+                $rules['agents/approvals/approvals'] = 'agents/dashboard/control';
+                $rules['agents/approvals/rules'] = 'agents/dashboard/control';
             }
 
             $event->rules = array_merge($event->rules, $rules);
@@ -165,9 +144,6 @@ class Plugin extends BasePlugin
     {
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_SITE_URL_RULES, function(RegisterUrlRulesEvent $event): void {
             $rules = [
-                'llms.txt' => 'agents/api/llms-txt',
-                'llms-full.txt' => 'agents/api/llms-full-txt',
-                'commerce.txt' => 'agents/api/commerce-txt',
                 'capabilities' => 'agents/api/capabilities',
                 'openapi.json' => 'agents/api/openapi',
                 'agents/v1/health' => 'agents/api/health',
@@ -218,6 +194,7 @@ class Plugin extends BasePlugin
                 'agents/v1/consumers/lag' => 'agents/api/consumers-lag',
                 'agents/v1/webhooks/dlq' => 'agents/api/webhook-dlq-list',
                 'agents/v1/webhooks/dlq/replay' => 'agents/api/webhook-dlq-replay',
+                'agents/dev/webhook-test-sink' => 'agents/webhook-test-sink/receive',
             ];
             if ($this->isWritesExperimentalEnabled()) {
                 $rules = array_merge($rules, [
@@ -244,17 +221,17 @@ class Plugin extends BasePlugin
         return $service;
     }
 
-    public function getDiscoveryTxtService(): DiscoveryTxtService
-    {
-        /** @var DiscoveryTxtService $service */
-        $service = $this->get('discoveryTxtService');
-        return $service;
-    }
-
     public function getWebhookService(): WebhookService
     {
         /** @var WebhookService $service */
         $service = $this->get('webhookService');
+        return $service;
+    }
+
+    public function getWebhookTestSinkService(): WebhookTestSinkService
+    {
+        /** @var WebhookTestSinkService $service */
+        $service = $this->get('webhookTestSinkService');
         return $service;
     }
 
@@ -459,38 +436,12 @@ class Plugin extends BasePlugin
 
     public function getSettingsResponse(): mixed
     {
-        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/readiness'));
+        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/status'));
     }
 
     public function getReadOnlySettingsResponse(): mixed
     {
-        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/readiness'));
-    }
-
-    private function registerDiscoveryInvalidationHooks(): void
-    {
-        $this->attachInvalidationHandlers(Entry::class);
-        foreach ([
-            'craft\\commerce\\elements\\Product',
-            'craft\\commerce\\elements\\Variant',
-        ] as $className) {
-            if (!class_exists($className)) {
-                continue;
-            }
-
-            $this->attachInvalidationHandlers($className);
-        }
-    }
-
-    private function attachInvalidationHandlers(string $className): void
-    {
-        Event::on($className, Element::EVENT_AFTER_SAVE, function(): void {
-            $this->getDiscoveryTxtService()->invalidateAllCaches();
-        });
-
-        Event::on($className, Element::EVENT_AFTER_DELETE, function(): void {
-            $this->getDiscoveryTxtService()->invalidateAllCaches();
-        });
+        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/status'));
     }
 
     private function registerWebhookEventHooks(): void
@@ -507,24 +458,6 @@ class Plugin extends BasePlugin
 
             $this->attachWebhookHandlers($className);
         }
-    }
-
-    private function registerCacheUtilityHooks(): void
-    {
-        Event::on(
-            ClearCaches::class,
-            ClearCaches::EVENT_REGISTER_CACHE_OPTIONS,
-            function(RegisterCacheOptionsEvent $event): void {
-                $event->options[] = [
-                    'key' => 'agents-discovery',
-                    'label' => Craft::t('app', 'Agents discovery caches'),
-                    'info' => Craft::t('app', 'Cached `llms.txt`, `llms-full.txt`, and `commerce.txt` documents generated by Agents'),
-                    'action' => function(): void {
-                        $this->getDiscoveryTxtService()->invalidateAllCaches();
-                    },
-                ];
-            }
-        );
     }
 
     private function attachWebhookHandlers(string $className): void

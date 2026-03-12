@@ -1,6 +1,6 @@
-# Status, Accounts, Discovery Docs & Approvals
+# Status, Accounts, Settings & Approvals
 
-The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure discovery and reliability settings, and, when experimental writes are enabled, review governed approval and rule flows.
+The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure runtime behavior, and, when experimental writes are enabled, review governed approval and rule flows.
 
 Agents CP is not a shell execution layer. Production behavior still flows through scoped APIs, request validation, policy controls, and audit records.
 
@@ -9,41 +9,26 @@ Agents CP is not a shell execution layer. Production behavior still flows throug
 The Agents CP subnav currently exposes:
 
 - **Status**
-  - URL: `admin/agents/readiness`
+  - URL: `admin/agents/status`
 - **Approvals**
-  - URL: `admin/agents/control`
+  - URL: `admin/agents/approvals`
   - shown only when governed-write CP is enabled
   - local sidebar tabs: `Approvals`, `Rules`
 - **Accounts**
-  - URL: `admin/agents/credentials`
+  - URL: `admin/agents/accounts`
   - managed machine-account lifecycle and access controls
-- **Discovery Docs**
-  - URL: `admin/agents/discovery`
-  - discovery-doc editing, cache refresh, enable/disable, and technical status JSON
 - **Settings**
   - URL: `admin/agents/settings`
-  - runtime switches, reliability thresholds, and config-lock visibility
+  - runtime switches, webhook transport, reliability thresholds, and config-lock visibility
 
-Legacy aliases still redirect for compatibility:
-
-- `admin/agents`
-- `admin/agents/dashboard`
-- `admin/agents/overview`
-- `admin/agents/dashboard/overview`
-- `admin/agents/dashboard/readiness`
-- `admin/agents/discovery`
-- `admin/agents/credentials/discovery` redirects to `Discovery Docs`
-- `admin/agents/dashboard/discovery`
-- `admin/agents/security` redirects to the security section inside `Readiness`
-- `admin/agents/dashboard/security` redirects to the security section inside `Readiness`
-- `admin/agents/health` redirects to Readiness
+The section root `admin/agents` opens `Status`.
 
 ## Status
 
 `Status` is the primary runtime-operator surface:
 
 - **Readiness**
-  - state card with overall verdict (`Ready`, `Degraded`, `Blocked`, `Unproven`)
+  - state card with overall verdict (`Ready`, `Ready to Connect`, `Degraded`, `Blocked`, `Unproven`)
   - combined summary strip with shared operator dimensions:
     - `Hard Gates`
     - `Traffic / Access`
@@ -51,20 +36,15 @@ Legacy aliases still redirect for compatibility:
     - `Integration / Capacity`
     - `Credentials / Policy`
     - `Confidence / Observability`
-  - `Details +` disclosure with merged proof panels:
-    - `Hard Gates`
-    - `Traffic / Access`
-    - `Delivery / Webhooks`
-    - `Integration / Capacity`
-    - `Credentials / Policy`
-    - `Confidence / Observability`
-  - legacy readiness/security deep-link anchors are preserved inside the merged cards for action-map compatibility
+  - `Details +` disclosure with merged proof panels for the same six domains
   - in-card `Action Mapping` table that renders only problematic signals
-  - security-origin follow-up actions stay in the main readiness `Action Mapping` table
   - `Diagnostics Bundle` download
   - separate dead-letter queue replay section for operational recovery
+  - dev-only `Webhook Test Sink` section when local sink capture is enabled
 
-This page is driven from runtime services, not hardcoded static status:
+Fresh installs bias toward `Ready to Connect` when the runtime is healthy but there is not enough live traffic yet to prove readiness. `Confidence / Observability` can still read `Unproven`, and sync-state remains optional until a worker starts reporting checkpoints.
+
+This page is driven from runtime services, not hardcoded status:
 
 - readiness and health summaries
 - sync-state lag summary
@@ -74,7 +54,7 @@ This page is driven from runtime services, not hardcoded static status:
 
 ## Approvals
 
-`Approvals` is a separate CP section that appears only when the governed-write CP is enabled. In the current plugin, that follows the same experimental gate as governed-write APIs.
+`Approvals` appears only when the governed-write CP is enabled.
 
 Local tabs:
 
@@ -100,7 +80,7 @@ Notable current behavior:
 
 ## Accounts
 
-`Accounts` replaces the older “Agents” wording in the CP subnav.
+`Accounts` is the managed machine-identity surface.
 
 Current responsibilities:
 
@@ -120,25 +100,7 @@ Current responsibilities:
 - usage metadata and optional live activity indicator
 - suggested account profiles for common integration shapes
 
-The visible page title is **Accounts**, and the route is `admin/agents/credentials`.
-
-## Discovery Docs
-
-Current responsibilities:
-
-- `Quick Actions` for refresh and cache clear
-- per-document cards for `llms.txt`, `llms-full.txt`, and `commerce.txt`
-- inline preview/edit support where allowed
-- per-document `Save`, `Reset`, `Refresh`, and `Enable/Disable` actions
-- `Editing Path`
-- technical status JSON
-
-This view is driven from discovery runtime services and settings:
-
-- discovery document status
-- discovery cache freshness
-- per-document enable/disable posture
-- inline custom-body overrides where allowed
+The visible page title is **Accounts**, and the route is `admin/agents/accounts`.
 
 ## Settings
 
@@ -150,9 +112,10 @@ Current sections:
   - enable/disable Agents API
   - enable governed writing APIs (experimental)
   - enable live usage indicator on Account cards
-  - enable/disable `llms.txt`
-  - enable/disable `llms-full.txt`
-  - enable/disable `commerce.txt`
+- **Webhooks**
+  - env-aware runtime webhook target field
+  - env-aware webhook signing secret field
+  - intended for env variable references, not inline production secrets
 - **Reliability Thresholds**
   - sync-state lag warn threshold
   - sync-state lag critical threshold
@@ -161,8 +124,6 @@ Current sections:
   - shown only when Approvals is available
 - **Configuration Locks**
   - explains when values are locked by env vars or `config/agents.php`
-
-The page is also where lock-state is surfaced for values controlled outside the CP.
 
 ## Permissions
 
@@ -192,17 +153,14 @@ In addition:
 Primary current routes:
 
 - `admin/agents`
-- `admin/agents/readiness`
-- `admin/agents/credentials`
-- `admin/agents/discovery`
-- `admin/agents/credentials/discovery` redirects to `admin/agents/discovery`
-- `admin/agents/dashboard/security` redirects to `admin/agents/readiness#securitySnapshotSection`
-- `admin/agents/control/approvals`
-- `admin/agents/control/rules`
+- `admin/agents/status`
+- `admin/agents/accounts`
+- `admin/agents/approvals/approvals`
+- `admin/agents/approvals/rules`
 - `admin/agents/settings`
 
 ## Runtime Boundary Reminder
 
 - `craft agents/*` remains operator/developer tooling
 - CP actions are operator workflows on top of the governed API/runtime model
-- machine integrations should still use the HTTP API and contract discovery surfaces, not the CP UI
+- machine integrations should still use the HTTP API and contract descriptors, not the CP UI

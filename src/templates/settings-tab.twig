@@ -7,7 +7,7 @@
   {% include 'agents/_partials/cp-ui' %}
 
   <h1>Settings</h1>
-  <p class="agents-page-intro">Configure runtime switches and discovery document behavior from one place.</p>
+  <p class="agents-page-intro">Configure runtime switches, webhook transport, and reliability thresholds from one place.</p>
 
   <form method="post" accept-charset="UTF-8">
     {{ csrfInput() }}
@@ -19,7 +19,7 @@
 
       <div class="agents-actions">
         <button class="btn submit" type="submit">Save Settings</button>
-        <a class="btn" href="{{ url('agents/dashboard/overview') }}">Back to Dashboard</a>
+        <a class="btn" href="{{ url('agents/status') }}">Back to Status</a>
       </div>
     </div>
   </form>

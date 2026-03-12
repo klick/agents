@@ -1,16 +1,25 @@
 {% import '_includes/forms' as forms %}
 
 {% set requestsFeatureEnabled = controlCpEnabled ?? false %}
-{% set llmsTxtSettingLocked = llmsTxtSettingLocked ?? false %}
-{% set llmsFullTxtSettingLocked = llmsFullTxtSettingLocked ?? false %}
-{% set commerceTxtSettingLocked = commerceTxtSettingLocked ?? false %}
 {% set writesExperimentalSettingLocked = writesExperimentalSettingLocked ?? false %}
 {% set writesExperimentalLockedByEnv = writesExperimentalLockedByEnv ?? false %}
 {% set writesExperimentalConfigLocked = writesExperimentalConfigLocked ?? false %}
 {% set writesExperimentalLockSource = writesExperimentalLockSource ?? '' %}
 {% set credentialUsageIndicatorSettingLocked = credentialUsageIndicatorSettingLocked ?? false %}
+{% set webhookUrlSettingLocked = webhookUrlSettingLocked ?? false %}
+{% set webhookSecretSettingLocked = webhookSecretSettingLocked ?? false %}
 {% set reliabilityConsumerLagWarnSecondsLocked = reliabilityConsumerLagWarnSecondsLocked ?? false %}
 {% set reliabilityConsumerLagCriticalSecondsLocked = reliabilityConsumerLagCriticalSecondsLocked ?? false %}
+{% set webhookUrlTip = 'This can begin with an environment variable or alias.'|t('app') ~ ' ' ~ tag('a', {
+  href: 'https://craftcms.com/docs/5.x/configure.html#control-panel-settings',
+  class: 'go',
+  text: 'Learn more'|t('app'),
+}) %}
+{% set webhookSecretTip = 'This can begin with an environment variable.'|t('app') ~ ' ' ~ tag('a', {
+  href: 'https://craftcms.com/docs/5.x/configure.html#control-panel-settings',
+  class: 'go',
+  text: 'Learn more'|t('app'),
+}) %}
 
 <section class="border rounded p-3" id="runtimeSwitchesSection">
   <h2 class="h4">Runtime Switches</h2>
@@ -21,7 +30,7 @@
     label: 'Enable Agents API',
     instructions: agentsEnabledLocked
       ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-      : 'Turn the Agents API and related discovery endpoints on or off.',
+      : 'Turn the Agents API on or off.',
     name: 'enabled',
     on: settings.enabled ?? true,
     onLabel: false,
@@ -56,41 +65,44 @@
     offLabel: false,
     disabled: credentialUsageIndicatorSettingLocked,
   }) }}
+</section>
 
-  {{ forms.lightswitchField({
-    label: 'Enable llms.txt',
-    instructions: llmsTxtSettingLocked
-      ? 'Controlled by config/agents.php (`enableLlmsTxt`).'
-      : 'Serve or hide /llms.txt.',
-    name: 'enableLlmsTxt',
-    on: settings.enableLlmsTxt ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: llmsTxtSettingLocked,
+
+<hr>
+
+
+<section class="border rounded p-3" id="webhookSection">
+  <h2 class="h4">Webhooks</h2>
+  <p class="agents-subtle">Configure the normal runtime webhook target here. These fields are env-aware; prefer env variable references over literal values.</p>
+
+  {{ forms.autosuggestField({
+    first: true,
+    label: 'Webhook URL',
+    instructions: webhookUrlSettingLocked
+      ? 'Controlled by config/agents.php (`webhookUrl`).'
+      : 'Normal runtime outbound webhook target. Recommended: keep this as `$PLUGIN_AGENTS_WEBHOOK_URL` and set the actual URL in your environment.',
+    id: 'webhookUrl',
+    name: 'webhookUrl',
+    value: settings.webhookUrl ?? '$PLUGIN_AGENTS_WEBHOOK_URL',
+    suggestEnvVars: true,
+    suggestAliases: true,
+    tip: webhookUrlTip,
+    placeholder: '$PLUGIN_AGENTS_WEBHOOK_URL',
+    disabled: webhookUrlSettingLocked,
   }) }}
 
-  {{ forms.lightswitchField({
-    label: 'Enable llms-full.txt',
-    instructions: llmsFullTxtSettingLocked
-      ? 'Controlled by config/agents.php (`enableLlmsFullTxt`).'
-      : 'Serve or hide /llms-full.txt as an extended discovery export.',
-    name: 'enableLlmsFullTxt',
-    on: settings.enableLlmsFullTxt ?? false,
-    onLabel: false,
-    offLabel: false,
-    disabled: llmsFullTxtSettingLocked,
-  }) }}
-
-  {{ forms.lightswitchField({
-    label: 'Enable commerce.txt',
-    instructions: commerceTxtSettingLocked
-      ? 'Controlled by config/agents.php (`enableCommerceTxt`).'
-      : 'Serve or hide /commerce.txt.',
-    name: 'enableCommerceTxt',
-    on: settings.enableCommerceTxt ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: commerceTxtSettingLocked,
+  {{ forms.autosuggestField({
+    label: 'Webhook secret',
+    instructions: webhookSecretSettingLocked
+      ? 'Controlled by config/agents.php (`webhookSecret`).'
+      : 'Shared signing secret for outbound deliveries. Recommended: keep this as `$PLUGIN_AGENTS_WEBHOOK_SECRET` and set the real secret in your environment.',
+    id: 'webhookSecret',
+    name: 'webhookSecret',
+    value: settings.webhookSecret ?? '$PLUGIN_AGENTS_WEBHOOK_SECRET',
+    suggestEnvVars: true,
+    tip: webhookSecretTip,
+    placeholder: '$PLUGIN_AGENTS_WEBHOOK_SECRET',
+    disabled: webhookSecretSettingLocked,
   }) }}
 </section>
 
@@ -147,7 +159,7 @@
   </section>
 {% endif %}
 
-{% if agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
+{% if agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or webhookUrlSettingLocked or webhookSecretSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
   <section class="border rounded p-3 warning" id="configurationLocksSection">
     <h2 class="h4">Configuration Locks</h2>
     {% if agentsEnabledLocked %}
@@ -162,8 +174,8 @@
     {% if credentialUsageIndicatorSettingLocked %}
       <p>`enableCredentialUsageIndicator` is controlled by <code>config/agents.php</code>.</p>
     {% endif %}
-    {% if llmsTxtSettingLocked or llmsFullTxtSettingLocked or commerceTxtSettingLocked %}
-      <p>Some discovery settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
+    {% if webhookUrlSettingLocked or webhookSecretSettingLocked %}
+      <p>Webhook transport settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
     {% endif %}
     {% if reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
       <p>Some reliability thresholds are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>

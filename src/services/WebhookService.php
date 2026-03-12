@@ -6,7 +6,6 @@ use Craft;
 use craft\base\Component;
 use craft\base\Element;
 use craft\elements\Entry;
-use craft\helpers\App;
 use craft\helpers\Queue;
 use craft\helpers\StringHelper;
 use DateTimeInterface;
@@ -105,16 +104,16 @@ class WebhookService extends Component
             return $this->webhookConfig;
         }
 
-        $url = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_URL'));
-        $secret = trim((string)App::env('PLUGIN_AGENTS_WEBHOOK_SECRET'));
-
-        $timeoutSeconds = (int)App::env('PLUGIN_AGENTS_WEBHOOK_TIMEOUT_SECONDS');
+        $runtimeConfig = Plugin::getInstance()->getSecurityPolicyService()->getRuntimeConfig();
+        $url = trim((string)($runtimeConfig['webhookUrl'] ?? ''));
+        $secret = trim((string)($runtimeConfig['webhookSecret'] ?? ''));
+        $timeoutSeconds = (int)($runtimeConfig['webhookTimeoutSeconds'] ?? self::DEFAULT_TIMEOUT_SECONDS);
         if ($timeoutSeconds <= 0) {
             $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS;
         }
         $timeoutSeconds = min($timeoutSeconds, 60);
 
-        $maxAttempts = (int)App::env('PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS');
+        $maxAttempts = (int)($runtimeConfig['webhookMaxAttempts'] ?? self::DEFAULT_MAX_ATTEMPTS);
         if ($maxAttempts <= 0) {
             $maxAttempts = self::DEFAULT_MAX_ATTEMPTS;
         }
@@ -129,6 +128,11 @@ class WebhookService extends Component
         ];
 
         return $this->webhookConfig;
+    }
+
+    public function getCredentialSubscriptionStatePreview(string $resourceType, string $action): array
+    {
+        return $this->resolveCredentialSubscriptionState($resourceType, $action);
     }
 
     public function recordDeadLetter(array $payload, int $attempts, string $lastError): void

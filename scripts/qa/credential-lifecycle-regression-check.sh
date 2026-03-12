@@ -79,7 +79,7 @@ expect_fixed "requireCredentialPermission" "$DASHBOARD_CONTROLLER" "Dashboard co
 expect_fixed "canCredentialPermission" "$DASHBOARD_CONTROLLER" "Dashboard controller exposes credential permission checks"
 
 expect_fixed "CredentialService::class" "$PLUGIN_FILE" "Plugin registers CredentialService component"
-expect_fixed "'agents/credentials'" "$PLUGIN_FILE" "Plugin exposes CP credentials route/subnav"
+expect_fixed "'agents/accounts'" "$PLUGIN_FILE" "Plugin exposes CP credentials route/subnav"
 expect_fixed "EVENT_REGISTER_PERMISSIONS" "$PLUGIN_FILE" "Plugin registers custom credential permissions"
 expect_fixed "PERMISSION_CREDENTIALS_MANAGE" "$PLUGIN_FILE" "Plugin defines credential permission constants"
 expect_fixed "<h1>Accounts</h1>" "$CP_TEMPLATE" "Accounts CP template is present"
