@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'Agents',
-  description: 'Safe AI and automation APIs for Craft CMS and Craft Commerce',
+  description: 'Governed machine access for Craft CMS and Craft Commerce',
   lang: 'en-US',
   base: '/docs/agents/',
   cleanUrls: true,

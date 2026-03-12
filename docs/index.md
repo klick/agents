@@ -1,6 +1,6 @@
 # Agents
 
-Safe AI and automation APIs for Craft CMS and Craft Commerce.
+Governed machine access for Craft CMS and Craft Commerce.
 
 Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It provides one governed machine-access layer with scoped APIs, managed credentials, diagnostics, and optional approval controls, so production behavior stays predictable, observable, and auditable.
 

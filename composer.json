@@ -1,6 +1,6 @@
 {
   "name": "klick/agents",
-  "description": "Secure, governed agent runtime for Craft: scoped APIs, sync, webhooks, and approvals.",
+  "description": "Governed machine access for Craft CMS and Craft Commerce.",
   "type": "craft-plugin",
   "homepage": "https://github.com/klick/agents",
   "version": "0.20.0",

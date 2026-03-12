@@ -1,6 +1,6 @@
 # Agents
 
-Safe AI and automation APIs for Craft CMS and Craft Commerce.
+Governed machine access for Craft CMS and Craft Commerce.
 
 Current plugin version: **0.20.0**
 
