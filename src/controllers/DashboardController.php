@@ -220,7 +220,7 @@ class DashboardController extends Controller
             }
         }
 
-        return $this->renderCpTemplate('agents/approvals', [
+        return $this->renderCpTemplate('agents/control', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'controlSummary' => (array)($snapshot['summary'] ?? []),
@@ -328,7 +328,7 @@ class DashboardController extends Controller
             }
         }
 
-        return $this->renderCpTemplate('agents/accounts', [
+        return $this->renderCpTemplate('agents/credentials', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'credentialUsageIndicatorEnabled' => (bool)$this->getSettingsModel()->enableCredentialUsageIndicator,
