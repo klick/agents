@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.7 - 2026-03-13
+
+### Fixed
+
+- Hid Commerce-only scopes from runtime defaults, capabilities, and the Accounts scope picker when Craft Commerce is not installed.
+
+### Changed
+
+- Reworked the Accounts scope picker into a responsive multi-column layout with group guidance so operators can evaluate access decisions more easily on wider viewports.
+
 ## 0.21.6 - 2026-03-13
 
 ### Fixed

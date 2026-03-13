@@ -115,6 +115,8 @@ In the CP, `Agents -> Status` also exposes a manual `Run status check` action pl
 - optional credential TTL (days) and reminder window
 - IP allowlist (CIDR/IP entries)
 
+The scope picker reflects installed capabilities. Commerce-only scopes are hidden when Craft Commerce is not installed.
+
 ## Enablement precedence
 
 1. If `PLUGIN_AGENTS_ENABLED` is set, it is the source of truth.

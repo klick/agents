@@ -2219,7 +2219,7 @@ class ApiController extends Controller
             return $guard;
         }
 
-        $snapshot = Plugin::getInstance()->getAdoptionMetricsService()->getSnapshot(self::DEFAULT_TOKEN_SCOPES);
+        $snapshot = Plugin::getInstance()->getAdoptionMetricsService()->getSnapshot($this->defaultTokenScopes());
         return $this->jsonResponse($snapshot);
     }
 
@@ -2883,12 +2883,12 @@ class ApiController extends Controller
                 continue;
             }
 
-            return [
-                'id' => (string)($credential['id'] ?? 'default'),
-                'scopes' => (array)($credential['scopes'] ?? self::DEFAULT_TOKEN_SCOPES),
-                'principalFingerprint' => $principalFingerprint,
-                'source' => (string)($credential['source'] ?? 'env'),
-                'managedCredentialId' => isset($credential['managedCredentialId']) ? (int)$credential['managedCredentialId'] : 0,
+              return [
+                  'id' => (string)($credential['id'] ?? 'default'),
+                  'scopes' => (array)($credential['scopes'] ?? $this->defaultTokenScopes()),
+                  'principalFingerprint' => $principalFingerprint,
+                  'source' => (string)($credential['source'] ?? 'env'),
+                  'managedCredentialId' => isset($credential['managedCredentialId']) ? (int)$credential['managedCredentialId'] : 0,
                 'forceHumanApproval' => (bool)($credential['forceHumanApproval'] ?? false),
                 'ipAllowlist' => $this->normalizeIpAllowlist($credential['ipAllowlist'] ?? []),
             ];
@@ -3405,6 +3405,11 @@ class ApiController extends Controller
                 unset($scopes[$scope]);
             }
         }
+        if (!$this->isCommerceApiEnabled()) {
+            foreach ($this->commerceScopeKeys() as $scope) {
+                unset($scopes[$scope]);
+            }
+        }
 
         return $scopes;
     }
@@ -3422,6 +3427,11 @@ class ApiController extends Controller
     private function isAddressesApiEnabled(): bool
     {
         return Plugin::getInstance()->isAddressesApiEnabled();
+    }
+
+    private function isCommerceApiEnabled(): bool
+    {
+        return Plugin::getInstance()->isCommercePluginEnabled();
     }
 
     private function guardWritesExperimentalEnabled(): ?Response
@@ -3512,6 +3522,26 @@ class ApiController extends Controller
             'addresses:read',
             'addresses:read_sensitive',
         ];
+    }
+
+    private function commerceScopeKeys(): array
+    {
+        return [
+            'products:read',
+            'variants:read',
+            'subscriptions:read',
+            'transfers:read',
+            'donations:read',
+            'orders:read',
+            'orders:read_sensitive',
+            'addresses:read',
+            'addresses:read_sensitive',
+        ];
+    }
+
+    private function defaultTokenScopes(): array
+    {
+        return array_values((array)($this->getSecurityConfig()['tokenScopes'] ?? self::DEFAULT_TOKEN_SCOPES));
     }
 
     private function errorTaxonomy(): array

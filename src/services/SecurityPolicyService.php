@@ -154,6 +154,7 @@ class SecurityPolicyService extends Component
         if (empty($tokenScopes)) {
             $tokenScopes = self::DEFAULT_TOKEN_SCOPES;
         }
+        $tokenScopes = $this->filterUnavailableDefaultScopes($tokenScopes);
 
         $tokenRequirementForcedInProd = false;
         $requireToken = $requestedRequireToken;
@@ -717,6 +718,36 @@ class SecurityPolicyService extends Component
         }
 
         return $deduped;
+    }
+
+    private function filterUnavailableDefaultScopes(array $scopes): array
+    {
+        $plugin = Plugin::getInstance();
+        $commerceEnabled = $plugin?->isCommercePluginEnabled() ?? false;
+
+        if ($commerceEnabled) {
+            return $scopes;
+        }
+
+        return array_values(array_filter(
+            $scopes,
+            fn(string $scope): bool => !in_array($scope, $this->commerceScopeKeys(), true)
+        ));
+    }
+
+    private function commerceScopeKeys(): array
+    {
+        return [
+            'products:read',
+            'variants:read',
+            'subscriptions:read',
+            'transfers:read',
+            'donations:read',
+            'orders:read',
+            'orders:read_sensitive',
+            'addresses:read',
+            'addresses:read_sensitive',
+        ];
     }
 
     private function extractUrlHost(string $url): ?string

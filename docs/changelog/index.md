@@ -2,6 +2,11 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.7 (2026-03-13)
+
+- Hid Commerce-only scopes from runtime defaults, capabilities, and the Accounts scope picker when Craft Commerce is not installed.
+- Reworked the Accounts scope picker into a responsive multi-column layout with group guidance so operators can evaluate access decisions more easily on wider viewports.
+
 ## 0.21.6 (2026-03-13)
 
 - Treated Commerce availability as optional in readiness diagnostics so CMS-only installs no longer surface a degraded `Status` state after update.

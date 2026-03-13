@@ -95,7 +95,7 @@ Current responsibilities:
 - create and edit flows for:
   - display name and handle
   - short operator-facing description shown on the account card
-  - scopes
+  - scopes, grouped by purpose with short operator guidance
   - owner user assignment with legacy-owner fallback
   - pause/resume state
   - force-human-approval mode for write-capable accounts
@@ -107,6 +107,7 @@ Current responsibilities:
 - usage metadata and optional live activity indicator
 - dedicated account-template section below the create form
 - suggested account profiles for common core-Craft integration shapes
+- Commerce-only scopes appear only when Craft Commerce is installed
 
 The visible page title is **Accounts**, and the route is `admin/agents/accounts`.
 

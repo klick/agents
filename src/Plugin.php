@@ -50,7 +50,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.21.6';
+    public string $schemaVersion = '0.21.7';
 
     public static ?self $plugin = null;
 
