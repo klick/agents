@@ -114,6 +114,8 @@ expect_fixed "getUserByUsernameOrEmail" "$DASHBOARD_CONTROLLER" "Dashboard contr
 expect_fixed "id=\"readinessStateCard\"" "$DASHBOARD_TEMPLATE" "Dashboard readiness view exposes readiness state card"
 expect_fixed "readinessOnlyBootstrapGaps" "$DASHBOARD_TEMPLATE" "Dashboard readiness view derives a setup state from bootstrap-only confidence gaps"
 expect_fixed "readinessIntegrationCapacitySummaryLabel = 'Optional'" "$DASHBOARD_TEMPLATE" "Dashboard readiness view treats sync-state as optional until configured"
+expect_fixed "readinessHasMonitoringGap" "$DASHBOARD_TEMPLATE" "Dashboard readiness view distinguishes monitoring gaps from harmless low-traffic observation gaps"
+expect_fixed "Confidence signals will strengthen as routine traffic and account activity build over time." "$DASHBOARD_TEMPLATE" "Dashboard readiness view keeps healthy low-traffic environments in a positive ready posture"
 expect_fixed "(row.stateLabel|lower) not in ['clear', 'optional']" "$DASHBOARD_TEMPLATE" "Dashboard readiness action mapping suppresses optional setup signals"
 expect_fixed "id=\"readinessActionMappingSection\"" "$DASHBOARD_TEMPLATE" "Dashboard readiness view exposes action mapping section"
 expect_fixed "id=\"securitySnapshotSection\"" "$DASHBOARD_TEMPLATE" "Dashboard readiness view preserves security detail section"

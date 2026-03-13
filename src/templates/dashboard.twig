@@ -245,10 +245,11 @@
         or readinessHasIntegrationIssues
         or readinessHasSecurityIssues
         or readinessHasCapacityIssues %}
-      {% set readinessHasLowConfidence = (not readinessMetricsCurrent)
-        or reliabilitySignalsEvaluated == 0
-        or (not readinessHasObservedTraffic)
+      {% set readinessHasMonitoringGap = (not readinessMetricsCurrent)
+        or reliabilitySignalsEvaluated == 0 %}
+      {% set readinessHasObservationGap = (not readinessHasObservedTraffic)
         or (not readinessHasActiveCredentials) %}
+      {% set readinessHasLowConfidence = readinessHasMonitoringGap or readinessHasObservationGap %}
       {% set readinessOnlyBootstrapGaps = (not readinessHasObservedTraffic)
         and (not readinessHasActiveCredentials)
         and (not readinessHasIntegrationTelemetry) %}
@@ -290,24 +291,30 @@
         {% set readinessStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
         {% set readinessStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
         {% set readinessStateTone = 'good' %}
-      {% elseif readinessHasLowConfidence %}
+      {% elseif readinessHasMonitoringGap %}
         {% set readinessStateKey = 'unproven' %}
         {% set readinessStateLabel = 'Unproven' %}
         {% set readinessStateLead = 'No blocking issues were detected, but live-readiness confidence is limited.' %}
         {% set readinessStateSubcopy = 'Recent traffic, credential activity, or observability freshness is too thin for a high-confidence assessment.' %}
         {% set readinessStateTone = 'muted' %}
+      {% elseif readinessHasObservationGap %}
+        {% set readinessStateKey = 'ready' %}
+        {% set readinessStateLabel = 'Ready' %}
+        {% set readinessStateLead = 'Core runtime is healthy and ready for machine traffic.' %}
+        {% set readinessStateSubcopy = 'No issues need attention right now. Confidence signals will strengthen as routine traffic and account activity build over time.' %}
+        {% set readinessStateTone = 'good' %}
       {% endif %}
       {% set readinessShowReadyState = readinessStateKey == 'ready' %}
       {% set readinessConfidenceLabel = readinessHasObservedTraffic and readinessHasActiveCredentials and readinessMetricsCurrent
         ? 'high'
-        : 'limited' %}
+        : (readinessHasMonitoringGap ? 'limited' : 'building') %}
       {% set readinessTrafficLead = 'Guarded requests observed in the last 60 minutes' %}
       {% if not agentsEnabled %}
         {% set readinessTrafficLead = 'Runtime is disabled, so guarded traffic is blocked' %}
       {% elseif not readinessMetricsCurrent %}
         {% set readinessTrafficLead = 'Recent traffic metrics are stale' %}
       {% elseif not readinessHasObservedTraffic %}
-        {% set readinessTrafficLead = 'No guarded requests observed in the last 60 minutes' %}
+        {% set readinessTrafficLead = 'No guarded request issues detected in the last 60 minutes' %}
       {% elseif telemetryErrors5xx > 0 %}
         {% set readinessTrafficLead = 'Server errors are occurring on guarded routes' %}
       {% elseif telemetryAuthFailures > 0 or telemetryForbidden > 0 or telemetryRateLimit > 0 %}
@@ -395,7 +402,7 @@
       {% set readinessMonitoringLine = readinessHasObservedTraffic and readinessMetricsCurrent
         ? 'Monitoring is active for live traffic'
         : (readinessMetricsCurrent
-          ? 'Monitoring is active, but recent traffic is limited'
+          ? 'Monitoring is active and building evidence from live traffic'
           : 'Monitoring confidence is limited by stale metrics') %}
       {% if readinessIsBootstrapState %}
         {% set readinessTrafficLead = 'Waiting for first guarded traffic' %}
@@ -420,9 +427,9 @@
       {% elseif readinessHasTrafficIssues %}
         {% set readinessTrafficSummaryTone = 'warn' %}
         {% set readinessTrafficSummaryLabel = 'Needs attention' %}
-      {% elseif (not readinessMetricsCurrent) or (not readinessHasObservedTraffic) %}
+      {% elseif not readinessMetricsCurrent %}
         {% set readinessTrafficSummaryTone = 'muted' %}
-        {% set readinessTrafficSummaryLabel = 'Unproven' %}
+        {% set readinessTrafficSummaryLabel = 'Monitoring' %}
       {% endif %}
       {% set readinessDeliverySummaryTone = 'good' %}
       {% set readinessDeliverySummaryLabel = 'Good' %}
@@ -456,9 +463,6 @@
       {% elseif readinessHasSecurityIssues %}
         {% set readinessSecuritySummaryTone = 'warn' %}
         {% set readinessSecuritySummaryLabel = 'Needs attention' %}
-      {% elseif not readinessHasActiveCredentials %}
-        {% set readinessSecuritySummaryTone = 'muted' %}
-        {% set readinessSecuritySummaryLabel = 'Unproven' %}
       {% endif %}
       {% set readinessEvaluationProofTone = 'good' %}
       {% if not readinessMetricsCurrent or reliabilitySignalsEvaluated == 0 %}
@@ -839,8 +843,8 @@
         },
         {
           signal: 'Stale or low-confidence observability',
-          stateLabel: ((not readinessMetricsCurrent) or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials)) ? 'Unproven' : 'Clear',
-          stateTone: ((not readinessMetricsCurrent) or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials)) ? 'warn' : 'muted',
+          stateLabel: readinessHasMonitoringGap ? 'Unproven' : 'Clear',
+          stateTone: readinessHasMonitoringGap ? 'warn' : 'muted',
           impact: 'The readiness verdict is less trustworthy because signal quality is weak.',
           primaryAction: 'Recheck readiness',
           secondaryAction: 'Inspect observability',
@@ -1043,9 +1047,9 @@
       {% elseif readinessTrafficSummaryTone == 'warn' or securityAuthSummaryTone == 'warn' %}
         {% set readinessTrafficAccessSummaryTone = 'warn' %}
         {% set readinessTrafficAccessSummaryLabel = 'Needs attention' %}
-      {% elseif (not readinessMetricsCurrent) or (not readinessHasObservedTraffic) %}
+      {% elseif not readinessMetricsCurrent %}
         {% set readinessTrafficAccessSummaryTone = 'muted' %}
-        {% set readinessTrafficAccessSummaryLabel = 'Unproven' %}
+        {% set readinessTrafficAccessSummaryLabel = 'Monitoring' %}
       {% endif %}
       {% set readinessDeliveryWebhooksSummaryTone = 'good' %}
       {% set readinessDeliveryWebhooksSummaryLabel = 'Good' %}
@@ -1088,9 +1092,12 @@
       {% if reliabilitySignalsCritical > 0 or reliabilitySignalsWarn > 0 %}
         {% set readinessConfidenceSummaryTone = 'warn' %}
         {% set readinessConfidenceSummaryLabel = 'Needs attention' %}
-      {% elseif (not readinessMetricsCurrent) or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials) %}
+      {% elseif readinessHasMonitoringGap %}
         {% set readinessConfidenceSummaryTone = 'muted' %}
         {% set readinessConfidenceSummaryLabel = 'Unproven' %}
+      {% elseif readinessHasObservationGap %}
+        {% set readinessConfidenceSummaryTone = 'good' %}
+        {% set readinessConfidenceSummaryLabel = 'Building' %}
       {% endif %}
       {% if readinessIsBootstrapState %}
         {% set readinessTrafficAccessSummaryTone = 'muted' %}
@@ -1101,8 +1108,8 @@
         {% set readinessIntegrationCapacitySummaryLabel = 'Optional' %}
         {% set readinessCredentialsPolicySummaryTone = 'good' %}
         {% set readinessCredentialsPolicySummaryLabel = 'Ready' %}
-        {% set readinessConfidenceSummaryTone = 'muted' %}
-        {% set readinessConfidenceSummaryLabel = 'Unproven' %}
+        {% set readinessConfidenceSummaryTone = 'good' %}
+        {% set readinessConfidenceSummaryLabel = 'Building' %}
       {% endif %}
       {% set readinessTrafficAccessProofTone = readinessTrafficAccessSummaryTone in ['warn', 'bad'] ? readinessTrafficAccessSummaryTone : 'good' %}
       {% set readinessDeliveryWebhooksProofTone = readinessDeliveryWebhooksSummaryTone in ['warn', 'bad'] ? readinessDeliveryWebhooksSummaryTone : 'good' %}
@@ -1188,7 +1195,7 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if not agentsEnabled or telemetryAuthFailures > 0 or telemetryForbidden > 0 or telemetryRateLimit > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent and readinessHasObservedTraffic and telemetryErrors5xx == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessTrafficLead }}</li>
+                <li{% if not agentsEnabled or telemetryAuthFailures > 0 or telemetryForbidden > 0 or telemetryRateLimit > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent and telemetryErrors5xx == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessTrafficLead }}</li>
                 <li class="{{ securityAuthFailures > 0 or securityForbiddenTotal > 0 ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">Auth failures / scope denials: <strong>{{ securityAuthFailures }}</strong> / <strong>{{ securityForbiddenTotal }}</strong></li>
                 <li{% if securityRateLimitDenied > 0 or securityErrors5xx > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif securityRateLimitDenied == 0 and securityErrors5xx == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Rate-limit denials / server errors: <strong>{{ securityRateLimitDenied }}</strong> / <strong>{{ securityErrors5xx }}</strong></li>
                 <li class="{{ (not securityTokenRequired) or securityQueryTokenEnabled ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">Token required / query-token auth: <strong>{{ securityTokenRequired ? 'yes' : 'no' }}</strong> / <strong>{{ securityQueryTokenEnabled ? 'enabled' : 'disabled' }}</strong></li>
@@ -1297,13 +1304,13 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if (not readinessMetricsCurrent) or reliabilitySignalsCritical > 0 or reliabilitySignalsWarn > 0 or reliabilitySignalsEvaluated == 0 or (not readinessHasObservedTraffic) or (not readinessHasActiveCredentials) %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent and reliabilitySignalsEvaluated > 0 and readinessHasObservedTraffic and readinessHasActiveCredentials %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessObservabilityLine }}</li>
+                <li{% if readinessHasMonitoringGap or reliabilitySignalsCritical > 0 or reliabilitySignalsWarn > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent and reliabilitySignalsEvaluated > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessObservabilityLine }}</li>
                 <li>Last evaluated: <strong>{{ readinessEvaluationLabel }}</strong></li>
                 <li{% if not readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--alert"{% elseif readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Signal window / metrics freshness: <strong>last 60 minutes</strong> / <strong>{{ readinessMetricsCurrent ? 'current' : 'stale' }}</strong></li>
-                <li{% if readinessConfidenceLabel == 'high' %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Confidence: <strong>{{ readinessConfidenceLabel }}</strong></li>
+                <li{% if readinessConfidenceLabel in ['high', 'building'] %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Confidence: <strong>{{ readinessConfidenceLabel }}</strong></li>
                 <li{% if reliabilitySignalsEvaluated == 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif reliabilitySignalsEvaluated > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessReliabilityLine }}</li>
                 <li{% if reliabilitySignalsCritical > 0 or reliabilitySignalsWarn > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif reliabilitySignalsEvaluated > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessReliabilityStatusLine }}</li>
-                <li{% if readinessHasObservedTraffic and readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessMonitoringLine }}</li>
+                <li{% if readinessMetricsCurrent %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessMonitoringLine }}</li>
               </ul>
             </section>
           </div>

@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.2 - 2026-03-13
+
+### Changed
+
+- Softened the `Status` readiness verdict for healthy low-traffic environments so they stay `Ready` while confidence is still building, instead of defaulting to `Unproven`.
+- Reframed `Traffic / Access` and `Confidence / Observability` messaging to communicate calm, positive readiness without hiding real monitoring gaps.
+
 ## 0.21.1 - 2026-03-13
 
 ### Added

@@ -2,6 +2,11 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.2 (2026-03-13)
+
+- Softened the `Status` readiness verdict for healthy low-traffic environments so they stay `Ready` while confidence is still building, instead of defaulting to `Unproven`.
+- Reframed `Traffic / Access` and `Confidence / Observability` messaging to keep quiet-but-healthy installs calm and positive without hiding real monitoring gaps.
+
 ## 0.21.1 (2026-03-13)
 
 - Added a persisted short description field for managed accounts so account cards and the add/edit form can carry a concise operator-facing purpose note.

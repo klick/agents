@@ -46,7 +46,7 @@ The section root `admin/agents` opens `Status`.
     - recent delivery outcomes
     - manual `Run status check` action
 
-Fresh installs bias toward `Ready to Connect` when the runtime is healthy but there is not enough live traffic yet to prove readiness. `Confidence / Observability` can still read `Unproven`, and sync-state remains optional until a worker starts reporting checkpoints.
+Fresh installs bias toward `Ready to Connect` when the runtime is healthy but there is not enough live traffic yet to prove readiness. After bootstrap, healthy low-traffic environments stay `Ready` while `Confidence / Observability` can read `Building`, and sync-state remains optional until a worker starts reporting checkpoints. `Unproven` is reserved for actual monitoring gaps such as stale metrics or missing reliability evaluation.
 
 This page is driven from runtime services, not hardcoded status:
 
