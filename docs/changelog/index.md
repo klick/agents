@@ -2,6 +2,11 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.3 (2026-03-13)
+
+- Added an account-scoped API token reveal overlay for create/rotate flows so copy/download actions stay anchored to the affected account card.
+- Added finer Accounts pulse-simulation controls for local demo and QA flows.
+
 ## 0.21.2 (2026-03-13)
 
 - Softened the `Status` readiness verdict for healthy low-traffic environments so they stay `Ready` while confidence is still building, instead of defaulting to `Unproven`.

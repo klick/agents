@@ -819,6 +819,7 @@ class DashboardController extends Controller
             );
             $credential = (array)($result['credential'] ?? []);
             $this->storeRevealedCredential([
+                'id' => (int)($credential['id'] ?? 0),
                 'token' => (string)($result['token'] ?? ''),
                 'handle' => (string)($credential['handle'] ?? ''),
                 'displayName' => (string)($credential['displayName'] ?? ''),
@@ -928,6 +929,7 @@ class DashboardController extends Controller
 
             $credential = (array)($result['credential'] ?? []);
             $this->storeRevealedCredential([
+                'id' => (int)($credential['id'] ?? 0),
                 'token' => (string)($result['token'] ?? ''),
                 'handle' => (string)($credential['handle'] ?? ''),
                 'displayName' => (string)($credential['displayName'] ?? ''),
@@ -1040,6 +1042,7 @@ class DashboardController extends Controller
 
             $credential = (array)($result['credential'] ?? []);
             $this->storeRevealedCredential([
+                'id' => (int)($credential['id'] ?? 0),
                 'token' => (string)($result['token'] ?? ''),
                 'handle' => (string)($credential['handle'] ?? ''),
                 'displayName' => (string)($credential['displayName'] ?? ''),

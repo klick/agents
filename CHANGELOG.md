@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.3 - 2026-03-13
+
+### Added
+
+- Added an account-scoped API token reveal overlay for newly created and rotated accounts, including copy/download actions and an explicit close control on the affected account card.
+- Added finer Accounts pulse-simulation controls for local demos and QA, including mode, account targeting, and interval query parameters.
+
+### Changed
+
+- Moved the one-time API token reveal from a global Accounts panel into the matching account card so create/rotate flows stay visually anchored to the affected account.
+
 ## 0.21.2 - 2026-03-13
 
 ### Changed

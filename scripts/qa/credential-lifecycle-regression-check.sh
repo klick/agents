@@ -107,5 +107,12 @@ expect_fixed "credentialApprovalRecipientUserIds" "$CP_TEMPLATE" "Credentials CP
 expect_fixed "credentialForceHumanApproval" "$CP_TEMPLATE" "Credentials CP template includes force-human-approval controls"
 expect_fixed "Account Templates" "$CP_TEMPLATE" "Credentials CP template exposes dedicated account templates section"
 expect_fixed "agents-capability-group-title" "$CP_TEMPLATE" "Credentials CP template groups scopes by type"
+expect_fixed "simulatePulseMode" "$CP_TEMPLATE" "Credentials CP template supports pulse simulation mode query parameter"
+expect_fixed "simulatePulseAccounts" "$CP_TEMPLATE" "Credentials CP template supports targeted pulse simulation accounts"
+expect_fixed "simulatePulseIntervalMs" "$CP_TEMPLATE" "Credentials CP template supports pulse simulation interval override"
+expect_fixed "normalizeSimulationStartOptions" "$CP_TEMPLATE" "Credentials CP template normalizes pulse simulation options"
+expect_fixed "credentialIdsByHandle" "$CP_TEMPLATE" "Credentials CP template can target pulse simulation by account handle"
+expect_fixed "agents-agent-token-overlay" "$CP_TEMPLATE" "Credentials CP template renders the account-scoped token overlay"
+expect_fixed "revealedCredentialOverlayClose" "$CP_TEMPLATE" "Credentials CP template includes a close control for the token overlay"
 
 echo "Credential lifecycle regression checks completed."

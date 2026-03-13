@@ -90,7 +90,7 @@ Notable current behavior:
 Current responsibilities:
 
 - lifecycle summary strip (`Managed accounts`, `Paused accounts`, `Need attention`)
-- one-time token reveal after create/rotate
+- one-time token reveal after create/rotate as an in-card overlay on the affected account
 - card-based managed-account overview
 - create and edit flows for:
   - display name and handle
