@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.1 - 2026-03-13
+
+### Added
+
+- Added a persisted short description field for managed accounts so operators can capture the account purpose directly on account cards and in the add/edit form.
+- Added a dedicated `Account Templates` section with compact starter cards and a new `Legal & Consent Checker` template focused on core Craft site review.
+
+### Changed
+
+- Reordered the top-level Agents CP navigation to `Status`, `Accounts`, `Approvals`, and `Settings`.
+- Grouped account scopes by type in the add/edit form so operators can evaluate access decisions more quickly.
+- Reworked the `Waiting for Decision` table so dual-control approvals expose two explicit approval buttons and visually consume one slot after the first approval.
+
+### Removed
+
+- Removed the temporary `Reason for rejection` and `Optional note` inputs from the waiting-table decision actions.
+- Removed legacy case-specific account templates in favor of broadly useful core-Craft starter profiles.
+
 ## 0.21.0 - 2026-03-13
 
 ### Added

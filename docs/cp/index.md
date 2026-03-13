@@ -10,13 +10,13 @@ The Agents CP subnav currently exposes:
 
 - **Status**
   - URL: `admin/agents/status`
+- **Accounts**
+  - URL: `admin/agents/accounts`
+  - managed machine-account lifecycle and access controls
 - **Approvals**
   - URL: `admin/agents/approvals`
   - shown only when governed-write CP is enabled
   - local sidebar tabs: `Approvals`, `Rules`
-- **Accounts**
-  - URL: `admin/agents/accounts`
-  - managed machine-account lifecycle and access controls
 - **Settings**
   - URL: `admin/agents/settings`
   - runtime switches, operator notifications, webhook transport, reliability thresholds, and config-lock visibility
@@ -78,6 +78,7 @@ Local tabs:
 Notable current behavior:
 
 - pending approvals can be reviewed, approved, or rejected from the CP
+- high-risk dual-approval rows show two explicit approval buttons so operators can see progress toward the second approval at a glance
 - review UI includes action labels, rule/risk context, assurance mode, SLA metadata, and review guards
 - approved draft-entry flows can expose `Apply Draft` actions when the underlying state allows it
 - rules support wildcard action matching, risk levels, approval requirements, enable/disable state, and advanced JSON config
@@ -93,6 +94,7 @@ Current responsibilities:
 - card-based managed-account overview
 - create and edit flows for:
   - display name and handle
+  - short operator-facing description shown on the account card
   - scopes
   - owner user assignment with legacy-owner fallback
   - pause/resume state
@@ -103,7 +105,8 @@ Current responsibilities:
   - IP allowlist
 - lifecycle risk details per account
 - usage metadata and optional live activity indicator
-- suggested account profiles for common integration shapes
+- dedicated account-template section below the create form
+- suggested account profiles for common core-Craft integration shapes
 
 The visible page title is **Accounts**, and the route is `admin/agents/accounts`.
 

@@ -772,6 +772,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $handle = (string)$this->request->getBodyParam('credentialHandle', '');
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $description = $this->parseStringBodyParam('credentialDescription', '');
         $owner = $this->parseStringBodyParam('credentialOwnerLegacyValue', $this->resolveCurrentCpUserEmail());
         $ownerUserId = $this->parseSingleIntegerIdBodyParam('credentialOwnerUserId');
         $token = (string)$this->request->getBodyParam('credentialToken', '');
@@ -804,6 +805,7 @@ class DashboardController extends Controller
             $result = $plugin->getCredentialService()->createManagedCredential(
                 $handle,
                 $displayName,
+                $description,
                 $owner,
                 $ownerUserId,
                 $approvalRecipientUserIds,
@@ -842,6 +844,7 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
+        $description = $this->parseStringBodyParam('credentialDescription', '');
         $owner = $this->parseStringBodyParam('credentialOwnerLegacyValue', '');
         $ownerUserId = $this->parseSingleIntegerIdBodyParam('credentialOwnerUserId');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
@@ -878,6 +881,7 @@ class DashboardController extends Controller
             $credential = $plugin->getCredentialService()->updateManagedCredential(
                 $credentialId,
                 $displayName,
+                $description,
                 $owner,
                 $ownerUserId,
                 $approvalRecipientUserIds,

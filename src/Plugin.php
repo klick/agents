@@ -50,7 +50,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.21.0';
+    public string $schemaVersion = '0.21.1';
 
     public static ?self $plugin = null;
 
@@ -105,6 +105,10 @@ class Plugin extends BasePlugin
                 'label' => 'Status',
                 'url' => 'agents/status',
             ],
+            'accounts' => [
+                'label' => 'Accounts',
+                'url' => 'agents/accounts',
+            ],
         ];
         if ($this->isControlCpEnabled()) {
             $subnav['approvals'] = [
@@ -112,10 +116,6 @@ class Plugin extends BasePlugin
                 'url' => 'agents/approvals',
             ];
         }
-        $subnav['accounts'] = [
-            'label' => 'Accounts',
-            'url' => 'agents/accounts',
-        ];
         $subnav['settings'] = [
             'label' => 'Settings',
             'url' => 'agents/settings',

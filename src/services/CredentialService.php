@@ -26,6 +26,7 @@ class CredentialService extends Component
     private ?bool $supportsIpAllowlistColumn = null;
     private ?bool $supportsPauseColumn = null;
     private ?bool $supportsOwnerColumn = null;
+    private ?bool $supportsDescriptionColumn = null;
     private ?bool $supportsOwnerUserIdColumn = null;
     private ?bool $supportsForceHumanApprovalColumn = null;
     private ?bool $supportsApprovalRecipientUserIdsColumn = null;
@@ -113,6 +114,7 @@ class CredentialService extends Component
                 'id' => (int)($row['id'] ?? 0),
                 'handle' => (string)($row['handle'] ?? ''),
                 'displayName' => (string)($row['displayName'] ?? ''),
+                'description' => $this->supportsDescriptionColumn() ? $this->normalizeDescription($row['description'] ?? null) : '',
                 'owner' => $owner,
                 'ownerLegacy' => $owner,
                 'ownerUserId' => $ownerUserId,
@@ -244,6 +246,7 @@ class CredentialService extends Component
 
         return [
             'owner' => $owner,
+            'description' => $this->supportsDescriptionColumn() ? $this->normalizeDescription($row['description'] ?? null) : '',
             'ownerUserId' => $ownerUserId,
             'ownerUser' => $ownerUserId !== null ? ($relatedUsersById[$ownerUserId] ?? null) : null,
             'approvalRecipientUserIds' => $approvalRecipientUserIds,
@@ -284,6 +287,7 @@ class CredentialService extends Component
     public function createManagedCredential(
         string $handle,
         string $displayName,
+        string $description,
         string $owner,
         ?int $ownerUserId,
         array $approvalRecipientUserIds,
@@ -306,6 +310,7 @@ class CredentialService extends Component
         }
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $normalizedHandle);
+        $normalizedDescription = $this->normalizeDescription($description);
         $normalizedOwnerUserId = $this->normalizeUserId($ownerUserId);
         $normalizedOwner = $this->resolveOwnerLegacyValue($normalizedOwnerUserId, $owner);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
@@ -360,6 +365,9 @@ class CredentialService extends Component
         }
         if ($this->supportsOwnerColumn()) {
             $insertData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
+        }
+        if ($this->supportsDescriptionColumn()) {
+            $insertData['description'] = $normalizedDescription !== '' ? $normalizedDescription : null;
         }
         if ($this->supportsOwnerUserIdColumn()) {
             $insertData['ownerUserId'] = $normalizedOwnerUserId;
@@ -531,6 +539,7 @@ class CredentialService extends Component
     public function updateManagedCredential(
         int $id,
         string $displayName,
+        string $description,
         string $owner,
         ?int $ownerUserId,
         array $approvalRecipientUserIds,
@@ -560,6 +569,7 @@ class CredentialService extends Component
         }
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $handle);
+        $normalizedDescription = $this->normalizeDescription($description);
         $normalizedOwnerUserId = $this->normalizeUserId($ownerUserId);
         $normalizedOwner = $this->resolveOwnerLegacyValue($normalizedOwnerUserId, $owner);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
@@ -584,6 +594,9 @@ class CredentialService extends Component
         }
         if ($this->supportsOwnerColumn()) {
             $updateData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
+        }
+        if ($this->supportsDescriptionColumn()) {
+            $updateData['description'] = $normalizedDescription !== '' ? $normalizedDescription : null;
         }
         if ($this->supportsOwnerUserIdColumn()) {
             $updateData['ownerUserId'] = $normalizedOwnerUserId;
@@ -801,6 +814,22 @@ class CredentialService extends Component
         return $this->supportsOwnerColumn;
     }
 
+    private function supportsDescriptionColumn(): bool
+    {
+        if ($this->supportsDescriptionColumn !== null) {
+            return $this->supportsDescriptionColumn;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsDescriptionColumn = false;
+            return false;
+        }
+
+        $this->supportsDescriptionColumn = $schema->getColumn('description') !== null;
+        return $this->supportsDescriptionColumn;
+    }
+
     private function supportsForceHumanApprovalColumn(): bool
     {
         if ($this->supportsForceHumanApprovalColumn !== null) {
@@ -884,6 +913,24 @@ class CredentialService extends Component
         }
 
         return $owner;
+    }
+
+    private function normalizeDescription(mixed $value): string
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return '';
+        }
+
+        $description = trim((string)$value);
+        if ($description === '') {
+            return '';
+        }
+
+        if (strlen($description) > 255) {
+            $description = substr($description, 0, 255);
+        }
+
+        return $description;
     }
 
     private function normalizeUserId(mixed $value): ?int

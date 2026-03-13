@@ -264,18 +264,22 @@
                       {{ redirectInput('agents/approvals') }}
                       <input type="hidden" name="approvalId" value="{{ approval.id }}">
                       <input type="hidden" name="decision" value="rejected">
-                      <input class="agents-control-pending-table__decision-input" type="text" name="decisionReason" placeholder="Reason for rejection">
                       <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--reject" type="submit">Reject</button>
                     </form>
-                    <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-control-pending-table__decision-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})? It will execute automatically once required approvals are complete.">
-                      {{ csrfInput() }}
-                      {{ actionInput('agents/dashboard/decide-control-approval') }}
-                      {{ redirectInput('agents/approvals') }}
-                      <input type="hidden" name="approvalId" value="{{ approval.id }}">
-                      <input type="hidden" name="decision" value="approved">
-                      <input class="agents-control-pending-table__decision-input" type="text" name="decisionReason" placeholder="Optional note">
-                      <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--approve" type="submit"{% if hasBlockingReviewGuards %} disabled{% endif %}>Approve</button>
-                    </form>
+                    {% set dualApprovalRequired = approval.requiredApprovals|default(1) > 1 %}
+                    {% set approvalButtonCount = dualApprovalRequired ? 2 : 1 %}
+                    {% set approvalsRecorded = approval.approvalCount|default(0) %}
+                    {% for approvalButtonIndex in 1..approvalButtonCount %}
+                      {% set approvalSlotConsumed = dualApprovalRequired and approvalsRecorded >= approvalButtonIndex %}
+                      <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-control-pending-table__decision-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})? It will execute automatically once required approvals are complete.">
+                        {{ csrfInput() }}
+                        {{ actionInput('agents/dashboard/decide-control-approval') }}
+                        {{ redirectInput('agents/approvals') }}
+                        <input type="hidden" name="approvalId" value="{{ approval.id }}">
+                        <input type="hidden" name="decision" value="approved">
+                        <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--approve" type="submit"{% if hasBlockingReviewGuards or approvalSlotConsumed %} disabled{% endif %}>{{ dualApprovalRequired ? 'Approve ' ~ approvalButtonIndex : 'Approve' }}</button>
+                      </form>
+                    {% endfor %}
                   </div>
                   {% if approval.requiredApprovals|default(1) > 1 and approval.approvalsRemaining|default(0) > 1 %}
                     <div class="agents-control-pending-table__decision-note">
@@ -1397,26 +1401,7 @@
 
     .agents-control-pending-table__decision-form {
       display: flex;
-      flex-direction: column-reverse;
-      gap: 6px;
       margin: 0;
-    }
-
-    .agents-control-pending-table__decision-input {
-      width: 100%;
-      min-width: 120px;
-      padding: 6px 8px;
-      border: 1px solid #d4dbe4;
-      border-radius: 3px;
-      background: #ffffff;
-      box-shadow: none;
-      color: #596673;
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
-    .agents-control-pending-table__decision-input::placeholder {
-      color: #7a8694;
     }
 
     .agents-control-pending-table__decision-button {

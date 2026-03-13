@@ -2,6 +2,14 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.1 (2026-03-13)
+
+- Added a persisted short description field for managed accounts so account cards and the add/edit form can carry a concise operator-facing purpose note.
+- Added a dedicated compact `Account Templates` section with broader starter profiles, including a `Legal & Consent Checker` template for core site/compliance review.
+- Reordered the Agents CP IA to `Status`, `Accounts`, `Approvals`, and `Settings`.
+- Grouped account scopes by type and reworked dual-control approvals to show two explicit approval buttons with consumed-slot disable states.
+- Removed the temporary waiting-table rejection/note inputs and dropped legacy case-specific account templates.
+
 ## 0.21.0 (2026-03-13)
 
 - Added queue-backed operator email notifications for approval requests, approval decisions, execution issues, webhook delivery failures, and scheduled system-status checks.
