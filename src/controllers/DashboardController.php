@@ -253,6 +253,7 @@ class DashboardController extends Controller
             'agentsEnabledSource' => (string)$enabledState['source'],
             'controlSummary' => (array)($snapshot['summary'] ?? []),
             'controlPolicies' => $policies,
+            'controlEditingPolicy' => $this->resolveEditingControlPolicy($policies),
             'controlApprovals' => $approvalsWithPolicy,
             'controlExecutions' => $executionsWithPolicy,
             'controlAuditEvents' => $auditEvents,
@@ -1093,6 +1094,7 @@ class DashboardController extends Controller
         try {
             $policy = $service->upsertPolicy([
                 'handle' => (string)$this->request->getBodyParam('handle', ''),
+                'originalHandle' => (string)$this->request->getBodyParam('originalHandle', ''),
                 'displayName' => (string)$this->request->getBodyParam('displayName', ''),
                 'actionPattern' => (string)$this->request->getBodyParam('actionPattern', ''),
                 'requiresApproval' => $this->parseBooleanBodyParam('requiresApproval', true),
@@ -1106,6 +1108,31 @@ class DashboardController extends Controller
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
             $this->setFailFlash('Unable to save rule: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/approvals');
+    }
+
+    public function actionDeleteControlPolicy(): Response
+    {
+        $this->requireControlCpEnabled();
+        $this->requirePostRequest();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE);
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $handle = (string)$this->request->getBodyParam('handle', '');
+
+        try {
+            $deleted = $service->deletePolicy($handle, $this->buildCpActorContext());
+            if ($deleted) {
+                $this->setSuccessFlash(sprintf('Rule `%s` deleted.', trim($handle)));
+            } else {
+                $this->setFailFlash('Rule not found.');
+            }
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to delete rule: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/approvals');
@@ -1466,6 +1493,27 @@ class DashboardController extends Controller
         }
 
         return 'approvals';
+    }
+
+    private function resolveEditingControlPolicy(array $policies): ?array
+    {
+        $editHandle = strtolower(trim((string)Craft::$app->getRequest()->getQueryParam('editRule', '')));
+        if ($editHandle === '') {
+            return null;
+        }
+
+        foreach ($policies as $policy) {
+            if (!is_array($policy)) {
+                continue;
+            }
+
+            $handle = strtolower(trim((string)($policy['handle'] ?? '')));
+            if ($handle === $editHandle) {
+                return $policy;
+            }
+        }
+
+        return null;
     }
 
     private function getSettingsModel(): Settings

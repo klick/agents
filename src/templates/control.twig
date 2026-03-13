@@ -12,26 +12,21 @@
   approvals: 'Review, approve, and run governed requests with clear operator actions and audit visibility.',
   rules: 'Define risk and approval behavior for governed actions, and validate outcomes with dry-run simulation.',
 } %}
-{% set controlSidebarNavItems = {} %}
-{% for tab in controlTabs %}
-  {% set controlSidebarNavItems = controlSidebarNavItems|merge({
-    (tab.key): {
-      label: tab.label,
-      url: tab.url,
-    }
-  }) %}
-{% endfor %}
-
-{% block sidebar %}
-      {% include "_includes/nav"
-    with {
-      label: 'Approvals',
-      items: controlSidebarNavItems,
-      selectedItem: activeControlTab,
-    }
-    only
-  %}
-{% endblock %}
+{% set controlRulesRedirect = activeControlTab == 'approvals' ? 'agents/approvals' : 'agents/approvals/rules' %}
+{% set editingPolicy = controlEditingPolicy ?? null %}
+{% set isEditingPolicy = editingPolicy is iterable and editingPolicy.handle is defined and editingPolicy.handle %}
+{% set rulesTableExpanded = activeControlTab == 'rules' %}
+{% set rulesFormExpanded = activeControlTab == 'rules' or isEditingPolicy %}
+{% set controlActionPatternOptions = [
+  { label: 'Entry draft update', value: 'entry.updatedraft' },
+  { label: 'Any governed action', value: '*' },
+] %}
+{% set currentEditingActionPattern = editingPolicy.actionPattern ?? '' %}
+{% if currentEditingActionPattern and currentEditingActionPattern not in ['entry.updatedraft', '*'] %}
+  {% set controlActionPatternOptions = controlActionPatternOptions|merge([
+    { label: 'Legacy / custom pattern (' ~ currentEditingActionPattern ~ ')', value: currentEditingActionPattern }
+  ]) %}
+{% endif %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
@@ -43,12 +38,26 @@
 
   <div class="agents-layout-stack">
   {% if activeControlTab == 'approvals' %}
+  <div class="agents-control-content-wrap">
   <div class="agents-control-journey">
+  {% set pendingTablePanelId = 'agents-control-pending-table-panel' %}
   <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-pending-section">
     <div class="agents-control-journey-card__header">
-      <h2 class="agents-control-journey-card__title">Waiting for Decision</h2>
+      <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
+        <button
+          class="agents-control-stage-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ pendingTablePanelId }}"
+          aria-controls="{{ pendingTablePanelId }}"
+          aria-expanded="true"
+        >
+          <span>Waiting for Decision</span>
+          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
+        </button>
+      </h2>
     </div>
-    <div class="agents-control-journey-card__body">
+    <div id="{{ pendingTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel">
     {% if controlPendingApprovals|length %}
       <div class="tablepane mx-0" style="margin-top: 0;">
         <table class="data fullwidth agents-control-pending-table">
@@ -272,115 +281,125 @@
 
   {% set approvedTablePanelId = 'agents-control-approved-table-panel' %}
   <!-- Release-gate sentinel: <h2 class="h4">Approved</h2> -->
-  <section class="agents-control-journey-card agents-control-journey-card--expanded">
+  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-card">
     <div class="agents-control-journey-card__header">
-      <h2 class="agents-control-journey-card__title">Approved</h2>
+      <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
+        <button
+          class="agents-control-stage-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ approvedTablePanelId }}"
+          aria-controls="{{ approvedTablePanelId }}"
+          aria-expanded="true"
+        >
+          <span>Approved</span>
+          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
+        </button>
+      </h2>
     </div>
-    <div class="agents-control-journey-card__body">
+    <div id="{{ approvedTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel">
     {% if controlApprovedApprovals|length %}
-      <div id="{{ approvedTablePanelId }}" class="agents-control-section-panel">
-        <div class="tablepane mx-0" style="margin-top: 0;">
-          <table class="data fullwidth agents-control-table">
-          <thead>
+      <div class="tablepane mx-0" style="margin-top: 0;">
+        <table class="data fullwidth agents-control-table">
+        <thead>
+        <tr>
+          <th>Request #</th>
+          <th>Action</th>
+          <th>Approver</th>
+          <th>Approved</th>
+          <th>Execution</th>
+          <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for approval in controlApprovedApprovals %}
+          {% set latestExecution = approval.latestExecution ?? null %}
+          {% set executionStatus = latestExecution ? latestExecution.status|lower : '' %}
+          {% set canApplyDraft = approval.actionType|lower == 'entry.updatedraft'
+            and approval.reviewMode == 'draft'
+            and approval.targetEntryDraftRecordId
+            and (executionStatus == '' or executionStatus == 'succeeded')
+          %}
           <tr>
-            <th>Request #</th>
-            <th>Action</th>
-            <th>Approver</th>
-            <th>Approved</th>
-            <th>Execution</th>
-            <th>Actions</th>
+            <td>#{{ approval.id }}</td>
+            <td>
+              <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
+              <span class="agents-actor-raw">{{ approval.actionType }}</span>
+              {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
+              <div class="light">
+                {% if approval.targetEntryCpUrl %}
+                  <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
+                {% else %}
+                  {{ targetTitle }}
+                {% endif %}
+              </div>
+              {% if approval.targetEntryId %}
+                <button
+                  class="btn small js-control-review-entry agents-control-review-btn"
+                  type="button"
+                  data-entry-id="{{ approval.targetEntryId }}"
+                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                >Review</button>
+              {% endif %}
+              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+            </td>
+            <td>
+              <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
+              {% if approval.decidedBy %}
+                <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
+              {% endif %}
+              {% if approval.assuranceModeLabel %}
+                <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
+              {% endif %}
+              {% if approval.assuranceReasonLabel %}
+                <div class="light">{{ approval.assuranceReasonLabel }}</div>
+              {% endif %}
+              {% if approval.secondaryDecisionBy %}
+                <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
+                <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
+              {% endif %}
+            </td>
+            <td>{{ approval.decidedAt ? approval.decidedAt|datetime('short') : 'n/a' }}</td>
+            <td>
+              {% if latestExecution %}
+                <div><strong>{{ latestExecution.status|upper }}</strong></div>
+                <div class="light">run #{{ latestExecution.id }}</div>
+                <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|datetime('short') : 'n/a' }}</div>
+              {% else %}
+                <span class="light">n/a</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if canApplyDraft %}
+                <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Apply draft #{{ approval.targetEntryDraftRecordId }} to canonical entry now?">
+                  {{ csrfInput() }}
+                  {{ actionInput('elements/apply-draft') }}
+                  {{ redirectInput('agents/approvals/approvals') }}
+                  <input type="hidden" name="draftId" value="{{ approval.targetEntryDraftRecordId }}">
+                  {% if approval.targetEntryCanonicalId %}
+                    <input type="hidden" name="elementId" value="{{ approval.targetEntryCanonicalId }}">
+                  {% endif %}
+                  {% set applySiteId = approval.targetEntrySiteId ?: approval.targetEntryCanonicalSiteId ?: 0 %}
+                  {% if applySiteId %}
+                    <input type="hidden" name="siteId" value="{{ applySiteId }}">
+                  {% endif %}
+                  <button class="btn submit small" type="submit">Apply Draft</button>
+                </form>
+              {% elseif approval.actionType|lower == 'entry.updatedraft' and approval.reviewDraftId %}
+                {% if latestExecution and latestExecution.status|lower != 'succeeded' %}
+                  <span class="light">Apply blocked: run {{ latestExecution.status|lower }}.</span>
+                {% else %}
+                  <span class="light">Draft not available to apply.</span>
+                {% endif %}
+              {% else %}
+                <span class="light">n/a</span>
+              {% endif %}
+            </td>
           </tr>
-          </thead>
-          <tbody>
-          {% for approval in controlApprovedApprovals %}
-            {% set latestExecution = approval.latestExecution ?? null %}
-            {% set executionStatus = latestExecution ? latestExecution.status|lower : '' %}
-            {% set canApplyDraft = approval.actionType|lower == 'entry.updatedraft'
-              and approval.reviewMode == 'draft'
-              and approval.targetEntryDraftRecordId
-              and (executionStatus == '' or executionStatus == 'succeeded')
-            %}
-            <tr>
-              <td>#{{ approval.id }}</td>
-              <td>
-                <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
-                <span class="agents-actor-raw">{{ approval.actionType }}</span>
-                {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
-                <div class="light">
-                  {% if approval.targetEntryCpUrl %}
-                    <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
-                  {% else %}
-                    {{ targetTitle }}
-                  {% endif %}
-                </div>
-                {% if approval.targetEntryId %}
-                  <button
-                    class="btn small js-control-review-entry agents-control-review-btn"
-                    type="button"
-                    data-entry-id="{{ approval.targetEntryId }}"
-                    data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                    data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                  >Review</button>
-                {% endif %}
-                <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
-              </td>
-              <td>
-                <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
-                {% if approval.decidedBy %}
-                  <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
-                {% endif %}
-                {% if approval.assuranceModeLabel %}
-                  <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
-                {% endif %}
-                {% if approval.assuranceReasonLabel %}
-                  <div class="light">{{ approval.assuranceReasonLabel }}</div>
-                {% endif %}
-                {% if approval.secondaryDecisionBy %}
-                  <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
-                  <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
-                {% endif %}
-              </td>
-              <td>{{ approval.decidedAt ? approval.decidedAt|datetime('short') : 'n/a' }}</td>
-              <td>
-                {% if latestExecution %}
-                  <div><strong>{{ latestExecution.status|upper }}</strong></div>
-                  <div class="light">run #{{ latestExecution.id }}</div>
-                  <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|datetime('short') : 'n/a' }}</div>
-                {% else %}
-                  <span class="light">n/a</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if canApplyDraft %}
-                  <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Apply draft #{{ approval.targetEntryDraftRecordId }} to canonical entry now?">
-                    {{ csrfInput() }}
-                    {{ actionInput('elements/apply-draft') }}
-                    {{ redirectInput('agents/approvals/approvals') }}
-                    <input type="hidden" name="draftId" value="{{ approval.targetEntryDraftRecordId }}">
-                    {% if approval.targetEntryCanonicalId %}
-                      <input type="hidden" name="elementId" value="{{ approval.targetEntryCanonicalId }}">
-                    {% endif %}
-                    {% set applySiteId = approval.targetEntrySiteId ?: approval.targetEntryCanonicalSiteId ?: 0 %}
-                    {% if applySiteId %}
-                      <input type="hidden" name="siteId" value="{{ applySiteId }}">
-                    {% endif %}
-                    <button class="btn submit small" type="submit">Apply Draft</button>
-                  </form>
-                {% elseif approval.actionType|lower == 'entry.updatedraft' and approval.reviewDraftId %}
-                  {% if latestExecution and latestExecution.status|lower != 'succeeded' %}
-                    <span class="light">Apply blocked: run {{ latestExecution.status|lower }}.</span>
-                  {% else %}
-                    <span class="light">Draft not available to apply.</span>
-                  {% endif %}
-                {% else %}
-                  <span class="light">n/a</span>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-          </table>
-        </div>
+        {% endfor %}
+        </tbody>
+        </table>
       </div>
     {% else %}
       <p class="agents-control-journey-card__empty">No approved requests yet.</p>
@@ -586,7 +605,7 @@
       <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Run dry-run simulation?">
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/simulate-control-action') }}
-        {{ redirectInput('agents/approvals/rules') }}
+        {{ redirectInput(controlRulesRedirect) }}
 
         {{ forms.textField({
           label: 'Action name',
@@ -692,6 +711,9 @@
           <th>Risk</th>
           <th>Approval required</th>
           <th>Active</th>
+          {% if canManagePolicies %}
+            <th>Actions</th>
+          {% endif %}
         </tr>
         </thead>
         <tbody>
@@ -702,6 +724,20 @@
             <td>{{ policy.riskLevel|upper }}</td>
             <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
             <td>{{ policy.enabled ? 'yes' : 'no' }}</td>
+            {% if canManagePolicies %}
+              <td>
+                <div class="agents-control-rule-actions">
+                  <a class="btn small" href="{{ cpUrl(controlRulesRedirect, { editRule: policy.handle }) }}">Edit</a>
+                  <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Delete rule `{{ policy.handle }}`?">
+                    {{ csrfInput() }}
+                    {{ actionInput('agents/dashboard/delete-control-policy') }}
+                    {{ redirectInput(controlRulesRedirect) }}
+                    <input type="hidden" name="handle" value="{{ policy.handle }}">
+                    <button class="btn small" type="submit">Delete</button>
+                  </form>
+                </div>
+              </td>
+            {% endif %}
           </tr>
         {% endfor %}
         </tbody>
@@ -718,28 +754,31 @@
           <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
             {{ csrfInput() }}
             {{ actionInput('agents/dashboard/upsert-control-policy') }}
-            {{ redirectInput('agents/approvals/rules') }}
+            {{ redirectInput(controlRulesRedirect) }}
+            <input type="hidden" name="originalHandle" value="{{ editingPolicy.handle ?? '' }}">
 
             {{ forms.textField({
-              label: 'Rule key',
-              instructions: 'Stable machine key for this rule.',
+              label: isEditingPolicy ? 'Rule key (stable)' : 'Rule key',
+              instructions: isEditingPolicy ? 'Stable machine key for this rule. Changing it renames the rule.' : 'Stable machine key for this rule.',
               name: 'handle',
               required: true,
-              placeholder: 'returns-exception-high-risk',
+              value: editingPolicy.handle ?? '',
+              placeholder: 'entry-draft-high-risk',
             }) }}
 
             {{ forms.textField({
               label: 'Rule name',
               name: 'displayName',
-              placeholder: 'Returns Exception High Risk',
+              value: editingPolicy.displayName ?? '',
+              placeholder: 'Entry Draft High Risk',
             }) }}
 
-            {{ forms.textField({
-              label: 'Action match pattern',
-              instructions: 'Wildcard pattern, for example: returns.exception.*',
+            {{ forms.selectField({
+              label: 'Governed action',
+              instructions: 'Choose which governed action this rule should evaluate.',
               name: 'actionPattern',
-              required: true,
-              placeholder: 'returns.exception.*',
+              options: controlActionPatternOptions,
+              value: currentEditingActionPattern ?: 'entry.updatedraft',
             }) }}
 
             {{ forms.selectField({
@@ -751,33 +790,25 @@
                 {label: 'high', value: 'high'},
                 {label: 'critical', value: 'critical'},
               ],
-              value: 'medium',
+              value: editingPolicy.riskLevel ?? 'medium',
             }) }}
 
             <div style="margin-bottom: 8px;">
               <input type="hidden" name="requiresApproval" value="0">
-              <label><input type="checkbox" name="requiresApproval" value="1" checked> Require approval</label>
+              <label><input type="checkbox" name="requiresApproval" value="1" {{ (editingPolicy.requiresApproval ?? true) ? 'checked' }}> Require approval</label>
             </div>
 
             <div style="margin-bottom: 8px;">
               <input type="hidden" name="enabled" value="0">
-              <label><input type="checkbox" name="enabled" value="1" checked> Rule is active</label>
+              <label><input type="checkbox" name="enabled" value="1" {{ (editingPolicy.enabled ?? true) ? 'checked' }}> Rule is active</label>
             </div>
 
-            <details style="margin-bottom: 12px;">
-              <summary><strong>Advanced rule JSON</strong></summary>
-              <div style="margin-top: 8px;">
-                {{ forms.textareaField({
-                  label: 'Advanced config JSON',
-                  instructions: 'Optional advanced values, for example: {"requiredScope":"control:actions:execute"}.',
-                  name: 'configJson',
-                  rows: 4,
-                  value: '{"requiredScope":"control:actions:execute"}',
-                }) }}
-              </div>
-            </details>
-
-            <button class="btn submit" type="submit">Save Rule</button>
+            <div class="agents-control-rule-form-actions">
+              <button class="btn submit" type="submit">{{ isEditingPolicy ? 'Save Changes' : 'Save Rule' }}</button>
+              {% if isEditingPolicy %}
+                <a class="btn" href="{{ cpUrl(controlRulesRedirect) }}">Cancel Edit</a>
+              {% endif %}
+            </div>
           </form>
         </div>
       </details>
@@ -844,6 +875,386 @@
       </div>
     {% endif %}
 
+  </section>
+  </div>
+  </div>
+
+  <hr class="agents-control-journey-break">
+
+  <div class="agents-control-content-wrap">
+  <div class="agents-control-journey">
+  {% set rulesTablePanelId = 'agents-control-rules-table-panel' %}
+  {% set rulesFormPanelId = 'agents-control-rules-form-panel' %}
+  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-card">
+    <div class="agents-control-journey-card__header">
+      <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
+        <button
+          class="agents-control-stage-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ rulesTablePanelId }}"
+          aria-controls="{{ rulesTablePanelId }}"
+          aria-expanded="{{ rulesTableExpanded ? 'true' : 'false' }}"
+        >
+          <span>Rules</span>
+          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
+        </button>
+      </h2>
+    </div>
+    <div id="{{ rulesTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel" {% if not rulesTableExpanded %}hidden{% endif %}>
+    {% if controlPolicies|length %}
+      <div class="tablepane mx-0" style="margin-top: 0;">
+        <table class="data fullwidth agents-control-table">
+        <thead>
+        <tr>
+          <th>Rule key</th>
+          <th>Matches action</th>
+          <th>Risk</th>
+          <th>Approval required</th>
+          <th>Active</th>
+          {% if canManagePolicies %}
+            <th>Actions</th>
+          {% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for policy in controlPolicies %}
+          <tr>
+            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName }}</span></td>
+            <td><code>{{ policy.actionPattern }}</code></td>
+            <td>{{ policy.riskLevel|upper }}</td>
+            <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
+            <td>{{ policy.enabled ? 'yes' : 'no' }}</td>
+            {% if canManagePolicies %}
+              <td>
+                <div class="agents-control-rule-actions">
+                  <a class="btn small" href="{{ cpUrl(controlRulesRedirect, { editRule: policy.handle }) }}#{{ rulesFormPanelId }}">Edit</a>
+                  <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Delete rule `{{ policy.handle }}`?">
+                    {{ csrfInput() }}
+                    {{ actionInput('agents/dashboard/delete-control-policy') }}
+                    {{ redirectInput(controlRulesRedirect) }}
+                    <input type="hidden" name="handle" value="{{ policy.handle }}">
+                    <button class="btn small" type="submit">Delete</button>
+                  </form>
+                </div>
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="agents-control-journey-card__empty">No rules configured yet.</p>
+    {% endif %}
+    </div>
+  </section>
+  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-create-card">
+    <div class="agents-control-journey-card__header">
+      <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
+        <button
+          class="agents-control-stage-toggle"
+          type="button"
+          data-control-section-toggle
+          data-target="{{ rulesFormPanelId }}"
+          aria-controls="{{ rulesFormPanelId }}"
+          aria-expanded="{{ rulesFormExpanded ? 'true' : 'false' }}"
+        >
+          <span>{{ isEditingPolicy ? 'Edit Rule' : 'Create or Update Rule' }}</span>
+          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
+        </button>
+      </h2>
+    </div>
+    <div id="{{ rulesFormPanelId }}" class="agents-control-journey-card__body agents-control-section-panel" {% if not rulesFormExpanded %}hidden{% endif %}>
+    {% if canManagePolicies %}
+      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/upsert-control-policy') }}
+        {{ redirectInput(controlRulesRedirect) }}
+        <input type="hidden" name="originalHandle" value="{{ editingPolicy.handle ?? '' }}">
+
+        {{ forms.textField({
+          label: isEditingPolicy ? 'Rule key (stable)' : 'Rule key',
+          instructions: isEditingPolicy ? 'Stable machine key for this rule. Changing it renames the rule.' : 'Stable machine key for this rule.',
+          name: 'handle',
+          required: true,
+          value: editingPolicy.handle ?? '',
+          placeholder: 'entry-draft-high-risk',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Rule name',
+          name: 'displayName',
+          value: editingPolicy.displayName ?? '',
+          placeholder: 'Entry Draft High Risk',
+        }) }}
+
+        {{ forms.selectField({
+          label: 'Governed action',
+          instructions: 'Choose which governed action this rule should evaluate.',
+          name: 'actionPattern',
+          options: controlActionPatternOptions,
+          value: currentEditingActionPattern ?: 'entry.updatedraft',
+        }) }}
+
+        {{ forms.selectField({
+          label: 'Risk level',
+          name: 'riskLevel',
+          options: [
+            {label: 'low', value: 'low'},
+              {label: 'medium', value: 'medium'},
+              {label: 'high', value: 'high'},
+              {label: 'critical', value: 'critical'},
+            ],
+          value: editingPolicy.riskLevel ?? 'medium',
+        }) }}
+
+        <div style="margin-bottom: 8px;">
+          <input type="hidden" name="requiresApproval" value="0">
+          <label><input type="checkbox" name="requiresApproval" value="1" {{ (editingPolicy.requiresApproval ?? true) ? 'checked' }}> Require approval</label>
+        </div>
+
+        <div style="margin-bottom: 8px;">
+          <input type="hidden" name="enabled" value="0">
+          <label><input type="checkbox" name="enabled" value="1" {{ (editingPolicy.enabled ?? true) ? 'checked' }}> Rule is active</label>
+        </div>
+
+        <div class="agents-control-rule-form-actions">
+          <button class="btn submit" type="submit">{{ isEditingPolicy ? 'Save Changes' : 'Save Rule' }}</button>
+          {% if isEditingPolicy %}
+            <a class="btn" href="{{ cpUrl(controlRulesRedirect) }}">Cancel Edit</a>
+          {% endif %}
+        </div>
+      </form>
+    {% else %}
+      <p class="warning">You do not have permission to manage rules.</p>
+    {% endif %}
+    </div>
+  </section>
+  </div>
+  </div>
+  {% endif %}
+
+  {% if activeControlTab == 'rules' %}
+  <div class="agents-control-content-wrap">
+  <section class="border rounded p-3">
+    <h2 class="h4">Policy Simulator (Dry Run)</h2>
+    <p class="light">Evaluate policy/approval outcomes without recording an execution run.</p>
+
+    {% if canExecuteActions %}
+      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Run dry-run simulation?">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/simulate-control-action') }}
+        {{ redirectInput(controlRulesRedirect) }}
+
+        {{ forms.textField({
+          label: 'Action name',
+          name: 'simulationActionType',
+          required: true,
+          placeholder: 'entry.updatedraft',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Case reference',
+          name: 'simulationActionRef',
+          placeholder: 'ENTRY-OPS-1001',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Approved request # (optional)',
+          name: 'simulationApprovalId',
+          placeholder: '123',
+        }) }}
+
+        <h3 class="h5">Dry-Run Payload</h3>
+        {{ forms.textField({
+          label: 'Order number / ID',
+          name: 'simulationPayloadOrderId',
+          placeholder: '12345',
+        }) }}
+        {{ forms.textField({
+          label: 'Return number / ID',
+          name: 'simulationPayloadReturnId',
+          placeholder: '998',
+        }) }}
+        {{ forms.textField({
+          label: 'Reason code',
+          name: 'simulationPayloadReasonCode',
+          placeholder: 'DAMAGED_ITEM',
+        }) }}
+        {{ forms.textField({
+          label: 'Operator note',
+          name: 'simulationPayloadOperatorNote',
+          placeholder: 'Dry-run validation before execution.',
+        }) }}
+
+        <details style="margin-bottom: 12px;">
+          <summary><strong>Advanced JSON payload override (optional)</strong></summary>
+          <div style="margin-top: 8px;">
+            {{ forms.textareaField({
+              label: 'Payload JSON',
+              instructions: 'Merged with guided fields. Duplicate keys in JSON take precedence.',
+              name: 'simulationPayloadJson',
+              rows: 4,
+              value: '{}',
+            }) }}
+          </div>
+        </details>
+
+        <button class="btn" type="submit">Run Dry-Run</button>
+      </form>
+    {% else %}
+      <p class="warning">You do not have permission to run policy simulations.</p>
+    {% endif %}
+
+    {% if controlSimulationResult %}
+      <hr>
+      <h3 class="h5">Latest Dry-Run Result</h3>
+      {% set simEval = controlSimulationResult.evaluation ?? {} %}
+      {% set simPolicy = controlSimulationResult.policy ?? {} %}
+      <ul>
+        <li>Status: <strong>{{ simEval.status ?? 'unknown' }}</strong></li>
+        <li>Would execute: <strong>{{ simEval.wouldExecute ? 'yes' : 'no' }}</strong></li>
+        <li>Required scope: <strong>{{ controlSimulationResult.requiredScope ?: 'n/a' }}</strong></li>
+        <li>Policy: <strong>{{ simPolicy.handle ?: 'default' }}</strong></li>
+        <li>Approval status: <strong>{{ simEval.approvalStatus ?? 'n/a' }}</strong></li>
+      </ul>
+      {% if simEval.reasons is defined and simEval.reasons|length %}
+        <p><strong>Reasons</strong></p>
+        <ul>
+          {% for reason in simEval.reasons %}
+            <li>{{ reason }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <details>
+        <summary><strong>Technical JSON</strong></summary>
+        <pre class="border rounded p-3" style="margin-top: 8px;">{{ controlSimulationResult|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+      </details>
+    {% endif %}
+  </section>
+
+
+  <hr>
+
+
+  <section class="border rounded p-3">
+    <h2 class="h4">Rules</h2>
+
+    {% if controlPolicies|length %}
+      <div class="tablepane mx-0" style="margin-top: 0; margin-bottom: 12px;">
+        <table class="data fullwidth agents-control-table">
+        <thead>
+        <tr>
+          <th>Rule key</th>
+          <th>Matches action</th>
+          <th>Risk</th>
+          <th>Approval required</th>
+          <th>Active</th>
+          {% if canManagePolicies %}
+            <th>Actions</th>
+          {% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for policy in controlPolicies %}
+          <tr>
+            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName }}</span></td>
+            <td><code>{{ policy.actionPattern }}</code></td>
+            <td>{{ policy.riskLevel|upper }}</td>
+            <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
+            <td>{{ policy.enabled ? 'yes' : 'no' }}</td>
+            {% if canManagePolicies %}
+              <td>
+                <div class="agents-control-rule-actions">
+                  <a class="btn small" href="{{ cpUrl(controlRulesRedirect, { editRule: policy.handle }) }}">Edit</a>
+                  <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Delete rule `{{ policy.handle }}`?">
+                    {{ csrfInput() }}
+                    {{ actionInput('agents/dashboard/delete-control-policy') }}
+                    {{ redirectInput(controlRulesRedirect) }}
+                    <input type="hidden" name="handle" value="{{ policy.handle }}">
+                    <button class="btn small" type="submit">Delete</button>
+                  </form>
+                </div>
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p>No rules configured yet.</p>
+    {% endif %}
+
+    {% if canManagePolicies %}
+      <details {% if isEditingPolicy %}open{% endif %}>
+        <summary><strong>{{ isEditingPolicy ? 'Edit rule' : 'Create or update a rule' }}</strong></summary>
+        <div style="margin-top: 8px;">
+          <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/upsert-control-policy') }}
+            {{ redirectInput(controlRulesRedirect) }}
+            <input type="hidden" name="originalHandle" value="{{ editingPolicy.handle ?? '' }}">
+
+            {{ forms.textField({
+              label: isEditingPolicy ? 'Rule key (stable)' : 'Rule key',
+              instructions: isEditingPolicy ? 'Stable machine key for this rule. Changing it renames the rule.' : 'Stable machine key for this rule.',
+              name: 'handle',
+              required: true,
+              value: editingPolicy.handle ?? '',
+              placeholder: 'entry-draft-high-risk',
+            }) }}
+
+            {{ forms.textField({
+              label: 'Rule name',
+              name: 'displayName',
+              value: editingPolicy.displayName ?? '',
+              placeholder: 'Entry Draft High Risk',
+            }) }}
+
+            {{ forms.selectField({
+              label: 'Governed action',
+              instructions: 'Choose which governed action this rule should evaluate.',
+              name: 'actionPattern',
+              options: controlActionPatternOptions,
+              value: currentEditingActionPattern ?: 'entry.updatedraft',
+            }) }}
+
+            {{ forms.selectField({
+              label: 'Risk level',
+              name: 'riskLevel',
+              options: [
+                {label: 'low', value: 'low'},
+                {label: 'medium', value: 'medium'},
+                {label: 'high', value: 'high'},
+                {label: 'critical', value: 'critical'},
+              ],
+              value: editingPolicy.riskLevel ?? 'medium',
+            }) }}
+
+            <div style="margin-bottom: 8px;">
+              <input type="hidden" name="requiresApproval" value="0">
+              <label><input type="checkbox" name="requiresApproval" value="1" {{ (editingPolicy.requiresApproval ?? true) ? 'checked' }}> Require approval</label>
+            </div>
+
+            <div style="margin-bottom: 8px;">
+              <input type="hidden" name="enabled" value="0">
+              <label><input type="checkbox" name="enabled" value="1" {{ (editingPolicy.enabled ?? true) ? 'checked' }}> Rule is active</label>
+            </div>
+
+            <div class="agents-control-rule-form-actions">
+              <button class="btn submit" type="submit">{{ isEditingPolicy ? 'Save Changes' : 'Save Rule' }}</button>
+              {% if isEditingPolicy %}
+                <a class="btn" href="{{ cpUrl(controlRulesRedirect) }}">Cancel Edit</a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </details>
+    {% else %}
+      <p class="warning">You do not have permission to manage rules.</p>
+    {% endif %}
   </section>
   </div>
   {% endif %}
@@ -944,6 +1355,12 @@
   {% endjs %}
 
   {% css %}
+    .agents-control-content-wrap {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
     .agents-page-header {
       text-align: center;
       margin: 12px 0 24px;
@@ -957,7 +1374,7 @@
       margin: 0 auto;
     }
 
-    .agents-page-header + .agents-layout-stack {
+    .agents-page-header + .agents-control-content-wrap {
       margin-top: 40px;
     }
 
@@ -993,7 +1410,30 @@
       width: 9px;
       height: 9px;
       border-radius: 999px;
-      background: #c3cedc;
+      background: #c3cedc78;
+    }
+
+    .agents-layout-stack > hr.agents-control-journey-break {
+      width: auto;
+      margin: 48px -24px;
+      border: 0;
+      border-top: 1px solid #bbc7d5;
+    }
+
+    .agents-control-rules-create-card {
+      margin-top: 24px;
+    }
+
+    .agents-control-rule-actions,
+    .agents-control-rule-form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .agents-control-rule-actions form {
+      margin: 0;
     }
 
     .agents-control-journey-card__header {
@@ -1001,6 +1441,10 @@
       align-items: center;
       padding: 24px 12px;
       border-bottom: 1px solid #bbc7d5;
+    }
+
+    .agents-control-journey-card__header:has(.agents-control-stage-toggle[aria-expanded='false']) {
+      border-bottom: 0;
     }
 
     .agents-control-journey-card--collapsed .agents-control-journey-card__header {
@@ -1153,8 +1597,8 @@
       width: 100%;
       display: inline-flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      justify-content: flex-start;
+      gap: 6px;
       color: #596673;
       font: inherit;
       text-align: left;
@@ -1162,29 +1606,24 @@
     }
 
     .agents-control-stage-chevron {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: #596673;
-      font-size: 16px;
-      line-height: 1;
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-top: 2px solid #596673;
+      border-right: 2px solid #596673;
+      transform: rotate(45deg);
+      transform-origin: center;
+      margin-right: 2px;
       transition: transform 120ms ease;
+      flex: 0 0 auto;
     }
 
     .agents-control-stage-toggle[aria-expanded='true'] .agents-control-stage-chevron {
-      transform: rotate(90deg);
-    }
-
-    .agents-control-stage-chevron::before {
-      content: '›';
+      transform: rotate(135deg);
     }
 
     .agents-control-stage-chevron--static {
       cursor: default;
-    }
-
-    .agents-control-stage-chevron--static::before {
-      content: '›';
     }
 
     .agents-control-review-guards {
@@ -1466,18 +1905,21 @@
     }
 
     .agents-control-pending-table__decision-actions {
-      display: flex;
-      flex-wrap: wrap;
+      display: inline-grid;
+      grid-auto-flow: row;
       gap: 10px;
-      align-items: flex-start;
+      align-items: stretch;
+      justify-items: stretch;
     }
 
     .agents-control-pending-table__decision-form {
-      display: flex;
+      display: block;
       margin: 0;
     }
 
     .agents-control-pending-table__decision-button {
+      display: block;
+      width: 100%;
       min-height: auto;
       padding: 7px 10px;
       border-radius: 3px;

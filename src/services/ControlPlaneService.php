@@ -83,6 +83,7 @@ class ControlPlaneService extends Component
         $this->requireTable(self::TABLE_POLICIES, 'Policy storage table is unavailable. Run plugin migrations.');
 
         $handle = $this->normalizeHandle((string)($input['handle'] ?? ''));
+        $originalHandle = $this->normalizeHandle((string)($input['originalHandle'] ?? ''));
         if ($handle === '') {
             throw new \InvalidArgumentException('Policy handle is required.');
         }
@@ -101,13 +102,35 @@ class ControlPlaneService extends Component
         $now = gmdate('Y-m-d H:i:s');
         $encodedConfig = $this->encodeJson($config);
 
-        $existing = (new Query())
-            ->from(self::TABLE_POLICIES)
-            ->where(['handle' => $handle])
-            ->one();
+        $existing = null;
+        if ($originalHandle !== '') {
+            $existing = (new Query())
+                ->from(self::TABLE_POLICIES)
+                ->where(['handle' => $originalHandle])
+                ->one();
+        }
+
+        if (!is_array($existing)) {
+            $existing = (new Query())
+                ->from(self::TABLE_POLICIES)
+                ->where(['handle' => $handle])
+                ->one();
+        }
 
         if (is_array($existing)) {
+            $existingId = (int)$existing['id'];
+            $duplicateHandle = (new Query())
+                ->from(self::TABLE_POLICIES)
+                ->where(['handle' => $handle])
+                ->andWhere(['not', ['id' => $existingId]])
+                ->exists();
+
+            if ($duplicateHandle) {
+                throw new \InvalidArgumentException(sprintf('Policy handle `%s` is already in use.', $handle));
+            }
+
             Craft::$app->getDb()->createCommand()->update(self::TABLE_POLICIES, [
+                'handle' => $handle,
                 'displayName' => $displayName,
                 'actionPattern' => $actionPattern,
                 'requiresApproval' => $requiresApproval,
@@ -115,11 +138,11 @@ class ControlPlaneService extends Component
                 'riskLevel' => $riskLevel,
                 'config' => $encodedConfig,
                 'dateUpdated' => $now,
-            ], ['id' => (int)$existing['id']])->execute();
+            ], ['id' => $existingId])->execute();
 
             $policy = (new Query())
                 ->from(self::TABLE_POLICIES)
-                ->where(['id' => (int)$existing['id']])
+                ->where(['id' => $existingId])
                 ->one();
 
             $hydrated = $this->hydratePolicy(is_array($policy) ? $policy : $existing);
@@ -190,6 +213,52 @@ class ControlPlaneService extends Component
         ]);
 
         return $hydrated;
+    }
+
+    public function deletePolicy(string $handle, array $actor = []): bool
+    {
+        $this->requireTable(self::TABLE_POLICIES, 'Policy storage table is unavailable. Run plugin migrations.');
+
+        $normalizedHandle = $this->normalizeHandle($handle);
+        if ($normalizedHandle === '') {
+            throw new \InvalidArgumentException('Policy handle is required.');
+        }
+
+        $existing = (new Query())
+            ->from(self::TABLE_POLICIES)
+            ->where(['handle' => $normalizedHandle])
+            ->one();
+
+        if (!is_array($existing)) {
+            return false;
+        }
+
+        $deleted = (int)Craft::$app->getDb()->createCommand()
+            ->delete(self::TABLE_POLICIES, ['id' => (int)$existing['id']])
+            ->execute();
+
+        if ($deleted < 1) {
+            return false;
+        }
+
+        $this->writeAuditEvent([
+            'category' => 'control.policy',
+            'action' => 'delete',
+            'outcome' => 'success',
+            'actorType' => (string)($actor['actorType'] ?? 'system'),
+            'actorId' => (string)($actor['actorId'] ?? 'system'),
+            'requestId' => (string)($actor['requestId'] ?? ''),
+            'ipAddress' => (string)($actor['ipAddress'] ?? ''),
+            'entityType' => 'policy',
+            'entityId' => (string)((int)$existing['id']),
+            'summary' => sprintf('Deleted policy `%s`.', $normalizedHandle),
+            'metadata' => [
+                'handle' => $normalizedHandle,
+                'actionPattern' => (string)($existing['actionPattern'] ?? ''),
+            ],
+        ]);
+
+        return true;
     }
 
     public function getApprovals(array $filters = [], int $limit = 50): array
