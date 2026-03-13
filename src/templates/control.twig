@@ -43,45 +43,12 @@
 
   <div class="agents-layout-stack">
   {% if activeControlTab == 'approvals' %}
-  {% set controlPendingCount = controlSummary.approvalsPending|default(0) %}
-  {% set controlExpiredApprovalsCount = controlSummary.approvalsExpired|default(0) %}
-  {% set controlBlockedRunsCount = controlSummary.executionsBlocked|default(0) %}
-  {% set controlCompletedRunsCount = controlSummary.executionsSucceeded|default(0) %}
-  {% set controlActivityCount = controlSummary.auditEvents|default(0) %}
-
-  <section class="border rounded p-3 agents-control-pending-section">
-    <div class="agents-metric-strip-wrap">
-      <div class="agents-metric-strip">
-      <div class="agents-metric agents-metric-strip-card {{ controlPendingCount > 0 ? 'agents-metric--warn' : 'agents-metric--good' }}">
-        <div class="label">Waiting for decision</div>
-        <div class="value">{{ controlPendingCount }}</div>
-      </div>
-      <div class="agents-metric agents-metric-strip-card {{ controlExpiredApprovalsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
-        <div class="label">Expired approvals</div>
-        <div class="value">{{ controlExpiredApprovalsCount }}</div>
-      </div>
-      <div class="agents-metric agents-metric-strip-card {{ controlBlockedRunsCount > 0 ? 'agents-metric--bad' : 'agents-metric--good' }}">
-        <div class="label">Runs blocked</div>
-        <div class="value">{{ controlBlockedRunsCount }}</div>
-      </div>
-      <div class="agents-metric agents-metric-strip-card {{ controlCompletedRunsCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
-        <div class="label">Runs completed</div>
-        <div class="value">{{ controlCompletedRunsCount }}</div>
-      </div>
-      <div class="agents-metric agents-metric-strip-card {{ controlActivityCount > 0 ? 'agents-metric--good' : 'agents-metric--warn' }}">
-        <div class="label">Activity entries</div>
-        <div class="value">{{ controlActivityCount }}</div>
-      </div>
-      </div>
+  <div class="agents-control-journey">
+  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-pending-section">
+    <div class="agents-control-journey-card__header">
+      <h2 class="agents-control-journey-card__title">Waiting for Decision</h2>
     </div>
-  </section>
-
-
-  <hr>
-
-
-  <section class="border rounded p-3">
-    <h2 class="h4">Waiting for Decision</h2>
+    <div class="agents-control-journey-card__body">
     {% if controlPendingApprovals|length %}
       <div class="tablepane mx-0" style="margin-top: 0;">
         <table class="data fullwidth agents-control-pending-table">
@@ -297,35 +264,21 @@
         </table>
       </div>
     {% else %}
-      <p>No requests are waiting for a decision.</p>
+      <p class="agents-control-journey-card__empty">No requests are waiting for a decision.</p>
     {% endif %}
+    </div>
   </section>
-
-
-  <hr>
+  <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
 
   {% set approvedTablePanelId = 'agents-control-approved-table-panel' %}
   <!-- Release-gate sentinel: <h2 class="h4">Approved</h2> -->
-  <section class="border rounded p-3">
-    <h2 class="h4">
-      {% if controlApprovedApprovals|length %}
-        <button
-          class="agents-control-section-toggle"
-          type="button"
-          data-control-section-toggle
-          data-target="{{ approvedTablePanelId }}"
-          aria-controls="{{ approvedTablePanelId }}"
-          aria-expanded="false"
-        >
-          <span>Approved</span>
-          <span class="agents-control-section-chevron" aria-hidden="true"></span>
-        </button>
-      {% else %}
-        Approved
-      {% endif %}
-    </h2>
+  <section class="agents-control-journey-card agents-control-journey-card--expanded">
+    <div class="agents-control-journey-card__header">
+      <h2 class="agents-control-journey-card__title">Approved</h2>
+    </div>
+    <div class="agents-control-journey-card__body">
     {% if controlApprovedApprovals|length %}
-      <div id="{{ approvedTablePanelId }}" class="agents-control-section-panel" hidden>
+      <div id="{{ approvedTablePanelId }}" class="agents-control-section-panel">
         <div class="tablepane mx-0" style="margin-top: 0;">
           <table class="data fullwidth agents-control-table">
           <thead>
@@ -430,18 +383,19 @@
         </div>
       </div>
     {% else %}
-      <p>No approved requests yet.</p>
+      <p class="agents-control-journey-card__empty">No approved requests yet.</p>
     {% endif %}
+    </div>
   </section>
-
-  <hr>
+  <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
 
   {% set completedTablePanelId = 'agents-control-completed-table-panel' %}
-  <section class="border rounded p-3">
-    <h2 class="h4">
+  <section class="agents-control-journey-card agents-control-journey-card--collapsed">
+    <div class="agents-control-journey-card__header">
+    <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlCompletedApprovals|length %}
         <button
-          class="agents-control-section-toggle"
+          class="agents-control-stage-toggle"
           type="button"
           data-control-section-toggle
           data-target="{{ completedTablePanelId }}"
@@ -449,14 +403,16 @@
           aria-expanded="false"
         >
           <span>Applied / Completed</span>
-          <span class="agents-control-section-chevron" aria-hidden="true"></span>
+          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
         </button>
       {% else %}
-        Applied / Completed
+        <span>Applied / Completed</span>
+        <span class="agents-control-stage-chevron agents-control-stage-chevron--static" aria-hidden="true"></span>
       {% endif %}
     </h2>
+    </div>
     {% if controlCompletedApprovals|length %}
-      <div id="{{ completedTablePanelId }}" class="agents-control-section-panel" hidden>
+      <div id="{{ completedTablePanelId }}" class="agents-control-section-panel agents-control-journey-card__panel" hidden>
         <div class="tablepane mx-0" style="margin-top: 0;">
           <table class="data fullwidth agents-control-table">
           <thead>
@@ -532,20 +488,17 @@
           </table>
         </div>
       </div>
-    {% else %}
-      <p>No applied/completed requests yet.</p>
     {% endif %}
   </section>
-
-
-  <hr>
+  <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
 
   {% set followUpTablePanelId = 'agents-control-follow-up-table-panel' %}
-  <section class="border rounded p-3">
-    <h2 class="h4">
+  <section class="agents-control-journey-card agents-control-journey-card--collapsed">
+    <div class="agents-control-journey-card__header">
+    <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlAttentionExecutions|length %}
         <button
-          class="agents-control-section-toggle"
+          class="agents-control-stage-toggle"
           type="button"
           data-control-section-toggle
           data-target="{{ followUpTablePanelId }}"
@@ -553,14 +506,16 @@
           aria-expanded="false"
         >
           <span>Runs That Need Follow-up</span>
-          <span class="agents-control-section-chevron" aria-hidden="true"></span>
+          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
         </button>
       {% else %}
-        Runs That Need Follow-up
+        <span>Runs That Need Follow-up</span>
+        <span class="agents-control-stage-chevron agents-control-stage-chevron--static" aria-hidden="true"></span>
       {% endif %}
     </h2>
+    </div>
     {% if controlAttentionExecutions|length %}
-      <div id="{{ followUpTablePanelId }}" class="agents-control-section-panel" hidden>
+      <div id="{{ followUpTablePanelId }}" class="agents-control-section-panel agents-control-journey-card__panel" hidden>
         <div class="tablepane mx-0" style="margin-top: 0;">
           <table class="data fullwidth agents-control-table">
           <thead>
@@ -617,12 +572,9 @@
           </table>
         </div>
       </div>
-    {% else %}
-      <p>No blocked or failed runs in this view.</p>
     {% endif %}
   </section>
-
-
+  <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
   {% endif %}
 
   {% if activeControlTab == 'rules' %}
@@ -836,13 +788,13 @@
   {% endif %}
 
   {% if activeControlTab == 'approvals' %}
-  <hr>
   {% set activityLogTablePanelId = 'agents-control-activity-log-table-panel' %}
-  <section class="border rounded p-3">
-    <h2 class="h4">
+  <section class="agents-control-journey-card agents-control-journey-card--collapsed">
+    <div class="agents-control-journey-card__header">
+    <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlAuditEvents|length %}
         <button
-          class="agents-control-section-toggle"
+          class="agents-control-stage-toggle"
           type="button"
           data-control-section-toggle
           data-target="{{ activityLogTablePanelId }}"
@@ -850,14 +802,16 @@
           aria-expanded="false"
         >
           <span>Activity Log</span>
-          <span class="agents-control-section-chevron" aria-hidden="true"></span>
+          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
         </button>
       {% else %}
-        Activity Log
+        <span>Activity Log</span>
+        <span class="agents-control-stage-chevron agents-control-stage-chevron--static" aria-hidden="true"></span>
       {% endif %}
     </h2>
+    </div>
     {% if controlAuditEvents|length %}
-      <div id="{{ activityLogTablePanelId }}" class="agents-control-section-panel" hidden>
+      <div id="{{ activityLogTablePanelId }}" class="agents-control-section-panel agents-control-journey-card__panel" hidden>
         <div class="tablepane mx-0" style="margin-top: 0;">
           <table class="data fullwidth agents-control-table">
           <thead>
@@ -888,11 +842,10 @@
           </table>
         </div>
       </div>
-    {% else %}
-      <p>No history events recorded yet.</p>
     {% endif %}
 
   </section>
+  </div>
   {% endif %}
   </div>
 
@@ -1008,6 +961,76 @@
       margin-top: 40px;
     }
 
+    .agents-control-journey {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .agents-control-journey-card {
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .agents-control-journey-card + .agents-control-journey-divider {
+      margin-top: 18px;
+    }
+
+    .agents-control-journey-divider + .agents-control-journey-card {
+      margin-top: 18px;
+    }
+
+    .agents-control-journey-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .agents-control-journey-divider__dot {
+      display: block;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: #c3cedc;
+    }
+
+    .agents-control-journey-card__header {
+      display: flex;
+      align-items: center;
+      padding: 24px 12px;
+      border-bottom: 1px solid #bbc7d5;
+    }
+
+    .agents-control-journey-card--collapsed .agents-control-journey-card__header {
+      border-bottom: 0;
+    }
+
+    .agents-control-journey-card__title {
+      margin: 0;
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: normal;
+    }
+
+    .agents-control-journey-card__title--toggle {
+      width: 100%;
+    }
+
+    .agents-control-journey-card__body,
+    .agents-control-journey-card__panel {
+      padding: 0 12px 12px;
+    }
+
+    .agents-control-journey-card__empty {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .agents-actor-raw {
       display: block;
       margin-top: 2px;
@@ -1042,8 +1065,6 @@
 
     .agents-control-pending-section {
       margin-top: 8px;
-      padding-top: 28px;
-      padding-bottom: 28px;
     }
 
     .agents-control-inline-toggle {
@@ -1124,6 +1145,48 @@
       display: none !important;
     }
 
+    .agents-control-stage-toggle {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      width: 100%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: #596673;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .agents-control-stage-chevron {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #596673;
+      font-size: 16px;
+      line-height: 1;
+      transition: transform 120ms ease;
+    }
+
+    .agents-control-stage-toggle[aria-expanded='true'] .agents-control-stage-chevron {
+      transform: rotate(90deg);
+    }
+
+    .agents-control-stage-chevron::before {
+      content: '›';
+    }
+
+    .agents-control-stage-chevron--static {
+      cursor: default;
+    }
+
+    .agents-control-stage-chevron--static::before {
+      content: '›';
+    }
+
     .agents-control-review-guards {
       margin-top: 8px;
     }
@@ -1171,6 +1234,11 @@
       white-space: nowrap;
     }
 
+    .agents-control-pending-table,
+    .agents-control-table {
+      margin: 0;
+    }
+
     .agents-control-pending-table thead,
     .agents-control-pending-table thead tr,
     .agents-control-table thead,
@@ -1199,6 +1267,11 @@
       line-height: 1.45;
       text-align: left;
       vertical-align: top;
+    }
+
+    .agents-control-pending-table tbody tr:last-child td.agents-control-pending-table__body-cell,
+    .agents-control-table tbody tr:last-child td {
+      border-bottom: 0;
     }
 
     .agents-control-pending-table tbody tr.agents-control-pending-table__row:hover,
