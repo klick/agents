@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.4 - 2026-03-13
+
+### Changed
+
+- Softened the fresh-install `Status` posture so healthy environments without any accounts now read as `Ready` instead of `Blocked`.
+- Reframed the main `Status` surface around operator-facing account language instead of internal credential terminology for the core readiness and action-mapping flow.
+- Hid the `Operator Notifications` card from `Status` when operator notifications are disabled.
+- Updated the internal roadmap with explicit pre-1.0 milestones for full multi-site/multi-store support and Craft Cloud compatibility.
+
 ## 0.21.3 - 2026-03-13
 
 ### Added

@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-13  
-Current release: `v0.21.3`
+Current release: `v0.21.4`
 
 ## Direction
 
@@ -130,12 +130,21 @@ Release outcome:
 
 - Freeze the main CP IA.
 - Freeze canonical routes and scope naming.
+- Add full multi-site and multi-store support across the public contract:
+  - explicit site/store selectors where they affect API behavior
+  - predictable defaults when selectors are omitted
+  - documentation that makes site/store context unambiguous for operators and integrators
+- Verify Craft Cloud compatibility and document the Cloud setup path:
+  - Cloud env variables
+  - SMTP mail setup
+  - scheduled `agents/notifications-check` command
+  - Cloud-specific operator guidance where wording differs from generic server setups
 - Tighten upgrade notes, deprecation rules, and compatibility discipline.
 - Remove avoidable churn from user-visible contracts.
 
 Release outcome:
 
-- The product becomes materially safer for external adopters to build against.
+- The product becomes materially safer for external adopters to build against, including teams running multi-site or multi-store Craft installs.
 
 ## Planned (`v0.25.x`) Extensibility Hardening
 

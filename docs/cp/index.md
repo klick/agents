@@ -28,25 +28,25 @@ The section root `admin/agents` opens `Status`.
 `Status` is the primary runtime-operator surface:
 
 - **Readiness**
-  - state card with overall verdict (`Ready`, `Ready to Connect`, `Degraded`, `Blocked`, `Unproven`)
+  - state card with overall verdict (`Ready`, `Degraded`, `Blocked`, `Unproven`)
   - combined summary strip with shared operator dimensions:
     - `Hard Gates`
     - `Traffic / Access`
     - `Delivery / Webhooks`
     - `Integration / Capacity`
-    - `Credentials / Policy`
+    - `Accounts / Policy`
     - `Confidence / Observability`
   - `Details +` disclosure with merged proof panels for the same six domains
   - in-card `Action Mapping` table that renders only problematic signals
   - `Diagnostics Bundle` download
   - separate dead-letter queue replay section for operational recovery
   - dev-only `Webhook Test Sink` section when local sink capture is enabled
-  - `Operator Notifications` card with:
+  - `Operator Notifications` card when notifications are enabled, with:
     - resolved recipient visibility
     - recent delivery outcomes
     - manual `Run status check` action
 
-Fresh installs bias toward `Ready to Connect` when the runtime is healthy but there is not enough live traffic yet to prove readiness. After bootstrap, healthy low-traffic environments stay `Ready` while `Confidence / Observability` can read `Building`, and sync-state remains optional until a worker starts reporting checkpoints. `Unproven` is reserved for actual monitoring gaps such as stale metrics or missing reliability evaluation.
+Fresh installs now stay `Ready` when the runtime is healthy but there is not enough live traffic yet to prove readiness. In that state, `Confidence / Observability` can read `Building`, sync-state remains optional until a worker starts reporting checkpoints, and missing accounts are treated as setup guidance rather than a hard failure. `Unproven` is reserved for actual monitoring gaps such as stale metrics or missing reliability evaluation.
 
 This page is driven from runtime services, not hardcoded status:
 

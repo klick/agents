@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.4 (2026-03-13)
+
+- Softened the fresh-install `Status` posture so healthy environments without any accounts now read as `Ready` instead of `Blocked`.
+- Reframed the main `Status` surface around operator-facing account language instead of internal credential terminology for the core readiness and action-mapping flow.
+- Hid the `Operator Notifications` card from `Status` when operator notifications are disabled.
+- Updated the internal roadmap with explicit pre-1.0 milestones for full multi-site/multi-store support and Craft Cloud compatibility.
+
 ## 0.21.3 (2026-03-13)
 
 - Added an account-scoped API token reveal overlay for create/rotate flows so copy/download actions stay anchored to the affected account card.

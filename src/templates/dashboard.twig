@@ -235,7 +235,7 @@
         or (not securityPrivacyEnabled)
         or securityWebhookMisconfigured %}
       {% set readinessHasCapacityIssues = telemetryQueueDepth > 10 %}
-      {% set readinessHasBlockingGate = (not agentsEnabled) or (not readinessDbAvailable) or securityCredentialCount == 0 %}
+      {% set readinessHasBlockingGate = (not agentsEnabled) or (not readinessDbAvailable) %}
       {% set readinessHasDegradedSignals = readinessTabWarnings > 0
         or reliabilityStatus in ['warn', 'critical']
         or reliabilitySignalsWarn > 0
@@ -265,9 +265,6 @@
       {% if not readinessDbAvailable %}
         {% set readinessBlockingCount = readinessBlockingCount + 1 %}
       {% endif %}
-      {% if securityCredentialCount == 0 %}
-        {% set readinessBlockingCount = readinessBlockingCount + 1 %}
-      {% endif %}
       {% set readinessStateKey = 'ready' %}
       {% set readinessStateLabel = 'Ready' %}
       {% set readinessStateLead = 'Ready for machine traffic' %}
@@ -286,8 +283,8 @@
         {% set readinessStateSubcopy = 'Review the affected areas below, then use the detailed sections for full context.' %}
         {% set readinessStateTone = 'warn' %}
       {% elseif readinessIsBootstrapState %}
-        {% set readinessStateKey = 'setup' %}
-        {% set readinessStateLabel = 'Ready to Connect' %}
+        {% set readinessStateKey = 'ready' %}
+        {% set readinessStateLabel = 'Ready' %}
         {% set readinessStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
         {% set readinessStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
         {% set readinessStateTone = 'good' %}
@@ -295,7 +292,7 @@
         {% set readinessStateKey = 'unproven' %}
         {% set readinessStateLabel = 'Unproven' %}
         {% set readinessStateLead = 'No blocking issues were detected, but live-readiness confidence is limited.' %}
-        {% set readinessStateSubcopy = 'Recent traffic, credential activity, or observability freshness is too thin for a high-confidence assessment.' %}
+        {% set readinessStateSubcopy = 'Recent traffic, account activity, or observability freshness is too thin for a high-confidence assessment.' %}
         {% set readinessStateTone = 'muted' %}
       {% elseif readinessHasObservationGap %}
         {% set readinessStateKey = 'ready' %}
@@ -357,11 +354,11 @@
       {% set readinessCheckpointLine = readinessHasIntegrationTelemetry
         ? 'Checkpoint telemetry available'
         : 'Checkpoint telemetry will appear after the first sync worker connects' %}
-      {% set readinessCredentialLine = 'Runtime credentials available for access' %}
+      {% set readinessCredentialLine = 'Accounts available for machine access' %}
       {% if securityCredentialCount == 0 %}
-        {% set readinessCredentialLine = 'No runtime credentials configured' %}
+        {% set readinessCredentialLine = 'No accounts configured yet' %}
       {% elseif (securityPosture.authentication.managedCredentialCount|default(0)) > 0 %}
-        {% set readinessCredentialLine = 'Managed credentials available for runtime access' %}
+        {% set readinessCredentialLine = 'Managed accounts available for machine access' %}
       {% endif %}
       {% set readinessCapacityLead = telemetryQueueDepth > 10
         ? 'Queue depth is elevated and may slow runtime work'
@@ -373,8 +370,8 @@
         {% set readinessBackpressureLine = 'Runtime backpressure is building' %}
       {% endif %}
       {% set readinessCapacityLine = readinessHasActiveCredentials
-        ? 'Active credentials seen in the last 7 days'
-        : 'No recent credential usage observed' %}
+        ? 'Active accounts seen in the last 7 days'
+        : 'No recent account activity observed' %}
       {% set readinessTokenLine = securityTokenRequired
         ? 'Token authentication required'
         : 'Token requirement is relaxed for this environment' %}
@@ -457,10 +454,7 @@
       {% endif %}
       {% set readinessSecuritySummaryTone = 'good' %}
       {% set readinessSecuritySummaryLabel = 'Good' %}
-      {% if securityCredentialCount == 0 %}
-        {% set readinessSecuritySummaryTone = 'bad' %}
-        {% set readinessSecuritySummaryLabel = 'Blocked' %}
-      {% elseif readinessHasSecurityIssues %}
+      {% if readinessHasSecurityIssues %}
         {% set readinessSecuritySummaryTone = 'warn' %}
         {% set readinessSecuritySummaryLabel = 'Needs attention' %}
       {% endif %}
@@ -493,10 +487,10 @@
         {% set readinessIntegrationLagLine = 'Max sync lag is below warning threshold' %}
         {% set readinessIntegrationStatusLine = 'No integrations are in warning or critical lag' %}
         {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
-        {% set readinessCredentialLine = 'Managed credentials available for runtime access' %}
+        {% set readinessCredentialLine = 'Managed accounts available for machine access' %}
         {% set readinessCapacityLead = 'Queue depth is within normal range' %}
         {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
-        {% set readinessCapacityLine = 'Active credentials seen in the last 7 days' %}
+        {% set readinessCapacityLine = 'Active accounts seen in the last 7 days' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
@@ -540,10 +534,10 @@
         {% set readinessIntegrationLagLine = 'Max sync lag is above warning threshold' %}
         {% set readinessIntegrationStatusLine = 'Review lagging integrations in the table below' %}
         {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
-        {% set readinessCredentialLine = 'Managed credentials available for runtime access' %}
+        {% set readinessCredentialLine = 'Managed accounts available for machine access' %}
         {% set readinessCapacityLead = 'Queue depth is within normal range' %}
         {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
-        {% set readinessCapacityLine = 'Active credentials seen in the last 7 days' %}
+        {% set readinessCapacityLine = 'Active accounts seen in the last 7 days' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
@@ -587,10 +581,10 @@
         {% set readinessIntegrationLagLine = 'Max sync lag is above warning threshold' %}
         {% set readinessIntegrationStatusLine = 'Review lagging integrations in the table below' %}
         {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
-        {% set readinessCredentialLine = 'No runtime credentials configured' %}
+        {% set readinessCredentialLine = 'No accounts configured yet' %}
         {% set readinessCapacityLead = 'Queue depth is elevated and may slow runtime work' %}
         {% set readinessBackpressureLine = 'Runtime backpressure is building' %}
-        {% set readinessCapacityLine = 'No recent credential usage observed' %}
+        {% set readinessCapacityLine = 'No recent account activity observed' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
@@ -623,7 +617,7 @@
         {% set readinessStateKey = 'unproven' %}
         {% set readinessStateLabel = 'Unproven' %}
         {% set readinessStateLead = 'No blocking issues were detected, but live-readiness confidence is limited.' %}
-        {% set readinessStateSubcopy = 'Recent traffic, credential activity, or observability freshness is too thin for a high-confidence assessment.' %}
+        {% set readinessStateSubcopy = 'Recent traffic, account activity, or observability freshness is too thin for a high-confidence assessment.' %}
         {% set readinessStateTone = 'muted' %}
         {% set readinessShowReadyState = false %}
         {% set readinessConfidenceLabel = 'limited' %}
@@ -634,10 +628,10 @@
         {% set readinessIntegrationLagLine = 'Checkpoint telemetry has not been submitted yet' %}
         {% set readinessIntegrationStatusLine = 'No integrations are in warning or critical lag' %}
         {% set readinessCheckpointLine = 'Checkpoint telemetry has not been submitted yet' %}
-        {% set readinessCredentialLine = 'No recent credential usage observed' %}
+        {% set readinessCredentialLine = 'No recent account activity observed' %}
         {% set readinessCapacityLead = 'Queue depth is within normal range' %}
         {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
-        {% set readinessCapacityLine = 'No recent credential usage observed' %}
+        {% set readinessCapacityLine = 'No recent account activity observed' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
@@ -668,7 +662,7 @@
         {% set readinessObservabilityProofTone = 'warn' %}
       {% endif %}
       {% set readinessSecuritySignalNames = [
-        'No runtime credentials',
+        'No accounts',
         'Token enforcement relaxed',
         'Query-token transport',
         'Privacy redaction disabled',
@@ -697,10 +691,10 @@
           surface: 'Settings',
         },
         {
-          signal: 'No runtime credentials',
-          stateLabel: securityCredentialCount == 0 ? 'Blocked' : 'Clear',
-          stateTone: securityCredentialCount == 0 ? 'bad' : 'muted',
-          impact: 'No managed or runtime credentials are available for machine access.',
+          signal: 'No accounts',
+          stateLabel: securityCredentialCount == 0 ? 'Optional' : 'Clear',
+          stateTone: 'muted',
+          impact: 'Create the first account when you are ready to connect machine access.',
           primaryAction: 'Create managed account',
           secondaryAction: 'Open Accounts',
           primaryUrl: accountsUrl ~ '#addAgentSection',
@@ -755,8 +749,8 @@
           signal: 'Auth failures',
           stateLabel: telemetryAuthFailures > 0 ? 'Needs attention' : 'Clear',
           stateTone: telemetryAuthFailures > 0 ? 'warn' : 'muted',
-          impact: 'Credentials may be invalid or clients may be misconfigured.',
-          primaryAction: 'Review credentials',
+          impact: 'Accounts may be invalid or clients may be misconfigured.',
+          primaryAction: 'Review accounts',
           secondaryAction: 'Inspect denied requests',
           primaryUrl: attentionAccountsUrl ~ '#agentsCardList',
           secondaryUrl: securityUrl ~ '#authRatePostureSection',
@@ -766,7 +760,7 @@
           signal: 'Scope denials',
           stateLabel: telemetryForbidden > 0 ? 'Needs attention' : 'Clear',
           stateTone: telemetryForbidden > 0 ? 'warn' : 'muted',
-          impact: 'One or more credentials cannot complete their expected requests.',
+          impact: 'One or more accounts cannot complete their expected requests.',
           primaryAction: 'Inspect scopes',
           secondaryAction: 'Open Accounts',
           primaryUrl: securityUrl ~ '#authRatePostureSection',
@@ -862,8 +856,8 @@
             signal: 'Auth failures',
             stateLabel: 'Needs attention',
             stateTone: 'warn',
-            impact: 'Credentials may be invalid or clients may be misconfigured.',
-            primaryAction: 'Review credentials',
+            impact: 'Accounts may be invalid or clients may be misconfigured.',
+            primaryAction: 'Review accounts',
             secondaryAction: 'Inspect denied requests',
             primaryUrl: attentionAccountsUrl ~ '#agentsCardList',
             secondaryUrl: securityUrl ~ '#authRatePostureSection',
@@ -906,10 +900,10 @@
             surface: 'Settings',
           },
           {
-            signal: 'No runtime credentials',
+            signal: 'No accounts',
             stateLabel: 'Blocked',
             stateTone: 'bad',
-            impact: 'No managed or runtime credentials are available for machine access.',
+            impact: 'No accounts are available for machine access.',
             primaryAction: 'Create managed account',
             secondaryAction: 'Open Accounts',
             primaryUrl: accountsUrl ~ '#addAgentSection',
@@ -1021,7 +1015,7 @@
       {% endif %}
       {% set securityCredentialSummaryTone = 'good' %}
       {% if securityTokenRequired and securityCredentialCount == 0 %}
-        {% set securityCredentialSummaryTone = 'bad' %}
+        {% set securityCredentialSummaryTone = 'muted' %}
       {% elseif securityCredentialCount > 0 and securityActiveCredentials7d == 0 %}
         {% set securityCredentialSummaryTone = 'muted' %}
       {% endif %}
@@ -1155,7 +1149,7 @@
             <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessIntegrationCapacitySummaryTone }}{% if readinessConsumerLagCriticalCount > 0 or telemetryQueueDepth > 50 %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessIntegrationCapacitySummaryLabel }}</strong>
           </div>
           <div class="agents-readiness-ready-summary-item" role="listitem">
-            <span class="agents-readiness-ready-summary-label">Credentials / Policy</span>
+            <span class="agents-readiness-ready-summary-label">Accounts / Policy</span>
             <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessCredentialsPolicySummaryTone }}{% if readinessCredentialsPolicySummaryTone in ['warn', 'bad'] %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessCredentialsPolicySummaryLabel }}</strong>
           </div>
           <div class="agents-readiness-ready-summary-item" role="listitem">
@@ -1173,7 +1167,7 @@
                 <li class="{{ not agentsEnabled ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateRuntimeLine }}</li>
                 <li class="{{ not readinessDbAvailable ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateDatabaseLine }}</li>
                 <li class="{{ not readinessCoreServicesOk ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateServicesLine }}</li>
-                <li class="{{ securityCredentialCount == 0 ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessCredentialLine }}</li>
+                <li{% if securityCredentialCount > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>{{ readinessCredentialLine }}</li>
                 <li class="{{ readinessHasBlockingGate ? 'agents-readiness-ready-proof-line--alert' : 'agents-readiness-ready-proof-line--ok' }}">{{ readinessHardGateStatusLine }}</li>
               </ul>
             </section>
@@ -1259,21 +1253,21 @@
               <div id="environmentProfileSection" hidden></div>
               <div id="securityWarningsSection" hidden></div>
               <div class="agents-readiness-ready-proof-head">
-                <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessCredentialsPolicyProofTone }}">Credentials / Policy</h3>
+                <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessCredentialsPolicyProofTone }}">Accounts / Policy</h3>
                 <button
                   type="button"
                   class="agents-readiness-ready-proof-trigger"
                   data-agents-detail-open="credentialsPolicyDetailDialog"
                   aria-haspopup="dialog"
                   aria-controls="credentialsPolicyDetailDialog"
-                  aria-label="View Credentials / Policy detail"
+                  aria-label="View Accounts / Policy detail"
                 >
                   <span class="agents-readiness-ready-proof-trigger-hint">View detail</span>
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if securityCredentialCount == 0 or securityWarnings > 0 or securityErrors > 0 or not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityCredentialCount > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Configured credentials: <strong>{{ securityCredentialCount }}</strong> total (<strong>{{ securityManagedCredentialCount }}</strong> managed, <strong>{{ securityEnvCredentialCount }}</strong> env)</li>
-                <li>Active credentials / guarded requests: <strong>{{ securityActiveCredentials7d }}</strong> / <strong>{{ securityRequestsTotal }}</strong></li>
+                <li{% if securityWarnings > 0 or securityErrors > 0 or not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityCredentialCount > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Configured accounts: <strong>{{ securityCredentialCount }}</strong> total (<strong>{{ securityManagedCredentialCount }}</strong> managed, <strong>{{ securityEnvCredentialCount }}</strong> env)</li>
+                <li>Active accounts / guarded requests: <strong>{{ securityActiveCredentials7d }}</strong> / <strong>{{ securityRequestsTotal }}</strong></li>
                 <li>Default scopes in runtime policy: <strong>{{ securityDefaultScopeCount }}</strong>{% if securityDefaultScopePreview %} ({{ securityDefaultScopePreview }}){% endif %}</li>
                 <li>Environment / profile: <strong>{{ securityPosture.environment|default('unknown') }}</strong> / <strong>{{ securityPosture.profile.name|default('unknown') }}</strong></li>
                 <li{% if not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityPrivacyRedaction and securityPosture.profile.defaultsApplied %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Privacy redaction / defaults applied: <strong>{{ securityPrivacyRedaction ? 'enabled' : 'disabled' }}</strong> / <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></li>
@@ -1462,7 +1456,7 @@
               </section>
 
               <div class="agents-readiness-detail-actions">
-                <a href="{{ attentionAccountsUrl ~ '#agentsCardList' }}" class="agents-readiness-detail-action">Review credentials</a>
+                <a href="{{ attentionAccountsUrl ~ '#agentsCardList' }}" class="agents-readiness-detail-action">Review accounts</a>
                 <a href="{{ securityUrl ~ '#authRatePostureSection' }}" class="agents-readiness-detail-action">Inspect denied requests</a>
                 <a href="{{ overviewUrl ~ '#diagnosticsBundleSection' }}" class="agents-readiness-detail-action">Download diagnostics bundle</a>
               </div>
@@ -1598,18 +1592,18 @@
           <div class="agents-readiness-detail-dialog-shell">
             <div class="agents-readiness-detail-dialog-head">
               <div class="agents-readiness-detail-dialog-heading">
-                <h2 class="agents-readiness-detail-dialog-title" id="credentialsPolicyDetailDialogTitle">Credentials / Policy Detail</h2>
-                <p class="agents-readiness-detail-dialog-copy">Runtime credential inventory, effective policy defaults, and current security warnings from the active environment profile.</p>
+                <h2 class="agents-readiness-detail-dialog-title" id="credentialsPolicyDetailDialogTitle">Accounts / Policy Detail</h2>
+                <p class="agents-readiness-detail-dialog-copy">Account inventory, effective policy defaults, and current security warnings from the active environment profile.</p>
               </div>
-              <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close credentials and policy detail">Close</button>
+              <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close accounts and policy detail">Close</button>
             </div>
             <div class="agents-readiness-detail-dialog-body">
               <div class="agents-readiness-detail-grid">
                 <section class="agents-readiness-detail-panel">
-                  <h3 class="agents-readiness-detail-panel-title">Credential Inventory</h3>
+                  <h3 class="agents-readiness-detail-panel-title">Account Inventory</h3>
                   <dl class="agents-readiness-detail-list">
                     <div class="agents-readiness-detail-list-row">
-                      <dt>Total credentials</dt>
+                      <dt>Total accounts</dt>
                       <dd><strong>{{ securityCredentialCount }}</strong></dd>
                     </div>
                     <div class="agents-readiness-detail-list-row">
@@ -1617,7 +1611,7 @@
                       <dd><strong>{{ securityManagedCredentialCount }}</strong> / <strong>{{ securityEnvCredentialCount }}</strong></dd>
                     </div>
                     <div class="agents-readiness-detail-list-row">
-                      <dt>Active credentials / guarded requests</dt>
+                      <dt>Active accounts / guarded requests</dt>
                       <dd><strong>{{ securityActiveCredentials7d }}</strong> / <strong>{{ securityRequestsTotal }}</strong></dd>
                     </div>
                     <div class="agents-readiness-detail-list-row">
@@ -1670,7 +1664,7 @@
                 {% endif %}
                 {% if securityCredentialIds|length %}
                   <p class="agents-readiness-detail-signal-copy">
-                    Active credential ids:
+                    Active account ids:
                     {% for credentialId in securityCredentialIds|slice(0, 8) %}
                       <code class="agents-readiness-detail-chip agents-readiness-detail-chip--inline">{{ credentialId }}</code>{% if not loop.last %} {% endif %}
                     {% endfor %}
@@ -1747,7 +1741,7 @@
                       <dd><strong>{{ telemetryRequestsTotal }}</strong></dd>
                     </div>
                     <div class="agents-readiness-detail-list-row">
-                      <dt>Active credentials (7d)</dt>
+                      <dt>Active accounts (7d)</dt>
                       <dd><strong>{{ telemetryActiveCredentials7d }}</strong></dd>
                     </div>
                     <div class="agents-readiness-detail-list-row">
@@ -2153,6 +2147,7 @@
         </dialog>
       {% endif %}
 
+      {% if notificationEnabled %}
       <section class="agents-operator-notifications-card border rounded p-0" id="operatorNotificationsSection">
         <div class="agents-operator-notifications-top">
           <div class="agents-operator-notifications-header">
@@ -2286,6 +2281,7 @@
           {% endif %}
         </div>
       </section>
+      {% endif %}
 
     {% endif %}
 
