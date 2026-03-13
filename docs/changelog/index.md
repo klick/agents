@@ -2,6 +2,11 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.5 (2026-03-13)
+
+- Removed the remaining bootstrap-only missing-account warning from the `Status` degradation path so healthy fresh installs no longer render `Degraded` after update.
+- Applied the muted notice background treatment to the `Status` summary strip while keeping the summary items themselves transparent.
+
 ## 0.21.4 (2026-03-13)
 
 - Softened the fresh-install `Status` posture so healthy environments without any accounts now read as `Ready` instead of `Blocked`.

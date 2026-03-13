@@ -327,18 +327,20 @@ class SecurityPolicyService extends Component
             ];
         }
 
-        if ($config['requireToken'] && empty($config['credentials'])) {
-            if ($config['isProduction'] && $config['failOnMissingTokenInProd']) {
-                $warnings[] = [
-                    'level' => 'error',
-                    'message' => 'Agents API credentials are required but no usable env/managed credentials were found. Requests will fail-closed in production.',
-                ];
-            } else {
-                $warnings[] = [
-                    'level' => 'warning',
-                    'message' => 'Agents API credentials are required but no usable env/managed credentials were found. Set `PLUGIN_AGENTS_REQUIRE_TOKEN=false` for explicit local-only bypass.',
-                ];
-            }
+          if ($config['requireToken'] && empty($config['credentials'])) {
+              if ($config['isProduction'] && $config['failOnMissingTokenInProd']) {
+                  $warnings[] = [
+                      'code' => 'missing_credentials',
+                      'level' => 'error',
+                      'message' => 'Agents API credentials are required but no usable env/managed credentials were found. Requests will fail-closed in production.',
+                  ];
+              } else {
+                  $warnings[] = [
+                      'code' => 'missing_credentials',
+                      'level' => 'warning',
+                      'message' => 'Agents API credentials are required but no usable env/managed credentials were found. Set `PLUGIN_AGENTS_REQUIRE_TOKEN=false` for explicit local-only bypass.',
+                  ];
+              }
         }
 
         if ($config['webhookUrlConfigured'] && !$config['webhookSecretConfigured']) {

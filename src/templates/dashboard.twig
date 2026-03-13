@@ -99,6 +99,23 @@
       {% set securityWebhookUrlConfigured = securityPosture.webhook.urlConfigured ?? false %}
       {% set securityWebhookSecretConfigured = securityPosture.webhook.secretConfigured ?? false %}
       {% set securityWebhookMisconfigured = (securityWebhookUrlConfigured and not securityWebhookSecretConfigured) or ((not securityWebhookUrlConfigured) and securityWebhookSecretConfigured) %}
+      {% set securityWarningsRaw = securityPosture.warnings|default([]) %}
+      {% set securityWarningsFiltered = [] %}
+      {% set securityBootstrapWarningCodes = securityCredentialCount == 0 and securityTokenRequired ? ['missing_credentials'] : [] %}
+      {% set securityWarnings = 0 %}
+      {% set securityErrors = 0 %}
+      {% for warning in securityWarningsRaw %}
+        {% set warningCode = (warning.code ?? '')|trim %}
+        {% if warningCode not in securityBootstrapWarningCodes %}
+          {% set securityWarningsFiltered = securityWarningsFiltered|merge([warning]) %}
+          {% if (warning.level ?? 'warning') == 'error' %}
+            {% set securityErrors = securityErrors + 1 %}
+          {% else %}
+            {% set securityWarnings = securityWarnings + 1 %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% set securityWarningsList = securityWarningsFiltered|slice(0, 6) %}
       {% set webhookEnabledForReadiness = securityPosture.webhook.enabled ?? false %}
       {% set webhookTestSinkConfig = webhookTestSinkSnapshot.config|default({}) %}
       {% set webhookTestSinkSummary = webhookTestSinkSnapshot.summary|default({}) %}
@@ -193,8 +210,8 @@
       {% set readinessCacheAvailable = readinessDiagnostics.componentChecks.systemComponents.cache ?? false %}
       {% set readinessUsersAvailable = readinessDiagnostics.componentChecks.systemComponents.users ?? false %}
       {% set readinessCoreServicesOk = readinessDbAvailable and readinessCacheAvailable and readinessUsersAvailable %}
-      {% set readinessSecurityWarnings = securityWarningCounts.warnings|default(0) %}
-      {% set readinessSecurityErrors = securityWarningCounts.errors|default(0) %}
+      {% set readinessSecurityWarnings = securityWarnings %}
+      {% set readinessSecurityErrors = securityErrors %}
       {% set readinessConsumerLagWarningCount = consumerLagSummary.warning|default(0) %}
       {% set readinessConsumerLagCriticalCount = consumerLagSummary.critical|default(0) %}
       {% set readinessHasIntegrationTelemetry = readinessTabConsumerCount > 0 or consumerLagRows|length > 0 %}
@@ -989,8 +1006,6 @@
       {% set securityDefaultScopes = securityPosture.authentication.tokenScopes|default([]) %}
       {% set securityDefaultScopeCount = securityDefaultScopes|length %}
       {% set securityDefaultScopePreview = securityDefaultScopes|slice(0, 3)|join(', ') %}
-      {% set securityWarnings = securityPosture.warningCounts.warnings|default(0) %}
-      {% set securityErrors = securityPosture.warningCounts.errors|default(0) %}
       {% set securityPrivacyRedaction = securityPosture.privacy.redactEmail ?? false %}
       {% set securityWebhookEnabled = securityPosture.webhook.enabled ?? false %}
       {% set securityWebhookUrlConfigured = securityPosture.webhook.urlConfigured ?? false %}
@@ -1110,7 +1125,7 @@
       {% set readinessIntegrationCapacityProofTone = readinessIntegrationCapacitySummaryTone in ['warn', 'bad'] ? readinessIntegrationCapacitySummaryTone : 'good' %}
       {% set readinessCredentialsPolicyProofTone = readinessCredentialsPolicySummaryTone in ['warn', 'bad'] ? readinessCredentialsPolicySummaryTone : 'good' %}
       {% set readinessConfidenceProofTone = readinessConfidenceSummaryTone == 'good' ? 'good' : 'warn' %}
-      {% set securityWarningPreview = securityPosture.warnings|default([])|slice(0, 4) %}
+      {% set securityWarningPreview = securityWarningsFiltered|slice(0, 4) %}
       {% set securityProfileDefaultsAppliedFields = securityPosture.profile.defaultsAppliedFields|default([]) %}
       {% set securityLatestDlqRow = webhookDeadLetters|first %}
       {% set securityLatestDlqUpdatedAt = 'n/a' %}
@@ -2390,7 +2405,7 @@
       gap: 0;
       padding: 1px 0 0 1px;
       border-bottom: 1px solid var(--agents-readiness-border);
-      background: transparent;
+      background: #f8fafc;
     }
 
     .agents-readiness-ready-summary-item {
@@ -2403,7 +2418,7 @@
       gap: 4px;
       margin: -1px 0 0 -1px;
       border: 1px solid var(--agents-readiness-border);
-      background: #fff;
+      background: transparent;
       color: #596673;
       line-height: normal;
       text-align: left;

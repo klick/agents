@@ -116,6 +116,8 @@ expect_fixed "readinessOnlyBootstrapGaps" "$DASHBOARD_TEMPLATE" "Dashboard readi
 expect_fixed "readinessHasBlockingGate = (not agentsEnabled) or (not readinessDbAvailable)" "$DASHBOARD_TEMPLATE" "Dashboard readiness view does not treat missing credentials as a blocking gate on fresh install"
 expect_fixed "readinessIntegrationCapacitySummaryLabel = 'Optional'" "$DASHBOARD_TEMPLATE" "Dashboard readiness view treats sync-state as optional until configured"
 expect_fixed "No accounts configured yet" "$DASHBOARD_TEMPLATE" "Dashboard readiness view treats missing accounts as setup guidance rather than failure"
+expect_fixed "securityBootstrapWarningCodes" "$DASHBOARD_TEMPLATE" "Dashboard readiness view filters bootstrap-only missing-account warnings out of degraded status"
+expect_fixed "'code' => 'missing_credentials'" "$SECURITY_POLICY_SERVICE" "Security policy marks missing-account warnings with a stable code for status filtering"
 expect_fixed "readinessHasMonitoringGap" "$DASHBOARD_TEMPLATE" "Dashboard readiness view distinguishes monitoring gaps from harmless low-traffic observation gaps"
 expect_fixed "Confidence signals will strengthen as routine traffic and account activity build over time." "$DASHBOARD_TEMPLATE" "Dashboard readiness view keeps healthy low-traffic environments in a positive ready posture"
 expect_fixed "stateLabel: securityCredentialCount == 0 ? 'Optional' : 'Clear'" "$DASHBOARD_TEMPLATE" "Dashboard readiness action mapping suppresses missing-credential setup guidance as an optional signal"

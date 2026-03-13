@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.5 - 2026-03-13
+
+### Fixed
+
+- Removed the remaining bootstrap-only missing-account warning from the `Status` degradation path so healthy fresh installs no longer render `Degraded` after update.
+
+### Changed
+
+- Applied the muted notice background treatment to the `Status` summary strip while keeping the summary items themselves transparent.
+
 ## 0.21.4 - 2026-03-13
 
 ### Changed
