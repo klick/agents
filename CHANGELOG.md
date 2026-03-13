@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.0 - 2026-03-13
+
+### Added
+
+- Added operator notifications with queue-backed email delivery for approval requests, approval decisions, execution issues, webhook delivery failures, and scheduled system-status checks.
+- Added account-level `Approval recipients` selection so governed-write notifications can route to specific CP users instead of only global operator recipients.
+
+### Changed
+
+- Switched managed account ownership from a free-text owner field to a native Craft user relation while preserving legacy owner strings as a fallback until operators remap them.
+- Added an `Operator Notifications` Status card with recipient visibility, recent delivery state, and explicit last SMTP handoff details for operator verification.
+- Added webhook transport settings to Settings so runtime webhook URL and signing secret can be managed with Craft-native env-aware inputs from the CP.
+
+### Fixed
+
+- Fixed notification queue processing and email message construction so approval emails hand off correctly through SMTP-backed Craft mail transports.
+- Fixed account-level governed-write notifications so approval-recipient routing is reflected in both runtime delivery and the Status card summary.
+
 ## 0.20.0 - 2026-03-12
 
 ### Added

@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.0 (2026-03-13)
+
+- Added queue-backed operator email notifications for approval requests, approval decisions, execution issues, webhook delivery failures, and scheduled system-status checks.
+- Added per-account `Approval recipients` routing so governed-write alerts can target selected CP users instead of only a global recipient list.
+- Switched managed account ownership to a native Craft user relation with safe legacy-owner fallback for existing installs.
+- Added explicit last-handoff details to the `Operator Notifications` Status card so operators can verify recent SMTP delivery attempts in the CP.
+
 ## 0.20.0 (2026-03-12)
 
 - Added a dev-only `Webhook Test Sink` with local capture history, signature verification, CP inspection, and a one-click `Send test webhook` flow for local webhook validation.
