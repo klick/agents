@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.8 (2026-03-14)
+
+- Reworked `Approvals` into a max-width journey of card-based stages with centered divider dots, embedded rules management, and toggleable sections that align with the rest of the CP.
+- Added inline `Edit` / `Delete` actions for approval rules and replaced the stale free-text action-pattern example with a human-readable governed-action selector.
+- Stacked pending decision buttons vertically with consistent widths for clearer high-risk approval actions.
+
 ## 0.21.7 (2026-03-13)
 
 - Hid Commerce-only scopes from runtime defaults, capabilities, and the Accounts scope picker when Craft Commerce is not installed.

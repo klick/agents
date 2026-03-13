@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.8 - 2026-03-14
+
+### Changed
+
+- Reworked `Approvals` into a max-width journey of card-based stages with centered divider dots, embedded rules management, and toggleable sections that align with the rest of the CP.
+- Made approval-rule management more operator-friendly by adding inline `Edit` and `Delete` actions plus a human-readable governed-action selector in the shared rule form.
+- Stacked pending decision buttons vertically with consistent widths for clearer high-risk approval actions.
+
 ## 0.21.7 - 2026-03-13
 
 ### Fixed

@@ -16,7 +16,6 @@ The Agents CP subnav currently exposes:
 - **Approvals**
   - URL: `admin/agents/approvals`
   - shown only when governed-write CP is enabled
-  - local sidebar tabs: `Approvals`, `Rules`
 - **Settings**
   - URL: `admin/agents/settings`
   - runtime switches, operator notifications, webhook transport, reliability thresholds, and config-lock visibility
@@ -60,28 +59,25 @@ This page is driven from runtime services, not hardcoded status:
 
 `Approvals` appears only when the governed-write CP is enabled.
 
-Local tabs:
+Current sections:
 
-- **Approvals**
-  - metric strip for pending, expired, blocked, completed, and activity counts
-  - `Waiting for Decision`
-  - `Approved`
-  - `Applied / Completed`
-  - `Runs That Need Follow-up`
-  - `Activity Log`
-- **Rules**
-  - `Policy Simulator (Dry Run)`
-  - `Latest Dry-Run Result`
-  - `Rules`
-  - inline rule create/update form when permitted
+- `Waiting for Decision`
+- `Approved`
+- `Applied / Completed`
+- `Runs That Need Follow-up`
+- `Activity Log`
+- embedded `Rules`
+- embedded `Create or Update Rule`
 
 Notable current behavior:
 
 - pending approvals can be reviewed, approved, or rejected from the CP
 - high-risk dual-approval rows show two explicit approval buttons so operators can see progress toward the second approval at a glance
+- decision buttons stack vertically at a consistent width for clearer review actions
 - review UI includes action labels, rule/risk context, assurance mode, SLA metadata, and review guards
 - approved draft-entry flows can expose `Apply Draft` actions when the underlying state allows it
-- rules support wildcard action matching, risk levels, approval requirements, enable/disable state, and advanced JSON config
+- rules can be edited and deleted inline from the embedded rules table
+- rule forms use a human-readable governed-action selector for the current core action set
 
 ## Accounts
 
