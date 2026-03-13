@@ -2,7 +2,7 @@
 
 Governed machine access for Craft CMS and Craft Commerce.
 
-![Agents banner](docs/public/marketing/agents-banner.png)
+![Agents banner](docs/public/marketing/plugin-banner.png)
 
 Current plugin version: **0.21.8**
 
