@@ -1555,6 +1555,10 @@ class DashboardController extends Controller
 
     private function hasWritingCapabilityScope(array $scopes): bool
     {
+        if (!Plugin::getInstance()->isWritesExperimentalEnabled()) {
+            return false;
+        }
+
         $writingScopes = ['entries:write:draft', 'entries:write'];
         foreach ($scopes as $scope) {
             $normalized = strtolower(trim((string)$scope));

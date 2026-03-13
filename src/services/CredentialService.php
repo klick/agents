@@ -6,6 +6,7 @@ use Craft;
 use craft\base\Component;
 use craft\elements\User;
 use craft\helpers\StringHelper;
+use Klick\Agents\Plugin;
 use yii\db\Query;
 
 class CredentialService extends Component
@@ -1536,6 +1537,7 @@ class CredentialService extends Component
         }
 
         $normalized = array_values(array_unique($normalized));
+        $normalized = $this->filterUnavailableScopes($normalized);
         sort($normalized);
 
         if (!empty($normalized)) {
@@ -1543,8 +1545,65 @@ class CredentialService extends Component
         }
 
         $fallback = array_values(array_unique(array_map('strval', $defaultScopes)));
+        $fallback = $this->filterUnavailableScopes($fallback);
         sort($fallback);
         return $fallback;
+    }
+
+    private function filterUnavailableScopes(array $scopes): array
+    {
+        $plugin = Plugin::getInstance();
+        $commerceEnabled = $plugin?->isCommercePluginEnabled() ?? false;
+        $writesExperimentalEnabled = $plugin?->isWritesExperimentalEnabled() ?? false;
+
+        if ($commerceEnabled && $writesExperimentalEnabled) {
+            return array_values($scopes);
+        }
+
+        return array_values(array_filter($scopes, function (string $scope) use ($commerceEnabled, $writesExperimentalEnabled): bool {
+            if (!$commerceEnabled && in_array($scope, $this->commerceScopeKeys(), true)) {
+                return false;
+            }
+
+            if (!$writesExperimentalEnabled && in_array($scope, $this->governedWriteScopeKeys(), true)) {
+                return false;
+            }
+
+            return true;
+        }));
+    }
+
+    private function commerceScopeKeys(): array
+    {
+        return [
+            'products:read',
+            'variants:read',
+            'subscriptions:read',
+            'transfers:read',
+            'donations:read',
+            'orders:read',
+            'orders:read_sensitive',
+            'addresses:read',
+            'addresses:read_sensitive',
+        ];
+    }
+
+    private function governedWriteScopeKeys(): array
+    {
+        return [
+            'entries:write:draft',
+            'entries:write',
+            'control:policies:read',
+            'control:policies:write',
+            'control:approvals:read',
+            'control:approvals:request',
+            'control:approvals:decide',
+            'control:approvals:write',
+            'control:executions:read',
+            'control:actions:simulate',
+            'control:actions:execute',
+            'control:audit:read',
+        ];
     }
 
     private function encodeJson(array $value): string

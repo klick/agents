@@ -724,15 +724,23 @@ class SecurityPolicyService extends Component
     {
         $plugin = Plugin::getInstance();
         $commerceEnabled = $plugin?->isCommercePluginEnabled() ?? false;
+        $writesExperimentalEnabled = $plugin?->isWritesExperimentalEnabled() ?? false;
 
-        if ($commerceEnabled) {
-            return $scopes;
+        if ($commerceEnabled && $writesExperimentalEnabled) {
+            return array_values($scopes);
         }
 
-        return array_values(array_filter(
-            $scopes,
-            fn(string $scope): bool => !in_array($scope, $this->commerceScopeKeys(), true)
-        ));
+        return array_values(array_filter($scopes, function (string $scope) use ($commerceEnabled, $writesExperimentalEnabled): bool {
+            if (!$commerceEnabled && in_array($scope, $this->commerceScopeKeys(), true)) {
+                return false;
+            }
+
+            if (!$writesExperimentalEnabled && in_array($scope, $this->governedWriteScopeKeys(), true)) {
+                return false;
+            }
+
+            return true;
+        }));
     }
 
     private function commerceScopeKeys(): array
@@ -747,6 +755,24 @@ class SecurityPolicyService extends Component
             'orders:read_sensitive',
             'addresses:read',
             'addresses:read_sensitive',
+        ];
+    }
+
+    private function governedWriteScopeKeys(): array
+    {
+        return [
+            'entries:write:draft',
+            'entries:write',
+            'control:policies:read',
+            'control:policies:write',
+            'control:approvals:read',
+            'control:approvals:request',
+            'control:approvals:decide',
+            'control:approvals:write',
+            'control:executions:read',
+            'control:actions:simulate',
+            'control:actions:execute',
+            'control:audit:read',
         ];
     }
 

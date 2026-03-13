@@ -107,6 +107,7 @@ expect_fixed "credentialApprovalRecipientUserIds" "$CP_TEMPLATE" "Credentials CP
 expect_fixed "credentialForceHumanApproval" "$CP_TEMPLATE" "Credentials CP template includes force-human-approval controls"
 expect_fixed "Account Templates" "$CP_TEMPLATE" "Credentials CP template exposes dedicated account templates section"
 expect_fixed "agents-capability-group-title" "$CP_TEMPLATE" "Credentials CP template groups scopes by type"
+expect_fixed "scope in ['incidents:read', 'syncstate:read', 'syncstate:write', 'webhooks:dlq:read', 'webhooks:dlq:replay']" "$CP_TEMPLATE" "Credentials CP template force-adds canonical sync-state and webhook DLQ scopes into the picker"
 expect_fixed "simulatePulseMode" "$CP_TEMPLATE" "Credentials CP template supports pulse simulation mode query parameter"
 expect_fixed "simulatePulseAccounts" "$CP_TEMPLATE" "Credentials CP template supports targeted pulse simulation accounts"
 expect_fixed "simulatePulseIntervalMs" "$CP_TEMPLATE" "Credentials CP template supports pulse simulation interval override"

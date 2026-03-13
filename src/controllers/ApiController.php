@@ -3307,7 +3307,7 @@ class ApiController extends Controller
         if (!$this->isWritesExperimentalEnabled()) {
             $normalized = array_values(array_filter(
                 $normalized,
-                static fn(string $scope): bool => !str_starts_with($scope, 'control:')
+                fn(string $scope): bool => !in_array($scope, $this->governedWriteScopeKeys(), true)
             ));
         }
         if (!$this->isUsersApiEnabled()) {
@@ -3391,7 +3391,7 @@ class ApiController extends Controller
             'webhooks:dlq:replay' => 'Replay failed webhook dead-letter events.',
         ];
         if (!$this->isWritesExperimentalEnabled()) {
-            foreach ($this->controlScopeKeys() as $scope) {
+            foreach ($this->governedWriteScopeKeys() as $scope) {
                 unset($scopes[$scope]);
             }
         }
@@ -3506,6 +3506,17 @@ class ApiController extends Controller
             'control:actions:execute',
             'control:audit:read',
         ];
+    }
+
+    private function governedWriteScopeKeys(): array
+    {
+        return array_merge(
+            [
+                'entries:write:draft',
+                'entries:write',
+            ],
+            $this->controlScopeKeys()
+        );
     }
 
     private function userScopeKeys(): array
