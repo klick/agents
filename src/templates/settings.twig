@@ -6,10 +6,22 @@
 {% set writesExperimentalConfigLocked = writesExperimentalConfigLocked ?? false %}
 {% set writesExperimentalLockSource = writesExperimentalLockSource ?? '' %}
 {% set credentialUsageIndicatorSettingLocked = credentialUsageIndicatorSettingLocked ?? false %}
+{% set notificationsEnabledSettingLocked = notificationsEnabledSettingLocked ?? false %}
+{% set notificationRecipientsSettingLocked = notificationRecipientsSettingLocked ?? false %}
+{% set notificationApprovalRequestedSettingLocked = notificationApprovalRequestedSettingLocked ?? false %}
+{% set notificationApprovalDecidedSettingLocked = notificationApprovalDecidedSettingLocked ?? false %}
+{% set notificationExecutionFailedSettingLocked = notificationExecutionFailedSettingLocked ?? false %}
+{% set notificationWebhookDlqFailedSettingLocked = notificationWebhookDlqFailedSettingLocked ?? false %}
+{% set notificationStatusChangedSettingLocked = notificationStatusChangedSettingLocked ?? false %}
 {% set webhookUrlSettingLocked = webhookUrlSettingLocked ?? false %}
 {% set webhookSecretSettingLocked = webhookSecretSettingLocked ?? false %}
 {% set reliabilityConsumerLagWarnSecondsLocked = reliabilityConsumerLagWarnSecondsLocked ?? false %}
 {% set reliabilityConsumerLagCriticalSecondsLocked = reliabilityConsumerLagCriticalSecondsLocked ?? false %}
+{% set notificationRecipientsTip = 'This can begin with an environment variable.'|t('app') ~ ' ' ~ tag('a', {
+  href: 'https://craftcms.com/docs/5.x/configure.html#control-panel-settings',
+  class: 'go',
+  text: 'Learn more'|t('app'),
+}) %}
 {% set webhookUrlTip = 'This can begin with an environment variable or alias.'|t('app') ~ ' ' ~ tag('a', {
   href: 'https://craftcms.com/docs/5.x/configure.html#control-panel-settings',
   class: 'go',
@@ -64,6 +76,102 @@
     onLabel: false,
     offLabel: false,
     disabled: credentialUsageIndicatorSettingLocked,
+  }) }}
+</section>
+
+
+<hr>
+
+
+<section class="border rounded p-3" id="notificationsSection">
+  <h2 class="h4">Operator Notifications</h2>
+  <p class="agents-subtle">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes. Run <code>php craft agents/notifications-check</code> from cron to evaluate system status notifications.</p>
+
+  {{ forms.lightswitchField({
+    first: true,
+    label: 'Enable operator notifications',
+    instructions: notificationsEnabledSettingLocked
+      ? 'Controlled by config/agents.php (`notificationsEnabled`).'
+      : 'Turn outbound operator notifications on or off.',
+    name: 'notificationsEnabled',
+    on: settings.notificationsEnabled ?? false,
+    onLabel: false,
+    offLabel: false,
+    disabled: notificationsEnabledSettingLocked,
+  }) }}
+
+  {{ forms.autosuggestField({
+    label: 'Notification recipients',
+    instructions: notificationRecipientsSettingLocked
+      ? 'Controlled by config/agents.php (`notificationRecipients`).'
+      : 'Comma- or newline-separated email recipients. Recommended: keep this as `$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS` and set the actual list in your environment.',
+    id: 'notificationRecipients',
+    name: 'notificationRecipients',
+    value: settings.notificationRecipients ?? '$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS',
+    suggestEnvVars: true,
+    tip: notificationRecipientsTip,
+    placeholder: '$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS',
+    disabled: notificationRecipientsSettingLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Approval requested',
+    instructions: notificationApprovalRequestedSettingLocked
+      ? 'Controlled by config/agents.php (`notificationApprovalRequested`).'
+      : 'Send an email when a new approval request is created.',
+    name: 'notificationApprovalRequested',
+    on: settings.notificationApprovalRequested ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: notificationApprovalRequestedSettingLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Approval decided',
+    instructions: notificationApprovalDecidedSettingLocked
+      ? 'Controlled by config/agents.php (`notificationApprovalDecided`).'
+      : 'Send an email when an approval request is finally approved or rejected.',
+    name: 'notificationApprovalDecided',
+    on: settings.notificationApprovalDecided ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: notificationApprovalDecidedSettingLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Execution blocked or failed',
+    instructions: notificationExecutionFailedSettingLocked
+      ? 'Controlled by config/agents.php (`notificationExecutionFailed`).'
+      : 'Send an email when governed execution ends blocked or failed.',
+    name: 'notificationExecutionFailed',
+    on: settings.notificationExecutionFailed ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: notificationExecutionFailedSettingLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Webhook DLQ failures',
+    instructions: notificationWebhookDlqFailedSettingLocked
+      ? 'Controlled by config/agents.php (`notificationWebhookDlqFailed`).'
+      : 'Send an email when an outbound webhook enters the dead-letter queue.',
+    name: 'notificationWebhookDlqFailed',
+    on: settings.notificationWebhookDlqFailed ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: notificationWebhookDlqFailedSettingLocked,
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Scheduled status changes',
+    instructions: notificationStatusChangedSettingLocked
+      ? 'Controlled by config/agents.php (`notificationStatusChanged`).'
+      : 'Send an email when the scheduled notifications check detects a system status transition.',
+    name: 'notificationStatusChanged',
+    on: settings.notificationStatusChanged ?? true,
+    onLabel: false,
+    offLabel: false,
+    disabled: notificationStatusChangedSettingLocked,
   }) }}
 </section>
 
@@ -159,7 +267,7 @@
   </section>
 {% endif %}
 
-{% if agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or webhookUrlSettingLocked or webhookSecretSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
+{% if agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or notificationsEnabledSettingLocked or notificationRecipientsSettingLocked or notificationApprovalRequestedSettingLocked or notificationApprovalDecidedSettingLocked or notificationExecutionFailedSettingLocked or notificationWebhookDlqFailedSettingLocked or notificationStatusChangedSettingLocked or webhookUrlSettingLocked or webhookSecretSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
   <section class="border rounded p-3 warning" id="configurationLocksSection">
     <h2 class="h4">Configuration Locks</h2>
     {% if agentsEnabledLocked %}
@@ -173,6 +281,9 @@
     {% endif %}
     {% if credentialUsageIndicatorSettingLocked %}
       <p>`enableCredentialUsageIndicator` is controlled by <code>config/agents.php</code>.</p>
+    {% endif %}
+    {% if notificationsEnabledSettingLocked or notificationRecipientsSettingLocked or notificationApprovalRequestedSettingLocked or notificationApprovalDecidedSettingLocked or notificationExecutionFailedSettingLocked or notificationWebhookDlqFailedSettingLocked or notificationStatusChangedSettingLocked %}
+      <p>Some operator notification settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
     {% endif %}
     {% if webhookUrlSettingLocked or webhookSecretSettingLocked %}
       <p>Webhook transport settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>

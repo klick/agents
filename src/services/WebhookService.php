@@ -170,6 +170,15 @@ class WebhookService extends Component
                 'payload' => $encodedPayload,
                 'dateUpdated' => $now,
             ], ['id' => (int)($existing['id'] ?? 0)])->execute();
+            $this->queueDeadLetterNotification([
+                'id' => (int)($existing['id'] ?? 0),
+                'eventId' => $eventId,
+                'resourceType' => $resourceType,
+                'resourceId' => $resourceId,
+                'action' => $action,
+                'attempts' => max((int)($existing['attempts'] ?? 0), max(1, $attempts)),
+                'lastError' => $errorMessage,
+            ]);
             return;
         }
 
@@ -186,6 +195,15 @@ class WebhookService extends Component
             'dateUpdated' => $now,
             'uid' => StringHelper::UUID(),
         ])->execute();
+        $this->queueDeadLetterNotification([
+            'id' => (int)Craft::$app->getDb()->getLastInsertID(),
+            'eventId' => $eventId,
+            'resourceType' => $resourceType,
+            'resourceId' => $resourceId,
+            'action' => $action,
+            'attempts' => max(1, $attempts),
+            'lastError' => $errorMessage,
+        ]);
     }
 
     public function getDeadLetterEvents(array $filters = [], int $limit = 100): array
@@ -550,5 +568,14 @@ class WebhookService extends Component
         }
 
         return min($limit, $max);
+    }
+
+    private function queueDeadLetterNotification(array $event): void
+    {
+        try {
+            Plugin::getInstance()->getNotificationService()->queueWebhookDeadLetter($event);
+        } catch (\Throwable $e) {
+            Craft::warning('Unable to queue webhook dead-letter notification: ' . $e->getMessage(), __METHOD__);
+        }
     }
 }

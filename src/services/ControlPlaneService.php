@@ -7,6 +7,7 @@ use craft\base\Component;
 use craft\elements\Entry;
 use craft\elements\User;
 use craft\helpers\StringHelper;
+use Klick\Agents\Plugin;
 use yii\db\Query;
 
 class ControlPlaneService extends Component
@@ -405,6 +406,12 @@ class ControlPlaneService extends Component
             ],
         ]);
 
+        try {
+            Plugin::getInstance()->getNotificationService()->queueApprovalRequested($hydrated);
+        } catch (\Throwable $e) {
+            Craft::warning('Unable to queue approval-request notification: ' . $e->getMessage(), __METHOD__);
+        }
+
         return $hydrated;
     }
 
@@ -539,6 +546,14 @@ class ControlPlaneService extends Component
                 'summary' => $auditSummary,
                 'metadata' => $auditMetadata,
             ]);
+
+            if ((string)($hydrated['status'] ?? self::APPROVAL_STATUS_PENDING) !== self::APPROVAL_STATUS_PENDING) {
+                try {
+                    Plugin::getInstance()->getNotificationService()->queueApprovalDecided($hydrated);
+                } catch (\Throwable $e) {
+                    Craft::warning('Unable to queue approval-decision notification: ' . $e->getMessage(), __METHOD__);
+                }
+            }
 
             return $hydrated;
         }
@@ -823,6 +838,14 @@ class ControlPlaneService extends Component
                 'error' => $errorMessage,
             ],
         ]);
+
+        if (in_array($status, [self::EXECUTION_STATUS_BLOCKED, self::EXECUTION_STATUS_FAILED], true)) {
+            try {
+                Plugin::getInstance()->getNotificationService()->queueExecutionIssue($hydrated);
+            } catch (\Throwable $e) {
+                Craft::warning('Unable to queue execution-issue notification: ' . $e->getMessage(), __METHOD__);
+            }
+        }
 
         return $hydrated;
     }

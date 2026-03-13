@@ -45,7 +45,7 @@ class AgentsController extends Controller
             'section-list' => array_merge($options, ['json']),
             'template-catalog' => array_merge($options, ['templateId', 'json']),
             'starter-packs' => array_merge($options, ['templateId', 'json']),
-            'auth-check', 'readiness-check', 'reliability-check', 'lifecycle-report', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
+            'auth-check', 'readiness-check', 'reliability-check', 'lifecycle-report', 'notifications-check', 'diagnostics-bundle', 'smoke' => array_merge($options, ['json', 'strict']),
             default => $options,
         };
     }
@@ -489,6 +489,36 @@ class AgentsController extends Controller
             'thresholds' => (array)($snapshot['thresholds'] ?? []),
             'summary' => (array)($snapshot['summary'] ?? []),
             'topRisks' => (array)($snapshot['topRisks'] ?? []),
+        ], $errors, $warnings);
+    }
+
+    public function actionNotificationsCheck(): int
+    {
+        $result = Plugin::getInstance()->getNotificationService()->runStatusMonitor();
+        $snapshot = (array)($result['snapshot'] ?? []);
+        $currentStatus = (string)($result['currentStatus'] ?? 'ok');
+
+        $errors = [];
+        $warnings = [];
+        foreach ((array)($snapshot['issues'] ?? []) as $issue) {
+            $message = (string)$issue;
+            if ($message === '') {
+                continue;
+            }
+            if ($currentStatus === 'critical') {
+                $errors[] = $message;
+            } elseif ($currentStatus === 'warn') {
+                $warnings[] = $message;
+            }
+        }
+
+        return $this->emitCheckResult('notifications-check', [
+            'monitorKey' => (string)($result['monitorKey'] ?? 'system-status'),
+            'previousStatus' => (string)($result['previousStatus'] ?? 'unknown'),
+            'currentStatus' => $currentStatus,
+            'changed' => (bool)($result['changed'] ?? false),
+            'notified' => (bool)($result['notified'] ?? false),
+            'snapshot' => $snapshot,
         ], $errors, $warnings);
     }
 

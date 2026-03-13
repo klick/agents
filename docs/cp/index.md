@@ -19,7 +19,7 @@ The Agents CP subnav currently exposes:
   - managed machine-account lifecycle and access controls
 - **Settings**
   - URL: `admin/agents/settings`
-  - runtime switches, webhook transport, reliability thresholds, and config-lock visibility
+  - runtime switches, operator notifications, webhook transport, reliability thresholds, and config-lock visibility
 
 The section root `admin/agents` opens `Status`.
 
@@ -41,6 +41,10 @@ The section root `admin/agents` opens `Status`.
   - `Diagnostics Bundle` download
   - separate dead-letter queue replay section for operational recovery
   - dev-only `Webhook Test Sink` section when local sink capture is enabled
+  - `Operator Notifications` card with:
+    - resolved recipient visibility
+    - recent delivery outcomes
+    - manual `Run status check` action
 
 Fresh installs bias toward `Ready to Connect` when the runtime is healthy but there is not enough live traffic yet to prove readiness. `Confidence / Observability` can still read `Unproven`, and sync-state remains optional until a worker starts reporting checkpoints.
 
@@ -90,9 +94,10 @@ Current responsibilities:
 - create and edit flows for:
   - display name and handle
   - scopes
-  - owner metadata
+  - owner user assignment with legacy-owner fallback
   - pause/resume state
   - force-human-approval mode for write-capable accounts
+  - account-specific approval recipients
   - event routing interests (resource/action subscriptions)
   - TTL and reminder policy
   - IP allowlist
@@ -112,6 +117,14 @@ Current sections:
   - enable/disable Agents API
   - enable governed writing APIs (experimental)
   - enable live usage indicator on Account cards
+- **Operator Notifications**
+  - email-first recipient list
+  - approval requested / approval decided toggles
+  - execution issue toggle
+  - webhook DLQ failure toggle
+  - scheduled system-status transition toggle
+  - cron entry point: `php craft agents/notifications-check`
+  - `Status` shows recent notification deliveries and lets admins run the status check manually
 - **Webhooks**
   - env-aware runtime webhook target field
   - env-aware webhook signing secret field

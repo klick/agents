@@ -13,7 +13,7 @@ Current plugin version: **0.20.0**
 - Control:
   - managed credentials, scopes, policies, approvals, and audit trail in the Craft CP
 - Operate:
-  - readiness, diagnostics, sync-state visibility, webhook reliability, and lifecycle posture
+  - readiness, diagnostics, sync-state visibility, operator notifications, webhook reliability, and lifecycle posture
 
 ## What Agents Provides
 
@@ -56,6 +56,8 @@ Current plugin version: **0.20.0**
   - signed webhook delivery with retries
   - per-key event routing interests
   - dead-letter queue visibility + replay (`/agents/v1/webhooks/dlq*`)
+- Operator notifications:
+  - email-first notifications for approvals, execution issues, webhook failures, and scheduled system-status changes
 - Governed control-plane flows (feature-flagged):
   - policies
   - approvals with explicit assurance modes and audit trail
@@ -64,7 +66,7 @@ Current plugin version: **0.20.0**
   - immutable audit trail
 - Craft CP operations:
   - Status (merged readiness and security operator surface)
-  - Settings (runtime switches, webhook transport, reliability thresholds)
+  - Settings (runtime switches, operator notifications, webhook transport, reliability thresholds)
   - Accounts (scopes, event routing interests, TTL/reminder, IP allowlists)
   - Approvals (when experimental governed writes are enabled)
 

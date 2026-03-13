@@ -24,6 +24,7 @@ use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiagnosticsBundleService;
 use Klick\Agents\services\IncidentFeedService;
 use Klick\Agents\services\LifecycleGovernanceService;
+use Klick\Agents\services\NotificationService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
 use Klick\Agents\services\ReliabilitySignalService;
@@ -35,6 +36,8 @@ use Klick\Agents\services\WebhookTestSinkService;
 
 class Plugin extends BasePlugin
 {
+    public const EVENT_REGISTER_EXTERNAL_RESOURCE_PROVIDERS = 'registerExternalResourceProviders';
+
     public const PERMISSION_CREDENTIALS_VIEW = 'agents-viewCredentials';
     public const PERMISSION_CREDENTIALS_MANAGE = 'agents-manageCredentials';
     public const PERMISSION_CREDENTIALS_ROTATE = 'agents-rotateCredentials';
@@ -47,7 +50,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.20.0';
+    public string $schemaVersion = '0.21.0';
 
     public static ?self $plugin = null;
 
@@ -67,6 +70,7 @@ class Plugin extends BasePlugin
             'observabilityMetricsService' => ObservabilityMetricsService::class,
             'reliabilitySignalService' => ReliabilitySignalService::class,
             'lifecycleGovernanceService' => LifecycleGovernanceService::class,
+            'notificationService' => NotificationService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
             'incidentFeedService' => IncidentFeedService::class,
             'templateCatalogService' => TemplateCatalogService::class,
@@ -302,6 +306,13 @@ class Plugin extends BasePlugin
     {
         /** @var DiagnosticsBundleService $service */
         $service = $this->get('diagnosticsBundleService');
+        return $service;
+    }
+
+    public function getNotificationService(): NotificationService
+    {
+        /** @var NotificationService $service */
+        $service = $this->get('notificationService');
         return $service;
     }
 

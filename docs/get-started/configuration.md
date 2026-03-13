@@ -50,6 +50,10 @@ Runtime model:
 - `PLUGIN_AGENTS_WEBHOOK_MAX_ATTEMPTS` (default `3`)
 - `PLUGIN_AGENTS_WEBHOOK_TEST_SINK` (default `false`, dev-only local capture endpoint)
 
+### Operator notifications
+
+- `PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS` (comma-, semicolon-, newline-, or JSON-array list of email recipients)
+
 ### Experimental surfaces
 
 - `PLUGIN_AGENTS_WRITES_EXPERIMENTAL` (default `false`)
@@ -81,10 +85,27 @@ Runtime precedence:
 
 - API availability (`enabled`) unless env-locked by `PLUGIN_AGENTS_ENABLED`
 - live agent usage indicator (`enableCredentialUsageIndicator`)
+- operator notifications:
+  - `notificationsEnabled`
+  - `notificationRecipients`
+  - `notificationApprovalRequested`
+  - `notificationApprovalDecided`
+  - `notificationExecutionFailed`
+  - `notificationWebhookDlqFailed`
+  - `notificationStatusChanged`
 - webhook target + signing secret as env-aware refs (`webhookUrl`, `webhookSecret`)
 - sync-state lag thresholds (`reliabilityConsumerLagWarnSeconds`, `reliabilityConsumerLagCriticalSeconds`)
 
 `config/agents.php` can override these settings; when overridden, CP fields are shown as locked.
+
+To evaluate scheduled system-status notifications, run:
+
+```bash
+php craft agents/notifications-check
+```
+
+In production, run that command from cron or a scheduler.
+In the CP, `Agents -> Status` also exposes a manual `Run status check` action plus a recent-deliveries card for operator verification.
 
 ## Agent policy controls (CP)
 

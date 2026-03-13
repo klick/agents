@@ -6,6 +6,7 @@ use Craft;
 use Klick\Agents\Plugin;
 use Klick\Agents\models\Settings;
 use craft\elements\Entry;
+use craft\elements\User;
 use craft\web\Controller;
 use craft\web\View;
 use Throwable;
@@ -88,6 +89,32 @@ class DashboardController extends Controller
         } catch (Throwable $e) {
             Craft::warning('Unable to load webhook test sink snapshot for CP: ' . $e->getMessage(), __METHOD__);
         }
+        $notificationSnapshot = [
+            'config' => [
+                'enabled' => false,
+                'recipients' => [],
+                'recipientCount' => 0,
+                'eventToggles' => [],
+            ],
+            'summary' => [
+                'total' => 0,
+                'queued' => 0,
+                'sent' => 0,
+                'failed' => 0,
+                'lastSentAt' => null,
+                'lastFailureAt' => null,
+            ],
+            'systemMonitor' => [
+                'status' => 'unknown',
+                'payload' => [],
+            ],
+            'recentNotifications' => [],
+        ];
+        try {
+            $notificationSnapshot = $plugin->getNotificationService()->getCpSnapshot(12);
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load operator notifications snapshot for CP: ' . $e->getMessage(), __METHOD__);
+        }
         $observabilitySnapshot = [
             'service' => 'agents',
             'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
@@ -120,6 +147,7 @@ class DashboardController extends Controller
             'observabilitySnapshotJson' => $this->prettyPrintJson($observabilitySnapshot),
             'webhookDeadLetters' => $webhookDeadLetters,
             'webhookTestSinkSnapshot' => $webhookTestSinkSnapshot,
+            'notificationSnapshot' => $notificationSnapshot,
             'securityPosture' => $securityPosture,
         ]);
     }
@@ -265,6 +293,13 @@ class DashboardController extends Controller
             'writesExperimentalLockSource' => (string)($writesState['source'] ?? ''),
             'controlCpEnabled' => $plugin->isControlCpEnabled(),
             'credentialUsageIndicatorSettingLocked' => (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false),
+            'notificationsEnabledSettingLocked' => (bool)($settingsOverrides['notificationsEnabled'] ?? false),
+            'notificationRecipientsSettingLocked' => (bool)($settingsOverrides['notificationRecipients'] ?? false),
+            'notificationApprovalRequestedSettingLocked' => (bool)($settingsOverrides['notificationApprovalRequested'] ?? false),
+            'notificationApprovalDecidedSettingLocked' => (bool)($settingsOverrides['notificationApprovalDecided'] ?? false),
+            'notificationExecutionFailedSettingLocked' => (bool)($settingsOverrides['notificationExecutionFailed'] ?? false),
+            'notificationWebhookDlqFailedSettingLocked' => (bool)($settingsOverrides['notificationWebhookDlqFailed'] ?? false),
+            'notificationStatusChangedSettingLocked' => (bool)($settingsOverrides['notificationStatusChanged'] ?? false),
             'webhookUrlSettingLocked' => (bool)($settingsOverrides['webhookUrl'] ?? false),
             'webhookSecretSettingLocked' => (bool)($settingsOverrides['webhookSecret'] ?? false),
             'reliabilityConsumerLagWarnSecondsLocked' => (bool)($settingsOverrides['reliabilityConsumerLagWarnSeconds'] ?? false),
@@ -332,6 +367,8 @@ class DashboardController extends Controller
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'credentialUsageIndicatorEnabled' => (bool)$this->getSettingsModel()->enableCredentialUsageIndicator,
+            'defaultCredentialOwnerUser' => $this->resolveCurrentCpUser(),
+            'defaultCredentialOwnerUserId' => $this->resolveCurrentCpUserId(),
             'defaultCredentialOwner' => $this->resolveCurrentCpUserEmail(),
             'securityPosture' => $posture,
             'managedCredentials' => $managedCredentials,
@@ -446,6 +483,13 @@ class DashboardController extends Controller
         $writesEnvLocked = (bool)($writesState['locked'] ?? false);
         $writesLocked = $writesConfigLocked || $writesEnvLocked;
         $credentialUsageIndicatorLocked = (bool)($settingsOverrides['enableCredentialUsageIndicator'] ?? false);
+        $notificationsEnabledLocked = (bool)($settingsOverrides['notificationsEnabled'] ?? false);
+        $notificationRecipientsLocked = (bool)($settingsOverrides['notificationRecipients'] ?? false);
+        $notificationApprovalRequestedLocked = (bool)($settingsOverrides['notificationApprovalRequested'] ?? false);
+        $notificationApprovalDecidedLocked = (bool)($settingsOverrides['notificationApprovalDecided'] ?? false);
+        $notificationExecutionFailedLocked = (bool)($settingsOverrides['notificationExecutionFailed'] ?? false);
+        $notificationWebhookDlqFailedLocked = (bool)($settingsOverrides['notificationWebhookDlqFailed'] ?? false);
+        $notificationStatusChangedLocked = (bool)($settingsOverrides['notificationStatusChanged'] ?? false);
         $webhookUrlLocked = (bool)($settingsOverrides['webhookUrl'] ?? false);
         $webhookSecretLocked = (bool)($settingsOverrides['webhookSecret'] ?? false);
         $consumerLagWarnLocked = (bool)($settingsOverrides['reliabilityConsumerLagWarnSeconds'] ?? false);
@@ -464,6 +508,27 @@ class DashboardController extends Controller
         $settingsData['enableCredentialUsageIndicator'] = $credentialUsageIndicatorLocked
             ? (bool)$settings->enableCredentialUsageIndicator
             : $this->parseBooleanBodyParam('enableCredentialUsageIndicator', (bool)$settings->enableCredentialUsageIndicator);
+        $settingsData['notificationsEnabled'] = $notificationsEnabledLocked
+            ? (bool)$settings->notificationsEnabled
+            : $this->parseBooleanBodyParam('notificationsEnabled', (bool)$settings->notificationsEnabled);
+        $settingsData['notificationRecipients'] = $notificationRecipientsLocked
+            ? (string)$settings->notificationRecipients
+            : $this->parseStringBodyParam('notificationRecipients', (string)$settings->notificationRecipients);
+        $settingsData['notificationApprovalRequested'] = $notificationApprovalRequestedLocked
+            ? (bool)$settings->notificationApprovalRequested
+            : $this->parseBooleanBodyParam('notificationApprovalRequested', (bool)$settings->notificationApprovalRequested);
+        $settingsData['notificationApprovalDecided'] = $notificationApprovalDecidedLocked
+            ? (bool)$settings->notificationApprovalDecided
+            : $this->parseBooleanBodyParam('notificationApprovalDecided', (bool)$settings->notificationApprovalDecided);
+        $settingsData['notificationExecutionFailed'] = $notificationExecutionFailedLocked
+            ? (bool)$settings->notificationExecutionFailed
+            : $this->parseBooleanBodyParam('notificationExecutionFailed', (bool)$settings->notificationExecutionFailed);
+        $settingsData['notificationWebhookDlqFailed'] = $notificationWebhookDlqFailedLocked
+            ? (bool)$settings->notificationWebhookDlqFailed
+            : $this->parseBooleanBodyParam('notificationWebhookDlqFailed', (bool)$settings->notificationWebhookDlqFailed);
+        $settingsData['notificationStatusChanged'] = $notificationStatusChangedLocked
+            ? (bool)$settings->notificationStatusChanged
+            : $this->parseBooleanBodyParam('notificationStatusChanged', (bool)$settings->notificationStatusChanged);
         $settingsData['webhookUrl'] = $webhookUrlLocked
             ? (string)$settings->webhookUrl
             : $this->parseStringBodyParam('webhookUrl', (string)$settings->webhookUrl);
@@ -508,6 +573,27 @@ class DashboardController extends Controller
         }
         if ($credentialUsageIndicatorLocked) {
             $notes[] = '`enableCredentialUsageIndicator` is controlled by `config/agents.php`.';
+        }
+        if ($notificationsEnabledLocked) {
+            $notes[] = '`notificationsEnabled` is controlled by `config/agents.php`.';
+        }
+        if ($notificationRecipientsLocked) {
+            $notes[] = '`notificationRecipients` is controlled by `config/agents.php`.';
+        }
+        if ($notificationApprovalRequestedLocked) {
+            $notes[] = '`notificationApprovalRequested` is controlled by `config/agents.php`.';
+        }
+        if ($notificationApprovalDecidedLocked) {
+            $notes[] = '`notificationApprovalDecided` is controlled by `config/agents.php`.';
+        }
+        if ($notificationExecutionFailedLocked) {
+            $notes[] = '`notificationExecutionFailed` is controlled by `config/agents.php`.';
+        }
+        if ($notificationWebhookDlqFailedLocked) {
+            $notes[] = '`notificationWebhookDlqFailed` is controlled by `config/agents.php`.';
+        }
+        if ($notificationStatusChangedLocked) {
+            $notes[] = '`notificationStatusChanged` is controlled by `config/agents.php`.';
         }
         if ($webhookUrlLocked) {
             $notes[] = '`webhookUrl` is controlled by `config/agents.php`.';
@@ -644,6 +730,39 @@ class DashboardController extends Controller
         return $this->redirectToPostedUrl(null, 'agents/status');
     }
 
+    public function actionRunNotificationsCheck(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        try {
+            $service = Plugin::getInstance()->getNotificationService();
+            $config = $service->getRuntimeConfig();
+            $result = $service->runStatusMonitor();
+            $currentStatus = strtoupper((string)($result['currentStatus'] ?? 'unknown'));
+            $previousStatus = strtoupper((string)($result['previousStatus'] ?? 'unknown'));
+            $queued = (int)($result['queued'] ?? 0);
+
+            if ((bool)($result['changed'] ?? false)) {
+                $message = sprintf('Notifications check recorded a system status change from %s to %s.', $previousStatus, $currentStatus);
+                if (!(bool)($config['enabled'] ?? false)) {
+                    $message .= ' Operator notifications are currently disabled, so no email was queued.';
+                } elseif ($queued > 0) {
+                    $message .= sprintf(' Queued %d email notification%s.', $queued, $queued === 1 ? '' : 's');
+                } else {
+                    $message .= ' No email was queued (toggle off for this event or dedupe window still active).';
+                }
+                $this->setSuccessFlash($message);
+            } else {
+                $this->setSuccessFlash(sprintf('Notifications check completed. Current system status remains %s.', $currentStatus));
+            }
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to run notifications check: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/status#operatorNotificationsSection');
+    }
+
     public function actionCreateCredential(): Response
     {
         $this->requirePostRequest();
@@ -653,12 +772,16 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $handle = (string)$this->request->getBodyParam('credentialHandle', '');
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
-        $owner = $this->parseStringBodyParam('credentialOwner', $this->resolveCurrentCpUserEmail());
+        $owner = $this->parseStringBodyParam('credentialOwnerLegacyValue', $this->resolveCurrentCpUserEmail());
+        $ownerUserId = $this->parseSingleIntegerIdBodyParam('credentialOwnerUserId');
         $token = (string)$this->request->getBodyParam('credentialToken', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
         $forceHumanApproval = $this->hasWritingCapabilityScope($scopes)
             ? $this->parseBooleanBodyParam('credentialForceHumanApproval', false)
             : false;
+        $approvalRecipientUserIds = $this->hasWritingCapabilityScope($scopes)
+            ? $this->parseIntegerIdsInput($this->request->getBodyParam('credentialApprovalRecipientUserIds', []))
+            : [];
         $webhookSubscriptions = [
             'resourceTypes' => $this->parseWebhookDimensionInput(
                 $this->request->getBodyParam('credentialWebhookResourceTypes', []),
@@ -682,6 +805,8 @@ class DashboardController extends Controller
                 $handle,
                 $displayName,
                 $owner,
+                $ownerUserId,
+                $approvalRecipientUserIds,
                 $forceHumanApproval,
                 $token,
                 $scopes,
@@ -717,11 +842,15 @@ class DashboardController extends Controller
         $defaultScopes = $this->getDefaultScopes();
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
         $displayName = (string)$this->request->getBodyParam('credentialDisplayName', '');
-        $owner = $this->parseStringBodyParam('credentialOwner', '');
+        $owner = $this->parseStringBodyParam('credentialOwnerLegacyValue', '');
+        $ownerUserId = $this->parseSingleIntegerIdBodyParam('credentialOwnerUserId');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
         $forceHumanApproval = $this->hasWritingCapabilityScope($scopes)
             ? $this->parseBooleanBodyParam('credentialForceHumanApproval', false)
             : false;
+        $approvalRecipientUserIds = $this->hasWritingCapabilityScope($scopes)
+            ? $this->parseIntegerIdsInput($this->request->getBodyParam('credentialApprovalRecipientUserIds', []))
+            : [];
         $webhookSubscriptions = [
             'resourceTypes' => $this->parseWebhookDimensionInput(
                 $this->request->getBodyParam('credentialWebhookResourceTypes', []),
@@ -750,6 +879,8 @@ class DashboardController extends Controller
                 $credentialId,
                 $displayName,
                 $owner,
+                $ownerUserId,
+                $approvalRecipientUserIds,
                 $forceHumanApproval,
                 $scopes,
                 $defaultScopes,
@@ -1555,6 +1686,12 @@ class DashboardController extends Controller
         return $ids;
     }
 
+    private function parseSingleIntegerIdBodyParam(string $name): ?int
+    {
+        $ids = $this->parseIntegerIdsInput($this->request->getBodyParam($name));
+        return $ids[0] ?? null;
+    }
+
     private function normalizeCidrInput(string $raw): ?string
     {
         $candidate = trim($raw);
@@ -1646,6 +1783,13 @@ class DashboardController extends Controller
         return [
             'enableWritesExperimental' => array_key_exists('enableWritesExperimental', $config),
             'enableCredentialUsageIndicator' => array_key_exists('enableCredentialUsageIndicator', $config),
+            'notificationsEnabled' => array_key_exists('notificationsEnabled', $config),
+            'notificationRecipients' => array_key_exists('notificationRecipients', $config),
+            'notificationApprovalRequested' => array_key_exists('notificationApprovalRequested', $config),
+            'notificationApprovalDecided' => array_key_exists('notificationApprovalDecided', $config),
+            'notificationExecutionFailed' => array_key_exists('notificationExecutionFailed', $config),
+            'notificationWebhookDlqFailed' => array_key_exists('notificationWebhookDlqFailed', $config),
+            'notificationStatusChanged' => array_key_exists('notificationStatusChanged', $config),
             'webhookUrl' => array_key_exists('webhookUrl', $config),
             'webhookSecret' => array_key_exists('webhookSecret', $config),
             'reliabilityConsumerLagWarnSeconds' => array_key_exists('reliabilityConsumerLagWarnSeconds', $config),
@@ -2845,7 +2989,7 @@ class DashboardController extends Controller
 
     private function resolveCurrentCpUserEmail(): string
     {
-        $identity = Craft::$app->getUser()->getIdentity();
+        $identity = $this->resolveCurrentCpUser();
         if ($identity === null) {
             return '';
         }
@@ -2857,6 +3001,27 @@ class DashboardController extends Controller
 
         $username = trim((string)($identity->username ?? ''));
         return $username;
+    }
+
+    private function resolveCurrentCpUserId(): ?int
+    {
+        $identity = $this->resolveCurrentCpUser();
+        if ($identity === null) {
+            return null;
+        }
+
+        $userId = (int)($identity->id ?? 0);
+        return $userId > 0 ? $userId : null;
+    }
+
+    private function resolveCurrentCpUser(): ?User
+    {
+        $identity = Craft::$app->getUser()->getIdentity();
+        if (!$identity instanceof User) {
+            return null;
+        }
+
+        return $identity;
     }
 
     private function buildCpActorContext(): array

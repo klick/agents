@@ -4,6 +4,7 @@ namespace Klick\Agents\services;
 
 use Craft;
 use craft\base\Component;
+use craft\elements\User;
 use craft\helpers\StringHelper;
 use yii\db\Query;
 
@@ -25,7 +26,9 @@ class CredentialService extends Component
     private ?bool $supportsIpAllowlistColumn = null;
     private ?bool $supportsPauseColumn = null;
     private ?bool $supportsOwnerColumn = null;
+    private ?bool $supportsOwnerUserIdColumn = null;
     private ?bool $supportsForceHumanApprovalColumn = null;
+    private ?bool $supportsApprovalRecipientUserIdsColumn = null;
 
     public function getManagedCredentialsForRuntime(array $defaultScopes): array
     {
@@ -65,6 +68,8 @@ class CredentialService extends Component
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
                 'ipAllowlist' => $this->decodeIpAllowlist($row),
                 'forceHumanApproval' => $this->decodeForceHumanApproval($row),
+                'ownerUserId' => $this->decodeOwnerUserId($row),
+                'approvalRecipientUserIds' => $this->decodeApprovalRecipientUserIds($row),
                 'source' => 'cp',
                 'managedCredentialId' => (int)($row['id'] ?? 0),
             ];
@@ -87,17 +92,35 @@ class CredentialService extends Component
             ])
             ->all();
 
+        $relatedUsersById = $this->loadReferencedUsers($rows);
         $credentials = [];
         foreach ($rows as $row) {
             $expiry = $this->decodeExpiryPolicy($row);
             $isRevoked = !empty($row['revokedAt']);
             $isPaused = $this->isCredentialPaused($row);
+            $owner = $this->supportsOwnerColumn() ? $this->normalizeOwner($row['owner'] ?? null) : '';
+            $ownerUserId = $this->decodeOwnerUserId($row);
+            $approvalRecipientUserIds = $this->decodeApprovalRecipientUserIds($row);
+            $ownerUser = $ownerUserId !== null ? ($relatedUsersById[$ownerUserId] ?? null) : null;
+            $approvalRecipients = [];
+            foreach ($approvalRecipientUserIds as $userId) {
+                if (!isset($relatedUsersById[$userId])) {
+                    continue;
+                }
+                $approvalRecipients[] = $relatedUsersById[$userId];
+            }
             $credentials[] = [
                 'id' => (int)($row['id'] ?? 0),
                 'handle' => (string)($row['handle'] ?? ''),
                 'displayName' => (string)($row['displayName'] ?? ''),
-                'owner' => $this->supportsOwnerColumn() ? $this->normalizeOwner($row['owner'] ?? null) : '',
+                'owner' => $owner,
+                'ownerLegacy' => $owner,
+                'ownerUserId' => $ownerUserId,
+                'ownerUser' => $ownerUser,
+                'ownerLabel' => $ownerUser['label'] ?? ($owner !== '' ? $owner : ''),
                 'forceHumanApproval' => $this->decodeForceHumanApproval($row),
+                'approvalRecipientUserIds' => $approvalRecipientUserIds,
+                'approvalRecipients' => $approvalRecipients,
                 'tokenPrefix' => (string)($row['tokenPrefix'] ?? ''),
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
@@ -170,10 +193,100 @@ class CredentialService extends Component
         return $subscriptions;
     }
 
+    public function getNotificationTargetsForHandle(string $handle): array
+    {
+        if (!$this->credentialsTableExists()) {
+            return [
+                'owner' => '',
+                'ownerUserId' => null,
+                'ownerUser' => null,
+                'approvalRecipientUserIds' => [],
+                'approvalRecipients' => [],
+            ];
+        }
+
+        $normalizedHandle = $this->normalizeHandle($handle);
+        if ($normalizedHandle === '') {
+            return [
+                'owner' => '',
+                'ownerUserId' => null,
+                'ownerUser' => null,
+                'approvalRecipientUserIds' => [],
+                'approvalRecipients' => [],
+            ];
+        }
+
+        $row = (new Query())
+            ->from(self::TABLE)
+            ->where(['handle' => $normalizedHandle])
+            ->one();
+
+        if (!is_array($row)) {
+            return [
+                'owner' => '',
+                'ownerUserId' => null,
+                'ownerUser' => null,
+                'approvalRecipientUserIds' => [],
+                'approvalRecipients' => [],
+            ];
+        }
+
+        $relatedUsersById = $this->loadReferencedUsers([$row]);
+        $owner = $this->supportsOwnerColumn() ? $this->normalizeOwner($row['owner'] ?? null) : '';
+        $ownerUserId = $this->decodeOwnerUserId($row);
+        $approvalRecipientUserIds = $this->decodeApprovalRecipientUserIds($row);
+        $approvalRecipients = [];
+        foreach ($approvalRecipientUserIds as $userId) {
+            if (isset($relatedUsersById[$userId])) {
+                $approvalRecipients[] = $relatedUsersById[$userId];
+            }
+        }
+
+        return [
+            'owner' => $owner,
+            'ownerUserId' => $ownerUserId,
+            'ownerUser' => $ownerUserId !== null ? ($relatedUsersById[$ownerUserId] ?? null) : null,
+            'approvalRecipientUserIds' => $approvalRecipientUserIds,
+            'approvalRecipients' => $approvalRecipients,
+        ];
+    }
+
+    public function getApprovalRecipientEmailsForRuntime(array $defaultScopes): array
+    {
+        $emails = [];
+        foreach ($this->getManagedCredentials($defaultScopes) as $credential) {
+            if (!is_array($credential)) {
+                continue;
+            }
+
+            $mode = strtolower(trim((string)($credential['mode'] ?? '')));
+            if (!in_array($mode, ['active', 'expiring_soon'], true)) {
+                continue;
+            }
+
+            foreach ((array)($credential['approvalRecipients'] ?? []) as $recipient) {
+                if (!is_array($recipient)) {
+                    continue;
+                }
+
+                $email = strtolower(trim((string)($recipient['email'] ?? '')));
+                if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    continue;
+                }
+
+                $emails[$email] = true;
+            }
+        }
+
+        return array_keys($emails);
+    }
+
     public function createManagedCredential(
         string $handle,
         string $displayName,
         string $owner,
+        ?int $ownerUserId,
+        array $approvalRecipientUserIds,
         bool $forceHumanApproval,
         string $rawToken,
         array $scopes,
@@ -193,11 +306,15 @@ class CredentialService extends Component
         }
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $normalizedHandle);
-        $normalizedOwner = $this->normalizeOwner($owner);
+        $normalizedOwnerUserId = $this->normalizeUserId($ownerUserId);
+        $normalizedOwner = $this->resolveOwnerLegacyValue($normalizedOwnerUserId, $owner);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
         $normalizedExpiryPolicy = $this->resolveCreateExpiryPolicy($expiryPolicy);
         $normalizedIpAllowlist = $this->normalizeIpAllowlist($networkPolicy['ipAllowlist'] ?? null);
+        $normalizedApprovalRecipientUserIds = $forceHumanApproval
+            ? $this->normalizeUserIds($approvalRecipientUserIds)
+            : [];
 
         $exists = (new Query())
             ->from(self::TABLE)
@@ -244,8 +361,14 @@ class CredentialService extends Component
         if ($this->supportsOwnerColumn()) {
             $insertData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
         }
+        if ($this->supportsOwnerUserIdColumn()) {
+            $insertData['ownerUserId'] = $normalizedOwnerUserId;
+        }
         if ($this->supportsForceHumanApprovalColumn()) {
             $insertData['forceHumanApproval'] = $forceHumanApproval ? 1 : 0;
+        }
+        if ($this->supportsApprovalRecipientUserIdsColumn()) {
+            $insertData['approvalRecipientUserIds'] = $this->encodeJson($normalizedApprovalRecipientUserIds);
         }
         if ($this->supportsWebhookSubscriptionColumns()) {
             $insertData['webhookResourceTypes'] = $this->encodeJson($normalizedWebhookSubscriptions['resourceTypes']);
@@ -409,6 +532,8 @@ class CredentialService extends Component
         int $id,
         string $displayName,
         string $owner,
+        ?int $ownerUserId,
+        array $approvalRecipientUserIds,
         bool $forceHumanApproval,
         array $scopes,
         array $defaultScopes,
@@ -435,11 +560,15 @@ class CredentialService extends Component
         }
 
         $normalizedDisplayName = $this->normalizeDisplayName($displayName, $handle);
-        $normalizedOwner = $this->normalizeOwner($owner);
+        $normalizedOwnerUserId = $this->normalizeUserId($ownerUserId);
+        $normalizedOwner = $this->resolveOwnerLegacyValue($normalizedOwnerUserId, $owner);
         $normalizedScopes = $this->normalizeScopes($scopes, $defaultScopes);
         $normalizedWebhookSubscriptions = $this->normalizeWebhookSubscriptions($webhookSubscriptions);
         $normalizedExpiryPolicy = $this->resolveUpdateExpiryPolicy($row, $expiryPolicy);
         $normalizedIpAllowlist = $this->resolveUpdateIpAllowlist($row, $networkPolicy['ipAllowlist'] ?? null);
+        $normalizedApprovalRecipientUserIds = $forceHumanApproval
+            ? $this->normalizeUserIds($approvalRecipientUserIds)
+            : [];
         $encodedScopes = json_encode($normalizedScopes, JSON_UNESCAPED_SLASHES);
         if (!is_string($encodedScopes)) {
             $encodedScopes = '[]';
@@ -456,8 +585,14 @@ class CredentialService extends Component
         if ($this->supportsOwnerColumn()) {
             $updateData['owner'] = $normalizedOwner !== '' ? $normalizedOwner : null;
         }
+        if ($this->supportsOwnerUserIdColumn()) {
+            $updateData['ownerUserId'] = $normalizedOwnerUserId;
+        }
         if ($this->supportsForceHumanApprovalColumn()) {
             $updateData['forceHumanApproval'] = $forceHumanApproval ? 1 : 0;
+        }
+        if ($this->supportsApprovalRecipientUserIdsColumn()) {
+            $updateData['approvalRecipientUserIds'] = $this->encodeJson($normalizedApprovalRecipientUserIds);
         }
         if ($this->supportsExpiryColumns()) {
             $updateData['expiresAt'] = $normalizedExpiryPolicy['expiresAt'];
@@ -682,6 +817,38 @@ class CredentialService extends Component
         return $this->supportsForceHumanApprovalColumn;
     }
 
+    private function supportsOwnerUserIdColumn(): bool
+    {
+        if ($this->supportsOwnerUserIdColumn !== null) {
+            return $this->supportsOwnerUserIdColumn;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsOwnerUserIdColumn = false;
+            return false;
+        }
+
+        $this->supportsOwnerUserIdColumn = $schema->getColumn('ownerUserId') !== null;
+        return $this->supportsOwnerUserIdColumn;
+    }
+
+    private function supportsApprovalRecipientUserIdsColumn(): bool
+    {
+        if ($this->supportsApprovalRecipientUserIdsColumn !== null) {
+            return $this->supportsApprovalRecipientUserIdsColumn;
+        }
+
+        $schema = Craft::$app->getDb()->getTableSchema(self::TABLE, true);
+        if ($schema === null) {
+            $this->supportsApprovalRecipientUserIdsColumn = false;
+            return false;
+        }
+
+        $this->supportsApprovalRecipientUserIdsColumn = $schema->getColumn('approvalRecipientUserIds') !== null;
+        return $this->supportsApprovalRecipientUserIdsColumn;
+    }
+
     private function normalizeHandle(string $value): string
     {
         $normalized = strtolower(trim($value));
@@ -717,6 +884,156 @@ class CredentialService extends Component
         }
 
         return $owner;
+    }
+
+    private function normalizeUserId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        $id = (int)$value;
+        return $id > 0 ? $id : null;
+    }
+
+    private function normalizeUserIds(mixed $value): array
+    {
+        $tokens = [];
+        if (is_array($value)) {
+            $tokens = $value;
+        } elseif ($value !== null && $value !== '') {
+            $tokens = [$value];
+        }
+
+        $ids = [];
+        foreach ($tokens as $token) {
+            if (!is_numeric($token)) {
+                continue;
+            }
+
+            $id = (int)$token;
+            if ($id <= 0 || in_array($id, $ids, true)) {
+                continue;
+            }
+
+            $ids[] = $id;
+        }
+
+        sort($ids);
+        return $ids;
+    }
+
+    private function decodeOwnerUserId(array $row): ?int
+    {
+        if (!$this->supportsOwnerUserIdColumn()) {
+            return null;
+        }
+
+        return $this->normalizeUserId($row['ownerUserId'] ?? null);
+    }
+
+    private function decodeApprovalRecipientUserIds(array $row): array
+    {
+        if (!$this->supportsApprovalRecipientUserIdsColumn()) {
+            return [];
+        }
+
+        $raw = $row['approvalRecipientUserIds'] ?? null;
+        if (!is_string($raw) && !is_numeric($raw)) {
+            return [];
+        }
+
+        $decoded = json_decode((string)$raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        return $this->normalizeUserIds($decoded);
+    }
+
+    private function resolveOwnerLegacyValue(?int $ownerUserId, string $fallback): string
+    {
+        if ($ownerUserId !== null) {
+            $user = User::find()
+                ->id($ownerUserId)
+                ->status(null)
+                ->one();
+            if ($user instanceof User) {
+                $email = trim((string)$user->email);
+                if ($email !== '') {
+                    return $email;
+                }
+
+                $username = trim((string)$user->username);
+                if ($username !== '') {
+                    return $username;
+                }
+
+                $label = trim((string)$user->friendlyName);
+                if ($label !== '') {
+                    return $label;
+                }
+            }
+        }
+
+        return $this->normalizeOwner($fallback);
+    }
+
+    private function loadReferencedUsers(array $rows): array
+    {
+        $userIds = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $ownerUserId = $this->decodeOwnerUserId($row);
+            if ($ownerUserId !== null && !in_array($ownerUserId, $userIds, true)) {
+                $userIds[] = $ownerUserId;
+            }
+
+            foreach ($this->decodeApprovalRecipientUserIds($row) as $userId) {
+                if (!in_array($userId, $userIds, true)) {
+                    $userIds[] = $userId;
+                }
+            }
+        }
+
+        if ($userIds === []) {
+            return [];
+        }
+
+        $users = User::find()
+            ->id($userIds)
+            ->status(null)
+            ->all();
+
+        $byId = [];
+        foreach ($users as $user) {
+            if (!$user instanceof User) {
+                continue;
+            }
+
+            $email = trim((string)$user->email);
+            $username = trim((string)$user->username);
+            $label = trim((string)$user->friendlyName);
+            if ($label === '') {
+                $label = $email !== '' ? $email : $username;
+            }
+
+            $byId[(int)$user->id] = [
+                'id' => (int)$user->id,
+                'label' => $label,
+                'email' => $email,
+                'username' => $username,
+            ];
+        }
+
+        return $byId;
     }
 
     private function decodeForceHumanApproval(array $row): bool

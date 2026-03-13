@@ -153,6 +153,42 @@
         {% set webhookTestSinkState = 'empty' %}
         {% set webhookTestSinkStateTone = 'muted' %}
       {% endif %}
+      {% set notificationConfig = notificationSnapshot.config|default({}) %}
+      {% set notificationSummary = notificationSnapshot.summary|default({}) %}
+      {% set notificationMonitor = notificationSnapshot.systemMonitor|default({ status: 'unknown', payload: {} }) %}
+      {% set notificationMonitorPayload = notificationMonitor.payload|default({}) %}
+      {% set notificationRecentRows = notificationSnapshot.recentNotifications|default([]) %}
+      {% set notificationEnabled = notificationConfig.enabled ?? false %}
+      {% set notificationRecipients = notificationConfig.recipients ?? [] %}
+      {% set notificationRecipientCount = notificationConfig.recipientCount ?? 0 %}
+      {% set notificationGlobalRecipients = notificationConfig.globalRecipients ?? [] %}
+      {% set notificationGlobalRecipientCount = notificationConfig.globalRecipientCount ?? 0 %}
+      {% set notificationAccountRecipients = notificationConfig.accountRecipients ?? [] %}
+      {% set notificationAccountRecipientCount = notificationConfig.accountRecipientCount ?? 0 %}
+      {% set notificationEventToggles = notificationConfig.eventToggles ?? {} %}
+      {% set notificationEnabledEvents = [] %}
+      {% if notificationEventToggles.approval_requested ?? false %}{% set notificationEnabledEvents = notificationEnabledEvents|merge(['approval requests']) %}{% endif %}
+      {% if notificationEventToggles.approval_decided ?? false %}{% set notificationEnabledEvents = notificationEnabledEvents|merge(['approval decisions']) %}{% endif %}
+      {% if notificationEventToggles.execution_issue ?? false %}{% set notificationEnabledEvents = notificationEnabledEvents|merge(['execution issues']) %}{% endif %}
+      {% if notificationEventToggles.webhook_dlq_failed ?? false %}{% set notificationEnabledEvents = notificationEnabledEvents|merge(['webhook DLQ failures']) %}{% endif %}
+      {% if notificationEventToggles.status_changed ?? false %}{% set notificationEnabledEvents = notificationEnabledEvents|merge(['status changes']) %}{% endif %}
+      {% set notificationMonitorStatus = (notificationMonitor.status ?? 'unknown')|lower %}
+      {% set notificationMonitorTone = notificationMonitorStatus == 'critical'
+        ? 'bad'
+        : (notificationMonitorStatus == 'warn' ? 'warn' : (notificationMonitorStatus == 'ok' ? 'good' : 'muted')) %}
+      {% set notificationStatusLine = notificationEnabled
+        ? 'Status: enabled for ' ~ notificationRecipientCount ~ ' recipient' ~ (notificationRecipientCount == 1 ? '' : 's') ~ '.'
+        : 'Status: disabled until operator notifications are enabled in Settings.' %}
+      {% if notificationRecipientCount == 0 and notificationEnabled %}
+        {% set notificationStatusLine = 'Status: enabled, but no valid recipients resolve from the current settings.' %}
+      {% elseif notificationGlobalRecipientCount == 0 and notificationAccountRecipientCount > 0 and notificationEnabled %}
+        {% set notificationStatusLine = 'Status: enabled via account-specific approval recipients (' ~ notificationAccountRecipientCount ~ ').' %}
+      {% endif %}
+      {% set notificationMonitorGeneratedAt = notificationMonitorPayload.generatedAt ?? null %}
+      {% set notificationLastEvaluatedLabel = notificationMonitorGeneratedAt ?: 'never' %}
+      {% set notificationLastSentAt = notificationSummary.lastSentAt ?? null %}
+      {% set notificationLastSentRecipient = notificationSummary.lastSentRecipient ?? '' %}
+      {% set notificationLastSentSubject = notificationSummary.lastSentSubject ?? '' %}
       {% set readinessDbAvailable = readinessDiagnostics.componentChecks.systemComponents.db ?? false %}
       {% set readinessCacheAvailable = readinessDiagnostics.componentChecks.systemComponents.cache ?? false %}
       {% set readinessUsersAvailable = readinessDiagnostics.componentChecks.systemComponents.users ?? false %}
@@ -2110,6 +2146,140 @@
         </dialog>
       {% endif %}
 
+      <section class="agents-operator-notifications-card border rounded p-0" id="operatorNotificationsSection">
+        <div class="agents-operator-notifications-top">
+          <div class="agents-operator-notifications-header">
+            <h2 class="agents-operator-notifications-title">Operator Notifications</h2>
+            <p class="agents-operator-notifications-copy">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes.</p>
+          </div>
+          <div class="agents-operator-notifications-actions">
+            <a href="{{ settingsUrl ~ '#notificationsSection' }}" class="btn agents-operator-notifications-button">Notification settings</a>
+            <form method="post" accept-charset="UTF-8" class="agents-operator-notifications-action-form">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/run-notifications-check') }}
+              {{ redirectInput('agents/status#operatorNotificationsSection') }}
+              <button class="btn agents-operator-notifications-button" type="submit">Run status check</button>
+            </form>
+          </div>
+          <p class="agents-operator-notifications-status agents-operator-notifications-status--{{ notificationEnabled and notificationRecipientCount > 0 ? 'good' : 'warn' }}">{{ notificationStatusLine }}</p>
+        </div>
+
+        <div class="agents-operator-notifications-summary">
+          <div class="agents-operator-notifications-summary-item">
+            <span class="agents-operator-notifications-summary-label">Recipients</span>
+            <strong class="agents-operator-notifications-summary-value">{{ notificationRecipientCount }}</strong>
+          </div>
+          <div class="agents-operator-notifications-summary-item">
+            <span class="agents-operator-notifications-summary-label">Last monitor status</span>
+            <strong class="agents-operator-notifications-summary-value agents-operator-notifications-summary-value--{{ notificationMonitorTone }}">{{ notificationMonitorStatus|upper }}</strong>
+          </div>
+          <div class="agents-operator-notifications-summary-item">
+            <span class="agents-operator-notifications-summary-label">Sent / failed</span>
+            <strong class="agents-operator-notifications-summary-value">{{ notificationSummary.sent|default(0) }} / {{ notificationSummary.failed|default(0) }}</strong>
+          </div>
+          <div class="agents-operator-notifications-summary-item">
+            <span class="agents-operator-notifications-summary-label">Last evaluated</span>
+            <strong class="agents-operator-notifications-summary-value">{{ notificationLastEvaluatedLabel }}</strong>
+          </div>
+        </div>
+
+        <div class="agents-operator-notifications-row">
+          <span class="agents-operator-notifications-row-label">Recipients:</span>
+          {% if notificationRecipients|length %}
+            {% if notificationGlobalRecipientCount > 0 and notificationAccountRecipientCount > 0 %}
+              <span class="agents-operator-notifications-row-copy">Global: {{ notificationGlobalRecipients|join(', ') }}. Account-specific approvals: {{ notificationAccountRecipients|join(', ') }}.</span>
+            {% elseif notificationGlobalRecipientCount > 0 %}
+              <span class="agents-operator-notifications-row-copy">{{ notificationGlobalRecipients|join(', ') }}</span>
+            {% else %}
+              <span class="agents-operator-notifications-row-copy">Account-specific approvals: {{ notificationAccountRecipients|join(', ') }}</span>
+            {% endif %}
+          {% else %}
+            <span class="agents-operator-notifications-row-copy">No valid recipients currently resolve from the configured value.</span>
+          {% endif %}
+        </div>
+
+        <div class="agents-operator-notifications-row">
+          <span class="agents-operator-notifications-row-label">Enabled events:</span>
+          {% if notificationEnabledEvents|length %}
+            <span class="agents-operator-notifications-row-copy">{{ notificationEnabledEvents|join(', ') }}</span>
+          {% else %}
+            <span class="agents-operator-notifications-row-copy">No notification events are enabled.</span>
+          {% endif %}
+        </div>
+
+        <div class="agents-operator-notifications-row">
+          <span class="agents-operator-notifications-row-label">Last handoff:</span>
+          {% if notificationLastSentAt %}
+            <span class="agents-operator-notifications-row-copy">
+              Sent to {{ notificationLastSentRecipient ?: 'configured recipient' }} at {{ notificationLastSentAt }}{% if notificationLastSentSubject %} ({{ notificationLastSentSubject }}){% endif %}.
+            </span>
+          {% else %}
+            <span class="agents-operator-notifications-row-copy">No successful notification delivery has been recorded yet.</span>
+          {% endif %}
+        </div>
+
+        {% if notificationMonitorPayload.issues|default([])|length %}
+          <div class="agents-operator-notifications-row agents-operator-notifications-row--notice agents-operator-notifications-row--notice-{{ notificationMonitorTone }}">
+            <p class="agents-operator-notifications-notice-copy">{{ notificationMonitorPayload.issues|slice(0, 3)|join(' ') }}</p>
+          </div>
+        {% endif %}
+
+        <div class="agents-operator-notifications-log">
+          <div class="agents-operator-notifications-log-head">
+            <h3 class="agents-operator-notifications-log-title">Recent deliveries</h3>
+          </div>
+
+          {% if notificationRecentRows|length %}
+            <div class="agents-operator-notifications-table-wrap">
+              <table class="agents-operator-notifications-table">
+                <colgroup>
+                  <col class="agents-operator-notifications-col agents-operator-notifications-col--event">
+                  <col class="agents-operator-notifications-col agents-operator-notifications-col--recipient">
+                  <col class="agents-operator-notifications-col agents-operator-notifications-col--status">
+                  <col class="agents-operator-notifications-col agents-operator-notifications-col--attempts">
+                  <col class="agents-operator-notifications-col agents-operator-notifications-col--updated">
+                </colgroup>
+                <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Recipient</th>
+                  <th>Status</th>
+                  <th>Attempts</th>
+                  <th>Updated</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in notificationRecentRows %}
+                  {% set notificationStatusTone = row.status == 'sent'
+                    ? 'agents-status-chip--good'
+                    : (row.status == 'failed' ? 'agents-status-chip--bad' : 'agents-status-chip--muted') %}
+                  <tr>
+                    <td>
+                      <div class="agents-operator-notifications-event-stack">
+                        <strong class="agents-operator-notifications-event-label">{{ row.eventLabel }}</strong>
+                        <span class="agents-operator-notifications-event-copy">{{ row.subject }}</span>
+                        {% if row.errorMessage %}
+                          <span class="agents-operator-notifications-event-copy">{{ row.errorMessage }}</span>
+                        {% endif %}
+                      </div>
+                    </td>
+                    <td>{{ row.recipient }}</td>
+                    <td><span class="agents-status-chip {{ notificationStatusTone }}">{{ row.status }}</span></td>
+                    <td>{{ row.attempts }}</td>
+                    <td>{{ row.lastAttemptAt ?: row.sentAt ?: row.dateCreated ?: 'n/a' }}</td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="agents-operator-notifications-empty">
+              <p class="agents-operator-notifications-empty-copy">No notification deliveries have been recorded yet.</p>
+            </div>
+          {% endif %}
+        </div>
+      </section>
+
     {% endif %}
 
   </div>
@@ -3090,6 +3260,294 @@
       margin-top: 8px;
     }
 
+    .agents-operator-notifications-card {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #ffffff;
+      color: #596673;
+    }
+
+    .agents-operator-notifications-top {
+      display: grid;
+      gap: 6px 12px;
+      padding: 24px 12px;
+      border-bottom: 1px solid #bbc7d5;
+    }
+
+    .agents-operator-notifications-header {
+      min-width: 0;
+    }
+
+    .agents-operator-notifications-title {
+      margin: 0;
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-operator-notifications-copy {
+      margin: 6px 0 0;
+      color: #596673;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .agents-operator-notifications-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 0;
+      grid-row: 1 / span 2;
+      grid-column: 2;
+    }
+
+    .agents-operator-notifications-action-form {
+      margin: 0;
+    }
+
+    .agents-operator-notifications-button.btn {
+      min-height: auto;
+      padding: 7px 10px;
+      border: 0;
+      border-radius: 3px;
+      background: #d4dbe4;
+      background-image: none;
+      box-shadow: none;
+      color: #000000;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: normal;
+      text-decoration: none;
+    }
+
+    .agents-operator-notifications-button.btn:hover,
+    .agents-operator-notifications-button.btn:focus-visible {
+      background: #c6cfda;
+      color: #000000;
+      text-decoration: none;
+    }
+
+    .agents-operator-notifications-status {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.45;
+      grid-column: 1;
+    }
+
+    .agents-operator-notifications-status--good {
+      color: #108e80;
+    }
+
+    .agents-operator-notifications-status--warn {
+      color: #c58a1b;
+    }
+
+    .agents-operator-notifications-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      padding: 1px 0 0 1px;
+      border-bottom: 1px solid #bbc7d5;
+      background: transparent;
+    }
+
+    .agents-operator-notifications-summary-item {
+      min-width: 0;
+      padding: 12px;
+      margin: -1px 0 0 -1px;
+      border: 1px solid #bbc7d5;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .agents-operator-notifications-summary-item:nth-child(-n + 4) {
+      border-top: 0;
+    }
+
+    .agents-operator-notifications-summary-item:nth-child(4n + 1) {
+      border-left: 0;
+    }
+
+    .agents-operator-notifications-summary-item:nth-child(4n) {
+      border-right: 0;
+    }
+
+    .agents-operator-notifications-summary-label {
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-operator-notifications-summary-value {
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .agents-operator-notifications-summary-value--good {
+      color: #108e80;
+    }
+
+    .agents-operator-notifications-summary-value--warn {
+      color: #c58a1b;
+    }
+
+    .agents-operator-notifications-summary-value--bad {
+      color: #c24f42;
+    }
+
+    .agents-operator-notifications-summary-value--muted {
+      color: #6d7782;
+    }
+
+    .agents-operator-notifications-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid #bbc7d5;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-operator-notifications-row--notice {
+      background: #f8fafc;
+    }
+
+    .agents-operator-notifications-row--notice-bad {
+      background: rgba(194, 79, 66, 0.08);
+    }
+
+    .agents-operator-notifications-row--notice-warn {
+      background: rgba(197, 138, 27, 0.08);
+    }
+
+    .agents-operator-notifications-row-label {
+      flex: 0 0 auto;
+      color: #596673;
+      font-weight: 700;
+    }
+
+    .agents-operator-notifications-row-copy,
+    .agents-operator-notifications-notice-copy {
+      margin: 0;
+      min-width: 0;
+      color: #596673;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-operator-notifications-log {
+      padding: 12px 0;
+    }
+
+    .agents-operator-notifications-log-head {
+      padding: 0 12px 12px;
+    }
+
+    .agents-operator-notifications-log-title {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-operator-notifications-table-wrap {
+      padding: 6px 12px 0;
+      overflow-x: auto;
+    }
+
+    .agents-operator-notifications-table {
+      width: 100%;
+      min-width: 960px;
+      border-collapse: collapse;
+      table-layout: fixed;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-operator-notifications-table th {
+      padding: 0 0 12px;
+      border-bottom: 1px solid #596673;
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: left;
+    }
+
+    .agents-operator-notifications-table td {
+      padding: 12px 0;
+      border-bottom: 1px solid #aab8ca;
+      vertical-align: top;
+    }
+
+    .agents-operator-notifications-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .agents-operator-notifications-col--event {
+      width: 42%;
+    }
+
+    .agents-operator-notifications-col--recipient {
+      width: 24%;
+    }
+
+    .agents-operator-notifications-col--status {
+      width: 12%;
+    }
+
+    .agents-operator-notifications-col--attempts {
+      width: 10%;
+    }
+
+    .agents-operator-notifications-col--updated {
+      width: 12%;
+    }
+
+    .agents-operator-notifications-event-stack {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .agents-operator-notifications-event-label {
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-operator-notifications-event-copy {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-operator-notifications-empty {
+      padding: 6px 12px 0;
+    }
+
+    .agents-operator-notifications-empty-copy {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .agents-readiness-detail-dialog--payload .agents-readiness-detail-dialog-shell {
       display: flex;
       flex-direction: column;
@@ -3314,13 +3772,47 @@
         justify-content: flex-start;
       }
 
+      .agents-operator-notifications-top {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-operator-notifications-actions {
+        grid-row: auto;
+        grid-column: 1;
+        justify-content: flex-start;
+      }
+
+      .agents-operator-notifications-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .agents-operator-notifications-summary-item:nth-child(-n + 2) {
+        border-top: 0;
+      }
+
+      .agents-operator-notifications-summary-item:nth-child(2n + 1) {
+        border-left: 0;
+      }
+
+      .agents-operator-notifications-summary-item:nth-child(2n) {
+        border-right: 0;
+      }
+
       .agents-webhook-test-sink-row {
         flex-direction: column;
         align-items: flex-start;
       }
 
+      .agents-operator-notifications-row {
+        flex-direction: column;
+      }
+
       .agents-webhook-test-sink-table {
         min-width: 960px;
+      }
+
+      .agents-operator-notifications-table {
+        min-width: 860px;
       }
 
       .agents-readiness-ready-grid > .agents-readiness-ready-proof-card {
@@ -3435,8 +3927,40 @@
         width: 100%;
       }
 
+      .agents-operator-notifications-top {
+        padding: 20px 12px;
+      }
+
+      .agents-operator-notifications-actions {
+        width: 100%;
+      }
+
+      .agents-operator-notifications-summary {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-operator-notifications-summary-item {
+        width: 100%;
+        border-top: 1px solid #bbc7d5;
+        border-bottom: 1px solid #bbc7d5;
+        border-left: 0;
+        border-right: 0;
+      }
+
+      .agents-operator-notifications-summary-item:first-child {
+        border-top: none;
+      }
+
+      .agents-operator-notifications-summary-item:last-child {
+        border-bottom: 0;
+      }
+
       .agents-webhook-test-sink-table {
         min-width: 840px;
+      }
+
+      .agents-operator-notifications-table {
+        min-width: 720px;
       }
     }
   {% endcss %}
