@@ -2,6 +2,10 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.6 (2026-03-13)
+
+- Treated Commerce availability as optional in readiness diagnostics so CMS-only installs no longer surface a degraded `Status` state after update.
+
 ## 0.21.5 (2026-03-13)
 
 - Removed the remaining bootstrap-only missing-account warning from the `Status` degradation path so healthy fresh installs no longer render `Degraded` after update.

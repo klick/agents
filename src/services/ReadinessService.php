@@ -102,6 +102,7 @@ class ReadinessService extends Component
                 'weight' => 40,
                 'passed' => $commerceEnabled,
                 'score' => $commerceEnabled ? 40 : 0,
+                'optional' => true,
             ],
         ];
     }
@@ -119,6 +120,9 @@ class ReadinessService extends Component
         $warnings = [];
         foreach ($breakdown as $criterion) {
             if ((bool)($criterion['passed'] ?? false)) {
+                continue;
+            }
+            if ((bool)($criterion['optional'] ?? false)) {
                 continue;
             }
             $warnings[] = sprintf('%s check is failing.', (string)($criterion['label'] ?? 'Readiness'));

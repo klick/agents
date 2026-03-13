@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.6 - 2026-03-13
+
+### Fixed
+
+- Treated Commerce availability as optional in readiness diagnostics so CMS-only installs no longer surface a degraded `Status` state after update.
+
 ## 0.21.5 - 2026-03-13
 
 ### Fixed
