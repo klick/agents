@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.10 - 2026-03-14
+
+### Added
+
+- Published the `First Worker` guide and bootstrap example so operators and developers now have a stable public path from account creation to a working scheduled worker.
+
+### Changed
+
+- Reworked the Accounts bootstrap flow around a lighter direct edit trigger, one-time worker `.env` export, async `Test Account` / `Rotate` / `Revoke` actions, and clearer in-product guidance for first-worker setup.
+- Updated the tracked roadmap with `F19` workflow starter kits and companion workers, and refreshed the public marketing banner asset.
+
 ## 0.21.9 - 2026-03-14
 
 ### Changed

@@ -150,6 +150,11 @@ class CredentialService extends Component
         return $credentials;
     }
 
+    public function getManagedCredentialByIdForCp(int $id, array $defaultScopes): ?array
+    {
+        return $this->getManagedCredentialById($id, $defaultScopes);
+    }
+
     public function getManagedWebhookSubscriptions(): array
     {
         if (!$this->credentialsTableExists() || !$this->supportsWebhookSubscriptionColumns()) {

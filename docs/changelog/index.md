@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.10 (2026-03-14)
+
+- Published the `First Worker` guide and bootstrap example so operators and developers now have a stable public path from account creation to a working scheduled worker.
+- Reworked the Accounts bootstrap flow around a lighter direct edit trigger, one-time worker `.env` export, async `Test Account` / `Rotate` / `Revoke` actions, and clearer in-product guidance for first-worker setup.
+- Added `F19` workflow starter kits and companion workers to the roadmap, and refreshed the public marketing banner asset.
+
 ## 0.21.9 (2026-03-14)
 
 - Reworked `Settings` around native Craft CP tabs with one shared top-right `Save Settings` action instead of per-panel save actions and custom tab chrome.
