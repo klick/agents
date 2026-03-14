@@ -30,7 +30,9 @@ grep -q '/health' "$WORKER_DIR/worker.mjs" || fail "Worker example does not call
 grep -q '/readiness' "$WORKER_DIR/worker.mjs" || fail "Worker example does not call /readiness"
 grep -q 'AGENTS_TOKEN' "$WORKER_DIR/.env.example" || fail "Worker env example is missing AGENTS_TOKEN"
 grep -q 'cron' "$README_FILE" || fail "Worker README is missing cron guidance"
+grep -q 'one-time revealed token' "$README_FILE" || fail "Worker README is missing one-time token guidance"
 grep -q '/get-started/first-worker' "$DOCS_INDEX" || fail "Get Started index is missing the first worker link"
 grep -q 'node-bootstrap' "$DOC_FILE" || fail "First worker docs are missing the example path reference"
+grep -q 'token is only shown once' "$DOC_FILE" || fail "First worker docs are missing one-time token guidance"
 
 pass "worker bootstrap example and docs are present"

@@ -2,6 +2,13 @@
 
 This example proves the current managed-account bootstrap flow end to end.
 
+The easiest path is:
+
+- create or rotate a managed account in Craft
+- copy the one-time revealed token
+- place that token in `.env`
+- run `./run-worker.sh`
+
 It expects either:
 
 - `BASE_URL` set to the full `https://example.test/agents/v1` base, or
@@ -17,6 +24,8 @@ Fill in:
 
 - `SITE_URL` or `BASE_URL`
 - `AGENTS_TOKEN`
+
+If your install offers a helper export for worker config, you can use that instead of filling `.env` by hand.
 
 ## Run once
 
