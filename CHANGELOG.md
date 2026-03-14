@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.11 - 2026-03-15
+
+### Fixed
+
+- Bound approved governed entry-draft requests to the exact saved draft created by execution so later review/apply surfaces no longer have to reconstruct draft identity from loose payload fragments.
+- Blocked governed draft creation when a canonical entry already has a saved draft and surfaced the resulting conflict details directly in `Approvals`, including the conflicting draft ids and open links for operator follow-up.
+
 ## 0.21.10 - 2026-03-14
 
 ### Added
