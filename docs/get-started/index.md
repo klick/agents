@@ -23,6 +23,14 @@ php craft plugin/install agents
 - Hit `GET /agents/v1/schema` with a token that has `schema:read`
 - Hit `GET /agents/v1/capabilities` to inspect the discovered contract and auth posture
 
+## First Worker
+
+If you want one practical end-to-end bootstrap before building a fuller integration, start with a managed account plus the public Node worker example:
+
+- create a read-only managed account with `health:read`, `readiness:read`, and `auth:read`
+- place the one-time token into `examples/workers/node-bootstrap/.env`
+- run the worker once, then schedule it
+
 ## Next
 
 - Set environment variables in `.env` / `config/agents.php`
@@ -35,5 +43,6 @@ See:
 
 - [Installation & Setup](/get-started/installation-setup)
 - [Configuration](/get-started/configuration)
+- [First Worker](/get-started/first-worker)
 - [Agent Bootstrap](/api/agent-bootstrap)
 - [Starter Packs](/api/starter-packs)

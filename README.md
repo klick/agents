@@ -11,6 +11,7 @@ Agents gives Craft a safe API and control plane for AI agents, automations, and 
 ## Documentation
 
 - Public docs: https://marcusscheller.com/docs/agents/
+- First worker guide: https://marcusscheller.com/docs/agents/get-started/first-worker
 - API overview: https://marcusscheller.com/docs/agents/api/
 - Control panel: https://marcusscheller.com/docs/agents/cp/
 - Security and execution model: https://marcusscheller.com/docs/agents/security/
