@@ -7,6 +7,7 @@ use Klick\Agents\Plugin;
 use Klick\Agents\models\Settings;
 use craft\elements\Entry;
 use craft\elements\User;
+use craft\db\Query;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use craft\web\View;
@@ -202,12 +203,7 @@ class DashboardController extends Controller
         $policyHintsByActionType = $this->buildPolicyHintsByActionType($actionTypes);
         $approvalsWithPolicy = $this->appendPolicyHints($approvals, $policyHintsByActionType);
         $executionsWithPolicy = $this->appendPolicyHints($executions, $policyHintsByActionType);
-        $approvalsWithPolicy = $this->decorateControlItemsWithActionLabels($approvalsWithPolicy);
         $executionsWithPolicy = $this->decorateControlItemsWithActionLabels($executionsWithPolicy);
-        $credentialDisplayByActorId = $this->buildControlCredentialDisplayMap($plugin);
-        $approvalsWithPolicy = $this->decorateControlApprovalsWithActorLabels($approvalsWithPolicy, $credentialDisplayByActorId);
-        $auditEvents = $this->decorateControlAuditEventsWithActorLabels($auditEvents, $credentialDisplayByActorId);
-
         $latestExecutionByApprovalId = [];
         foreach ($executionsWithPolicy as $execution) {
             $approvalId = (int)($execution['approvalId'] ?? 0);
@@ -217,6 +213,19 @@ class DashboardController extends Controller
 
             $latestExecutionByApprovalId[$approvalId] = $execution;
         }
+
+        foreach ($approvalsWithPolicy as $index => $approval) {
+            $approvalId = (int)($approval['id'] ?? 0);
+            if ($approvalId > 0 && isset($latestExecutionByApprovalId[$approvalId])) {
+                $approval['latestExecution'] = $latestExecutionByApprovalId[$approvalId];
+            }
+            $approvalsWithPolicy[$index] = $approval;
+        }
+
+        $approvalsWithPolicy = $this->decorateControlItemsWithActionLabels($approvalsWithPolicy);
+        $credentialDisplayByActorId = $this->buildControlCredentialDisplayMap($plugin);
+        $approvalsWithPolicy = $this->decorateControlApprovalsWithActorLabels($approvalsWithPolicy, $credentialDisplayByActorId);
+        $auditEvents = $this->decorateControlAuditEventsWithActorLabels($auditEvents, $credentialDisplayByActorId);
 
         $pendingApprovals = [];
         $approvedApprovals = [];
@@ -2669,12 +2678,24 @@ class DashboardController extends Controller
     {
         $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
         $resultPayload = is_array($item['resultPayload'] ?? null) ? (array)$item['resultPayload'] : [];
+        $boundEntryId = isset($item['boundDraftEntryId']) ? (int)$item['boundDraftEntryId'] : 0;
+        $boundSiteId = isset($item['boundDraftSiteId']) ? (int)$item['boundDraftSiteId'] : 0;
+        $boundDraftId = isset($item['boundDraftId']) ? (int)$item['boundDraftId'] : 0;
+        $latestExecution = is_array($item['latestExecution'] ?? null) ? (array)$item['latestExecution'] : [];
+        $latestExecutionRequestPayload = is_array($latestExecution['requestPayload'] ?? null) ? (array)$latestExecution['requestPayload'] : [];
+        $latestExecutionResultPayload = is_array($latestExecution['resultPayload'] ?? null) ? (array)$latestExecution['resultPayload'] : [];
 
         $entryId = 0;
         if (isset($requestPayload['entryId'])) {
             $entryId = (int)$requestPayload['entryId'];
         } elseif (isset($resultPayload['entryId'])) {
             $entryId = (int)$resultPayload['entryId'];
+        } elseif ($boundEntryId > 0) {
+            $entryId = $boundEntryId;
+        } elseif (isset($latestExecutionRequestPayload['entryId'])) {
+            $entryId = (int)$latestExecutionRequestPayload['entryId'];
+        } elseif (isset($latestExecutionResultPayload['entryId'])) {
+            $entryId = (int)$latestExecutionResultPayload['entryId'];
         }
 
         $siteId = 0;
@@ -2682,6 +2703,12 @@ class DashboardController extends Controller
             $siteId = (int)$requestPayload['siteId'];
         } elseif (isset($resultPayload['siteId'])) {
             $siteId = (int)$resultPayload['siteId'];
+        } elseif ($boundSiteId > 0) {
+            $siteId = $boundSiteId;
+        } elseif (isset($latestExecutionRequestPayload['siteId'])) {
+            $siteId = (int)$latestExecutionRequestPayload['siteId'];
+        } elseif (isset($latestExecutionResultPayload['siteId'])) {
+            $siteId = (int)$latestExecutionResultPayload['siteId'];
         }
 
         $draftId = 0;
@@ -2689,6 +2716,12 @@ class DashboardController extends Controller
             $draftId = (int)$requestPayload['draftId'];
         } elseif (isset($resultPayload['draftId'])) {
             $draftId = (int)$resultPayload['draftId'];
+        } elseif ($boundDraftId > 0) {
+            $draftId = $boundDraftId;
+        } elseif (isset($latestExecutionRequestPayload['draftId'])) {
+            $draftId = (int)$latestExecutionRequestPayload['draftId'];
+        } elseif (isset($latestExecutionResultPayload['draftId'])) {
+            $draftId = (int)$latestExecutionResultPayload['draftId'];
         }
 
         return [
@@ -2723,8 +2756,9 @@ class DashboardController extends Controller
 
         $draft = $query->one();
         if (!$draft instanceof Entry || !$draft->getIsDraft()) {
-            $cache[$cacheKey] = null;
-            return null;
+            $fallbackDescriptor = $this->resolveDraftDescriptorByDbLookup($draftId, $preferredSiteId);
+            $cache[$cacheKey] = $fallbackDescriptor;
+            return $fallbackDescriptor;
         }
 
         $title = trim((string)$draft->title);
@@ -2739,6 +2773,56 @@ class DashboardController extends Controller
         ];
 
         return $cache[$cacheKey];
+    }
+
+    private function resolveDraftDescriptorByDbLookup(int $draftId, int $preferredSiteId = 0): ?array
+    {
+        if ($draftId <= 0) {
+            return null;
+        }
+
+        $query = (new Query())
+            ->select([
+                'elements.id',
+                'elements.canonicalId',
+                'elements.draftId',
+                'elements_sites.siteId',
+                'elements_sites.title',
+                'elements_sites.uri',
+            ])
+            ->from(['elements' => '{{%elements}}'])
+            ->innerJoin('{{%elements_sites}} elements_sites', '[[elements_sites.elementId]] = [[elements.id]]')
+            ->where([
+                'elements.id' => $draftId,
+                'elements.type' => Entry::class,
+            ])
+            ->andWhere(['not', ['elements.draftId' => null]]);
+
+        if ($preferredSiteId > 0) {
+            $query->andWhere(['elements_sites.siteId' => $preferredSiteId]);
+        } else {
+            $query->orderBy(['elements_sites.siteId' => SORT_ASC]);
+        }
+
+        $row = $query->one();
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $canonicalId = (int)($row['canonicalId'] ?? 0);
+        $draftRecordId = (int)($row['draftId'] ?? 0);
+        $siteId = (int)($row['siteId'] ?? 0);
+        $title = trim((string)($row['title'] ?? ''));
+        $uri = trim((string)($row['uri'] ?? ''));
+
+        return [
+            'id' => $draftId,
+            'siteId' => $siteId > 0 ? $siteId : null,
+            'canonicalId' => $canonicalId > 0 ? $canonicalId : null,
+            'draftRecordId' => $draftRecordId > 0 ? $draftRecordId : null,
+            'title' => $title !== '' ? $title : null,
+            'cpEditUrl' => $uri !== '' ? 'entries/' . $draftId : null,
+        ];
     }
 
     private function findControlEntryForReview(int $entryId, int $preferredSiteId = 0, bool $drafts = false): ?Entry

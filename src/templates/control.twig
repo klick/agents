@@ -323,8 +323,11 @@
         {% for approval in controlApprovedApprovals %}
           {% set latestExecution = approval.latestExecution ?? null %}
           {% set executionStatus = latestExecution ? latestExecution.status|lower : '' %}
+          {% set boundDraftId = approval.boundDraftId ?? null %}
+          {% set boundDraftRecordId = approval.boundDraftRecordId ?? null %}
+          {% set boundDraftMessage = approval.boundDraftMessage ?? null %}
+          {% set boundDraftConflicts = approval.boundDraftConflicts ?? [] %}
           {% set canApplyDraft = approval.actionType|lower == 'entry.updatedraft'
-            and approval.reviewMode == 'draft'
             and approval.targetEntryDraftRecordId
             and (executionStatus == '' or executionStatus == 'succeeded')
           %}
@@ -341,6 +344,11 @@
                   {{ targetTitle }}
                 {% endif %}
               </div>
+              {% if approval.actionType|lower == 'entry.updatedraft' and (boundDraftId or boundDraftRecordId) %}
+                <div class="light">
+                  Bound draft{% if boundDraftId %} #{{ boundDraftId }}{% endif %}{% if boundDraftRecordId %} · saved draft #{{ boundDraftRecordId }}{% endif %}
+                </div>
+              {% endif %}
               {% if approval.targetEntryId %}
                 <button
                   class="btn small js-control-review-entry agents-control-review-btn"
@@ -374,6 +382,14 @@
                 <div><strong>{{ latestExecution.status|upper }}</strong></div>
                 <div class="light">run #{{ latestExecution.id }}</div>
                 <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
+                {% if latestExecution.resultPayload.draftId ?? null %}
+                  <div class="light">
+                    Draft #{{ latestExecution.resultPayload.draftId }}{% if latestExecution.resultPayload.draftRecordId ?? null %} · saved draft #{{ latestExecution.resultPayload.draftRecordId }}{% endif %}
+                  </div>
+                {% endif %}
+                {% if executionStatus in ['blocked', 'failed'] %}
+                  <div class="light">{{ latestExecution.errorMessage ?: (latestExecution.resultPayload.message ?? 'Execution needs follow-up.') }}</div>
+                {% endif %}
               {% else %}
                 <span class="light">n/a</span>
               {% endif %}
@@ -394,6 +410,21 @@
                   {% endif %}
                   <button class="btn submit small" type="submit">Apply Draft</button>
                 </form>
+              {% elseif approval.actionType|lower == 'entry.updatedraft' and executionStatus in ['blocked', 'failed'] %}
+                <div class="light">{{ latestExecution.errorMessage ?: (latestExecution.resultPayload.message ?? boundDraftMessage ?? 'Draft execution needs follow-up.') }}</div>
+                {% if (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|length %}
+                  {% for conflict in (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|slice(0, 2) %}
+                    <div class="light">
+                      Existing draft{% if conflict.id ?? null %} #{{ conflict.id }}{% endif %}{% if conflict.draftRecordId ?? null %} · saved draft #{{ conflict.draftRecordId }}{% endif %}{% if conflict.draftName ?? null %} · {{ conflict.draftName }}{% elseif conflict.title ?? null %} · {{ conflict.title }}{% endif %}
+                      {% if conflict.cpEditUrl ?? null %}
+                        · <a href="{{ cpUrl(conflict.cpEditUrl) }}" class="agents-control-target-link">open</a>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                  {% if (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|length > 2 %}
+                    <div class="light">+ {{ (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|length - 2 }} more conflicting drafts</div>
+                  {% endif %}
+                {% endif %}
               {% elseif approval.actionType|lower == 'entry.updatedraft' and approval.reviewDraftId %}
                 {% if latestExecution and latestExecution.status|lower != 'succeeded' %}
                   <span class="light">Apply blocked: run {{ latestExecution.status|lower }}.</span>
@@ -590,7 +621,22 @@
                   <span class="light">Default rule</span>
                 {% endif %}
               </td>
-              <td>{{ execution.errorMessage ?: 'Check rule/approval requirements and retry.' }}</td>
+              <td>
+                <div>{{ execution.errorMessage ?: (execution.resultPayload.message ?? 'Check rule/approval requirements and retry.') }}</div>
+                {% if execution.resultPayload.conflictType ?? null == 'savedDraftExists' and (execution.resultPayload.conflictingDrafts ?? [])|length %}
+                  {% for conflict in execution.resultPayload.conflictingDrafts|slice(0, 2) %}
+                    <div class="light">
+                      Existing draft{% if conflict.id ?? null %} #{{ conflict.id }}{% endif %}{% if conflict.draftRecordId ?? null %} · saved draft #{{ conflict.draftRecordId }}{% endif %}{% if conflict.draftName ?? null %} · {{ conflict.draftName }}{% elseif conflict.title ?? null %} · {{ conflict.title }}{% endif %}
+                      {% if conflict.cpEditUrl ?? null %}
+                        · <a href="{{ cpUrl(conflict.cpEditUrl) }}" class="agents-control-target-link">open</a>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                  {% if execution.resultPayload.conflictingDrafts|length > 2 %}
+                    <div class="light">+ {{ execution.resultPayload.conflictingDrafts|length - 2 }} more conflicting drafts</div>
+                  {% endif %}
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
           </tbody>

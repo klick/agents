@@ -22,6 +22,7 @@ class ControlPlaneService extends Component
     private const APPROVAL_STATUS_REJECTED = 'rejected';
     private const APPROVAL_STATUS_EXPIRED = 'expired';
     private const APPROVAL_ASSURANCE_METADATA_KEY = '_agentsApproval';
+    private const APPROVAL_DRAFT_EXECUTION_METADATA_KEY = '_agentsDraftExecution';
     private const APPROVAL_ASSURANCE_SINGLE = 'single_approval';
     private const APPROVAL_ASSURANCE_DUAL = 'dual_control';
     private const APPROVAL_ASSURANCE_DEGRADED = 'single_operator_degraded';
@@ -657,12 +658,22 @@ class ControlPlaneService extends Component
             $idempotencyKey = sprintf('approval-%d-exec-v1', $approvalId);
         }
 
+        $payload = (array)($approval['requestPayload'] ?? []);
+        if (
+            (string)($approval['actionType'] ?? '') === self::ACTION_ENTRY_UPDATE_DRAFT &&
+            !isset($payload['draftId']) &&
+            isset($approval['boundDraftId']) &&
+            (int)$approval['boundDraftId'] > 0
+        ) {
+            $payload['draftId'] = (int)$approval['boundDraftId'];
+        }
+
         return $this->executeAction([
             'actionType' => (string)($approval['actionType'] ?? ''),
             'actionRef' => (string)($approval['actionRef'] ?? ''),
             'approvalId' => $approvalId,
             'idempotencyKey' => $idempotencyKey,
-            'payload' => (array)($approval['requestPayload'] ?? []),
+            'payload' => $payload,
         ], $actor);
     }
 
@@ -885,6 +896,14 @@ class ControlPlaneService extends Component
         }
 
         $hydrated = $this->hydrateExecution($execution);
+
+        if ($approvalEntityId !== null && $approvalEntityId > 0) {
+            try {
+                $this->syncApprovalDraftExecutionMetadata($approvalEntityId, $hydrated);
+            } catch (\Throwable $e) {
+                Craft::warning('Unable to sync approval draft execution metadata: ' . $e->getMessage(), __METHOD__);
+            }
+        }
 
         $this->writeAuditEvent([
             'category' => 'control.execution',
@@ -1111,6 +1130,7 @@ class ControlPlaneService extends Component
             $draftQuery = Entry::find()
                 ->id($draftId)
                 ->drafts(true)
+                ->savedDraftsOnly()
                 ->status(null);
 
             if ($siteId > 0) {
@@ -1128,6 +1148,57 @@ class ControlPlaneService extends Component
                 throw new \InvalidArgumentException('payload.draftId does not belong to the provided payload.entryId canonical entry.');
             }
         } else {
+            $conflictingSavedDrafts = $this->findConflictingSavedDraftsForCanonical($canonical, $siteId);
+            if (!empty($conflictingSavedDrafts)) {
+                $primaryConflict = $conflictingSavedDrafts[0];
+                $conflictDraftId = (int)($primaryConflict['id'] ?? 0);
+                $conflictSiteId = (int)($primaryConflict['siteId'] ?? 0);
+                $conflictTitle = trim((string)($primaryConflict['title'] ?? ''));
+                $conflictName = trim((string)($primaryConflict['draftName'] ?? ''));
+                $conflictUpdatedAt = trim((string)($primaryConflict['dateUpdated'] ?? ''));
+                $conflictLabelParts = [];
+                if ($conflictDraftId > 0) {
+                    $conflictLabelParts[] = sprintf('draft #%d', $conflictDraftId);
+                }
+                if ($conflictName !== '') {
+                    $conflictLabelParts[] = sprintf('name "%s"', $conflictName);
+                }
+                if ($conflictTitle !== '') {
+                    $conflictLabelParts[] = sprintf('title "%s"', $conflictTitle);
+                }
+                if ($conflictSiteId > 0) {
+                    $conflictLabelParts[] = sprintf('site %d', $conflictSiteId);
+                }
+                if ($conflictUpdatedAt !== '') {
+                    $conflictLabelParts[] = sprintf('updated %s', $conflictUpdatedAt);
+                }
+
+                $errorMessage = 'Draft conflict: canonical entry already has an active saved draft.';
+                if (!empty($conflictLabelParts)) {
+                    $errorMessage .= ' Existing ' . implode(' · ', $conflictLabelParts) . '.';
+                }
+                $errorMessage .= ' Provide payload.draftId to target an exact saved draft.';
+
+                return [
+                    'status' => self::EXECUTION_STATUS_BLOCKED,
+                    'errorMessage' => $errorMessage,
+                    'resultPayload' => [
+                        'executionMode' => 'entry_draft_update',
+                        'message' => $errorMessage,
+                        'policyHandle' => (string)($policy['handle'] ?? 'default'),
+                        'riskLevel' => (string)($policy['riskLevel'] ?? self::RISK_LEVEL_HIGH),
+                        'requiresApproval' => (bool)($policy['requiresApproval'] ?? true),
+                        'actionType' => $actionType,
+                        'actionRef' => $actionRef,
+                        'entryId' => (int)$canonical->id,
+                        'siteId' => $siteId > 0 ? $siteId : (int)($canonical->siteId ?? 0),
+                        'createdDraft' => false,
+                        'conflictType' => 'savedDraftExists',
+                        'conflictingDrafts' => $conflictingSavedDrafts,
+                    ],
+                ];
+            }
+
             /** @var Entry $draft */
             $draft = Craft::$app->getDrafts()->createDraft(
                 $canonical,
@@ -1201,6 +1272,7 @@ class ControlPlaneService extends Component
                     'actionRef' => $actionRef,
                     'entryId' => (int)$canonical->id,
                     'draftId' => (int)($draft->id ?? 0),
+                    'draftRecordId' => (int)($draft->draftId ?? 0),
                     'siteId' => (int)($draft->siteId ?? 0),
                     'createdDraft' => $createdDraft,
                     'changedKeys' => array_values(array_unique($changedKeys)),
@@ -1222,6 +1294,7 @@ class ControlPlaneService extends Component
                 'actionRef' => $actionRef,
                 'entryId' => (int)$canonical->id,
                 'draftId' => (int)$draft->id,
+                'draftRecordId' => (int)($draft->draftId ?? 0),
                 'siteId' => (int)($draft->siteId ?? 0),
                 'draftName' => $this->extractDraftName($draft),
                 'createdDraft' => $createdDraft,
@@ -1265,6 +1338,44 @@ class ControlPlaneService extends Component
             'fieldValues' => $fieldValues,
             'unknownFieldHandles' => array_values(array_unique($unknownFieldHandles)),
         ];
+    }
+
+    private function findConflictingSavedDraftsForCanonical(Entry $canonical, int $preferredSiteId = 0): array
+    {
+        $query = Entry::find()
+            ->draftOf($canonical)
+            ->savedDraftsOnly()
+            ->status(null);
+
+        if ($preferredSiteId > 0) {
+            $query->siteId($preferredSiteId);
+        } else {
+            $query->site('*');
+        }
+
+        /** @var Entry[] $drafts */
+        $drafts = $query
+            ->orderBy(['elements.dateUpdated' => SORT_DESC])
+            ->all();
+
+        $conflicts = [];
+        foreach ($drafts as $draft) {
+            if (!$draft instanceof Entry || !$draft->getIsDraft()) {
+                continue;
+            }
+
+            $conflicts[] = [
+                'id' => (int)$draft->id,
+                'draftRecordId' => (int)($draft->draftId ?? 0),
+                'siteId' => (int)($draft->siteId ?? 0),
+                'draftName' => $this->extractDraftName($draft),
+                'title' => trim((string)$draft->title) !== '' ? trim((string)$draft->title) : null,
+                'cpEditUrl' => trim((string)$draft->getCpEditUrl()) !== '' ? trim((string)$draft->getCpEditUrl()) : null,
+                'dateUpdated' => $draft->dateUpdated?->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        return $conflicts;
     }
 
     private function normalizePayloadString(mixed $value, string $path): ?string
@@ -1475,7 +1586,9 @@ class ControlPlaneService extends Component
         $requiredApprovals = max(1, (int)($row['requiredApprovals'] ?? 1));
         $metadata = $this->decodeJsonArray((string)($row['metadata'] ?? '[]'));
         $assurance = $this->extractApprovalAssurance($metadata, $requiredApprovals);
+        $draftExecution = $this->normalizeArray($metadata[self::APPROVAL_DRAFT_EXECUTION_METADATA_KEY] ?? []);
         unset($metadata[self::APPROVAL_ASSURANCE_METADATA_KEY]);
+        unset($metadata[self::APPROVAL_DRAFT_EXECUTION_METADATA_KEY]);
         $primaryDecisionBy = $this->normalizeOptionalString($row['decidedBy'] ?? null, 128);
         $secondaryDecisionBy = $this->normalizeOptionalString($row['secondaryDecisionBy'] ?? null, 128);
         $approvalCount = 0;
@@ -1532,6 +1645,17 @@ class ControlPlaneService extends Component
             'idempotencyKey' => $this->normalizeOptionalString($row['idempotencyKey'] ?? null, 128),
             'requestPayload' => $this->decodeJsonArray((string)($row['requestPayload'] ?? '[]')),
             'metadata' => $metadata,
+            'draftExecutionMetadata' => $draftExecution,
+            'boundDraftExecutionId' => isset($draftExecution['executionId']) ? (int)$draftExecution['executionId'] : null,
+            'boundDraftStatus' => $this->normalizeOptionalString($draftExecution['status'] ?? null, 16),
+            'boundDraftEntryId' => isset($draftExecution['entryId']) ? (int)$draftExecution['entryId'] : null,
+            'boundDraftSiteId' => isset($draftExecution['siteId']) ? (int)$draftExecution['siteId'] : null,
+            'boundDraftId' => isset($draftExecution['draftId']) ? (int)$draftExecution['draftId'] : null,
+            'boundDraftRecordId' => isset($draftExecution['draftRecordId']) ? (int)$draftExecution['draftRecordId'] : null,
+            'boundDraftName' => $this->normalizeOptionalString($draftExecution['draftName'] ?? null),
+            'boundDraftMessage' => $this->normalizeOptionalString($draftExecution['message'] ?? null),
+            'boundDraftConflictType' => $this->normalizeOptionalString($draftExecution['conflictType'] ?? null, 64),
+            'boundDraftConflicts' => is_array($draftExecution['conflictingDrafts'] ?? null) ? array_values($draftExecution['conflictingDrafts']) : [],
             'requiredApprovals' => $requiredApprovals,
             'approvalCount' => $approvalCount,
             'approvalsRemaining' => max(0, $requiredApprovals - $approvalCount),
@@ -1606,6 +1730,74 @@ class ControlPlaneService extends Component
         ];
 
         return $metadata;
+    }
+
+    private function syncApprovalDraftExecutionMetadata(int $approvalId, array $execution): void
+    {
+        if ($approvalId <= 0 || !$this->tableExists(self::TABLE_APPROVALS)) {
+            return;
+        }
+
+        $draftExecutionMetadata = $this->captureApprovalDraftExecutionMetadata($execution);
+        if ($draftExecutionMetadata === null) {
+            return;
+        }
+
+        $approval = $this->findApprovalById($approvalId);
+        if (!is_array($approval)) {
+            return;
+        }
+
+        $metadata = $this->decodeJsonArray((string)($approval['metadata'] ?? '[]'));
+        $metadata[self::APPROVAL_DRAFT_EXECUTION_METADATA_KEY] = $draftExecutionMetadata;
+
+        $now = gmdate('Y-m-d H:i:s');
+        Craft::$app->getDb()->createCommand()->update(self::TABLE_APPROVALS, [
+            'metadata' => $this->encodeJson($metadata),
+            'dateUpdated' => $now,
+        ], [
+            'id' => $approvalId,
+        ])->execute();
+    }
+
+    private function captureApprovalDraftExecutionMetadata(array $execution): ?array
+    {
+        $actionType = $this->normalizeActionType((string)($execution['actionType'] ?? ''));
+        if ($actionType !== self::ACTION_ENTRY_UPDATE_DRAFT) {
+            return null;
+        }
+
+        $resultPayload = is_array($execution['resultPayload'] ?? null) ? (array)$execution['resultPayload'] : [];
+        $conflictingDrafts = [];
+        foreach ((array)($resultPayload['conflictingDrafts'] ?? []) as $draft) {
+            if (!is_array($draft)) {
+                continue;
+            }
+
+            $conflictingDrafts[] = [
+                'id' => isset($draft['id']) ? (int)$draft['id'] : null,
+                'draftRecordId' => isset($draft['draftRecordId']) ? (int)$draft['draftRecordId'] : null,
+                'siteId' => isset($draft['siteId']) ? (int)$draft['siteId'] : null,
+                'draftName' => $this->normalizeOptionalString($draft['draftName'] ?? null),
+                'title' => $this->normalizeOptionalString($draft['title'] ?? null),
+                'cpEditUrl' => $this->normalizeOptionalString($draft['cpEditUrl'] ?? null),
+                'dateUpdated' => $this->normalizeOptionalString($draft['dateUpdated'] ?? null),
+            ];
+        }
+
+        return [
+            'executionId' => isset($execution['id']) ? (int)$execution['id'] : null,
+            'status' => $this->normalizeOptionalString($execution['status'] ?? null, 16),
+            'entryId' => isset($resultPayload['entryId']) ? (int)$resultPayload['entryId'] : null,
+            'siteId' => isset($resultPayload['siteId']) ? (int)$resultPayload['siteId'] : null,
+            'draftId' => isset($resultPayload['draftId']) ? (int)$resultPayload['draftId'] : null,
+            'draftRecordId' => isset($resultPayload['draftRecordId']) ? (int)$resultPayload['draftRecordId'] : null,
+            'draftName' => $this->normalizeOptionalString($resultPayload['draftName'] ?? null),
+            'message' => $this->normalizeOptionalString($resultPayload['message'] ?? ($execution['errorMessage'] ?? null)),
+            'conflictType' => $this->normalizeOptionalString($resultPayload['conflictType'] ?? null, 64),
+            'conflictingDrafts' => $conflictingDrafts,
+            'capturedAt' => $this->normalizeOptionalString($execution['executedAt'] ?? ($execution['dateCreated'] ?? null)),
+        ];
     }
 
     private function extractApprovalAssurance(array $metadata, int $requiredApprovals): array

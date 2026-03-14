@@ -75,7 +75,8 @@ Notable current behavior:
 - high-risk dual-approval rows show two explicit approval buttons so operators can see progress toward the second approval at a glance
 - decision buttons stack vertically at a consistent width for clearer review actions
 - review UI includes action labels, rule/risk context, assurance mode, SLA metadata, and review guards
-- approved draft-entry flows can expose `Apply Draft` actions when the underlying state allows it
+- approved draft-entry flows bind to the exact saved draft created by execution so `Review` and `Apply Draft` target a stable draft identity
+- governed draft execution is blocked when the canonical entry already has another saved draft and the follow-up surfaces the conflicting draft ids and draft links for operator cleanup
 - rules can be edited and deleted inline from the embedded rules table
 - rule forms use a human-readable governed-action selector for the current core action set
 
