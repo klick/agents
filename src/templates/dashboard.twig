@@ -139,7 +139,7 @@
       {% set webhookTestSinkCanSend = webhookTestSinkEnabled and webhookTestSinkStorageReady and webhookTestSinkWebhookUrlMatches and webhookTestSinkWebhookSecretConfigured %}
       {% set webhookTestSinkState = 'configured' %}
       {% set webhookTestSinkStateTone = 'good' %}
-      {% set webhookTestSinkStatusLine = 'Last captured: ' ~ (webhookTestSinkLastCapturedAt ?: 'none yet') %}
+      {% set webhookTestSinkStatusLine = 'Last captured: ' ~ (webhookTestSinkLastCapturedAt ? webhookTestSinkLastCapturedAt|date('Y-m-d, H:i:s', timezone='UTC') : 'none yet') %}
       {% set webhookTestSinkNotice = '' %}
       {% set webhookTestSinkEmptyCopy = 'No deliveries captured yet. Click Send test webhook or trigger a real content event and run the queue.' %}
       {% if not webhookTestSinkRequested %}
@@ -1130,9 +1130,9 @@
       {% set securityLatestDlqRow = webhookDeadLetters|first %}
       {% set securityLatestDlqUpdatedAt = 'n/a' %}
       {% if securityLatestDlqRow and securityLatestDlqRow.dateUpdated is defined and securityLatestDlqRow.dateUpdated %}
-        {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateUpdated %}
+        {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateUpdated|date('Y-m-d, H:i:s', timezone='UTC') %}
       {% elseif securityLatestDlqRow and securityLatestDlqRow.dateCreated is defined and securityLatestDlqRow.dateCreated %}
-        {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateCreated %}
+        {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') %}
       {% endif %}
 
       <section class="border p-0 agents-readiness-ready-card agents-readiness-ready-card--{{ readinessStateTone }}" id="readinessStateCard">
@@ -1173,8 +1173,8 @@
           </div>
         </div>
 
-        <details class="agents-readiness-ready-details" open>
-          <summary><span>Details +</span></summary>
+        <details class="agents-readiness-ready-details"{% if readinessStateTone != 'good' %} open{% endif %}>
+          <summary><span>Details</span></summary>
           <div class="agents-readiness-ready-grid">
             <section class="agents-readiness-ready-proof-card" id="readinessProofHardGates">
               <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessHardGateProofTone }}">Hard Gates</h3>
@@ -1281,7 +1281,7 @@
                 </button>
               </div>
               <ul class="agents-readiness-ready-proof-list">
-                <li{% if securityWarnings > 0 or securityErrors > 0 or not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityCredentialCount > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Configured accounts: <strong>{{ securityCredentialCount }}</strong> total (<strong>{{ securityManagedCredentialCount }}</strong> managed, <strong>{{ securityEnvCredentialCount }}</strong> env)</li>
+                <li{% if securityWarnings > 0 or securityErrors > 0 or not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityCredentialCount > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Configured accounts: <strong>{{ securityCredentialCount }}</strong> total (<strong>{{ securityManagedCredentialCount }}</strong> managed, <strong>{{ securityEnvCredentialCount }}</strong> environment)</li>
                 <li>Active accounts / guarded requests: <strong>{{ securityActiveCredentials7d }}</strong> / <strong>{{ securityRequestsTotal }}</strong></li>
                 <li>Default scopes in runtime policy: <strong>{{ securityDefaultScopeCount }}</strong>{% if securityDefaultScopePreview %} ({{ securityDefaultScopePreview }}){% endif %}</li>
                 <li>Environment / profile: <strong>{{ securityPosture.environment|default('unknown') }}</strong> / <strong>{{ securityPosture.profile.name|default('unknown') }}</strong></li>
@@ -1551,7 +1551,7 @@
                         </p>
                         <p class="agents-readiness-detail-signal-copy">
                           Last error: <strong>{{ row.lastError ?: 'n/a' }}</strong>.
-                          Updated <strong>{{ row.dateUpdated ?: row.dateCreated ?: 'n/a' }}</strong>.
+                          Updated <strong>{{ (row.dateUpdated ?: row.dateCreated) ? (row.dateUpdated ?: row.dateCreated)|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</strong>.
                         </p>
                       </li>
                     {% endfor %}
@@ -1622,7 +1622,7 @@
                       <dd><strong>{{ securityCredentialCount }}</strong></dd>
                     </div>
                     <div class="agents-readiness-detail-list-row">
-                      <dt>Managed / env</dt>
+                      <dt>Managed / environment</dt>
                       <dd><strong>{{ securityManagedCredentialCount }}</strong> / <strong>{{ securityEnvCredentialCount }}</strong></dd>
                     </div>
                     <div class="agents-readiness-detail-list-row">
@@ -1819,7 +1819,7 @@
                   </li>
                   <li class="agents-readiness-detail-signal agents-readiness-detail-signal--{{ readinessHasActiveCredentials ? 'ok' : 'warn' }}">
                     <div class="agents-readiness-detail-signal-head">
-                      <strong>Credential activity</strong>
+                      <strong>Account activity</strong>
                       <span class="agents-readiness-detail-signal-badge agents-readiness-detail-signal-badge--{{ readinessHasActiveCredentials ? 'ok' : 'warn' }}">{{ readinessHasActiveCredentials ? 'ACTIVE' : 'LIMITED' }}</span>
                     </div>
                     <p class="agents-readiness-detail-signal-copy">{{ readinessCapacityLine }}</p>
@@ -1904,7 +1904,7 @@
                         </div>
                         <p class="agents-readiness-detail-signal-copy">
                           Lag <strong>{{ row.lagSeconds }}</strong>s.
-                          Last checkpoint <strong>{{ row.checkpointAt ?: 'n/a' }}</strong>.
+                          Last checkpoint <strong>{{ row.checkpointAt ? row.checkpointAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</strong>.
                         </p>
                         {% if row.updatedSince %}
                           <p class="agents-readiness-detail-signal-copy">Updated since <strong>{{ row.updatedSince }}</strong>.</p>
@@ -1995,7 +1995,7 @@
                   <td><strong>{{ row.status }}</strong></td>
                   <td>{{ row.attempts }}</td>
                   <td>{{ row.lastError ?: 'n/a' }}</td>
-                  <td>{{ row.dateUpdated ?: row.dateCreated ?: 'n/a' }}</td>
+                  <td>{{ (row.dateUpdated ?: row.dateCreated) ? (row.dateUpdated ?: row.dateCreated)|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
                   <td>
                     <form method="post" accept-charset="UTF-8">
                       {{ csrfInput() }}
@@ -2039,109 +2039,114 @@
             <p class="agents-webhook-test-sink-status agents-webhook-test-sink-status--{{ webhookTestSinkStateTone }}">{{ webhookTestSinkStatusLine }}</p>
           </div>
 
-          <div class="agents-webhook-test-sink-row agents-webhook-test-sink-row--url">
-            <span class="agents-webhook-test-sink-row-label">Sink URL:</span>
-            <code class="agents-webhook-test-sink-url">{{ webhookTestSinkUrl }}</code>
-          </div>
-
-          {% if webhookTestSinkState != 'configured' and webhookTestSinkNotice %}
-            <div class="agents-webhook-test-sink-row agents-webhook-test-sink-row--notice agents-webhook-test-sink-row--notice-{{ webhookTestSinkStateTone }}">
-              <p class="agents-webhook-test-sink-notice-copy">{{ webhookTestSinkNotice }}</p>
-            </div>
-          {% endif %}
-
-          <div class="agents-webhook-test-sink-captures">
-            <div class="agents-webhook-test-sink-captures-head">
-              <h3 class="agents-webhook-test-sink-captures-title">Captures:</h3>
-            </div>
-
-            {% if webhookTestSinkStorageReady and webhookTestSinkEvents|length %}
-              <div class="agents-webhook-test-sink-table-wrap">
-                <table class="agents-webhook-test-sink-table">
-                  <colgroup>
-                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--id">
-                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--event">
-                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--verification">
-                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--routing">
-                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--captured">
-                    <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--payload">
-                  </colgroup>
-                  <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Event</th>
-                    <th>Verification</th>
-                    <th>Routing</th>
-                    <th>Captured</th>
-                    <th>Payload</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {% for row in webhookTestSinkEvents %}
-                    {% set verificationTone = row.verificationStatus == 'valid'
-                      ? 'agents-status-chip--good'
-                      : (row.verificationStatus == 'invalid' ? 'agents-status-chip--bad' : 'agents-status-chip--muted') %}
-                    {% set routingLabel = row.subscriptionMode ?: 'n/a' %}
-                    <tr>
-                      <td>#{{ row.id }}</td>
-                      <td>
-                        <div class="agents-webhook-test-sink-event-stack">
-                          <span class="agents-webhook-test-sink-event-id">{{ row.eventId ?: 'n/a' }}</span>
-                          <span class="agents-webhook-test-sink-event-copy">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }}{{ row.action ? ' (' ~ row.action ~ ')' : '' }}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="agents-webhook-test-sink-verification-stack">
-                          <span class="agents-status-chip {{ verificationTone }}">{{ row.verificationStatus }}</span>
-                          <span class="agents-webhook-test-sink-detail-copy">{{ row.requestMethod }} / {{ row.payloadBytes }} bytes</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="agents-webhook-test-sink-routing-stack">
-                          <strong class="agents-webhook-test-sink-routing-label">{{ routingLabel }}</strong>
-                          {% if row.subscriptionCredentialHandles|length %}
-                            <span class="agents-webhook-test-sink-detail-copy">{{ row.subscriptionCredentialHandles|join(', ') }}</span>
-                          {% endif %}
-                        </div>
-                      </td>
-                      <td>{{ row.dateCreated ?: 'n/a' }}</td>
-                      <td>
-                        <button
-                          type="button"
-                          class="agents-webhook-test-sink-payload-trigger"
-                          data-agents-detail-open="webhookTestSinkPayloadDialog"
-                          data-agents-payload-source="webhookTestSinkPayload-{{ row.id }}"
-                          data-agents-payload-title="Webhook Payload"
-                          data-agents-payload-copy="{{ (row.eventId ?: 'n/a') ~ ' · ' ~ (row.resourceType ?: 'resource') ~ ':' ~ (row.resourceId ?: 'n/a') ~ (row.action ? ' (' ~ row.action ~ ')' : '') ~ ' · ' ~ row.requestMethod ~ ' / ' ~ row.payloadBytes ~ ' bytes · ' ~ (row.dateCreated ?: 'n/a') }}"
-                          aria-haspopup="dialog"
-                          aria-controls="webhookTestSinkPayloadDialog"
-                        >› VIEW</button>
-                        <script type="application/json" id="webhookTestSinkPayload-{{ row.id }}">{{ row.payloadJson }}</script>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                  </tbody>
-                </table>
+          <details class="agents-readiness-ready-details">
+            <summary><span>Details</span></summary>
+            <div class="agents-status-collapsible-body">
+              <div class="agents-webhook-test-sink-row agents-webhook-test-sink-row--url">
+                <span class="agents-webhook-test-sink-row-label">Sink URL:</span>
+                <code class="agents-webhook-test-sink-url">{{ webhookTestSinkUrl }}</code>
               </div>
-            {% else %}
-              <div class="agents-webhook-test-sink-empty">
-                <p class="agents-webhook-test-sink-empty-copy">{{ webhookTestSinkEmptyCopy }}</p>
-                {% if webhookTestSinkStorageReady %}
-                  <p class="agents-webhook-test-sink-empty-meta">Captured / valid / invalid / unsigned: <strong>{{ webhookTestSinkTotal }}</strong> / <strong>{{ webhookTestSinkValid }}</strong> / <strong>{{ webhookTestSinkInvalid }}</strong> / <strong>{{ webhookTestSinkUnsigned }}</strong></p>
+
+              {% if webhookTestSinkState != 'configured' and webhookTestSinkNotice %}
+                <div class="agents-webhook-test-sink-row agents-webhook-test-sink-row--notice agents-webhook-test-sink-row--notice-{{ webhookTestSinkStateTone }}">
+                  <p class="agents-webhook-test-sink-notice-copy">{{ webhookTestSinkNotice }}</p>
+                </div>
+              {% endif %}
+
+              <div class="agents-webhook-test-sink-captures">
+                <div class="agents-webhook-test-sink-captures-head">
+                  <h3 class="agents-webhook-test-sink-captures-title">Captures:</h3>
+                </div>
+
+                {% if webhookTestSinkStorageReady and webhookTestSinkEvents|length %}
+                  <div class="agents-webhook-test-sink-table-wrap">
+                    <table class="agents-webhook-test-sink-table">
+                      <colgroup>
+                        <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--id">
+                        <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--event">
+                        <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--verification">
+                        <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--routing">
+                        <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--captured">
+                        <col class="agents-webhook-test-sink-col agents-webhook-test-sink-col--payload">
+                      </colgroup>
+                      <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Event</th>
+                        <th>Verification</th>
+                        <th>Routing</th>
+                        <th>Captured</th>
+                        <th>Payload</th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                      {% for row in webhookTestSinkEvents %}
+                        {% set verificationTone = row.verificationStatus == 'valid'
+                          ? 'agents-status-chip--good'
+                          : (row.verificationStatus == 'invalid' ? 'agents-status-chip--bad' : 'agents-status-chip--muted') %}
+                        {% set routingLabel = row.subscriptionMode ?: 'n/a' %}
+                        <tr>
+                          <td>#{{ row.id }}</td>
+                          <td>
+                            <div class="agents-webhook-test-sink-event-stack">
+                              <span class="agents-webhook-test-sink-event-id">{{ row.eventId ?: 'n/a' }}</span>
+                              <span class="agents-webhook-test-sink-event-copy">{{ row.resourceType ?: 'resource' }}:{{ row.resourceId ?: 'n/a' }}{{ row.action ? ' (' ~ row.action ~ ')' : '' }}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="agents-webhook-test-sink-verification-stack">
+                              <span class="agents-status-chip {{ verificationTone }}">{{ row.verificationStatus }}</span>
+                              <span class="agents-webhook-test-sink-detail-copy">{{ row.requestMethod }} / {{ row.payloadBytes }} bytes</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="agents-webhook-test-sink-routing-stack">
+                              <strong class="agents-webhook-test-sink-routing-label">{{ routingLabel }}</strong>
+                              {% if row.subscriptionCredentialHandles|length %}
+                                <span class="agents-webhook-test-sink-detail-copy">{{ row.subscriptionCredentialHandles|join(', ') }}</span>
+                              {% endif %}
+                            </div>
+                          </td>
+                          <td>{{ row.dateCreated ? row.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
+                          <td>
+                            <button
+                              type="button"
+                              class="agents-webhook-test-sink-payload-trigger"
+                              data-agents-detail-open="webhookTestSinkPayloadDialog"
+                              data-agents-payload-source="webhookTestSinkPayload-{{ row.id }}"
+                              data-agents-payload-title="Webhook Payload"
+                              data-agents-payload-copy="{{ (row.eventId ?: 'n/a') ~ ' · ' ~ (row.resourceType ?: 'resource') ~ ':' ~ (row.resourceId ?: 'n/a') ~ (row.action ? ' (' ~ row.action ~ ')' : '') ~ ' · ' ~ row.requestMethod ~ ' / ' ~ row.payloadBytes ~ ' bytes · ' ~ (row.dateCreated ? row.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a') }}"
+                              aria-haspopup="dialog"
+                              aria-controls="webhookTestSinkPayloadDialog"
+                            >› VIEW</button>
+                            <script type="application/json" id="webhookTestSinkPayload-{{ row.id }}">{{ row.payloadJson }}</script>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <div class="agents-webhook-test-sink-empty">
+                    <p class="agents-webhook-test-sink-empty-copy">{{ webhookTestSinkEmptyCopy }}</p>
+                    {% if webhookTestSinkStorageReady %}
+                      <p class="agents-webhook-test-sink-empty-meta">Captured / valid / invalid / unsigned: <strong>{{ webhookTestSinkTotal }}</strong> / <strong>{{ webhookTestSinkValid }}</strong> / <strong>{{ webhookTestSinkInvalid }}</strong> / <strong>{{ webhookTestSinkUnsigned }}</strong></p>
+                    {% endif %}
+                  </div>
                 {% endif %}
               </div>
-            {% endif %}
-          </div>
 
-          <div class="agents-webhook-test-sink-footer">
-            <ul class="agents-link-list agents-webhook-test-sink-notes">
-              <li><code>PLUGIN_AGENTS_WEBHOOK_URL</code> and <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> are the normal runtime webhook settings.</li>
-              <li>Only point <code>PLUGIN_AGENTS_WEBHOOK_URL</code> at the sink URL above in local/dev.</li>
-              <li>Keep <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> configured so signatures can be verified.</li>
-              <li>Use <strong>Send test webhook</strong> for a one-click local delivery check, or save an entry/product/order to test a real content-triggered event.</li>
-              <li>The sink keeps the latest {{ webhookTestSinkRetentionLimit }} captured deliveries.</li>
-            </ul>
-          </div>
+              <div class="agents-webhook-test-sink-footer">
+                <ul class="agents-link-list agents-webhook-test-sink-notes">
+                  <li><code>PLUGIN_AGENTS_WEBHOOK_URL</code> and <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> are the normal runtime webhook settings.</li>
+                  <li>Only point <code>PLUGIN_AGENTS_WEBHOOK_URL</code> at the sink URL above in local/dev.</li>
+                  <li>Keep <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> configured so signatures can be verified.</li>
+                  <li>Use <strong>Send test webhook</strong> for a one-click local delivery check, or save an entry/product/order to test a real content-triggered event.</li>
+                  <li>The sink keeps the latest {{ webhookTestSinkRetentionLimit }} captured deliveries.</li>
+                </ul>
+              </div>
+            </div>
+          </details>
         </section>
 
         <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--payload" id="webhookTestSinkPayloadDialog" data-agents-detail-dialog aria-labelledby="webhookTestSinkPayloadDialogTitle">
@@ -2181,120 +2186,134 @@
           <p class="agents-operator-notifications-status agents-operator-notifications-status--{{ notificationEnabled and notificationRecipientCount > 0 ? 'good' : 'warn' }}">{{ notificationStatusLine }}</p>
         </div>
 
-        <div class="agents-operator-notifications-summary">
-          <div class="agents-operator-notifications-summary-item">
-            <span class="agents-operator-notifications-summary-label">Recipients</span>
-            <strong class="agents-operator-notifications-summary-value">{{ notificationRecipientCount }}</strong>
-          </div>
-          <div class="agents-operator-notifications-summary-item">
-            <span class="agents-operator-notifications-summary-label">Last monitor status</span>
-            <strong class="agents-operator-notifications-summary-value agents-operator-notifications-summary-value--{{ notificationMonitorTone }}">{{ notificationMonitorStatus|upper }}</strong>
-          </div>
-          <div class="agents-operator-notifications-summary-item">
-            <span class="agents-operator-notifications-summary-label">Sent / failed</span>
-            <strong class="agents-operator-notifications-summary-value">{{ notificationSummary.sent|default(0) }} / {{ notificationSummary.failed|default(0) }}</strong>
-          </div>
-          <div class="agents-operator-notifications-summary-item">
-            <span class="agents-operator-notifications-summary-label">Last evaluated</span>
-            <strong class="agents-operator-notifications-summary-value">{{ notificationLastEvaluatedLabel }}</strong>
-          </div>
-        </div>
+        <details class="agents-readiness-ready-details">
+          <summary><span>Details</span></summary>
+          <div class="agents-status-collapsible-body">
+            <div class="agents-operator-notifications-summary">
+              <div class="agents-operator-notifications-summary-item">
+                <span class="agents-operator-notifications-summary-label">Recipients</span>
+                <strong class="agents-operator-notifications-summary-value">{{ notificationRecipientCount }}</strong>
+              </div>
+              <div class="agents-operator-notifications-summary-item">
+                <span class="agents-operator-notifications-summary-label">Last monitor status</span>
+                <strong class="agents-operator-notifications-summary-value agents-operator-notifications-summary-value--{{ notificationMonitorTone }}">{{ notificationMonitorStatus|upper }}</strong>
+              </div>
+              <div class="agents-operator-notifications-summary-item">
+                <span class="agents-operator-notifications-summary-label">Sent / failed</span>
+                <strong class="agents-operator-notifications-summary-value">{{ notificationSummary.sent|default(0) }} / {{ notificationSummary.failed|default(0) }}</strong>
+              </div>
+              <div class="agents-operator-notifications-summary-item">
+                <span class="agents-operator-notifications-summary-label">Last evaluated</span>
+                <strong class="agents-operator-notifications-summary-value">{{ notificationLastEvaluatedLabel }}</strong>
+              </div>
+            </div>
 
-        <div class="agents-operator-notifications-row">
-          <span class="agents-operator-notifications-row-label">Recipients:</span>
-          {% if notificationRecipients|length %}
-            {% if notificationGlobalRecipientCount > 0 and notificationAccountRecipientCount > 0 %}
-              <span class="agents-operator-notifications-row-copy">Global: {{ notificationGlobalRecipients|join(', ') }}. Account-specific approvals: {{ notificationAccountRecipients|join(', ') }}.</span>
-            {% elseif notificationGlobalRecipientCount > 0 %}
-              <span class="agents-operator-notifications-row-copy">{{ notificationGlobalRecipients|join(', ') }}</span>
-            {% else %}
-              <span class="agents-operator-notifications-row-copy">Account-specific approvals: {{ notificationAccountRecipients|join(', ') }}</span>
+            <div class="agents-operator-notifications-row">
+              <span class="agents-operator-notifications-row-label">Recipients:</span>
+              {% if notificationRecipients|length %}
+                {% if notificationGlobalRecipientCount > 0 and notificationAccountRecipientCount > 0 %}
+                  <span class="agents-operator-notifications-row-copy">Global: {{ notificationGlobalRecipients|join(', ') }}. Account-specific approvals: {{ notificationAccountRecipients|join(', ') }}.</span>
+                {% elseif notificationGlobalRecipientCount > 0 %}
+                  <span class="agents-operator-notifications-row-copy">{{ notificationGlobalRecipients|join(', ') }}</span>
+                {% else %}
+                  <span class="agents-operator-notifications-row-copy">Account-specific approvals: {{ notificationAccountRecipients|join(', ') }}</span>
+                {% endif %}
+              {% else %}
+                <span class="agents-operator-notifications-row-copy">No valid recipients currently resolve from the configured value.</span>
+              {% endif %}
+            </div>
+
+            <div class="agents-operator-notifications-row">
+              <span class="agents-operator-notifications-row-label">Enabled events:</span>
+              {% if notificationEnabledEvents|length %}
+                <span class="agents-operator-notifications-row-copy">{{ notificationEnabledEvents|join(', ') }}</span>
+              {% else %}
+                <span class="agents-operator-notifications-row-copy">No notification events are enabled.</span>
+              {% endif %}
+            </div>
+
+            <div class="agents-operator-notifications-row">
+              <span class="agents-operator-notifications-row-label">Last handoff:</span>
+              {% if notificationLastSentAt %}
+                <span class="agents-operator-notifications-row-copy">
+                  Sent to {{ notificationLastSentRecipient ?: 'configured recipient' }} at {{ notificationLastSentAt|date('Y-m-d, H:i:s', timezone='UTC') }}{% if notificationLastSentSubject %} ({{ notificationLastSentSubject }}){% endif %}.
+                </span>
+              {% else %}
+                <span class="agents-operator-notifications-row-copy">No successful notification delivery has been recorded yet.</span>
+              {% endif %}
+            </div>
+
+            {% if notificationMonitorPayload.issues|default([])|length %}
+              <div class="agents-operator-notifications-row agents-operator-notifications-row--notice agents-operator-notifications-row--notice-{{ notificationMonitorTone }}">
+                <p class="agents-operator-notifications-notice-copy">{{ notificationMonitorPayload.issues|slice(0, 3)|join(' ') }}</p>
+              </div>
             {% endif %}
-          {% else %}
-            <span class="agents-operator-notifications-row-copy">No valid recipients currently resolve from the configured value.</span>
-          {% endif %}
-        </div>
 
-        <div class="agents-operator-notifications-row">
-          <span class="agents-operator-notifications-row-label">Enabled events:</span>
-          {% if notificationEnabledEvents|length %}
-            <span class="agents-operator-notifications-row-copy">{{ notificationEnabledEvents|join(', ') }}</span>
-          {% else %}
-            <span class="agents-operator-notifications-row-copy">No notification events are enabled.</span>
-          {% endif %}
-        </div>
+            <div class="agents-operator-notifications-log">
+              <div class="agents-operator-notifications-log-head">
+                <h3 class="agents-operator-notifications-log-title">Recent deliveries</h3>
+              </div>
 
-        <div class="agents-operator-notifications-row">
-          <span class="agents-operator-notifications-row-label">Last handoff:</span>
-          {% if notificationLastSentAt %}
-            <span class="agents-operator-notifications-row-copy">
-              Sent to {{ notificationLastSentRecipient ?: 'configured recipient' }} at {{ notificationLastSentAt }}{% if notificationLastSentSubject %} ({{ notificationLastSentSubject }}){% endif %}.
-            </span>
-          {% else %}
-            <span class="agents-operator-notifications-row-copy">No successful notification delivery has been recorded yet.</span>
-          {% endif %}
-        </div>
-
-        {% if notificationMonitorPayload.issues|default([])|length %}
-          <div class="agents-operator-notifications-row agents-operator-notifications-row--notice agents-operator-notifications-row--notice-{{ notificationMonitorTone }}">
-            <p class="agents-operator-notifications-notice-copy">{{ notificationMonitorPayload.issues|slice(0, 3)|join(' ') }}</p>
-          </div>
-        {% endif %}
-
-        <div class="agents-operator-notifications-log">
-          <div class="agents-operator-notifications-log-head">
-            <h3 class="agents-operator-notifications-log-title">Recent deliveries</h3>
-          </div>
-
-          {% if notificationRecentRows|length %}
-            <div class="agents-operator-notifications-table-wrap">
-              <table class="agents-operator-notifications-table">
-                <colgroup>
-                  <col class="agents-operator-notifications-col agents-operator-notifications-col--event">
-                  <col class="agents-operator-notifications-col agents-operator-notifications-col--recipient">
-                  <col class="agents-operator-notifications-col agents-operator-notifications-col--status">
-                  <col class="agents-operator-notifications-col agents-operator-notifications-col--attempts">
-                  <col class="agents-operator-notifications-col agents-operator-notifications-col--updated">
-                </colgroup>
-                <thead>
-                <tr>
-                  <th>Event</th>
-                  <th>Recipient</th>
-                  <th>Status</th>
-                  <th>Attempts</th>
-                  <th>Updated</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for row in notificationRecentRows %}
-                  {% set notificationStatusTone = row.status == 'sent'
-                    ? 'agents-status-chip--good'
-                    : (row.status == 'failed' ? 'agents-status-chip--bad' : 'agents-status-chip--muted') %}
-                  <tr>
-                    <td>
-                      <div class="agents-operator-notifications-event-stack">
-                        <strong class="agents-operator-notifications-event-label">{{ row.eventLabel }}</strong>
-                        <span class="agents-operator-notifications-event-copy">{{ row.subject }}</span>
-                        {% if row.errorMessage %}
-                          <span class="agents-operator-notifications-event-copy">{{ row.errorMessage }}</span>
-                        {% endif %}
-                      </div>
-                    </td>
-                    <td>{{ row.recipient }}</td>
-                    <td><span class="agents-status-chip {{ notificationStatusTone }}">{{ row.status }}</span></td>
-                    <td>{{ row.attempts }}</td>
-                    <td>{{ row.lastAttemptAt ?: row.sentAt ?: row.dateCreated ?: 'n/a' }}</td>
-                  </tr>
-                {% endfor %}
-                </tbody>
-              </table>
+              {% if notificationRecentRows|length %}
+                <div class="agents-operator-notifications-table-wrap">
+                  <table class="agents-operator-notifications-table">
+                    <colgroup>
+                      <col class="agents-operator-notifications-col agents-operator-notifications-col--event">
+                      <col class="agents-operator-notifications-col agents-operator-notifications-col--recipient">
+                      <col class="agents-operator-notifications-col agents-operator-notifications-col--status">
+                      <col class="agents-operator-notifications-col agents-operator-notifications-col--attempts">
+                      <col class="agents-operator-notifications-col agents-operator-notifications-col--updated">
+                    </colgroup>
+                    <thead>
+                    <tr>
+                      <th>Event</th>
+                      <th>Recipient</th>
+                      <th>Status</th>
+                      <th>Attempts</th>
+                      <th>Updated</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in notificationRecentRows %}
+                      {% set notificationStatusTone = row.status == 'sent'
+                        ? 'agents-status-chip--good'
+                        : (row.status == 'failed' ? 'agents-status-chip--bad' : 'agents-status-chip--muted') %}
+                      <tr>
+                        <td>
+                          <div class="agents-operator-notifications-event-stack">
+                            <strong class="agents-operator-notifications-event-label">{{ row.eventLabel }}</strong>
+                            <span class="agents-operator-notifications-event-copy">{{ row.subject }}</span>
+                            {% if row.errorMessage %}
+                              <span class="agents-operator-notifications-event-copy">{{ row.errorMessage }}</span>
+                            {% endif %}
+                          </div>
+                        </td>
+                        <td>
+                          {% if row.recipientCpEditUrl %}
+                            <a href="{{ cpUrl(row.recipientCpEditUrl) }}">{{ row.recipientLabel }}</a>
+                          {% else %}
+                            {{ row.recipientLabel ?: row.recipient }}
+                          {% endif %}
+                          {% if row.recipientChannelLabel %}
+                            <span class="agents-operator-notifications-recipient-channel"> &rarr; {{ row.recipientChannelLabel }}</span>
+                          {% endif %}
+                        </td>
+                        <td><span class="agents-status-chip {{ notificationStatusTone }}">{{ row.status }}</span></td>
+                        <td>{{ row.attempts }}</td>
+                        <td>{{ (row.lastAttemptAt ?: row.sentAt ?: row.dateCreated) ? (row.lastAttemptAt ?: row.sentAt ?: row.dateCreated)|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
+                      </tr>
+                    {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <div class="agents-operator-notifications-empty">
+                  <p class="agents-operator-notifications-empty-copy">No notification deliveries have been recorded yet.</p>
+                </div>
+              {% endif %}
             </div>
-          {% else %}
-            <div class="agents-operator-notifications-empty">
-              <p class="agents-operator-notifications-empty-copy">No notification deliveries have been recorded yet.</p>
-            </div>
-          {% endif %}
-        </div>
+          </div>
+        </details>
       </section>
       {% endif %}
 
@@ -2303,10 +2322,33 @@
   </div>
 
   {% css %}
+    .agents-layout-stack {
+      --agents-readiness-border: #bbc7d5;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    #readinessStateCard {
+      order: 10;
+    }
+
+    #operatorNotificationsSection {
+      order: 20;
+    }
+
+    #webhookTestSinkSection,
+    #webhookTestSinkPayloadDialog {
+      order: 30;
+    }
+
+    #webhookDlqDetailSection {
+      order: 40;
+    }
+
     .agents-readiness-ready-card {
       --agents-readiness-accent: #108e80;
       --agents-readiness-alert-color: #c24f42;
-      --agents-readiness-border: #c8d0da;
       width: 100%;
       max-width: 1400px;
       margin: 0 auto;
@@ -2507,12 +2549,25 @@
       padding: 12px;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 6px;
       color: #596673;
       font-size: 12px;
       font-weight: 700;
       line-height: 1;
+    }
+
+    .agents-readiness-ready-details > summary::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-top: 2px solid #596673;
+      border-right: 2px solid #596673;
+      transform: rotate(45deg);
+      transform-origin: center;
+      margin-left: 2px;
+      transition: transform 120ms ease;
+      flex: 0 0 auto;
     }
 
     .agents-readiness-ready-details > summary::-webkit-details-marker {
@@ -2521,6 +2576,10 @@
 
     .agents-readiness-ready-details[open] > summary {
       border-bottom: 1px solid var(--agents-readiness-border);
+    }
+
+    .agents-readiness-ready-details[open] > summary::after {
+      transform: rotate(135deg);
     }
 
     .agents-readiness-ready-grid {
@@ -3370,21 +3429,29 @@
     .agents-operator-notifications-summary {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      align-items: stretch;
       gap: 0;
       padding: 1px 0 0 1px;
-      border-bottom: 1px solid #bbc7d5;
-      background: transparent;
+      box-shadow: inset 0 -1px 0 #bbc7d5;
+      background: #f8fafc;
+      position: relative;
     }
 
     .agents-operator-notifications-summary-item {
       min-width: 0;
       padding: 12px;
       margin: -1px 0 0 -1px;
-      border: 1px solid #bbc7d5;
-      background: #ffffff;
+      border: 1px solid var(--agents-readiness-border);
+      background: transparent;
       display: flex;
       flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
       gap: 4px;
+      color: #596673;
+      line-height: normal;
+      text-align: left;
+      white-space: nowrap;
     }
 
     .agents-operator-notifications-summary-item:nth-child(-n + 4) {
@@ -3959,8 +4026,8 @@
 
       .agents-operator-notifications-summary-item {
         width: 100%;
-        border-top: 1px solid #bbc7d5;
-        border-bottom: 1px solid #bbc7d5;
+        border-top: 1px solid var(--agents-readiness-border);
+        border-bottom: 1px solid var(--agents-readiness-border);
         border-left: 0;
         border-right: 0;
       }
@@ -3971,6 +4038,14 @@
 
       .agents-operator-notifications-summary-item:last-child {
         border-bottom: 0;
+      }
+
+      .agents-operator-notifications-summary::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 1px;
+        background: #bbc7d5;
       }
 
       .agents-webhook-test-sink-table {

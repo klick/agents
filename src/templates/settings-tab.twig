@@ -2,25 +2,183 @@
 
 {% set title = "Agents Settings" %}
 {% set selectedSubnavItem = "settings" %}
+{% set fullPageForm = true %}
+{% set submitButtonLabel = 'Save Settings' %}
+{% set settingsFocusTabs = [
+  {
+    id: 'runtime',
+    label: 'Runtime',
+    panelId: 'settingsFocusRuntime',
+  },
+  {
+    id: 'approvals',
+    label: 'Approvals',
+    panelId: 'settingsFocusApprovals',
+    visible: controlCpEnabled ?? false,
+  },
+  {
+    id: 'delivery',
+    label: 'Delivery',
+    panelId: 'settingsFocusDelivery',
+  },
+  {
+    id: 'monitoring',
+    label: 'Monitoring & Advanced',
+    panelId: 'settingsFocusMonitoring',
+  },
+] %}
+{% set visibleSettingsFocusTabs = [] %}
+{% for tab in settingsFocusTabs %}
+  {% if tab.visible is not defined or tab.visible %}
+    {% set visibleSettingsFocusTabs = visibleSettingsFocusTabs|merge([tab]) %}
+  {% endif %}
+{% endfor %}
+{% set tabs = {} %}
+{% for tab in visibleSettingsFocusTabs %}
+  {% set tabs = tabs|merge({
+    (tab.panelId): {
+      label: tab.label,
+      url: '#' ~ tab.panelId,
+    }
+  }) %}
+{% endfor %}
+{% set selectedTab = visibleSettingsFocusTabs|first ? (visibleSettingsFocusTabs|first).panelId : null %}
+{% set tablistLabel = 'Settings focus areas' %}
+
+{% set settingsFocusScript %}
+(() => {
+  const panels = Array.from(document.querySelectorAll('[data-agents-settings-focus-panel]'));
+  const triggers = Array.from(document.querySelectorAll('#tabs [data-id]'));
+  if (!panels.length || !triggers.length) {
+    return;
+  }
+
+  const activatePanel = (panelId) => {
+    panels.forEach((panel) => {
+      const active = panel.id === panelId;
+      panel.hidden = !active;
+    });
+
+    triggers.forEach((trigger) => {
+      const active = trigger.dataset.id === panelId;
+      trigger.classList.toggle('sel', active);
+      if (trigger.getAttribute('role') === 'tab') {
+        trigger.setAttribute('aria-selected', active ? 'true' : 'false');
+        trigger.setAttribute('tabindex', active ? '0' : '-1');
+      }
+    });
+  };
+
+  const panelForHash = () => {
+    const locationHash = window.LOCATION_HASH || (window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : '');
+    if (!locationHash) {
+      return null;
+    }
+
+    const target = document.getElementById(locationHash);
+    if (!target) {
+      return null;
+    }
+
+    const panel = target.closest('[data-agents-settings-focus-panel]');
+    return panel ? panel.id : null;
+  };
+
+  const defaultPanelId = triggers[0]?.dataset.id || panels[0]?.id;
+  activatePanel(panelForHash() || defaultPanelId);
+
+  triggers.forEach((trigger) => {
+    trigger.addEventListener('click', (event) => {
+      event.preventDefault();
+
+      const panelId = trigger.dataset.id;
+      activatePanel(panelId);
+
+      if (window.location.hash !== `#${panelId}`) {
+        window.history.replaceState(null, '', `#${panelId}`);
+      }
+    });
+
+    trigger.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const currentIndex = triggers.indexOf(trigger);
+      let nextIndex = currentIndex;
+
+      if (event.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % triggers.length;
+      } else if (event.key === 'ArrowLeft') {
+        nextIndex = (currentIndex - 1 + triggers.length) % triggers.length;
+      } else if (event.key === 'Home') {
+        nextIndex = 0;
+      } else if (event.key === 'End') {
+        nextIndex = triggers.length - 1;
+      }
+
+      const nextTrigger = triggers[nextIndex];
+      nextTrigger?.focus();
+      if (nextTrigger) {
+        const panelId = nextTrigger.dataset.id;
+        activatePanel(panelId);
+        if (window.location.hash !== `#${panelId}`) {
+          window.history.replaceState(null, '', `#${panelId}`);
+        }
+      }
+    });
+  });
+
+  window.addEventListener('hashchange', () => {
+    const panelId = panelForHash();
+    if (panelId) {
+      activatePanel(panelId);
+    }
+  });
+})();
+{% endset %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
-  <h1>Settings</h1>
-  <p class="agents-page-intro">Configure runtime switches, operator notifications, webhook transport, and reliability thresholds from one place.</p>
+  <style>
+    .agents-settings-page {
+      display: grid;
+      gap: 16px;
+    }
 
-  <form method="post" accept-charset="UTF-8">
-    {{ csrfInput() }}
-    {{ actionInput('agents/dashboard/save-settings') }}
-    {{ redirectInput('agents/settings') }}
+    .agents-settings-focus-panel[hidden] {
+      display: none !important;
+    }
 
-    <div class="agents-layout-stack">
+    .agents-settings-focus-grid {
+      display: grid;
+      gap: 24px;
+    }
+
+    @media (min-width: 1200px) {
+      .agents-settings-focus-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 767px) {
+      .agents-settings-page {
+        gap: 16px;
+      }
+    }
+  </style>
+
+  {{ actionInput('agents/dashboard/save-settings') }}
+  {{ redirectInput('agents/settings') }}
+
+  <div class="agents-layout-stack agents-settings-page" data-agents-settings-focus-tabs>
+    <div class="agents-settings-focus-panels">
       {% include 'agents/settings' %}
-
-      <div class="agents-actions">
-        <button class="btn submit" type="submit">Save Settings</button>
-        <a class="btn" href="{{ url('agents/status') }}">Back to Status</a>
-      </div>
     </div>
-  </form>
+  </div>
+
+  <script>{{ settingsFocusScript|raw }}</script>
 {% endblock %}

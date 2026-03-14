@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.9 (2026-03-14)
+
+- Reworked `Settings` around native Craft CP tabs with one shared top-right `Save Settings` action instead of per-panel save actions and custom tab chrome.
+- Refined the `Status` surface with explicit card ordering, calmer detail toggles, and consistent human-readable timestamps across operator-facing tables and summaries.
+- Enriched `Operator Notifications` recent-delivery rows so recipients resolve to clickable CP user names plus delivery channels when possible.
+- Polished `Approvals` journey cards by muting empty stages, hiding empty-state chevrons, and keeping the staged control view aligned with the rest of the CP.
+
 ## 0.21.8 (2026-03-14)
 
 - Reworked `Approvals` into a max-width journey of card-based stages with centered divider dots, embedded rules management, and toggleable sections that align with the rest of the CP.

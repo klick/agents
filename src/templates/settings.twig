@@ -32,264 +32,267 @@
   class: 'go',
   text: 'Learn more'|t('app'),
 }) %}
+{% set settingsHasLocks = agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or notificationsEnabledSettingLocked or notificationRecipientsSettingLocked or notificationApprovalRequestedSettingLocked or notificationApprovalDecidedSettingLocked or notificationExecutionFailedSettingLocked or notificationWebhookDlqFailedSettingLocked or notificationStatusChangedSettingLocked or webhookUrlSettingLocked or webhookSecretSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
+<section class="agents-settings-focus-panel" id="settingsFocusRuntime" data-agents-settings-focus-panel>
+    <div class="agents-settings-focus-grid">
+      <section class="border rounded p-3" id="runtimeSwitchesSection">
+        <h2 class="h4">Runtime Switches</h2>
+        <p class="agents-subtle">Turn public surfaces on or off. Some controls may be locked by environment or config.</p>
 
-<section class="border rounded p-3" id="runtimeSwitchesSection">
-  <h2 class="h4">Runtime Switches</h2>
-  <p class="agents-subtle">Turn public surfaces on or off. Some controls may be locked by environment or config.</p>
+        {{ forms.lightswitchField({
+          first: true,
+          label: 'Enable Agents API',
+          instructions: agentsEnabledLocked
+            ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
+            : 'Turn the Agents API on or off.',
+          name: 'enabled',
+          on: settings.enabled ?? true,
+          onLabel: false,
+          offLabel: false,
+          disabled: agentsEnabledLocked,
+        }) }}
 
-  {{ forms.lightswitchField({
-    first: true,
-    label: 'Enable Agents API',
-    instructions: agentsEnabledLocked
-      ? 'Controlled by PLUGIN_AGENTS_ENABLED in your environment.'
-      : 'Turn the Agents API on or off.',
-    name: 'enabled',
-    on: settings.enabled ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: agentsEnabledLocked,
-  }) }}
+        {{ forms.lightswitchField({
+          label: 'Enable governed writing APIs (experimental)',
+          instructions: writesExperimentalLockedByEnv
+            ? 'Controlled by ' ~ writesExperimentalLockSource ~ ' in your environment.'
+            : (writesExperimentalConfigLocked
+              ? 'Controlled by config/agents.php (`enableWritesExperimental`).'
+              : 'Enable /control/* governed write surfaces for policies, approvals, simulations, and execute actions.'),
+          name: 'enableWritesExperimental',
+          on: writesExperimentalSettingLocked
+            ? (writesExperimentalEnabled ?? (settings.enableWritesExperimental ?? false))
+            : (settings.enableWritesExperimental ?? false),
+          onLabel: false,
+          offLabel: false,
+          disabled: writesExperimentalSettingLocked,
+        }) }}
 
-  {{ forms.lightswitchField({
-    label: 'Enable governed writing APIs (experimental)',
-    instructions: writesExperimentalLockedByEnv
-      ? 'Controlled by ' ~ writesExperimentalLockSource ~ ' in your environment.'
-      : (writesExperimentalConfigLocked
-        ? 'Controlled by config/agents.php (`enableWritesExperimental`).'
-        : 'Enable /control/* governed write surfaces for policies, approvals, simulations, and execute actions.'),
-    name: 'enableWritesExperimental',
-    on: writesExperimentalSettingLocked
-      ? (writesExperimentalEnabled ?? (settings.enableWritesExperimental ?? false))
-      : (settings.enableWritesExperimental ?? false),
-    onLabel: false,
-    offLabel: false,
-    disabled: writesExperimentalSettingLocked,
-  }) }}
-
-  {{ forms.lightswitchField({
-    label: 'Enable live usage indicator on Account cards',
-    instructions: credentialUsageIndicatorSettingLocked
-      ? 'Controlled by config/agents.php (`enableCredentialUsageIndicator`).'
-      : 'Show temporary yellow activity color on an Account card dot when that key is used.',
-    name: 'enableCredentialUsageIndicator',
-    on: settings.enableCredentialUsageIndicator ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: credentialUsageIndicatorSettingLocked,
-  }) }}
-</section>
-
-
-<hr>
-
-
-<section class="border rounded p-3" id="notificationsSection">
-  <h2 class="h4">Operator Notifications</h2>
-  <p class="agents-subtle">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes. Run <code>php craft agents/notifications-check</code> from cron to evaluate system status notifications.</p>
-
-  {{ forms.lightswitchField({
-    first: true,
-    label: 'Enable operator notifications',
-    instructions: notificationsEnabledSettingLocked
-      ? 'Controlled by config/agents.php (`notificationsEnabled`).'
-      : 'Turn outbound operator notifications on or off.',
-    name: 'notificationsEnabled',
-    on: settings.notificationsEnabled ?? false,
-    onLabel: false,
-    offLabel: false,
-    disabled: notificationsEnabledSettingLocked,
-  }) }}
-
-  {{ forms.autosuggestField({
-    label: 'Notification recipients',
-    instructions: notificationRecipientsSettingLocked
-      ? 'Controlled by config/agents.php (`notificationRecipients`).'
-      : 'Comma- or newline-separated email recipients. Recommended: keep this as `$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS` and set the actual list in your environment.',
-    id: 'notificationRecipients',
-    name: 'notificationRecipients',
-    value: settings.notificationRecipients ?? '$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS',
-    suggestEnvVars: true,
-    tip: notificationRecipientsTip,
-    placeholder: '$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS',
-    disabled: notificationRecipientsSettingLocked,
-  }) }}
-
-  {{ forms.lightswitchField({
-    label: 'Approval requested',
-    instructions: notificationApprovalRequestedSettingLocked
-      ? 'Controlled by config/agents.php (`notificationApprovalRequested`).'
-      : 'Send an email when a new approval request is created.',
-    name: 'notificationApprovalRequested',
-    on: settings.notificationApprovalRequested ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: notificationApprovalRequestedSettingLocked,
-  }) }}
-
-  {{ forms.lightswitchField({
-    label: 'Approval decided',
-    instructions: notificationApprovalDecidedSettingLocked
-      ? 'Controlled by config/agents.php (`notificationApprovalDecided`).'
-      : 'Send an email when an approval request is finally approved or rejected.',
-    name: 'notificationApprovalDecided',
-    on: settings.notificationApprovalDecided ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: notificationApprovalDecidedSettingLocked,
-  }) }}
-
-  {{ forms.lightswitchField({
-    label: 'Execution blocked or failed',
-    instructions: notificationExecutionFailedSettingLocked
-      ? 'Controlled by config/agents.php (`notificationExecutionFailed`).'
-      : 'Send an email when governed execution ends blocked or failed.',
-    name: 'notificationExecutionFailed',
-    on: settings.notificationExecutionFailed ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: notificationExecutionFailedSettingLocked,
-  }) }}
-
-  {{ forms.lightswitchField({
-    label: 'Webhook DLQ failures',
-    instructions: notificationWebhookDlqFailedSettingLocked
-      ? 'Controlled by config/agents.php (`notificationWebhookDlqFailed`).'
-      : 'Send an email when an outbound webhook enters the dead-letter queue.',
-    name: 'notificationWebhookDlqFailed',
-    on: settings.notificationWebhookDlqFailed ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: notificationWebhookDlqFailedSettingLocked,
-  }) }}
-
-  {{ forms.lightswitchField({
-    label: 'Scheduled status changes',
-    instructions: notificationStatusChangedSettingLocked
-      ? 'Controlled by config/agents.php (`notificationStatusChanged`).'
-      : 'Send an email when the scheduled notifications check detects a system status transition.',
-    name: 'notificationStatusChanged',
-    on: settings.notificationStatusChanged ?? true,
-    onLabel: false,
-    offLabel: false,
-    disabled: notificationStatusChangedSettingLocked,
-  }) }}
-</section>
-
-
-<hr>
-
-
-<section class="border rounded p-3" id="webhookSection">
-  <h2 class="h4">Webhooks</h2>
-  <p class="agents-subtle">Configure the normal runtime webhook target here. These fields are env-aware; prefer env variable references over literal values.</p>
-
-  {{ forms.autosuggestField({
-    first: true,
-    label: 'Webhook URL',
-    instructions: webhookUrlSettingLocked
-      ? 'Controlled by config/agents.php (`webhookUrl`).'
-      : 'Normal runtime outbound webhook target. Recommended: keep this as `$PLUGIN_AGENTS_WEBHOOK_URL` and set the actual URL in your environment.',
-    id: 'webhookUrl',
-    name: 'webhookUrl',
-    value: settings.webhookUrl ?? '$PLUGIN_AGENTS_WEBHOOK_URL',
-    suggestEnvVars: true,
-    suggestAliases: true,
-    tip: webhookUrlTip,
-    placeholder: '$PLUGIN_AGENTS_WEBHOOK_URL',
-    disabled: webhookUrlSettingLocked,
-  }) }}
-
-  {{ forms.autosuggestField({
-    label: 'Webhook secret',
-    instructions: webhookSecretSettingLocked
-      ? 'Controlled by config/agents.php (`webhookSecret`).'
-      : 'Shared signing secret for outbound deliveries. Recommended: keep this as `$PLUGIN_AGENTS_WEBHOOK_SECRET` and set the real secret in your environment.',
-    id: 'webhookSecret',
-    name: 'webhookSecret',
-    value: settings.webhookSecret ?? '$PLUGIN_AGENTS_WEBHOOK_SECRET',
-    suggestEnvVars: true,
-    tip: webhookSecretTip,
-    placeholder: '$PLUGIN_AGENTS_WEBHOOK_SECRET',
-    disabled: webhookSecretSettingLocked,
-  }) }}
-</section>
-
-
-<hr>
-
-
-<section class="border rounded p-3" id="reliabilityThresholdsSection">
-  <h2 class="h4">Reliability Thresholds</h2>
-  <p class="agents-subtle">Tune reliability alert sensitivity for your sync cadence.</p>
-
-  {{ forms.autosuggestField({
-    label: 'Sync-state lag warn threshold (seconds)',
-    instructions: reliabilityConsumerLagWarnSecondsLocked
-      ? 'Controlled by config/agents.php (`reliabilityConsumerLagWarnSeconds`).'
-      : 'Signal turns WARN when max sync-state lag is greater than this value.',
-    id: 'reliabilityConsumerLagWarnSeconds',
-    name: 'reliabilityConsumerLagWarnSeconds',
-    value: settings.reliabilityConsumerLagWarnSeconds ?? 300,
-    suggestEnvVars: true,
-    placeholder: '300',
-    disabled: reliabilityConsumerLagWarnSecondsLocked,
-  }) }}
-
-  {{ forms.autosuggestField({
-    label: 'Sync-state lag critical threshold (seconds)',
-    instructions: reliabilityConsumerLagCriticalSecondsLocked
-      ? 'Controlled by config/agents.php (`reliabilityConsumerLagCriticalSeconds`).'
-      : 'Signal turns CRITICAL when max sync-state lag is greater than this value. Must be higher than warn threshold.',
-    id: 'reliabilityConsumerLagCriticalSeconds',
-    name: 'reliabilityConsumerLagCriticalSeconds',
-    value: settings.reliabilityConsumerLagCriticalSeconds ?? 900,
-    suggestEnvVars: true,
-    placeholder: '900',
-    disabled: reliabilityConsumerLagCriticalSecondsLocked,
-  }) }}
-</section>
-
-
-{% if requestsFeatureEnabled %}
-  <section class="border rounded p-3" id="manualFallbackSection">
-    <h2 class="h4">Manual Fallback</h2>
-    <p class="agents-subtle">Keep this off for agent-first workflows. Enable only if operators must create requests manually.</p>
-
-    {{ forms.lightswitchField({
-      first: true,
-      label: 'Allow manual approval requests in Approvals',
-      instructions: 'Fallback only. Recommended: agents/integrations create requests, humans only approve/reject.',
-      name: 'allowCpApprovalRequests',
-      on: settings.allowCpApprovalRequests ?? false,
-      onLabel: false,
-      offLabel: false,
-    }) }}
+        {{ forms.lightswitchField({
+          label: 'Enable live usage indicator on Account cards',
+          instructions: credentialUsageIndicatorSettingLocked
+            ? 'Controlled by config/agents.php (`enableCredentialUsageIndicator`).'
+            : 'Show temporary yellow activity color on an Account card dot when that key is used.',
+          name: 'enableCredentialUsageIndicator',
+          on: settings.enableCredentialUsageIndicator ?? true,
+          onLabel: false,
+          offLabel: false,
+          disabled: credentialUsageIndicatorSettingLocked,
+        }) }}
+      </section>
+    </div>
   </section>
-{% endif %}
 
-{% if agentsEnabledLocked or writesExperimentalSettingLocked or credentialUsageIndicatorSettingLocked or notificationsEnabledSettingLocked or notificationRecipientsSettingLocked or notificationApprovalRequestedSettingLocked or notificationApprovalDecidedSettingLocked or notificationExecutionFailedSettingLocked or notificationWebhookDlqFailedSettingLocked or notificationStatusChangedSettingLocked or webhookUrlSettingLocked or webhookSecretSettingLocked or reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
-  <section class="border rounded p-3 warning" id="configurationLocksSection">
-    <h2 class="h4">Configuration Locks</h2>
-    {% if agentsEnabledLocked %}
-      <p>`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
-    {% endif %}
-    {% if writesExperimentalLockedByEnv %}
-      <p>`enableWritesExperimental` is locked by environment variable source: {{ writesExperimentalLockSource }}.</p>
-    {% endif %}
-    {% if writesExperimentalConfigLocked %}
-      <p>`enableWritesExperimental` is controlled by <code>config/agents.php</code>.</p>
-    {% endif %}
-    {% if credentialUsageIndicatorSettingLocked %}
-      <p>`enableCredentialUsageIndicator` is controlled by <code>config/agents.php</code>.</p>
-    {% endif %}
-    {% if notificationsEnabledSettingLocked or notificationRecipientsSettingLocked or notificationApprovalRequestedSettingLocked or notificationApprovalDecidedSettingLocked or notificationExecutionFailedSettingLocked or notificationWebhookDlqFailedSettingLocked or notificationStatusChangedSettingLocked %}
-      <p>Some operator notification settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
-    {% endif %}
-    {% if webhookUrlSettingLocked or webhookSecretSettingLocked %}
-      <p>Webhook transport settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
-    {% endif %}
-    {% if reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
-      <p>Some reliability thresholds are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
-    {% endif %}
+  {% if requestsFeatureEnabled %}
+    <section class="agents-settings-focus-panel" id="settingsFocusApprovals" data-agents-settings-focus-panel hidden>
+      <div class="agents-settings-focus-grid">
+        <section class="border rounded p-3" id="manualFallbackSection">
+          <h2 class="h4">Approvals</h2>
+          <p class="agents-subtle">Keep this off for agent-first workflows. Enable only if operators must create requests manually.</p>
+
+          {{ forms.lightswitchField({
+            first: true,
+            label: 'Allow manual approval requests in Approvals',
+            instructions: 'Fallback only. Recommended: agents/integrations create requests, humans only approve/reject.',
+            name: 'allowCpApprovalRequests',
+            on: settings.allowCpApprovalRequests ?? false,
+            onLabel: false,
+            offLabel: false,
+          }) }}
+        </section>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="agents-settings-focus-panel" id="settingsFocusDelivery" data-agents-settings-focus-panel hidden>
+    <div class="agents-settings-focus-grid">
+      <section class="border rounded p-3" id="notificationsSection">
+        <h2 class="h4">Operator Notifications</h2>
+        <p class="agents-subtle">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes. Run php craft agents/notifications-check from cron to evaluate system status notifications.</p>
+
+        {{ forms.lightswitchField({
+          first: true,
+          label: 'Enable operator notifications',
+          instructions: notificationsEnabledSettingLocked
+            ? 'Controlled by config/agents.php (`notificationsEnabled`).'
+            : 'Turn outbound operator notifications on or off.',
+          name: 'notificationsEnabled',
+          on: settings.notificationsEnabled ?? false,
+          onLabel: false,
+          offLabel: false,
+          disabled: notificationsEnabledSettingLocked,
+        }) }}
+
+        {{ forms.autosuggestField({
+          label: 'Notification recipients',
+          instructions: notificationRecipientsSettingLocked
+            ? 'Controlled by config/agents.php (`notificationRecipients`).'
+            : 'Fallback email recipients for operator notifications. Account-specific approval recipients override this when set.',
+          id: 'notificationRecipients',
+          name: 'notificationRecipients',
+          value: settings.notificationRecipients ?? '$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS',
+          suggestEnvVars: true,
+          tip: notificationRecipientsTip,
+          placeholder: '$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS',
+          disabled: notificationRecipientsSettingLocked,
+        }) }}
+
+        {{ forms.lightswitchField({
+          label: 'Approval requested',
+          instructions: notificationApprovalRequestedSettingLocked
+            ? 'Controlled by config/agents.php (`notificationApprovalRequested`).'
+            : 'Send an email when a new approval request is created.',
+          name: 'notificationApprovalRequested',
+          on: settings.notificationApprovalRequested ?? true,
+          onLabel: false,
+          offLabel: false,
+          disabled: notificationApprovalRequestedSettingLocked,
+        }) }}
+
+        {{ forms.lightswitchField({
+          label: 'Approval decided',
+          instructions: notificationApprovalDecidedSettingLocked
+            ? 'Controlled by config/agents.php (`notificationApprovalDecided`).'
+            : 'Send an email when an approval request is finally approved or rejected.',
+          name: 'notificationApprovalDecided',
+          on: settings.notificationApprovalDecided ?? true,
+          onLabel: false,
+          offLabel: false,
+          disabled: notificationApprovalDecidedSettingLocked,
+        }) }}
+
+        {{ forms.lightswitchField({
+          label: 'Execution blocked or failed',
+          instructions: notificationExecutionFailedSettingLocked
+            ? 'Controlled by config/agents.php (`notificationExecutionFailed`).'
+            : 'Send an email when governed execution ends blocked or failed.',
+          name: 'notificationExecutionFailed',
+          on: settings.notificationExecutionFailed ?? true,
+          onLabel: false,
+          offLabel: false,
+          disabled: notificationExecutionFailedSettingLocked,
+        }) }}
+
+        {{ forms.lightswitchField({
+          label: 'Webhook DLQ failures',
+          instructions: notificationWebhookDlqFailedSettingLocked
+            ? 'Controlled by config/agents.php (`notificationWebhookDlqFailed`).'
+            : 'Send an email when an outbound webhook enters the dead-letter queue.',
+          name: 'notificationWebhookDlqFailed',
+          on: settings.notificationWebhookDlqFailed ?? true,
+          onLabel: false,
+          offLabel: false,
+          disabled: notificationWebhookDlqFailedSettingLocked,
+        }) }}
+
+        {{ forms.lightswitchField({
+          label: 'Scheduled status changes',
+          instructions: notificationStatusChangedSettingLocked
+            ? 'Controlled by config/agents.php (`notificationStatusChanged`).'
+            : 'Send an email when the scheduled notifications check detects a system status transition.',
+          name: 'notificationStatusChanged',
+          on: settings.notificationStatusChanged ?? true,
+          onLabel: false,
+          offLabel: false,
+          disabled: notificationStatusChangedSettingLocked,
+        }) }}
+      </section>
+
+      <section class="border rounded p-3" id="webhookSection">
+        <h2 class="h4">Webhooks</h2>
+        <p class="agents-subtle">Configure the normal runtime webhook target here. These fields are env-aware; prefer env variable references over literal values.</p>
+
+        {{ forms.autosuggestField({
+          first: true,
+          label: 'Webhook URL',
+          instructions: webhookUrlSettingLocked
+            ? 'Controlled by config/agents.php (`webhookUrl`).'
+            : 'Normal runtime outbound webhook target. Recommended: keep this as `$PLUGIN_AGENTS_WEBHOOK_URL` and set the actual URL in your environment.',
+          id: 'webhookUrl',
+          name: 'webhookUrl',
+          value: settings.webhookUrl ?? '$PLUGIN_AGENTS_WEBHOOK_URL',
+          suggestEnvVars: true,
+          suggestAliases: true,
+          tip: webhookUrlTip,
+          placeholder: '$PLUGIN_AGENTS_WEBHOOK_URL',
+          disabled: webhookUrlSettingLocked,
+        }) }}
+
+        {{ forms.autosuggestField({
+          label: 'Webhook secret',
+          instructions: webhookSecretSettingLocked
+            ? 'Controlled by config/agents.php (`webhookSecret`).'
+            : 'Shared signing secret for outbound deliveries. Recommended: keep this as `$PLUGIN_AGENTS_WEBHOOK_SECRET` and set the real secret in your environment.',
+          id: 'webhookSecret',
+          name: 'webhookSecret',
+          value: settings.webhookSecret ?? '$PLUGIN_AGENTS_WEBHOOK_SECRET',
+          suggestEnvVars: true,
+          tip: webhookSecretTip,
+          placeholder: '$PLUGIN_AGENTS_WEBHOOK_SECRET',
+          disabled: webhookSecretSettingLocked,
+        }) }}
+      </section>
+    </div>
   </section>
-{% endif %}
+
+  <section class="agents-settings-focus-panel" id="settingsFocusMonitoring" data-agents-settings-focus-panel hidden>
+    <div class="agents-settings-focus-grid">
+      <section class="border rounded p-3" id="reliabilityThresholdsSection">
+        <h2 class="h4">Reliability Thresholds</h2>
+        <p class="agents-subtle">Tune reliability alert sensitivity for your sync cadence.</p>
+
+        {{ forms.autosuggestField({
+          label: 'Sync-state lag warn threshold (seconds)',
+          instructions: reliabilityConsumerLagWarnSecondsLocked
+            ? 'Controlled by config/agents.php (`reliabilityConsumerLagWarnSeconds`).'
+            : 'Signal turns WARN when max sync-state lag is greater than this value.',
+          id: 'reliabilityConsumerLagWarnSeconds',
+          name: 'reliabilityConsumerLagWarnSeconds',
+          value: settings.reliabilityConsumerLagWarnSeconds ?? 300,
+          suggestEnvVars: true,
+          placeholder: '300',
+          disabled: reliabilityConsumerLagWarnSecondsLocked,
+        }) }}
+
+        {{ forms.autosuggestField({
+          label: 'Sync-state lag critical threshold (seconds)',
+          instructions: reliabilityConsumerLagCriticalSecondsLocked
+            ? 'Controlled by config/agents.php (`reliabilityConsumerLagCriticalSeconds`).'
+            : 'Signal turns CRITICAL when max sync-state lag is greater than this value. Must be higher than warn threshold.',
+          id: 'reliabilityConsumerLagCriticalSeconds',
+          name: 'reliabilityConsumerLagCriticalSeconds',
+          value: settings.reliabilityConsumerLagCriticalSeconds ?? 900,
+          suggestEnvVars: true,
+          placeholder: '900',
+          disabled: reliabilityConsumerLagCriticalSecondsLocked,
+        }) }}
+      </section>
+
+      {% if settingsHasLocks %}
+        <section class="border rounded p-3 warning" id="configurationLocksSection">
+          <h2 class="h4">Configuration Locks</h2>
+          {% if agentsEnabledLocked %}
+            <p>`enabled` is locked by environment variable source: {{ agentsEnabledSource }}.</p>
+          {% endif %}
+          {% if writesExperimentalLockedByEnv %}
+            <p>`enableWritesExperimental` is locked by environment variable source: {{ writesExperimentalLockSource }}.</p>
+          {% endif %}
+          {% if writesExperimentalConfigLocked %}
+            <p>`enableWritesExperimental` is controlled by <code>config/agents.php</code>.</p>
+          {% endif %}
+          {% if credentialUsageIndicatorSettingLocked %}
+            <p>`enableCredentialUsageIndicator` is controlled by <code>config/agents.php</code>.</p>
+          {% endif %}
+          {% if notificationsEnabledSettingLocked or notificationRecipientsSettingLocked or notificationApprovalRequestedSettingLocked or notificationApprovalDecidedSettingLocked or notificationExecutionFailedSettingLocked or notificationWebhookDlqFailedSettingLocked or notificationStatusChangedSettingLocked %}
+            <p>Some operator notification settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
+          {% endif %}
+          {% if webhookUrlSettingLocked or webhookSecretSettingLocked %}
+            <p>Webhook transport settings are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
+          {% endif %}
+          {% if reliabilityConsumerLagWarnSecondsLocked or reliabilityConsumerLagCriticalSecondsLocked %}
+            <p>Some reliability thresholds are controlled by <code>config/agents.php</code> and cannot be changed in CP.</p>
+          {% endif %}
+        </section>
+      {% endif %}
+    </div>
+  </section>

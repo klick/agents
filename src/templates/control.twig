@@ -41,20 +41,24 @@
   <div class="agents-control-content-wrap">
   <div class="agents-control-journey">
   {% set pendingTablePanelId = 'agents-control-pending-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-pending-section">
+  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-pending-section{% if not controlPendingApprovals|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
       <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
-        <button
-          class="agents-control-stage-toggle"
-          type="button"
-          data-control-section-toggle
-          data-target="{{ pendingTablePanelId }}"
-          aria-controls="{{ pendingTablePanelId }}"
-          aria-expanded="true"
-        >
+        {% if controlPendingApprovals|length %}
+          <button
+            class="agents-control-stage-toggle"
+            type="button"
+            data-control-section-toggle
+            data-target="{{ pendingTablePanelId }}"
+            aria-controls="{{ pendingTablePanelId }}"
+            aria-expanded="true"
+          >
+            <span>Waiting for Decision</span>
+            <span class="agents-control-stage-chevron" aria-hidden="true"></span>
+          </button>
+        {% else %}
           <span>Waiting for Decision</span>
-          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
-        </button>
+        {% endif %}
       </h2>
     </div>
     <div id="{{ pendingTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel">
@@ -183,7 +187,7 @@
                     <div class="agents-control-pending-table__meta">
                       Assurance: <strong>{{ approval.assuranceModeLabel }}</strong>
                       {% if approval.assuranceEvaluatedAt %}
-                        <span>· evaluated {{ approval.assuranceEvaluatedAt|datetime('short') }}</span>
+                        <span>· evaluated {{ approval.assuranceEvaluatedAt|date('Y-m-d, H:i:s', timezone='UTC') }}</span>
                       {% endif %}
                       {% if approval.assuranceActiveCpUserCount is not null %}
                         <span>· active CP users {{ approval.assuranceActiveCpUserCount }}</span>
@@ -210,7 +214,7 @@
                 {% if approval.requestedBy %}
                   <div class="agents-control-pending-table__meta">{{ approval.requestedBy }}</div>
                 {% endif %}
-                <div class="agents-control-pending-table__meta">{{ approval.dateCreated ? approval.dateCreated|datetime('short') : 'n/a' }}</div>
+                <div class="agents-control-pending-table__meta">{{ approval.dateCreated ? approval.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
               </div>
             </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--reason">
@@ -219,9 +223,9 @@
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--sla">
               <div class="agents-control-pending-table__detail-stack">
                 <div class="agents-control-pending-table__meta">{{ approval.slaState|default('none') }}</div>
-                <div class="agents-control-pending-table__meta">due: {{ approval.slaDueAt ? approval.slaDueAt|datetime('short') : 'n/a' }}</div>
+                <div class="agents-control-pending-table__meta">due: {{ approval.slaDueAt ? approval.slaDueAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
                 {% if approval.escalatedAt %}
-                  <div class="agents-control-pending-table__meta">escalated: {{ approval.escalatedAt|datetime('short') }}</div>
+                  <div class="agents-control-pending-table__meta">escalated: {{ approval.escalatedAt|date('Y-m-d, H:i:s', timezone='UTC') }}</div>
                 {% endif %}
               </div>
             </td>
@@ -281,20 +285,24 @@
 
   {% set approvedTablePanelId = 'agents-control-approved-table-panel' %}
   <!-- Release-gate sentinel: <h2 class="h4">Approved</h2> -->
-  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-card">
+  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-card{% if not controlApprovedApprovals|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
       <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
-        <button
-          class="agents-control-stage-toggle"
-          type="button"
-          data-control-section-toggle
-          data-target="{{ approvedTablePanelId }}"
-          aria-controls="{{ approvedTablePanelId }}"
-          aria-expanded="true"
-        >
+        {% if controlApprovedApprovals|length %}
+          <button
+            class="agents-control-stage-toggle"
+            type="button"
+            data-control-section-toggle
+            data-target="{{ approvedTablePanelId }}"
+            aria-controls="{{ approvedTablePanelId }}"
+            aria-expanded="true"
+          >
+            <span>Approved</span>
+            <span class="agents-control-stage-chevron" aria-hidden="true"></span>
+          </button>
+        {% else %}
           <span>Approved</span>
-          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
-        </button>
+        {% endif %}
       </h2>
     </div>
     <div id="{{ approvedTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel">
@@ -360,12 +368,12 @@
                 <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
               {% endif %}
             </td>
-            <td>{{ approval.decidedAt ? approval.decidedAt|datetime('short') : 'n/a' }}</td>
+            <td>{{ approval.decidedAt ? approval.decidedAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
             <td>
               {% if latestExecution %}
                 <div><strong>{{ latestExecution.status|upper }}</strong></div>
                 <div class="light">run #{{ latestExecution.id }}</div>
-                <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|datetime('short') : 'n/a' }}</div>
+                <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
               {% else %}
                 <span class="light">n/a</span>
               {% endif %}
@@ -409,7 +417,7 @@
   <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
 
   {% set completedTablePanelId = 'agents-control-completed-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--collapsed">
+  <section class="agents-control-journey-card agents-control-journey-card--collapsed{% if not controlCompletedApprovals|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
     <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlCompletedApprovals|length %}
@@ -426,7 +434,6 @@
         </button>
       {% else %}
         <span>Applied / Completed</span>
-        <span class="agents-control-stage-chevron agents-control-stage-chevron--static" aria-hidden="true"></span>
       {% endif %}
     </h2>
     </div>
@@ -490,7 +497,7 @@
               <td>
                 <div><strong>{{ completionState.label ?: 'COMPLETED' }}</strong></div>
                 {% if completionState.at %}
-                  <div class="light">{{ completionState.at|datetime('short') }}</div>
+                  <div class="light">{{ completionState.at|date('Y-m-d, H:i:s', timezone='UTC') }}</div>
                 {% else %}
                   <div class="light">n/a</div>
                 {% endif %}
@@ -512,7 +519,7 @@
   <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
 
   {% set followUpTablePanelId = 'agents-control-follow-up-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--collapsed">
+  <section class="agents-control-journey-card agents-control-journey-card--collapsed{% if not controlAttentionExecutions|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
     <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlAttentionExecutions|length %}
@@ -529,7 +536,6 @@
         </button>
       {% else %}
         <span>Runs That Need Follow-up</span>
-        <span class="agents-control-stage-chevron agents-control-stage-chevron--static" aria-hidden="true"></span>
       {% endif %}
     </h2>
     </div>
@@ -820,7 +826,7 @@
 
   {% if activeControlTab == 'approvals' %}
   {% set activityLogTablePanelId = 'agents-control-activity-log-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--collapsed">
+  <section class="agents-control-journey-card agents-control-journey-card--collapsed{% if not controlAuditEvents|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
     <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlAuditEvents|length %}
@@ -837,7 +843,6 @@
         </button>
       {% else %}
         <span>Activity Log</span>
-        <span class="agents-control-stage-chevron agents-control-stage-chevron--static" aria-hidden="true"></span>
       {% endif %}
     </h2>
     </div>
@@ -857,7 +862,7 @@
           <tbody>
           {% for event in controlAuditEvents %}
             <tr>
-              <td>{{ event.dateCreated ? event.dateCreated|datetime('short') : 'n/a' }}</td>
+              <td>{{ event.dateCreated ? event.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
               <td><code>{{ event.category }}</code></td>
               <td>{{ event.action }} ({{ event.outcome }})</td>
               <td>
@@ -885,23 +890,27 @@
   <div class="agents-control-journey">
   {% set rulesTablePanelId = 'agents-control-rules-table-panel' %}
   {% set rulesFormPanelId = 'agents-control-rules-form-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-card">
+  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-card{% if not controlPolicies|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
       <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
-        <button
-          class="agents-control-stage-toggle"
-          type="button"
-          data-control-section-toggle
-          data-target="{{ rulesTablePanelId }}"
-          aria-controls="{{ rulesTablePanelId }}"
-          aria-expanded="{{ rulesTableExpanded ? 'true' : 'false' }}"
-        >
+        {% if controlPolicies|length %}
+          <button
+            class="agents-control-stage-toggle"
+            type="button"
+            data-control-section-toggle
+            data-target="{{ rulesTablePanelId }}"
+            aria-controls="{{ rulesTablePanelId }}"
+            aria-expanded="{{ rulesTableExpanded ? 'true' : 'false' }}"
+          >
+            <span>Rules</span>
+            <span class="agents-control-stage-chevron" aria-hidden="true"></span>
+          </button>
+        {% else %}
           <span>Rules</span>
-          <span class="agents-control-stage-chevron" aria-hidden="true"></span>
-        </button>
+        {% endif %}
       </h2>
     </div>
-    <div id="{{ rulesTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel" {% if not rulesTableExpanded %}hidden{% endif %}>
+    <div id="{{ rulesTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel" {% if controlPolicies|length and not rulesTableExpanded %}hidden{% endif %}>
     {% if controlPolicies|length %}
       <div class="tablepane mx-0" style="margin-top: 0;">
         <table class="data fullwidth agents-control-table">
@@ -1449,6 +1458,10 @@
 
     .agents-control-journey-card--collapsed .agents-control-journey-card__header {
       border-bottom: 0;
+    }
+
+    .agents-control-journey-card--empty {
+      opacity: 0.5;
     }
 
     .agents-control-journey-card__title {

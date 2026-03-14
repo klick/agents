@@ -4,6 +4,7 @@ namespace Klick\Agents\services;
 
 use Craft;
 use craft\base\Component;
+use craft\elements\User;
 use craft\helpers\App;
 use craft\helpers\Queue;
 use craft\helpers\StringHelper;
@@ -60,6 +61,11 @@ class NotificationService extends Component
         }
         $effectiveRecipients = array_values($effectiveRecipients);
         $recentNotifications = $this->getRecentNotifications($limit);
+        $recipientUsersByEmail = $this->resolveRecipientUsersByEmail(array_merge(
+            $effectiveRecipients,
+            array_map(static fn(array $row): string => (string)($row['recipient'] ?? ''), $recentNotifications)
+        ));
+        $recentNotifications = $this->enrichRecentNotifications($recentNotifications, $recipientUsersByEmail);
         $summary = [
             'total' => count($recentNotifications),
             'queued' => 0,
@@ -889,6 +895,85 @@ class NotificationService extends Component
             'dateCreated' => $this->normalizeDateTimeString($row['dateCreated'] ?? null),
             'dateUpdated' => $this->normalizeDateTimeString($row['dateUpdated'] ?? null),
         ];
+    }
+
+    private function enrichRecentNotifications(array $rows, array $recipientUsersByEmail): array
+    {
+        $enriched = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $recipientEmail = strtolower(trim((string)($row['recipient'] ?? '')));
+            $recipientUser = $recipientEmail !== '' ? ($recipientUsersByEmail[$recipientEmail] ?? null) : null;
+            $channel = strtolower(trim((string)($row['channel'] ?? self::CHANNEL_EMAIL)));
+            $channelLabel = $channel !== '' ? ucwords(str_replace(['_', '-'], ' ', $channel)) : 'Email';
+
+            $row['recipientLabel'] = is_array($recipientUser)
+                ? (string)($recipientUser['label'] ?? $recipientEmail)
+                : (string)($row['recipient'] ?? '');
+            $row['recipientCpEditUrl'] = is_array($recipientUser)
+                ? ($recipientUser['cpEditUrl'] ?? null)
+                : null;
+            $row['recipientChannelLabel'] = $channelLabel;
+
+            $enriched[] = $row;
+        }
+
+        return $enriched;
+    }
+
+    private function resolveRecipientUsersByEmail(array $emails): array
+    {
+        $normalizedEmails = [];
+        foreach ($emails as $email) {
+            $normalizedEmail = strtolower(trim((string)$email));
+            if ($normalizedEmail === '' || !filter_var($normalizedEmail, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+
+            $normalizedEmails[$normalizedEmail] = true;
+        }
+
+        if ($normalizedEmails === []) {
+            return [];
+        }
+
+        $users = User::find()
+            ->email(array_keys($normalizedEmails))
+            ->status(null)
+            ->all();
+
+        $byEmail = [];
+        foreach ($users as $user) {
+            if (!$user instanceof User) {
+                continue;
+            }
+
+            $email = strtolower(trim((string)$user->email));
+            if ($email === '') {
+                continue;
+            }
+
+            $label = trim((string)$user->friendlyName);
+            if ($label === '') {
+                $label = trim((string)$user->username);
+            }
+            if ($label === '') {
+                $label = $email;
+            }
+
+            $cpEditUrl = trim((string)$user->getCpEditUrl());
+            $byEmail[$email] = [
+                'id' => (int)$user->id,
+                'label' => $label,
+                'email' => $email,
+                'cpEditUrl' => $cpEditUrl !== '' ? $cpEditUrl : null,
+            ];
+        }
+
+        return $byEmail;
     }
 
     private function normalizeDateTimeString(mixed $value): ?string
