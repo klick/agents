@@ -146,7 +146,18 @@ Release outcome:
 
 - The product becomes materially safer for external adopters to build against, including teams running multi-site or multi-store Craft installs.
 
-## Planned (`v0.25.x`) Extensibility Hardening
+## Planned (`v0.25.x`) Workflow Starter Kits and Companion Workers
+
+- Implement `F19`.
+- Pair strong account templates with companion guides, starter workers, and bootstrap artifacts.
+- Ship a shared worker scaffold for auth, preflight, pagination, output writing, and optional OpenAI narrative steps.
+- Start with a small curated workflow set rather than trying to ship a production app for every template.
+
+Release outcome:
+
+- Operators and developers can move from account creation to a working scheduled workflow with far less reinvention.
+
+## Planned (`v0.26.x`) Extensibility Hardening
 
 - Implement the useful parts of `F13`.
 - Add registry-backed scope extension and field-profile governance where needed.
@@ -156,7 +167,7 @@ Release outcome:
 
 - Agents gains controlled extensibility without collapsing into arbitrary scope sprawl.
 
-## Planned (`v0.26.x`) Agent-Assisted Operations
+## Planned (`v0.27.x`) Agent-Assisted Operations
 
 - Begin `F18`, phase 1 only.
 - Start with read-only insight and recommendation support.
@@ -166,7 +177,7 @@ Release outcome:
 
 - Agents can assist operators inside the product without weakening the trust boundary.
 
-## Planned (`v0.27.x`) Pre-1.0 Consolidation
+## Planned (`v0.28.x`) Pre-1.0 Consolidation
 
 - Focus on bug fixing, upgrade safety, onboarding, and support polish.
 - Avoid major IA churn.

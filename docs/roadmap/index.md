@@ -26,29 +26,32 @@ Release outcome:
 
 ## Done (`v0.6.0`)
 
-- Ship observability baseline: metrics taxonomy and naming.
-- Ship observability baseline: runtime metrics collection.
-- Ship observability baseline: metrics export endpoint.
-- Ship observability baseline: CP telemetry snapshot.
-- Ship observability baseline: runbook and alert guidance.
-- Add adoption instrumentation: first-call success funnel.
-- Add adoption instrumentation: time-to-first-success metric.
-- Add adoption instrumentation: credential activation and weekly usage tracking.
+- Ship observability baseline:
+  - metrics taxonomy and naming
+  - runtime metrics collection
+  - metrics export endpoint
+  - CP telemetry snapshot
+  - runbook and alert guidance
+- Add adoption instrumentation:
+  - first-call success funnel
+  - time-to-first-success metric
+  - credential activation and weekly usage tracking
 
 Release outcome:
 
 - Operators can triage incidents quickly, and product teams can see where integration adoption drops.
-- `v0.6.1` hotfix closed runtime reliability issues in adoption metrics, CSRF handling for machine POST routes, and dual-approval race protection.
+- `v0.6.1` hotfix closed runtime reliability issues in adoption metrics, machine POST CSRF handling, and dual-approval race safety.
 - `v0.6.2` corrected release-version metadata/tag alignment for plugin store ingestion.
 
 ## Done (`v0.7.0`)
 
-- Ship one-click diagnostics bundle: contract and redaction policy.
-- Ship one-click diagnostics bundle: diagnostics engine.
-- Ship one-click diagnostics bundle: CP download flow.
-- Ship one-click diagnostics bundle: CLI companion command.
+- Ship one-click diagnostics bundle:
+  - contract + redaction policy
+  - diagnostics engine
+  - CP download flow
+  - CLI companion command
 - Improve integrator DX with schema/OpenAPI-based templates.
-- Publish reference automations for the canonical jobs with tested sample payloads.
+- Publish reference automations for the canonical jobs (with tested sample payloads).
 
 Release outcome:
 
@@ -86,19 +89,122 @@ Release outcome:
 
 - Operators get a cleaner Agent card view now, with lifecycle governance still available for future reintroduction without backend rollback.
 
-## Planned (`v0.11.0`)
+## Proposed Path to `1.0.0`
 
-- Add external plugin data adapters for agent accounts (read-only first).
-- Introduce provider registry + registration event so integrations can be added without hardcoded controller logic.
-- Add explicit plugin/resource scopes for external data (for example `plugins:seomatic:meta:read`).
-- Expose registered external resources in capabilities, OpenAPI, and schema outputs.
-- Ship first-party reference adapters for SEOmatic and Campaign (when installed).
+## Planned (`v0.21.x`) External Adapter Foundation
+
+- Implement `F12` external plugin data access.
+- Ship provider registry + registration event.
+- Add external read scopes and contract exposure in capabilities/OpenAPI/schema.
+- Ship first standalone reference adapter.
 
 Release outcome:
 
-- Teams can let agents safely consume data from selected Craft plugins using the same governed account model.
+- Agents proves it can extend safely beyond core Craft/Commerce data without bloating the core plugin.
 
-## Success checks
+## Planned (`v0.22.x`) Operator Notifications
+
+- Implement the core of `F17`.
+- Ship email-first notifications for:
+  - degraded or blocked status
+  - approval pending decision
+  - approval decided or execution failed
+  - webhook delivery failures / DLQ growth
+- Keep additional channels behind a clean channel abstraction.
+
+Release outcome:
+
+- Operators no longer need to sit inside the CP to catch important runtime and approval events.
+
+## Planned (`v0.23.x`) Production Validation and Supportability
+
+- Implement `F15` production webhook probe.
+- Tighten diagnostics and support flows around webhook delivery and runtime verification.
+- Add lightweight operator visibility for recent probe/notification outcomes if useful.
+
+Release outcome:
+
+- Production environments can validate webhook transport safely without content mutation or dev-only tooling.
+
+## Planned (`v0.24.x`) Contract and Upgrade Stabilization
+
+- Freeze the main CP IA.
+- Freeze canonical routes and scope naming.
+- Add full multi-site and multi-store support across the public contract:
+  - explicit site/store selectors where they affect API behavior
+  - predictable defaults when selectors are omitted
+  - documentation that makes site/store context unambiguous for operators and integrators
+- Verify Craft Cloud compatibility and document the Cloud setup path:
+  - Cloud env variables
+  - SMTP mail setup
+  - scheduled `agents/notifications-check` command
+  - Cloud-specific operator guidance where wording differs from generic server setups
+- Tighten upgrade notes, deprecation rules, and compatibility discipline.
+- Remove avoidable churn from user-visible contracts.
+
+Release outcome:
+
+- The product becomes materially safer for external adopters to build against, including teams running multi-site or multi-store Craft installs.
+
+## Planned (`v0.25.x`) Workflow Starter Kits and Companion Workers
+
+- Implement `F19`.
+- Pair strong account templates with companion guides, starter workers, and bootstrap artifacts.
+- Ship a shared worker scaffold for auth, preflight, pagination, output writing, and optional OpenAI narrative steps.
+- Start with a small curated workflow set rather than trying to ship a production app for every template.
+
+Release outcome:
+
+- Operators and developers can move from account creation to a working scheduled workflow with far less reinvention.
+
+## Planned (`v0.26.x`) Extensibility Hardening
+
+- Implement the useful parts of `F13`.
+- Add registry-backed scope extension and field-profile governance where needed.
+- Only expand after the adapter/provider direction is proven.
+
+Release outcome:
+
+- Agents gains controlled extensibility without collapsing into arbitrary scope sprawl.
+
+## Planned (`v0.27.x`) Agent-Assisted Operations
+
+- Begin `F18`, phase 1 only.
+- Start with read-only insight and recommendation support.
+- Do not introduce broad autonomous operator control.
+
+Release outcome:
+
+- Agents can assist operators inside the product without weakening the trust boundary.
+
+## Planned (`v0.28.x`) Pre-1.0 Consolidation
+
+- Focus on bug fixing, upgrade safety, onboarding, and support polish.
+- Avoid major IA churn.
+- Validate that the core product promise and support model hold under real customer use.
+
+Release outcome:
+
+- The product is ready for a `1.0.0` stability commitment rather than still behaving like a moving target.
+
+## `1.0.0` Criteria
+
+Before `1.0.0`, the following must be stable:
+
+- top-level CP information architecture
+- canonical CP routes
+- core scope catalog and naming
+- core machine-readable descriptors
+- settings model and config-lock behavior
+- managed-account lifecycle behavior
+- webhook delivery and verification model
+- upgrade and migration expectations
+
+## Parked / Not Before `1.0.0` Unless Reassessed
+
+- `F14` agent commerce via stablecoin spend rail remains intentionally parked and should not shape the near-term core roadmap.
+
+## Success Checks
 
 - Support escalations reduced by at least `30%` by end of `v0.8.0` cycle.
 - Time-to-triage for integration incidents below `15` minutes.

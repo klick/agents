@@ -7,6 +7,7 @@ use Klick\Agents\Plugin;
 use Klick\Agents\models\Settings;
 use craft\elements\Entry;
 use craft\elements\User;
+use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use craft\web\View;
 use Throwable;
@@ -380,6 +381,9 @@ class DashboardController extends Controller
             'credentialExpirySummary' => $credentialExpirySummary,
             'defaultScopes' => $defaultScopes,
             'revealedCredential' => $this->pullRevealedCredential(),
+            'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
+            'workerBootstrapSiteUrl' => UrlHelper::siteUrl(''),
+            'workerBootstrapBaseUrl' => UrlHelper::siteUrl('agents/v1'),
             'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
             'canPauseCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
             'canRotateCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_ROTATE),
@@ -915,8 +919,18 @@ class DashboardController extends Controller
         $plugin = Plugin::getInstance();
         $defaultScopes = $this->getDefaultScopes();
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        $acceptsJson = $this->request->getAcceptsJson();
 
         if ($credentialId <= 0) {
+            if ($acceptsJson) {
+                $response = $this->asJson([
+                    'ok' => false,
+                    'message' => 'Missing account ID.',
+                ]);
+                $response->setStatusCode(400);
+                return $response;
+            }
+
             $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
@@ -924,25 +938,181 @@ class DashboardController extends Controller
         try {
             $result = $plugin->getCredentialService()->rotateManagedCredential($credentialId, $defaultScopes);
             if (!is_array($result)) {
+                if ($acceptsJson) {
+                    $response = $this->asJson([
+                        'ok' => false,
+                        'message' => 'Account not found.',
+                        'credentialId' => $credentialId,
+                    ]);
+                    $response->setStatusCode(404);
+                    return $response;
+                }
+
                 $this->setFailFlash('Account not found.');
                 return $this->redirectToPostedUrl(null, 'agents/accounts');
             }
 
             $credential = (array)($result['credential'] ?? []);
-            $this->storeRevealedCredential([
+            $revealedCredential = [
                 'id' => (int)($credential['id'] ?? 0),
                 'token' => (string)($result['token'] ?? ''),
                 'handle' => (string)($credential['handle'] ?? ''),
                 'displayName' => (string)($credential['displayName'] ?? ''),
                 'action' => 'rotated',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
-            ]);
+            ];
+
+            if ($acceptsJson) {
+                return $this->asJson([
+                    'ok' => true,
+                    'message' => sprintf('Account `%s` rotated. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')),
+                    'credentialId' => (int)($credential['id'] ?? $credentialId),
+                    'revealedCredential' => $revealedCredential,
+                    'workerEnv' => $this->buildWorkerEnvExport((string)($result['token'] ?? '')),
+                    'envFilename' => $this->buildWorkerEnvFilename((string)($credential['handle'] ?? '')),
+                    'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
+                ]);
+            }
+
+            $this->storeRevealedCredential($revealedCredential);
             $this->setSuccessFlash(sprintf('Account `%s` rotated. Copy the new API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (Throwable $e) {
+            if ($acceptsJson) {
+                $response = $this->asJson([
+                    'ok' => false,
+                    'message' => 'Unable to rotate account token: ' . $e->getMessage(),
+                    'credentialId' => $credentialId,
+                ]);
+                $response->setStatusCode(400);
+                return $response;
+            }
+
             $this->setFailFlash('Unable to rotate account token: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/accounts');
+    }
+
+    public function actionTestCredential(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+
+        $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        $redirectPath = $credentialId > 0
+            ? 'agents/accounts?focusCardId=' . $credentialId
+            : 'agents/accounts';
+        $acceptsJson = $this->request->getAcceptsJson();
+
+        if ($credentialId <= 0) {
+            if ($acceptsJson) {
+                $response = $this->asJson([
+                    'ok' => false,
+                    'message' => 'Missing account ID.',
+                ]);
+                $response->setStatusCode(400);
+                return $response;
+            }
+
+            $this->setFailFlash('Missing account ID.');
+            return $this->redirectToPostedUrl(null, $redirectPath);
+        }
+
+        try {
+            $result = $this->buildCredentialTestResult($credentialId);
+            if ($acceptsJson) {
+                return $this->asJson($result);
+            }
+
+            $this->setSuccessFlash((string)$result['message']);
+        } catch (Throwable $e) {
+            $message = 'Unable to test account: ' . $e->getMessage();
+            if ($acceptsJson) {
+                $response = $this->asJson([
+                    'ok' => false,
+                    'message' => $message,
+                    'credentialId' => $credentialId,
+                ]);
+                $response->setStatusCode(400);
+                return $response;
+            }
+
+            $this->setFailFlash($message);
+        }
+
+        return $this->redirectToPostedUrl(null, $redirectPath);
+    }
+
+    private function buildCredentialTestResult(int $credentialId): array
+    {
+        $plugin = Plugin::getInstance();
+        $defaultScopes = $this->getDefaultScopes();
+        $credential = $plugin->getCredentialService()->getManagedCredentialByIdForCp($credentialId, $defaultScopes);
+        if (!is_array($credential)) {
+            throw new NotFoundHttpException('Account not found.');
+        }
+
+        $enabledState = $plugin->getAgentsEnabledState();
+        if (!(bool)($enabledState['enabled'] ?? false)) {
+            throw new \RuntimeException('Agents API is disabled. Enable runtime before testing this account.');
+        }
+
+        $mode = strtolower(trim((string)($credential['mode'] ?? 'active')));
+        $modeLabel = match ($mode) {
+            'expiring_soon' => 'Expiring soon',
+            'paused' => 'Paused',
+            'revoked' => 'Revoked',
+            'expired' => 'Expired',
+            default => 'Active',
+        };
+
+        if (in_array($mode, ['paused', 'revoked', 'expired'], true)) {
+            throw new \RuntimeException(sprintf('Account `%s` cannot be tested while its state is %s.', (string)($credential['handle'] ?? 'account'), strtolower($modeLabel)));
+        }
+
+        $scopes = array_values(array_unique(array_map(static fn($scope) => strtolower(trim((string)$scope)), (array)($credential['scopes'] ?? []))));
+        $bootstrapScopes = ['auth:read', 'health:read', 'readiness:read'];
+        $availableBootstrapScopes = array_values(array_intersect($bootstrapScopes, $scopes));
+        $missingBootstrapScopes = array_values(array_diff($bootstrapScopes, $availableBootstrapScopes));
+        $validatedSurfaces = [];
+
+        if (in_array('health:read', $availableBootstrapScopes, true)) {
+            $plugin->getReadinessService()->getHealthSummary();
+            $validatedSurfaces[] = 'health:read';
+        }
+
+        if (in_array('auth:read', $availableBootstrapScopes, true)) {
+            $validatedSurfaces[] = 'auth:read';
+        }
+
+        if (in_array('readiness:read', $availableBootstrapScopes, true)) {
+            $plugin->getReadinessService()->getReadinessSummary();
+            $validatedSurfaces[] = 'readiness:read';
+        }
+
+        $message = sprintf('Account `%s` validated. State: %s.', (string)($credential['handle'] ?? 'account'), $modeLabel);
+        if ($validatedSurfaces !== []) {
+            $message .= ' Safe read surfaces: ' . implode(', ', $validatedSurfaces) . '.';
+        } else {
+            $message .= ' No bootstrap read scopes are assigned, so only lifecycle state was validated.';
+        }
+
+        if ($missingBootstrapScopes !== []) {
+            $message .= ' Missing bootstrap scopes: ' . implode(', ', $missingBootstrapScopes) . '.';
+        }
+
+        $message .= ' External worker and cron setup are not tested here.';
+
+        return [
+            'ok' => true,
+            'message' => $message,
+            'credentialId' => $credentialId,
+            'handle' => (string)($credential['handle'] ?? ''),
+            'state' => $mode,
+            'stateLabel' => $modeLabel,
+            'validatedSurfaces' => $validatedSurfaces,
+            'missingBootstrapScopes' => $missingBootstrapScopes,
+        ];
     }
 
     public function actionRevokeCredential(): Response
@@ -951,7 +1121,17 @@ class DashboardController extends Controller
         $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_REVOKE);
 
         $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        $acceptsJson = $this->request->getAcceptsJson();
         if ($credentialId <= 0) {
+            if ($acceptsJson) {
+                $response = $this->asJson([
+                    'ok' => false,
+                    'message' => 'Missing account ID.',
+                ]);
+                $response->setStatusCode(400);
+                return $response;
+            }
+
             $this->setFailFlash('Missing account ID.');
             return $this->redirectToPostedUrl(null, 'agents/accounts');
         }
@@ -959,11 +1139,41 @@ class DashboardController extends Controller
         try {
             $revoked = Plugin::getInstance()->getCredentialService()->revokeManagedCredential($credentialId);
             if (!$revoked) {
+                if ($acceptsJson) {
+                    $response = $this->asJson([
+                        'ok' => false,
+                        'message' => 'Account not found.',
+                        'credentialId' => $credentialId,
+                    ]);
+                    $response->setStatusCode(404);
+                    return $response;
+                }
+
                 $this->setFailFlash('Account not found.');
             } else {
+                if ($acceptsJson) {
+                    return $this->asJson([
+                        'ok' => true,
+                        'message' => 'Account token revoked.',
+                        'credentialId' => $credentialId,
+                        'state' => 'revoked',
+                        'stateLabel' => 'Revoked',
+                    ]);
+                }
+
                 $this->setSuccessFlash('Account token revoked.');
             }
         } catch (Throwable $e) {
+            if ($acceptsJson) {
+                $response = $this->asJson([
+                    'ok' => false,
+                    'message' => 'Unable to revoke account token: ' . $e->getMessage(),
+                    'credentialId' => $credentialId,
+                ]);
+                $response->setStatusCode(400);
+                return $response;
+            }
+
             $this->setFailFlash('Unable to revoke account token: ' . $e->getMessage());
         }
 
@@ -2964,6 +3174,31 @@ class DashboardController extends Controller
         }
 
         return 0;
+    }
+
+    private function buildWorkerEnvExport(string $token): string
+    {
+        $lines = [
+            'SITE_URL=' . UrlHelper::siteUrl(''),
+            'BASE_URL=' . UrlHelper::siteUrl('agents/v1'),
+            'AGENTS_TOKEN=' . $token,
+            'REQUEST_TIMEOUT_MS=15000',
+            'PRINT_JSON=1',
+        ];
+
+        return implode("\n", $lines);
+    }
+
+    private function buildWorkerEnvFilename(string $handle): string
+    {
+        $normalizedHandle = preg_replace('/[^a-zA-Z0-9._-]+/', '-', trim($handle)) ?: '';
+        $normalizedHandle = trim($normalizedHandle, '-');
+
+        if ($normalizedHandle === '') {
+            return 'agents-worker.env';
+        }
+
+        return 'accounts-' . $normalizedHandle . '-worker.env';
     }
 
     private function storeRevealedCredential(array $credential): void
