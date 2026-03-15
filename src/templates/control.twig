@@ -13,6 +13,7 @@
   rules: 'Define risk and approval behavior for governed actions, and validate outcomes with dry-run simulation.',
 } %}
 {% set controlRulesRedirect = activeControlTab == 'approvals' ? 'agents/approvals' : 'agents/approvals/rules' %}
+{% set controlDiffUrl = cpUrl('agents/approvals/diff') %}
 {% set editingPolicy = controlEditingPolicy ?? null %}
 {% set isEditingPolicy = editingPolicy is iterable and editingPolicy.handle is defined and editingPolicy.handle %}
 {% set rulesTableExpanded = activeControlTab == 'rules' %}
@@ -122,14 +123,25 @@
                   {% endif %}
                   <div class="agents-control-pending-table__meta">Ref: {{ approval.actionRef ?: 'n/a' }}</div>
                 </div>
-                {% if approval.targetEntryId %}
-                  <button
-                    class="btn small js-control-review-entry agents-control-review-btn agents-control-pending-table__review-button"
-                    type="button"
-                    data-entry-id="{{ approval.targetEntryId }}"
-                    data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                    data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                  >Review</button>
+                {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
+                  <div class="agents-control-table__quick-actions">
+                    {% if approval.targetEntryId %}
+                      <button
+                        class="btn small js-control-review-entry agents-control-review-btn agents-control-pending-table__review-button"
+                        type="button"
+                        data-entry-id="{{ approval.targetEntryId }}"
+                        data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                        data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                      >Review</button>
+                    {% endif %}
+                    {% if approval.actionType|lower == 'entry.updatedraft' %}
+                      <button
+                        class="btn small js-control-view-diff agents-control-diff-btn"
+                        type="button"
+                        data-approval-id="{{ approval.id }}"
+                      >Diff</button>
+                    {% endif %}
+                  </div>
                 {% endif %}
                 {% if approval.reviewChangeSummary|length %}
                   {% set reviewChangeSummaryPanelId = 'agents-control-review-change-summary-' ~ approval.id %}
@@ -349,14 +361,25 @@
                   Bound draft{% if boundDraftId %} #{{ boundDraftId }}{% endif %}{% if boundDraftRecordId %} · saved draft #{{ boundDraftRecordId }}{% endif %}
                 </div>
               {% endif %}
-              {% if approval.targetEntryId %}
-                <button
-                  class="btn small js-control-review-entry agents-control-review-btn"
-                  type="button"
-                  data-entry-id="{{ approval.targetEntryId }}"
-                  data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                  data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                >Review</button>
+              {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
+                <div class="agents-control-table__quick-actions">
+                  {% if approval.targetEntryId %}
+                    <button
+                      class="btn small js-control-review-entry agents-control-review-btn"
+                      type="button"
+                      data-entry-id="{{ approval.targetEntryId }}"
+                      data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                      data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                    >Review</button>
+                  {% endif %}
+                  {% if approval.actionType|lower == 'entry.updatedraft' %}
+                    <button
+                      class="btn small js-control-view-diff agents-control-diff-btn"
+                      type="button"
+                      data-approval-id="{{ approval.id }}"
+                    >Diff</button>
+                  {% endif %}
+                </div>
               {% endif %}
               <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
             </td>
@@ -498,14 +521,25 @@
                     {{ targetTitle }}
                   {% endif %}
                 </div>
-                {% if approval.targetEntryId %}
-                  <button
-                    class="btn small js-control-review-entry agents-control-review-btn"
-                    type="button"
-                    data-entry-id="{{ approval.targetEntryId }}"
-                    data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                    data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                  >Review</button>
+                {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
+                  <div class="agents-control-table__quick-actions">
+                    {% if approval.targetEntryId %}
+                      <button
+                        class="btn small js-control-review-entry agents-control-review-btn"
+                        type="button"
+                        data-entry-id="{{ approval.targetEntryId }}"
+                        data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
+                        data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
+                      >Review</button>
+                    {% endif %}
+                    {% if approval.actionType|lower == 'entry.updatedraft' %}
+                      <button
+                        class="btn small js-control-view-diff agents-control-diff-btn"
+                        type="button"
+                        data-approval-id="{{ approval.id }}"
+                      >Diff</button>
+                    {% endif %}
+                  </div>
                 {% endif %}
                 <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
               </td>
@@ -599,14 +633,25 @@
                     {{ targetTitle }}
                   {% endif %}
                 </div>
-                {% if execution.targetEntryId %}
-                  <button
-                    class="btn small js-control-review-entry agents-control-review-btn"
-                    type="button"
-                    data-entry-id="{{ execution.targetEntryId }}"
-                    data-site-id="{{ execution.targetEntrySiteId ?: 0 }}"
-                    data-entry-url="{{ execution.targetEntryCpUrl ? cpUrl(execution.targetEntryCpUrl) : '' }}"
-                  >Review</button>
+                {% if execution.targetEntryId or (execution.actionType|lower == 'entry.updatedraft' and execution.approvalId) %}
+                  <div class="agents-control-table__quick-actions">
+                    {% if execution.targetEntryId %}
+                      <button
+                        class="btn small js-control-review-entry agents-control-review-btn"
+                        type="button"
+                        data-entry-id="{{ execution.targetEntryId }}"
+                        data-site-id="{{ execution.targetEntrySiteId ?: 0 }}"
+                        data-entry-url="{{ execution.targetEntryCpUrl ? cpUrl(execution.targetEntryCpUrl) : '' }}"
+                      >Review</button>
+                    {% endif %}
+                    {% if execution.actionType|lower == 'entry.updatedraft' and execution.approvalId %}
+                      <button
+                        class="btn small js-control-view-diff agents-control-diff-btn"
+                        type="button"
+                        data-approval-id="{{ execution.approvalId }}"
+                      >Diff</button>
+                    {% endif %}
+                  </div>
                 {% else %}
                   <span class="agents-actor-raw">Ref: {{ execution.actionRef ?: 'n/a' }}</span>
                 {% endif %}
@@ -1315,6 +1360,46 @@
   {% endif %}
   </div>
 
+  {% set controlDiffModalTabs = {
+    ( 'agentsControlDiffRows' ): {
+      label: 'Structured',
+      url: '#agentsControlDiffRows',
+    },
+    ( 'agentsControlRedlineRows' ): {
+      label: 'Redline',
+      url: '#agentsControlRedlineRows',
+    },
+  } %}
+  <div class="agents-control-diff-modal" id="agentsControlDiffModal" hidden aria-hidden="true">
+    <div class="agents-control-diff-modal__backdrop" data-control-diff-close></div>
+    <div class="agents-control-diff-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="agentsControlDiffTitle">
+      <div class="agents-control-diff-modal__header">
+        <div class="agents-control-diff-modal__heading">
+          <h2 id="agentsControlDiffTitle">Approval diff</h2>
+          <div id="agentsControlDiffMeta" class="light"></div>
+        </div>
+        <button class="btn" type="button" data-control-diff-close>Close</button>
+      </div>
+      <div id="agentsControlDiffStatus" class="agents-control-diff-modal__status" hidden></div>
+      <div id="agentsControlDiffIntro" class="agents-control-diff-modal__intro light"></div>
+      <div class="agents-control-diff-modal__pane">
+        {% include "_includes/tabs" with {
+          tabs: controlDiffModalTabs,
+          selectedTab: 'agentsControlDiffRows',
+          tablistLabel: 'Diff view',
+          containerAttributes: {
+            id: 'agentsControlDiffTabs',
+            class: ['agents-control-diff-modal__tabs'],
+          },
+        } only %}
+        <div class="agents-control-diff-modal__pane-body">
+          <div id="agentsControlDiffRows" class="agents-control-diff-rows"></div>
+          <div id="agentsControlRedlineRows" class="agents-control-redline-rows" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   {% js %}
     (() => {
       const confirmForms = document.querySelectorAll('.js-confirm-form');
@@ -1364,6 +1449,293 @@
             window.location.href = entryUrl;
           }
         });
+      });
+
+      const diffModal = document.getElementById('agentsControlDiffModal');
+      const diffTitle = document.getElementById('agentsControlDiffTitle');
+      const diffMeta = document.getElementById('agentsControlDiffMeta');
+      const diffStatus = document.getElementById('agentsControlDiffStatus');
+      const diffIntro = document.getElementById('agentsControlDiffIntro');
+      const diffTabs = document.getElementById('agentsControlDiffTabs');
+      const diffTabTriggers = diffTabs ? Array.from(diffTabs.querySelectorAll('[data-id]')) : [];
+      const diffRows = document.getElementById('agentsControlDiffRows');
+      const redlineRows = document.getElementById('agentsControlRedlineRows');
+      const diffButtons = Array.from(document.querySelectorAll('.js-control-view-diff'));
+      const diffUrl = {{ controlDiffUrl|json_encode|raw }};
+      let diffLastFocusedButton = null;
+      let diffActiveTab = 'agentsControlDiffRows';
+
+      const escapeHtml = (value) => {
+        const div = document.createElement('div');
+        div.textContent = value;
+        return div.innerHTML;
+      };
+
+      const setDiffStatus = (message, tone = 'info') => {
+        if (!diffStatus) {
+          return;
+        }
+
+        if (!message) {
+          diffStatus.setAttribute('hidden', 'hidden');
+          diffStatus.textContent = '';
+          diffStatus.className = 'agents-control-diff-modal__status';
+          return;
+        }
+
+        diffStatus.textContent = message;
+        diffStatus.className = `agents-control-diff-modal__status agents-control-diff-modal__status--${tone}`;
+        diffStatus.removeAttribute('hidden');
+      };
+
+      const setDiffTab = (tab) => {
+        diffActiveTab = tab === 'agentsControlRedlineRows' ? 'agentsControlRedlineRows' : 'agentsControlDiffRows';
+        diffTabTriggers.forEach((trigger) => {
+          const isActive = trigger.dataset.id === diffActiveTab;
+          trigger.classList.toggle('sel', isActive);
+          trigger.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          trigger.setAttribute('tabindex', isActive ? '0' : '-1');
+        });
+
+        if (diffRows) {
+          if (diffActiveTab === 'agentsControlDiffRows') {
+            diffRows.removeAttribute('hidden');
+          } else {
+            diffRows.setAttribute('hidden', 'hidden');
+          }
+        }
+
+        if (redlineRows) {
+          if (diffActiveTab === 'agentsControlRedlineRows') {
+            redlineRows.removeAttribute('hidden');
+          } else {
+            redlineRows.setAttribute('hidden', 'hidden');
+          }
+        }
+      };
+
+      const closeDiffModal = () => {
+        if (!diffModal) {
+          return;
+        }
+
+        diffModal.setAttribute('hidden', 'hidden');
+        diffModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('noscroll');
+        setDiffTab('agentsControlDiffRows');
+        if (diffLastFocusedButton && typeof diffLastFocusedButton.focus === 'function') {
+          diffLastFocusedButton.focus();
+        }
+      };
+
+      const renderDiffRows = (rows) => {
+        if (!diffRows) {
+          return;
+        }
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+          diffRows.innerHTML = '<div class="agents-control-diff-empty light">No changed content rows are available for this request.</div>';
+          return;
+        }
+
+        diffRows.innerHTML = rows.map((row) => {
+          const note = row.note ? `<div class="agents-control-diff-row__note">${escapeHtml(String(row.note))}</div>` : '';
+          const unsupportedClass = row.supported ? '' : ' agents-control-diff-row--unsupported';
+          const beforeDisplay = escapeHtml(String(row.beforeDisplay ?? '—'));
+          const afterDisplay = escapeHtml(String(row.afterDisplay ?? '—'));
+          const changeLabel = escapeHtml(String(row.change ?? 'changed'));
+          const label = escapeHtml(String(row.label ?? 'Field'));
+
+          return `
+            <article class="agents-control-diff-row${unsupportedClass}">
+              <div class="agents-control-diff-row__header">
+                <div class="agents-control-diff-row__label">${label}</div>
+                <span class="agents-control-diff-row__change agents-control-diff-row__change--${changeLabel}">${changeLabel}</span>
+              </div>
+              <div class="agents-control-diff-row__columns">
+                <section class="agents-control-diff-row__column agents-control-diff-row__column--before">
+                  <div class="agents-control-diff-row__column-label">Before</div>
+                  <pre class="agents-control-diff-row__value">${beforeDisplay}</pre>
+                </section>
+                <section class="agents-control-diff-row__column agents-control-diff-row__column--after">
+                  <div class="agents-control-diff-row__column-label">After</div>
+                  <pre class="agents-control-diff-row__value">${afterDisplay}</pre>
+                </section>
+              </div>
+              ${note}
+            </article>
+          `;
+        }).join('');
+      };
+
+      const renderRedlineRows = (redline) => {
+        if (!redlineRows) {
+          return;
+        }
+
+        if (!redline || !Array.isArray(redline.rows) || redline.rows.length === 0) {
+          const message = redline && redline.message ? escapeHtml(String(redline.message)) : 'No text-like field changes are available for redline preview in this request.';
+          redlineRows.innerHTML = `<div class="agents-control-diff-empty light">${message}</div>`;
+          return;
+        }
+
+        redlineRows.innerHTML = redline.rows.map((row) => {
+          const label = escapeHtml(String(row.label ?? 'Field'));
+          const note = row.note ? `<div class="agents-control-redline-row__note">${escapeHtml(String(row.note))}</div>` : '';
+          const unsupportedClass = row.supported ? '' : ' agents-control-redline-row--unsupported';
+          const segments = Array.isArray(row.segments) ? row.segments.map((segment) => {
+            const type = String(segment.type || 'context');
+            const text = escapeHtml(String(segment.text || ''));
+            if (text === '') {
+              return '';
+            }
+
+            if (type === 'added') {
+              return `<ins class="agents-control-redline-row__segment agents-control-redline-row__segment--added">${text}</ins>`;
+            }
+
+            if (type === 'removed') {
+              return `<del class="agents-control-redline-row__segment agents-control-redline-row__segment--removed">${text}</del>`;
+            }
+
+            return `<span class="agents-control-redline-row__segment">${text}</span>`;
+          }).join('') : '';
+
+          return `
+            <article class="agents-control-redline-row${unsupportedClass}">
+              <div class="agents-control-redline-row__header">
+                <div class="agents-control-redline-row__label">${label}</div>
+              </div>
+              <div class="agents-control-redline-row__body">
+                <div class="agents-control-redline-row__text">${segments || '<span class="light">No redline preview available.</span>'}</div>
+              </div>
+              ${note}
+            </article>
+          `;
+        }).join('');
+      };
+
+      const openDiffModal = async (button) => {
+        if (!diffModal || !diffTitle || !diffMeta || !diffIntro || !diffRows || !redlineRows) {
+          return;
+        }
+
+        const approvalId = Number.parseInt(button.getAttribute('data-approval-id') || '', 10);
+        if (!Number.isInteger(approvalId) || approvalId <= 0) {
+          return;
+        }
+
+        diffLastFocusedButton = button;
+        diffTitle.textContent = `Approval diff #${approvalId}`;
+        diffMeta.textContent = '';
+        diffIntro.textContent = '';
+        diffRows.innerHTML = '';
+        redlineRows.innerHTML = '';
+        setDiffTab('agentsControlDiffRows');
+        setDiffStatus('Loading diff…', 'loading');
+        diffModal.removeAttribute('hidden');
+        diffModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('noscroll');
+
+        try {
+          const response = await fetch(`${diffUrl}?approvalId=${approvalId}`, {
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+          });
+
+          const payload = await response.json();
+          if (!response.ok || !payload.ok || !payload.diff) {
+            throw new Error(payload && payload.message ? payload.message : 'Unable to load diff.');
+          }
+
+          const diff = payload.diff;
+          const target = diff.target || {};
+          const siteLabel = target.siteName || target.siteHandle || '';
+          const summary = diff.summary || {};
+          const changedCount = Number(summary.changedFieldCount || 0);
+          const unsupportedCount = Number(summary.unsupportedFieldCount || 0);
+          const metaParts = [];
+          if (target.entryTitle) {
+            metaParts.push(String(target.entryTitle));
+          }
+          if (siteLabel) {
+            metaParts.push(siteLabel);
+          }
+          metaParts.push(`${changedCount} changed row${changedCount === 1 ? '' : 's'}`);
+          if (unsupportedCount > 0) {
+            metaParts.push(`${unsupportedCount} fallback`);
+          }
+          diffMeta.textContent = metaParts.join(' · ');
+          diffIntro.textContent = diff.message || '';
+          renderDiffRows(diff.rows || []);
+          renderRedlineRows(diff.redline || null);
+          setDiffStatus('', 'info');
+        } catch (error) {
+          renderDiffRows([]);
+          renderRedlineRows(null);
+          diffIntro.textContent = '';
+          setDiffStatus(error instanceof Error ? error.message : 'Unable to load diff.', 'error');
+        }
+      };
+
+      diffButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          void openDiffModal(button);
+        });
+      });
+
+      const diffCloseButtons = Array.from(document.querySelectorAll('[data-control-diff-close]'));
+      diffCloseButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          closeDiffModal();
+        });
+      });
+
+      diffTabTriggers.forEach((trigger) => {
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          const tab = trigger.dataset.id || 'agentsControlDiffRows';
+          setDiffTab(tab);
+        });
+
+        trigger.addEventListener('keydown', (event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+            return;
+          }
+
+          event.preventDefault();
+
+          const currentIndex = diffTabTriggers.indexOf(trigger);
+          let nextIndex = currentIndex;
+
+          if (event.key === 'ArrowRight') {
+            nextIndex = (currentIndex + 1) % diffTabTriggers.length;
+          } else if (event.key === 'ArrowLeft') {
+            nextIndex = (currentIndex - 1 + diffTabTriggers.length) % diffTabTriggers.length;
+          } else if (event.key === 'Home') {
+            nextIndex = 0;
+          } else if (event.key === 'End') {
+            nextIndex = diffTabTriggers.length - 1;
+          }
+
+          const nextTrigger = diffTabTriggers[nextIndex];
+          const nextTabId = nextTrigger?.dataset.id || 'agentsControlDiffRows';
+          setDiffTab(nextTabId);
+          nextTrigger?.focus();
+        });
+      });
+
+      setDiffTab('agentsControlDiffRows');
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && diffModal && !diffModal.hasAttribute('hidden')) {
+          closeDiffModal();
+        }
       });
 
       const sectionToggles = Array.from(document.querySelectorAll('[data-control-section-toggle]'));
@@ -1495,15 +1867,12 @@
       display: flex;
       align-items: center;
       padding: 24px 12px;
+      border-bottom: 0;
+    }
+
+    .agents-control-journey-card__header:not(:has(.agents-control-stage-toggle)),
+    .agents-control-journey-card__header:has(.agents-control-stage-toggle[aria-expanded='true']) {
       border-bottom: 1px solid #bbc7d5;
-    }
-
-    .agents-control-journey-card__header:has(.agents-control-stage-toggle[aria-expanded='false']) {
-      border-bottom: 0;
-    }
-
-    .agents-control-journey-card--collapsed .agents-control-journey-card__header {
-      border-bottom: 0;
     }
 
     .agents-control-journey-card--empty {
@@ -1527,6 +1896,11 @@
       padding: 0 12px 12px;
     }
 
+    .agents-control-journey-card__body > .tablepane,
+    .agents-control-journey-card__panel > .tablepane {
+      margin: 0 -12px -12px !important;
+    }
+
     .agents-control-journey-card__empty {
       margin: 0;
       color: #596673;
@@ -1544,7 +1918,11 @@
       word-break: break-all;
     }
 
-    .agents-control-review-btn {
+    .agents-control-table__quick-actions {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
       margin-top: 6px;
     }
 
@@ -1641,7 +2019,15 @@
     }
 
     .agents-control-section-panel {
-      margin-top: 12px;
+      margin-top: 0;
+    }
+
+    #agents-control-pending-table-panel {
+      margin-top: 0;
+    }
+
+    #agents-control-approved-table-panel {
+      margin-top: 0;
     }
 
     .agents-control-section-panel[hidden] {
@@ -1709,15 +2095,12 @@
       border-color: #ec9ca7;
     }
 
-    .agents-control-pending-table thead th.agents-control-pending-table__cell,
-    .agents-control-table thead th {
-      padding-top: 0;
-      padding-right: 16px;
-      padding-bottom: 12px;
-      padding-left: 0;
-      border-bottom: 1px solid #596673;
-      background: transparent !important;
-      background-color: transparent !important;
+    .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell,
+    .agents-control-table thead > tr > th {
+      padding: 12px 0 !important;
+      border-bottom: 1px solid #d7e0ea;
+      background: #f8fafc !important;
+      background-color: #f8fafc !important;
       background-image: none !important;
       box-shadow: none !important;
       color: #596673;
@@ -1732,6 +2115,11 @@
       white-space: nowrap;
     }
 
+    .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell:first-child,
+    .agents-control-table thead > tr > th:first-child {
+      padding-inline-start: var(--pane-padding, var(--pane-x-padding-default)) !important;
+    }
+
     .agents-control-pending-table,
     .agents-control-table {
       margin: 0;
@@ -1741,10 +2129,20 @@
     .agents-control-pending-table thead tr,
     .agents-control-table thead,
     .agents-control-table thead tr {
-      background: transparent !important;
-      background-color: transparent !important;
+      background: #f8fafc !important;
+      background-color: #f8fafc !important;
       background-image: none !important;
       box-shadow: none !important;
+    }
+
+    .agents-control-pending-table tbody td.agents-control-pending-table__body-cell:first-child,
+    .agents-control-table tbody td:first-child {
+      padding-left: 12px;
+    }
+
+    .agents-control-pending-table tbody td.agents-control-pending-table__body-cell:last-child,
+    .agents-control-table tbody td:last-child {
+      padding-right: 12px;
     }
 
     .agents-control-pending-table tbody td.agents-control-pending-table__body-cell,
@@ -1821,28 +2219,6 @@
     .agents-control-table .agents-control-target-link:focus {
       color: #596673;
       text-decoration: none;
-    }
-
-    .agents-control-table .agents-control-review-btn {
-      margin-top: 0;
-      min-height: auto;
-      padding: 3px 6px;
-      border: 1px solid #d4dbe4;
-      border-radius: 3px;
-      background: #d4dbe4;
-      background-image: none;
-      box-shadow: none;
-      color: #000000;
-      font-size: 12px;
-      font-weight: 400;
-      line-height: normal;
-    }
-
-    .agents-control-table .agents-control-review-btn:hover,
-    .agents-control-table .agents-control-review-btn:focus {
-      border-color: #c7d0db;
-      background: #c7d0db;
-      color: #000000;
     }
 
     .agents-control-pending-table__cell-stack {
@@ -1941,26 +2317,322 @@
       white-space: nowrap;
     }
 
-    .agents-control-pending-table__review-button {
-      margin-top: 0;
-      min-height: auto;
-      padding: 3px 6px;
-      border: 1px solid #d4dbe4;
-      border-radius: 3px;
-      background: #d4dbe4;
-      background-image: none;
-      box-shadow: none;
-      color: #000000;
-      font-size: 12px;
-      font-weight: 400;
-      line-height: normal;
+    .agents-control-diff-modal[hidden] {
+      display: none !important;
     }
 
-    .agents-control-pending-table__review-button:hover,
-    .agents-control-pending-table__review-button:focus {
-      border-color: #c7d0db;
-      background: #c7d0db;
-      color: #000000;
+    .agents-control-diff-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1010;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .agents-control-diff-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.42);
+    }
+
+    .agents-control-diff-modal__dialog {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      width: min(1120px, calc(100vw - 48px));
+      max-height: calc(100vh - 48px);
+      overflow: hidden;
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      background: var(--white);
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+    }
+
+    .agents-control-diff-modal__header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 20px 12px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .agents-control-diff-modal__heading h2 {
+      margin: 0 0 4px;
+      color: var(--gray-900);
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .agents-control-diff-modal__status,
+    .agents-control-diff-modal__intro {
+      margin: 0 20px;
+    }
+
+    .agents-control-diff-modal__status {
+      margin-top: 16px;
+      padding: 10px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--gray-250, var(--gray-300));
+      background: var(--gray-050);
+      color: var(--gray-800);
+    }
+
+    .agents-control-diff-modal__status--loading {
+      border-color: var(--gray-300);
+      background: var(--gray-050);
+    }
+
+    .agents-control-diff-modal__status--error {
+      border-color: var(--red-200);
+      background: var(--red-050);
+      color: var(--red-900);
+    }
+
+    .agents-control-diff-modal__intro {
+      margin-top: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-control-diff-modal__pane {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      min-height: 0;
+      margin-top: 16px;
+      overflow: hidden;
+      background: var(--white);
+    }
+
+    .agents-control-diff-modal__tabs {
+      margin: 0;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .agents-control-diff-modal__tabs .scrollable {
+      padding-inline: 0;
+    }
+
+    .agents-control-diff-modal__tabs .pane-tabs {
+      border-radius: 0;
+      border-top: 0;
+    }
+
+    .agents-control-diff-modal__tabs [role='tablist'] [role='tab'].sel {
+      background: var(--white) !important;
+      box-shadow: inset 0 2px 0 var(--custom-text-color, var(--highlight-color));
+      border-top: 1px solid rgba(51, 64, 77, 0.1);
+      border-inline: 1px solid rgba(51, 64, 77, 0.1);
+      margin-bottom: -1px;
+    }
+
+    .agents-control-diff-modal__pane-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      background: var(--white);
+    }
+
+    .agents-control-diff-rows {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .agents-control-diff-rows[hidden],
+    .agents-control-redline-rows[hidden] {
+      display: none !important;
+    }
+
+    .agents-control-diff-empty {
+      padding: 16px;
+      border: 1px dashed var(--gray-300);
+      border-radius: 4px;
+      background: var(--gray-050);
+    }
+
+    .agents-control-redline-rows {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .agents-control-diff-row {
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      background: var(--gray-000, var(--white));
+      overflow: hidden;
+    }
+
+    .agents-control-diff-row--unsupported {
+      border-color: var(--gray-300);
+    }
+
+    .agents-control-diff-row__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--gray-200);
+      background: var(--gray-050);
+    }
+
+    .agents-control-diff-row__label {
+      color: var(--gray-900);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .agents-control-diff-row__change {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .agents-control-diff-row__change--added {
+      background: var(--green-100);
+      color: var(--green-900);
+    }
+
+    .agents-control-diff-row__change--removed {
+      background: var(--red-100);
+      color: var(--red-900);
+    }
+
+    .agents-control-diff-row__change--changed {
+      background: var(--gray-150);
+      color: var(--gray-900);
+    }
+
+    .agents-control-diff-row__columns {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .agents-control-diff-row__column {
+      min-width: 0;
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--white);
+    }
+
+    .agents-control-diff-row__column--before {
+      border-color: var(--red-200);
+      background: var(--red-050);
+    }
+
+    .agents-control-diff-row__column--after {
+      border-color: var(--green-200);
+      background: var(--green-050);
+    }
+
+    .agents-control-diff-row__column-label {
+      padding: 8px 10px;
+      border-bottom: 1px solid currentColor;
+      color: var(--gray-700);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+
+    .agents-control-diff-row__value {
+      margin: 0;
+      padding: 10px;
+      color: var(--gray-900);
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-control-diff-row__note {
+      padding: 0 14px 14px;
+      color: var(--gray-700);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .agents-control-redline-row {
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      background: var(--gray-000, var(--white));
+      overflow: hidden;
+    }
+
+    .agents-control-redline-row--unsupported {
+      border-color: var(--gray-300);
+    }
+
+    .agents-control-redline-row__header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--gray-200);
+      background: var(--gray-050);
+    }
+
+    .agents-control-redline-row__label {
+      color: var(--gray-900);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .agents-control-redline-row__body {
+      padding: 14px;
+    }
+
+    .agents-control-redline-row__text {
+      color: var(--gray-900);
+      font-size: 13px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-control-redline-row__segment {
+      color: inherit;
+    }
+
+    .agents-control-redline-row__segment--added {
+      background: color-mix(in srgb, var(--green-100) 76%, white 24%);
+      color: var(--green-900);
+      text-decoration: none;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+
+    .agents-control-redline-row__segment--removed {
+      background: color-mix(in srgb, var(--red-100) 74%, white 26%);
+      color: var(--red-900);
+      text-decoration-thickness: 1.5px;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+
+    .agents-control-redline-row__note {
+      padding: 0 14px 14px;
+      color: var(--gray-700);
+      font-size: 11px;
+      line-height: 1.45;
     }
 
     .agents-control-pending-table__decision-actions {

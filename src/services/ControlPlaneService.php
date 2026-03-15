@@ -287,6 +287,12 @@ class ControlPlaneService extends Component
         return array_map(fn(array $row) => $this->hydrateApproval($row), $rows);
     }
 
+    public function getApprovalById(int $approvalId): ?array
+    {
+        $row = $this->findApprovalById($approvalId);
+        return is_array($row) ? $this->hydrateApproval($row) : null;
+    }
+
     public function applyApprovalEscalationRules(int $limit = 100): array
     {
         if (!$this->tableExists(self::TABLE_APPROVALS)) {
@@ -696,8 +702,25 @@ class ControlPlaneService extends Component
             $query->andWhere(['actionType' => trim($filters['actionType'])]);
         }
 
+        if (isset($filters['approvalId'])) {
+            $approvalId = (int)$filters['approvalId'];
+            if ($approvalId > 0) {
+                $query->andWhere(['approvalId' => $approvalId]);
+            }
+        }
+
         $rows = $query->all();
         return array_map(fn(array $row) => $this->hydrateExecution($row), $rows);
+    }
+
+    public function getLatestExecutionForApproval(int $approvalId): ?array
+    {
+        if ($approvalId <= 0) {
+            return null;
+        }
+
+        $executions = $this->getExecutions(['approvalId' => $approvalId], 1);
+        return is_array($executions[0] ?? null) ? $executions[0] : null;
     }
 
     public function simulateAction(array $input): array

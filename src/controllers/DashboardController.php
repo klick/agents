@@ -283,6 +283,69 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function actionControlDiff(): Response
+    {
+        $this->requireControlCpEnabled();
+        $this->requireControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
+        $this->requireAcceptsJson();
+
+        if (!$this->request->getIsGet()) {
+            $response = $this->asJson([
+                'ok' => false,
+                'error' => 'METHOD_NOT_ALLOWED',
+                'message' => 'Use GET.',
+            ]);
+            $response->setStatusCode(405);
+            return $response;
+        }
+
+        $approvalId = (int)$this->request->getQueryParam('approvalId', 0);
+        if ($approvalId <= 0) {
+            $response = $this->asJson([
+                'ok' => false,
+                'error' => 'INVALID_APPROVAL_ID',
+                'message' => 'Missing approval number.',
+            ]);
+            $response->setStatusCode(400);
+            return $response;
+        }
+
+        $service = Plugin::getInstance()->getControlPlaneService();
+        $approval = $service->getApprovalById($approvalId);
+        if (!is_array($approval)) {
+            $response = $this->asJson([
+                'ok' => false,
+                'error' => 'APPROVAL_NOT_FOUND',
+                'message' => sprintf('Approval #%d could not be found.', $approvalId),
+            ]);
+            $response->setStatusCode(404);
+            return $response;
+        }
+
+        $latestExecution = $service->getLatestExecutionForApproval($approvalId);
+        if (is_array($latestExecution)) {
+            $approval['latestExecution'] = $latestExecution;
+        }
+
+        $decorated = $this->decorateControlItemsWithActionLabels([$approval]);
+        $decoratedApproval = is_array($decorated[0] ?? null) ? $decorated[0] : null;
+        if (!is_array($decoratedApproval)) {
+            $response = $this->asJson([
+                'ok' => false,
+                'error' => 'APPROVAL_NOT_DECORATABLE',
+                'message' => sprintf('Approval #%d could not be prepared for diff review.', $approvalId),
+            ]);
+            $response->setStatusCode(500);
+            return $response;
+        }
+
+        $targetEntry = $this->resolveControlTargetEntryDetails($decoratedApproval);
+        return $this->asJson([
+            'ok' => true,
+            'diff' => $this->buildControlDiffPayload($decoratedApproval, $targetEntry),
+        ]);
+    }
+
     public function actionSettings(): Response
     {
         $this->requireAdmin();
@@ -2603,6 +2666,850 @@ class DashboardController extends Controller
         }
 
         return $context;
+    }
+
+    private function buildControlDiffPayload(array $item, array $targetEntry): array
+    {
+        $actionType = strtolower(trim((string)($item['actionType'] ?? '')));
+        $targetIds = $this->extractControlTargetIds($item);
+        $canonicalEntryId = (int)($targetIds['entryId'] ?? 0);
+        $siteId = (int)($targetIds['siteId'] ?? 0);
+        $site = $siteId > 0 ? Craft::$app->getSites()->getSiteById($siteId) : null;
+        $status = strtolower(trim((string)($item['status'] ?? '')));
+
+        $payload = [
+            'approvalId' => (int)($item['id'] ?? 0),
+            'actionType' => $actionType,
+            'supported' => $actionType === 'entry.updatedraft',
+            'target' => [
+                'entryId' => $canonicalEntryId > 0 ? $canonicalEntryId : null,
+                'entryTitle' => $targetEntry['canonicalTitle'] ?? $targetEntry['title'] ?? $item['targetTitle'] ?? 'Untitled target',
+                'reviewEntryId' => $targetEntry['id'] ?? null,
+                'draftId' => $targetEntry['draftId'] ?? null,
+                'draftRecordId' => $targetEntry['draftRecordId'] ?? null,
+                'siteId' => $siteId > 0 ? $siteId : null,
+                'siteHandle' => $site?->handle,
+                'siteName' => $site?->name,
+                'language' => $site?->language,
+                'sectionHandle' => null,
+            ],
+            'mode' => 'unsupported',
+            'modeLabel' => 'Unsupported',
+            'summary' => [
+                'changedFieldCount' => 0,
+                'unsupportedFieldCount' => 0,
+            ],
+            'message' => 'Diff preview is only available for governed entry draft approvals in this version.',
+            'rows' => [],
+            'redline' => [
+                'available' => false,
+                'message' => 'Redline preview is only available for text-like field changes in this version.',
+                'rows' => [],
+            ],
+        ];
+
+        if ($actionType !== 'entry.updatedraft') {
+            return $payload;
+        }
+
+        $canonical = $canonicalEntryId > 0 ? $this->findControlEntryForReview($canonicalEntryId, $siteId, false) : null;
+        if (!$canonical instanceof Entry) {
+            $payload['mode'] = 'missing';
+            $payload['modeLabel'] = 'Unavailable';
+            $payload['message'] = 'The target canonical entry could not be loaded for diff review.';
+            return $payload;
+        }
+
+        $payload['target']['entryTitle'] = trim((string)$canonical->title) !== '' ? trim((string)$canonical->title) : ($payload['target']['entryTitle'] ?? 'Untitled target');
+        $payload['target']['siteId'] = (int)($canonical->siteId ?? $siteId) ?: ($payload['target']['siteId'] ?? null);
+        $resolvedSiteId = (int)($payload['target']['siteId'] ?? 0);
+        $resolvedSite = $resolvedSiteId > 0 ? Craft::$app->getSites()->getSiteById($resolvedSiteId) : null;
+        if ($resolvedSite !== null) {
+            $payload['target']['siteHandle'] = $resolvedSite->handle;
+            $payload['target']['siteName'] = $resolvedSite->name;
+            $payload['target']['language'] = $resolvedSite->language;
+        }
+
+        $section = $canonical->getSection();
+        if ($section !== null) {
+            $payload['target']['sectionHandle'] = trim((string)$section->handle) ?: null;
+        }
+
+        $fieldHandles = $this->buildControlDiffFieldHandles($item);
+        $fieldLabels = $this->buildControlFieldLabelMap($canonical);
+        $draftId = (int)($targetEntry['draftId'] ?? 0);
+        $draft = $draftId > 0 ? $this->findControlEntryForReview($draftId, $resolvedSiteId > 0 ? $resolvedSiteId : $siteId, true) : null;
+        if ($draft instanceof Entry && $draft->getIsDraft()) {
+            $fieldLabels = array_replace($fieldLabels, $this->buildControlFieldLabelMap($draft));
+            $payload['mode'] = 'draft';
+            $payload['modeLabel'] = 'Saved draft';
+            $payload['message'] = 'Showing the linked saved draft against the current canonical entry for the fields targeted by this governed request.';
+            $payload['rows'] = $this->buildControlDiffRowsFromDraft($item, $canonical, $draft, $fieldHandles, $fieldLabels);
+        } else {
+            $payload['mode'] = 'request';
+            $payload['modeLabel'] = 'Requested change';
+            $payload['message'] = 'Showing requested values against the current canonical entry. No readable saved draft is linked yet.';
+            $payload['rows'] = $this->buildControlDiffRowsFromRequestPayload($item, $canonical, $fieldHandles, $fieldLabels);
+        }
+
+        $payload['summary'] = [
+            'changedFieldCount' => count($payload['rows']),
+            'unsupportedFieldCount' => count(array_filter(
+                $payload['rows'],
+                static fn(array $row): bool => !((bool)($row['supported'] ?? false))
+            )),
+        ];
+        $payload['redline'] = $this->buildControlRedlinePayload($payload['rows']);
+
+        if (empty($payload['rows'])) {
+            $changedKeySet = $this->buildControlDiffChangedKeySet($item);
+            if (!empty(array_intersect(array_keys($changedKeySet), ['draftname', 'draftnotes']))) {
+                $payload['message'] = 'This request only changes draft metadata in this version. No entry content fields were targeted.';
+            } elseif (in_array($status, ['approved', 'completed'], true)) {
+                $payload['message'] = 'No changed content rows are available. The current canonical entry may already reflect the approved values, or the saved draft is no longer available for precise compare.';
+            } else {
+                $payload['message'] = 'No changed content rows could be derived from the current request payload.';
+            }
+        }
+
+        return $payload;
+    }
+
+    private function buildControlRedlinePayload(array $rows): array
+    {
+        $payload = [
+            'available' => false,
+            'message' => 'Redline preview highlights inserted and removed text for text-like field changes only. Structured fields stay in the Structured tab.',
+            'rows' => [],
+        ];
+
+        foreach ($rows as $row) {
+            $redlineRow = $this->buildControlRedlineRow($row);
+            if ($redlineRow !== null) {
+                $payload['rows'][] = $redlineRow;
+            }
+        }
+
+        if (!empty($payload['rows'])) {
+            $payload['available'] = true;
+            $payload['message'] = 'Redline preview shows text changes inline with surrounding context. Markup is flattened to readable text in this version.';
+        }
+
+        return $payload;
+    }
+
+    private function buildControlRedlineRow(array $row): ?array
+    {
+        if (!(bool)($row['supported'] ?? false)) {
+            return null;
+        }
+
+        if (($row['kind'] ?? '') !== 'text') {
+            return null;
+        }
+
+        $beforeText = $this->normalizeControlRedlineTextValue($row['before'] ?? null);
+        $afterText = $this->normalizeControlRedlineTextValue($row['after'] ?? null);
+        if ($beforeText === $afterText) {
+            return null;
+        }
+
+        $beforeTokens = $this->tokenizeControlRedlineText($beforeText);
+        $afterTokens = $this->tokenizeControlRedlineText($afterText);
+        if ((count($beforeTokens) + count($afterTokens)) > 800) {
+            return [
+                'path' => (string)($row['path'] ?? ''),
+                'label' => (string)($row['label'] ?? 'Field'),
+                'change' => (string)($row['change'] ?? 'changed'),
+                'supported' => false,
+                'note' => 'Redline preview is limited to shorter text in this version. Use Structured diff for this field.',
+                'segments' => $this->buildControlRedlinePrefixSuffixSegments($beforeTokens, $afterTokens),
+            ];
+        }
+
+        return [
+            'path' => (string)($row['path'] ?? ''),
+            'label' => (string)($row['label'] ?? 'Field'),
+            'change' => (string)($row['change'] ?? 'changed'),
+            'supported' => true,
+            'note' => null,
+            'segments' => $this->buildControlRedlineSegments($beforeTokens, $afterTokens),
+        ];
+    }
+
+    private function buildControlDiffRowsFromDraft(array $item, Entry $canonical, Entry $draft, array $fieldHandles, array $fieldLabels): array
+    {
+        $rows = [];
+        $changedKeySet = $this->buildControlDiffChangedKeySet($item);
+
+        if (isset($changedKeySet['title'])) {
+            $this->appendControlDiffRows($rows, 'title', ['Title'], (string)$canonical->title, (string)$draft->title);
+        }
+
+        if (isset($changedKeySet['slug'])) {
+            $this->appendControlDiffRows($rows, 'slug', ['Slug'], (string)$canonical->slug, (string)$draft->slug);
+        }
+
+        if (!empty($fieldHandles)) {
+            $canonicalSerialized = $canonical->getSerializedFieldValues($fieldHandles);
+            $draftSerialized = $draft->getSerializedFieldValues($fieldHandles);
+            foreach ($fieldHandles as $fieldHandle) {
+                $fieldLabel = $fieldLabels[$fieldHandle] ?? $this->humanizeControlDiffKey($fieldHandle);
+                $before = $canonicalSerialized[$fieldHandle] ?? null;
+                $after = $draftSerialized[$fieldHandle] ?? null;
+                $this->appendControlDiffRows($rows, 'fields.' . $fieldHandle, [$fieldLabel], $before, $after);
+            }
+        }
+
+        return $rows;
+    }
+
+    private function buildControlDiffRowsFromRequestPayload(array $item, Entry $canonical, array $fieldHandles, array $fieldLabels): array
+    {
+        $rows = [];
+        $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
+
+        if (array_key_exists('title', $requestPayload)) {
+            $this->appendControlDiffRows($rows, 'title', ['Title'], (string)$canonical->title, $requestPayload['title']);
+        }
+
+        if (array_key_exists('slug', $requestPayload)) {
+            $this->appendControlDiffRows($rows, 'slug', ['Slug'], (string)$canonical->slug, $requestPayload['slug']);
+        }
+
+        $requestedFields = is_array($requestPayload['fields'] ?? null) ? (array)$requestPayload['fields'] : [];
+        if (!empty($fieldHandles) && !empty($requestedFields)) {
+            $canonicalSerialized = $canonical->getSerializedFieldValues($fieldHandles);
+            foreach ($fieldHandles as $fieldHandle) {
+                if (!array_key_exists($fieldHandle, $requestedFields)) {
+                    continue;
+                }
+
+                $fieldLabel = $fieldLabels[$fieldHandle] ?? $this->humanizeControlDiffKey($fieldHandle);
+                $before = $canonicalSerialized[$fieldHandle] ?? null;
+                $after = $requestedFields[$fieldHandle];
+                $this->appendControlDiffRows($rows, 'fields.' . $fieldHandle, [$fieldLabel], $before, $after);
+            }
+        }
+
+        return $rows;
+    }
+
+    private function buildControlDiffFieldHandles(array $item): array
+    {
+        $handles = [];
+        $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
+        if (is_array($requestPayload['fields'] ?? null)) {
+            foreach (array_keys((array)$requestPayload['fields']) as $fieldHandle) {
+                $normalized = trim((string)$fieldHandle);
+                if ($normalized !== '') {
+                    $handles[] = $normalized;
+                }
+            }
+        }
+
+        $changedKeySet = $this->buildControlDiffChangedKeySet($item);
+        foreach (array_keys($changedKeySet) as $key) {
+            if (str_starts_with($key, 'fields.')) {
+                $fieldHandle = trim(substr($key, 7));
+                if ($fieldHandle !== '') {
+                    $handles[] = $fieldHandle;
+                }
+            }
+        }
+
+        return array_values(array_unique($handles));
+    }
+
+    private function buildControlDiffChangedKeySet(array $item): array
+    {
+        $keys = [];
+        $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
+        if (array_key_exists('title', $requestPayload)) {
+            $keys['title'] = true;
+        }
+        if (array_key_exists('slug', $requestPayload)) {
+            $keys['slug'] = true;
+        }
+        if (array_key_exists('draftName', $requestPayload)) {
+            $keys['draftname'] = true;
+        }
+        if (array_key_exists('draftNotes', $requestPayload)) {
+            $keys['draftnotes'] = true;
+        }
+
+        if (is_array($requestPayload['fields'] ?? null)) {
+            foreach (array_keys((array)$requestPayload['fields']) as $fieldHandle) {
+                $normalized = trim((string)$fieldHandle);
+                if ($normalized !== '') {
+                    $keys['fields.' . $normalized] = true;
+                }
+            }
+        }
+
+        $sources = [
+            is_array($item['resultPayload'] ?? null) ? (array)$item['resultPayload'] : [],
+            is_array($item['latestExecution']['resultPayload'] ?? null) ? (array)$item['latestExecution']['resultPayload'] : [],
+        ];
+        foreach ($sources as $payload) {
+            foreach ((array)($payload['changedKeys'] ?? []) as $changedKey) {
+                $normalized = strtolower(trim((string)$changedKey));
+                if ($normalized !== '') {
+                    $keys[$normalized] = true;
+                }
+            }
+        }
+
+        return $keys;
+    }
+
+    private function buildControlFieldLabelMap(Entry ...$entries): array
+    {
+        $map = [];
+        foreach ($entries as $entry) {
+            $fieldLayout = $entry->getFieldLayout();
+            if ($fieldLayout === null) {
+                continue;
+            }
+
+            foreach ($fieldLayout->getCustomFields() as $field) {
+                $handle = trim((string)$field->handle);
+                if ($handle === '') {
+                    continue;
+                }
+
+                $label = trim((string)($field->name ?? ''));
+                $map[$handle] = $label !== '' ? $label : $this->humanizeControlDiffKey($handle);
+            }
+        }
+
+        return $map;
+    }
+
+    private function appendControlDiffRows(array &$rows, string $path, array $labelParts, mixed $before, mixed $after): void
+    {
+        $beforeValue = $this->normalizeControlDiffValue($before);
+        $afterValue = $this->normalizeControlDiffValue($after);
+        if ($this->controlDiffValuesEqual($beforeValue, $afterValue)) {
+            return;
+        }
+
+        $beforeIsArray = is_array($beforeValue);
+        $afterIsArray = is_array($afterValue);
+
+        if ($beforeIsArray xor $afterIsArray) {
+            $rows[] = $this->createControlDiffRow($path, $labelParts, $beforeValue, $afterValue, 'structured', false, 'This field changed shape and is only shown as a fallback summary in this version.');
+            return;
+        }
+
+        if (!$beforeIsArray && !$afterIsArray) {
+            $rows[] = $this->createControlDiffRow($path, $labelParts, $beforeValue, $afterValue, $this->resolveControlDiffKind($beforeValue, $afterValue), true);
+            return;
+        }
+
+        if ($this->isControlDiffSimpleList($beforeValue) && $this->isControlDiffSimpleList($afterValue)) {
+            $rows[] = $this->createControlDiffRow($path, $labelParts, $beforeValue, $afterValue, 'list', true);
+            return;
+        }
+
+        $rowCountBefore = count($rows);
+        if (array_is_list($beforeValue) || array_is_list($afterValue)) {
+            $max = max(count($beforeValue), count($afterValue));
+            for ($index = 0; $index < $max; $index++) {
+                $this->appendControlDiffRows(
+                    $rows,
+                    sprintf('%s[%d]', $path, $index),
+                    array_merge($labelParts, [$this->describeControlDiffListItem($index, $beforeValue[$index] ?? null, $afterValue[$index] ?? null)]),
+                    $beforeValue[$index] ?? null,
+                    $afterValue[$index] ?? null
+                );
+            }
+        } else {
+            $keys = array_values(array_unique(array_merge(array_keys($beforeValue), array_keys($afterValue))));
+            foreach ($keys as $key) {
+                $normalizedKey = trim((string)$key);
+                if ($normalizedKey === '' || $this->isControlDiffInternalKey($normalizedKey)) {
+                    continue;
+                }
+
+                if ($normalizedKey === 'fields' && (is_array($beforeValue[$key] ?? null) || is_array($afterValue[$key] ?? null))) {
+                    $this->appendControlDiffRows($rows, $path . '.fields', $labelParts, $beforeValue[$key] ?? [], $afterValue[$key] ?? []);
+                    continue;
+                }
+
+                $this->appendControlDiffRows(
+                    $rows,
+                    $path . '.' . $normalizedKey,
+                    array_merge($labelParts, [$this->humanizeControlDiffKey($normalizedKey)]),
+                    $beforeValue[$key] ?? null,
+                    $afterValue[$key] ?? null
+                );
+            }
+        }
+
+        if (count($rows) === $rowCountBefore) {
+            $rows[] = $this->createControlDiffRow($path, $labelParts, $beforeValue, $afterValue, 'structured', false, 'This field changed, but only a fallback summary is available in this version.');
+        }
+    }
+
+    private function normalizeControlDiffValue(mixed $value): mixed
+    {
+        if ($value === null || is_bool($value) || is_int($value) || is_float($value) || is_string($value)) {
+            return $value;
+        }
+
+        if (is_array($value)) {
+            $normalized = [];
+            foreach ($value as $key => $nested) {
+                $normalized[$key] = $this->normalizeControlDiffValue($nested);
+            }
+            return $normalized;
+        }
+
+        if ($value instanceof \Stringable) {
+            return (string)$value;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format(DATE_ATOM);
+        }
+
+        if (is_object($value)) {
+            return $this->normalizeControlDiffValue((array)$value);
+        }
+
+        return $value;
+    }
+
+    private function controlDiffValuesEqual(mixed $before, mixed $after): bool
+    {
+        if (is_array($before) || is_array($after)) {
+            return $this->encodeComparableControlDiffValue($before) === $this->encodeComparableControlDiffValue($after);
+        }
+
+        return $before === $after;
+    }
+
+    private function encodeComparableControlDiffValue(mixed $value): string
+    {
+        $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+        return is_string($encoded) ? $encoded : '';
+    }
+
+    private function isControlDiffSimpleList(mixed $value): bool
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (is_array($item)) {
+                if (!$this->isControlDiffSimpleDisplayMap($item)) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (!is_scalar($item) && $item !== null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function isControlDiffSimpleDisplayMap(array $value): bool
+    {
+        $keys = array_map(static fn($key): string => strtolower(trim((string)$key)), array_keys($value));
+        foreach ($keys as $key) {
+            if (!in_array($key, ['id', 'label', 'title', 'name', 'filename', 'slug', 'uri', 'url'], true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function isControlDiffInternalKey(string $key): bool
+    {
+        $normalized = strtolower($key);
+        return in_array($normalized, [
+            'id',
+            'uid',
+            'sortorder',
+            'fieldid',
+            'typeid',
+            'ownerid',
+            'canonicalid',
+            'siteid',
+        ], true);
+    }
+
+    private function describeControlDiffListItem(int $index, mixed $before, mixed $after): string
+    {
+        $candidate = is_array($after) ? $after : (is_array($before) ? $before : []);
+        $type = $this->firstNonEmptyString([
+            is_array($candidate) ? ($candidate['type'] ?? null) : null,
+            is_array($candidate) ? ($candidate['typeHandle'] ?? null) : null,
+            is_array($candidate) ? ($candidate['blockType'] ?? null) : null,
+            is_array($candidate) ? ($candidate['kind'] ?? null) : null,
+        ]);
+
+        if ($type !== null) {
+            return sprintf('Block %d (%s)', $index + 1, $this->humanizeControlDiffKey($type));
+        }
+
+        return sprintf('Item %d', $index + 1);
+    }
+
+    private function createControlDiffRow(
+        string $path,
+        array $labelParts,
+        mixed $before,
+        mixed $after,
+        string $kind,
+        bool $supported,
+        ?string $note = null,
+    ): array {
+        return [
+            'path' => $path,
+            'label' => implode(' -> ', array_filter(array_map(static fn(mixed $part): string => trim((string)$part), $labelParts))),
+            'kind' => $kind,
+            'change' => $this->resolveControlDiffChangeType($before, $after),
+            'before' => $before,
+            'after' => $after,
+            'beforeDisplay' => $this->formatControlDiffDisplayValue($before),
+            'afterDisplay' => $this->formatControlDiffDisplayValue($after),
+            'supported' => $supported,
+            'note' => $note,
+        ];
+    }
+
+    private function resolveControlDiffChangeType(mixed $before, mixed $after): string
+    {
+        if ($this->isControlDiffEmptyValue($before) && !$this->isControlDiffEmptyValue($after)) {
+            return 'added';
+        }
+
+        if (!$this->isControlDiffEmptyValue($before) && $this->isControlDiffEmptyValue($after)) {
+            return 'removed';
+        }
+
+        return 'changed';
+    }
+
+    private function resolveControlDiffKind(mixed $before, mixed $after): string
+    {
+        $candidate = $after ?? $before;
+        if (is_bool($candidate)) {
+            return 'boolean';
+        }
+
+        if (is_int($candidate) || is_float($candidate)) {
+            return 'number';
+        }
+
+        if (is_array($candidate)) {
+            return 'list';
+        }
+
+        if (is_string($candidate) && preg_match('/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})?)?$/', trim($candidate)) === 1) {
+            return 'datetime';
+        }
+
+        return 'text';
+    }
+
+    private function isControlDiffEmptyValue(mixed $value): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+
+        if (is_string($value)) {
+            return trim($value) === '';
+        }
+
+        if (is_array($value)) {
+            return empty($value);
+        }
+
+        return false;
+    }
+
+    private function formatControlDiffDisplayValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '—';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (string)$value;
+        }
+
+        if (is_string($value)) {
+            $text = preg_replace("/\r\n?/", "\n", $value) ?? $value;
+            if (preg_match('/<[^>]+>/', $text) === 1) {
+                $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5);
+            }
+            $text = trim((string)$text);
+            return $text !== '' ? $text : 'Empty';
+        }
+
+        if (is_array($value)) {
+            if ($this->isControlDiffSimpleList($value)) {
+                $parts = [];
+                foreach ($value as $item) {
+                    if (is_array($item)) {
+                        $parts[] = $this->formatControlDiffSimpleDisplayMap($item);
+                    } elseif ($item === null || (is_string($item) && trim($item) === '')) {
+                        $parts[] = 'Empty';
+                    } else {
+                        $parts[] = (string)$item;
+                    }
+                }
+
+                return !empty($parts) ? implode(', ', $parts) : 'Empty';
+            }
+
+            $encoded = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            return is_string($encoded) && $encoded !== '' ? $encoded : '[structured value]';
+        }
+
+        return trim((string)$value) !== '' ? trim((string)$value) : '—';
+    }
+
+    private function normalizeControlRedlineTextValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (string)$value;
+        }
+
+        if (is_array($value)) {
+            return '';
+        }
+
+        $text = preg_replace("/\r\n?/", "\n", (string)$value) ?? (string)$value;
+        if (preg_match('/<[^>]+>/', $text) === 1) {
+            $text = preg_replace('/<br\s*\/?>/i', "\n", $text) ?? $text;
+            $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5);
+        }
+
+        return trim($text);
+    }
+
+    private function tokenizeControlRedlineText(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+
+        preg_match_all('/\s+|[^\s]+/u', $text, $matches);
+        return array_values(array_filter($matches[0] ?? [], static fn(mixed $token): bool => is_string($token) && $token !== ''));
+    }
+
+    private function buildControlRedlineSegments(array $beforeTokens, array $afterTokens): array
+    {
+        $operations = $this->diffControlRedlineTokens($beforeTokens, $afterTokens);
+        if (empty($operations)) {
+            return $this->buildControlRedlinePrefixSuffixSegments($beforeTokens, $afterTokens);
+        }
+
+        $segments = [];
+        foreach ($operations as $operation) {
+            $type = match ((string)($operation['op'] ?? 'equal')) {
+                'insert' => 'added',
+                'delete' => 'removed',
+                default => 'context',
+            };
+            $text = implode('', (array)($operation['tokens'] ?? []));
+            if ($text === '') {
+                continue;
+            }
+
+            $lastIndex = count($segments) - 1;
+            if ($lastIndex >= 0 && ($segments[$lastIndex]['type'] ?? null) === $type) {
+                $segments[$lastIndex]['text'] .= $text;
+                continue;
+            }
+
+            $segments[] = [
+                'type' => $type,
+                'text' => $text,
+            ];
+        }
+
+        return $segments;
+    }
+
+    private function diffControlRedlineTokens(array $beforeTokens, array $afterTokens): array
+    {
+        $beforeCount = count($beforeTokens);
+        $afterCount = count($afterTokens);
+        if ($beforeCount === 0 && $afterCount === 0) {
+            return [];
+        }
+
+        $lcs = array_fill(0, $beforeCount + 1, null);
+        for ($beforeIndex = 0; $beforeIndex <= $beforeCount; $beforeIndex++) {
+            $lcs[$beforeIndex] = array_fill(0, $afterCount + 1, 0);
+        }
+
+        $operations = [];
+        for ($beforeIndex = $beforeCount - 1; $beforeIndex >= 0; $beforeIndex--) {
+            for ($afterIndex = $afterCount - 1; $afterIndex >= 0; $afterIndex--) {
+                if ($beforeTokens[$beforeIndex] === $afterTokens[$afterIndex]) {
+                    $lcs[$beforeIndex][$afterIndex] = $lcs[$beforeIndex + 1][$afterIndex + 1] + 1;
+                } else {
+                    $lcs[$beforeIndex][$afterIndex] = max($lcs[$beforeIndex + 1][$afterIndex], $lcs[$beforeIndex][$afterIndex + 1]);
+                }
+            }
+        }
+
+        $beforeIndex = 0;
+        $afterIndex = 0;
+        while ($beforeIndex < $beforeCount && $afterIndex < $afterCount) {
+            if ($beforeTokens[$beforeIndex] === $afterTokens[$afterIndex]) {
+                $operations[] = ['op' => 'equal', 'tokens' => [$beforeTokens[$beforeIndex]]];
+                $beforeIndex++;
+                $afterIndex++;
+                continue;
+            }
+
+            if ($lcs[$beforeIndex + 1][$afterIndex] >= $lcs[$beforeIndex][$afterIndex + 1]) {
+                $operations[] = ['op' => 'delete', 'tokens' => [$beforeTokens[$beforeIndex]]];
+                $beforeIndex++;
+            } else {
+                $operations[] = ['op' => 'insert', 'tokens' => [$afterTokens[$afterIndex]]];
+                $afterIndex++;
+            }
+        }
+
+        while ($beforeIndex < $beforeCount) {
+            $operations[] = ['op' => 'delete', 'tokens' => [$beforeTokens[$beforeIndex]]];
+            $beforeIndex++;
+        }
+
+        while ($afterIndex < $afterCount) {
+            $operations[] = ['op' => 'insert', 'tokens' => [$afterTokens[$afterIndex]]];
+            $afterIndex++;
+        }
+
+        return $this->coalesceControlRedlineOperations($operations);
+    }
+
+    private function coalesceControlRedlineOperations(array $operations): array
+    {
+        $coalesced = [];
+        foreach ($operations as $operation) {
+            $op = (string)($operation['op'] ?? '');
+            $tokens = array_values(array_filter((array)($operation['tokens'] ?? []), static fn(mixed $token): bool => is_string($token) && $token !== ''));
+            if ($op === '' || empty($tokens)) {
+                continue;
+            }
+
+            $lastIndex = count($coalesced) - 1;
+            if ($lastIndex >= 0 && ($coalesced[$lastIndex]['op'] ?? null) === $op) {
+                $coalesced[$lastIndex]['tokens'] = array_merge((array)$coalesced[$lastIndex]['tokens'], $tokens);
+                continue;
+            }
+
+            $coalesced[] = [
+                'op' => $op,
+                'tokens' => $tokens,
+            ];
+        }
+
+        return $coalesced;
+    }
+
+    private function buildControlRedlinePrefixSuffixSegments(array $beforeTokens, array $afterTokens): array
+    {
+        $beforeCount = count($beforeTokens);
+        $afterCount = count($afterTokens);
+        $prefix = 0;
+
+        while ($prefix < $beforeCount && $prefix < $afterCount && $beforeTokens[$prefix] === $afterTokens[$prefix]) {
+            $prefix++;
+        }
+
+        $suffix = 0;
+        while (
+            ($beforeCount - $suffix - 1) >= $prefix &&
+            ($afterCount - $suffix - 1) >= $prefix &&
+            $beforeTokens[$beforeCount - $suffix - 1] === $afterTokens[$afterCount - $suffix - 1]
+        ) {
+            $suffix++;
+        }
+
+        $segments = [];
+        $prefixText = implode('', array_slice($afterTokens, 0, $prefix));
+        $removedText = implode('', array_slice($beforeTokens, $prefix, max(0, $beforeCount - $prefix - $suffix)));
+        $addedText = implode('', array_slice($afterTokens, $prefix, max(0, $afterCount - $prefix - $suffix)));
+        $suffixText = $suffix > 0 ? implode('', array_slice($afterTokens, $afterCount - $suffix)) : '';
+
+        if ($prefixText !== '') {
+            $segments[] = ['type' => 'context', 'text' => $prefixText];
+        }
+        if ($removedText !== '') {
+            $segments[] = ['type' => 'removed', 'text' => $removedText];
+        }
+        if ($addedText !== '') {
+            $segments[] = ['type' => 'added', 'text' => $addedText];
+        }
+        if ($suffixText !== '') {
+            $segments[] = ['type' => 'context', 'text' => $suffixText];
+        }
+
+        return $segments;
+    }
+
+    private function formatControlDiffSimpleDisplayMap(array $value): string
+    {
+        $display = $this->firstNonEmptyString([
+            $value['label'] ?? null,
+            $value['title'] ?? null,
+            $value['name'] ?? null,
+            $value['filename'] ?? null,
+            $value['slug'] ?? null,
+            $value['uri'] ?? null,
+            $value['url'] ?? null,
+        ]);
+        if ($display !== null) {
+            return $display;
+        }
+
+        if (isset($value['id']) && (is_numeric($value['id']) || is_string($value['id']))) {
+            return '#' . trim((string)$value['id']);
+        }
+
+        $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return is_string($encoded) && $encoded !== '' ? $encoded : '[item]';
+    }
+
+    private function humanizeControlDiffKey(string $value): string
+    {
+        $normalized = trim($value);
+        if ($normalized === '') {
+            return 'Field';
+        }
+
+        $normalized = preg_replace('/([a-z])([A-Z])/', '$1 $2', $normalized) ?? $normalized;
+        $normalized = preg_replace('/[^a-zA-Z0-9]+/', ' ', $normalized) ?? $normalized;
+        $normalized = trim($normalized);
+        return $normalized !== '' ? ucwords(strtolower($normalized)) : $value;
     }
 
     private function buildControlChangeSummary(array $requestPayload, array $resultPayload): array

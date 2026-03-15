@@ -50,7 +50,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.21.12';
+    public string $schemaVersion = '0.22.0';
 
     public static ?self $plugin = null;
 
@@ -139,6 +139,7 @@ class Plugin extends BasePlugin
                 $rules['agents/approvals'] = 'agents/dashboard/control';
                 $rules['agents/approvals/approvals'] = 'agents/dashboard/control';
                 $rules['agents/approvals/rules'] = 'agents/dashboard/control';
+                $rules['agents/approvals/diff'] = 'agents/dashboard/control-diff';
             }
 
             $event->rules = array_merge($event->rules, $rules);

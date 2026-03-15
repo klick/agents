@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.22.0 (2026-03-15)
+
+- Added a dedicated `Diff` action next to `Review` for governed `entry.updateDraft` approvals.
+- Added a changed-only `Structured` diff view plus a `Redline` tab for text-focused approval review with surrounding context.
+- Bound approval diffs to the exact saved draft when one is linked and clarified canonical-request fallback when no readable saved draft is available yet.
+- Refined the `Approvals` tables and diff modal framing so the review surface feels more native in the Craft CP.
+
 ## 0.21.12 (2026-03-15)
 
 - Published a public operator-facing `Scope Guide` with plain-language explanations of what each scope unlocks, when a worker would need it, and when it usually should not be assigned.

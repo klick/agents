@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.22.0 - 2026-03-15
+
+### Added
+
+- Added a dedicated `Diff` action next to `Review` for governed `entry.updateDraft` approvals so approvers can inspect content changes directly from `Approvals`.
+- Added a field-aware approval diff modal with changed-only `Structured` output plus a `Redline` tab for text-focused review with surrounding unchanged context.
+
+### Changed
+
+- Bound the approval diff surface to the exact saved draft when one is linked, while clearly falling back to canonical-versus-request comparison when no readable saved draft is available yet.
+- Refined the `Approvals` journey tables and diff modal to feel more native in the Craft CP, including cleaner card/table framing and Craft pane-tabs for diff modes.
+
 ## 0.21.12 - 2026-03-15
 
 ### Added

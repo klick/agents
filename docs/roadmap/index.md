@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-15  
-Current release: `v0.21.12`
+Current release: `v0.22.0`
 
 ## Direction
 
@@ -102,11 +102,11 @@ Release outcome:
 
 ## Proposed Path to `1.0.0`
 
-## Planned (`v0.22.x`) Approval Review Hardening
+## Done (`v0.22.0`)
 
-- Implement `F20` approval content diff review surface.
-- Add a dedicated `Diff` action next to `Review` for governed entry-draft approvals.
-- Keep the first version changed-only, field-aware, and optimized for fast human judgment.
+- Implemented `F20` approval content diff review surface.
+- Added a dedicated `Diff` action next to `Review` for governed entry-draft approvals.
+- Shipped the first version as changed-only, field-aware, and optimized for fast human judgment, including a text-focused redline view.
 
 Release outcome:
 

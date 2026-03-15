@@ -1,4 +1,4 @@
-# Status, Accounts, Settings & Approvals
+# Accounts, Approvals, Status & Settings
 
 The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure runtime behavior, and, when experimental writes are enabled, review governed approval and rule flows.
 
@@ -8,19 +8,19 @@ Agents CP is not a shell execution layer. Production behavior still flows throug
 
 The Agents CP subnav currently exposes:
 
-- **Status**
-  - URL: `admin/agents/status`
 - **Accounts**
   - URL: `admin/agents/accounts`
   - managed machine-account lifecycle and access controls
 - **Approvals**
   - URL: `admin/agents/approvals`
   - shown only when governed-write CP is enabled
+- **Status**
+  - URL: `admin/agents/status`
 - **Settings**
   - URL: `admin/agents/settings`
   - runtime switches, operator notifications, webhook transport, reliability thresholds, and config-lock visibility
 
-The section root `admin/agents` opens `Status`.
+The section root `admin/agents` opens `Accounts`.
 
 ## Status
 
@@ -72,9 +72,14 @@ Current sections:
 Notable current behavior:
 
 - pending approvals can be reviewed, approved, or rejected from the CP
+- governed entry-draft approvals expose separate `Review` and `Diff` actions so content inspection is not overloaded onto the generic review flow
+- `Diff` opens a changed-only review modal with:
+  - `Structured` field-aware before/after rows
+  - `Redline` text-focused review with surrounding unchanged context where the field type is suitable
 - high-risk dual-approval rows show two explicit approval buttons so operators can see progress toward the second approval at a glance
 - decision buttons stack vertically at a consistent width for clearer review actions
 - review UI includes action labels, rule/risk context, assurance mode, SLA metadata, and review guards
+- when a saved draft is linked, the diff surface targets that exact draft; otherwise it falls back to requested-versus-canonical comparison and says so explicitly
 - approved draft-entry flows bind to the exact saved draft created by execution so `Review` and `Apply Draft` target a stable draft identity
 - governed draft execution is blocked when the canonical entry already has another saved draft and the follow-up surfaces the conflicting draft ids and draft links for operator cleanup
 - rules can be edited and deleted inline from the embedded rules table
@@ -167,9 +172,9 @@ In addition:
 Primary current routes:
 
 - `admin/agents`
-- `admin/agents/status`
 - `admin/agents/accounts`
-- `admin/agents/approvals/approvals`
+- `admin/agents/approvals`
+- `admin/agents/status`
 - `admin/agents/approvals/rules`
 - `admin/agents/settings`
 
