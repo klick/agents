@@ -2,6 +2,11 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.22.2 (2026-03-16)
+
+- Restored inline async `Rotate` behavior in `Accounts` so token rotation no longer drops back to a full postback.
+- Brightened the one-time token overlay actions and switched them to the smaller Craft button treatment for clearer contrast against the dark overlay.
+
 ## 0.22.1 (2026-03-15)
 
 - Fixed completed approval diffs for governed `entry.updateDraft` requests so `Applied / Completed` can compare the applied revision against the previous revision even after the active draft is gone.

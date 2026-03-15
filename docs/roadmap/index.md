@@ -1,7 +1,7 @@
 # Roadmap
 
-Last updated: 2026-03-15  
-Current release: `v0.22.1`
+Last updated: 2026-03-16
+Current release: `v0.22.2`
 
 ## Direction
 
@@ -101,6 +101,15 @@ Release outcome:
 - Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
 
 ## Proposed Path to `1.0.0`
+
+## Done (`v0.22.2`)
+
+- Restored async credential rotation in the Accounts details panel so rotate stays inline and can reveal the new one-time token without a full-page reload.
+- Brightened the one-time token overlay actions and switched them to a smaller Craft-native button treatment for clearer contrast and better visual hierarchy.
+
+Release outcome:
+
+- Credential rotation is back to the intended inline workflow, and the token overlay actions are readable enough to support real operator use.
 
 ## Done (`v0.22.1`)
 

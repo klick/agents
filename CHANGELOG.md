@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.22.2 - 2026-03-16
+
+### Fixed
+
+- Restored reliable async `Rotate` behavior inside the Accounts details panel so token rotation stays inline instead of falling back to a full postback.
+
+### Changed
+
+- Brightened the one-time token overlay actions and switched them to Craft’s smaller button treatment so `Copy token`, `Download .env`, and `Open guide` remain legible against the dark overlay.
+
 ## 0.22.1 - 2026-03-15
 
 ### Fixed
