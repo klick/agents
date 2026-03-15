@@ -722,6 +722,29 @@ class DashboardController extends Controller
         return $this->redirectToPostedUrl(null, 'agents/status');
     }
 
+    public function actionClearStatusVerdicts(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        try {
+            $cleared = Plugin::getInstance()->getObservabilityMetricsService()->clearRuntimeCounters();
+            if ($cleared > 0) {
+                $this->setSuccessFlash(sprintf(
+                    'Cleared %d cache-backed runtime counter%s. Status will be recalculated on the next load.',
+                    $cleared,
+                    $cleared === 1 ? '' : 's'
+                ));
+            } else {
+                $this->setSuccessFlash('No cache-backed runtime counters were present. Status will be recalculated on the next load.');
+            }
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to clear stale status inputs: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/status');
+    }
+
     public function actionReplayWebhookDlq(): Response
     {
         $this->requirePostRequest();
@@ -2745,6 +2768,21 @@ class DashboardController extends Controller
             $payload['modeLabel'] = 'Saved draft';
             $payload['message'] = 'Showing the linked saved draft against the current canonical entry for the fields targeted by this governed request.';
             $payload['rows'] = $this->buildControlDiffRowsFromDraft($item, $canonical, $draft, $fieldHandles, $fieldLabels);
+        } elseif (($revisionCompare = $this->resolveControlCompletedRevisionComparison($item, $canonical)) !== null) {
+            $fieldLabels = array_replace(
+                $fieldLabels,
+                $this->buildControlFieldLabelMap($revisionCompare['before'], $revisionCompare['after'])
+            );
+            $payload['mode'] = 'revision';
+            $payload['modeLabel'] = 'Applied revision';
+            $payload['message'] = 'Showing the applied revision against the immediately previous revision because the active draft is no longer available.';
+            $payload['rows'] = $this->buildControlDiffRowsFromEntryPair(
+                $item,
+                $revisionCompare['before'],
+                $revisionCompare['after'],
+                $fieldHandles,
+                $fieldLabels
+            );
         } else {
             $payload['mode'] = 'request';
             $payload['modeLabel'] = 'Requested change';
@@ -2839,29 +2877,7 @@ class DashboardController extends Controller
 
     private function buildControlDiffRowsFromDraft(array $item, Entry $canonical, Entry $draft, array $fieldHandles, array $fieldLabels): array
     {
-        $rows = [];
-        $changedKeySet = $this->buildControlDiffChangedKeySet($item);
-
-        if (isset($changedKeySet['title'])) {
-            $this->appendControlDiffRows($rows, 'title', ['Title'], (string)$canonical->title, (string)$draft->title);
-        }
-
-        if (isset($changedKeySet['slug'])) {
-            $this->appendControlDiffRows($rows, 'slug', ['Slug'], (string)$canonical->slug, (string)$draft->slug);
-        }
-
-        if (!empty($fieldHandles)) {
-            $canonicalSerialized = $canonical->getSerializedFieldValues($fieldHandles);
-            $draftSerialized = $draft->getSerializedFieldValues($fieldHandles);
-            foreach ($fieldHandles as $fieldHandle) {
-                $fieldLabel = $fieldLabels[$fieldHandle] ?? $this->humanizeControlDiffKey($fieldHandle);
-                $before = $canonicalSerialized[$fieldHandle] ?? null;
-                $after = $draftSerialized[$fieldHandle] ?? null;
-                $this->appendControlDiffRows($rows, 'fields.' . $fieldHandle, [$fieldLabel], $before, $after);
-            }
-        }
-
-        return $rows;
+        return $this->buildControlDiffRowsFromEntryPair($item, $canonical, $draft, $fieldHandles, $fieldLabels);
     }
 
     private function buildControlDiffRowsFromRequestPayload(array $item, Entry $canonical, array $fieldHandles, array $fieldLabels): array
@@ -2893,6 +2909,198 @@ class DashboardController extends Controller
         }
 
         return $rows;
+    }
+
+    private function buildControlDiffRowsFromEntryPair(array $item, Entry $beforeEntry, Entry $afterEntry, array $fieldHandles, array $fieldLabels): array
+    {
+        $rows = [];
+        $changedKeySet = $this->buildControlDiffChangedKeySet($item);
+
+        if (isset($changedKeySet['title'])) {
+            $this->appendControlDiffRows($rows, 'title', ['Title'], (string)$beforeEntry->title, (string)$afterEntry->title);
+        }
+
+        if (isset($changedKeySet['slug'])) {
+            $this->appendControlDiffRows($rows, 'slug', ['Slug'], (string)$beforeEntry->slug, (string)$afterEntry->slug);
+        }
+
+        if (!empty($fieldHandles)) {
+            $beforeSerialized = $beforeEntry->getSerializedFieldValues($fieldHandles);
+            $afterSerialized = $afterEntry->getSerializedFieldValues($fieldHandles);
+            foreach ($fieldHandles as $fieldHandle) {
+                $fieldLabel = $fieldLabels[$fieldHandle] ?? $this->humanizeControlDiffKey($fieldHandle);
+                $before = $beforeSerialized[$fieldHandle] ?? null;
+                $after = $afterSerialized[$fieldHandle] ?? null;
+                $this->appendControlDiffRows($rows, 'fields.' . $fieldHandle, [$fieldLabel], $before, $after);
+            }
+        }
+
+        return $rows;
+    }
+
+    private function resolveControlCompletedRevisionComparison(array $item, Entry $canonical): ?array
+    {
+        $actionType = strtolower(trim((string)($item['actionType'] ?? '')));
+        if ($actionType !== 'entry.updatedraft') {
+            return null;
+        }
+
+        $latestExecution = is_array($item['latestExecution'] ?? null) ? (array)$item['latestExecution'] : [];
+        $executionStatus = strtolower(trim((string)($latestExecution['status'] ?? '')));
+        if ($executionStatus !== 'succeeded') {
+            return null;
+        }
+
+        $siteId = (int)($canonical->siteId ?? 0);
+        $revisionDescriptors = $this->resolveControlRevisionDescriptorsByCanonicalId((int)$canonical->id, $siteId);
+        if (count($revisionDescriptors) < 2) {
+            return null;
+        }
+
+        $matchedRevision = $this->matchControlCompletedRevisionDescriptor($item, $revisionDescriptors);
+        if (!is_array($matchedRevision)) {
+            return null;
+        }
+
+        $matchedIndex = null;
+        foreach ($revisionDescriptors as $index => $descriptor) {
+            if ((int)($descriptor['id'] ?? 0) === (int)($matchedRevision['id'] ?? 0)) {
+                $matchedIndex = $index;
+                break;
+            }
+        }
+
+        if ($matchedIndex === null || $matchedIndex === 0) {
+            return null;
+        }
+
+        $previousRevision = $revisionDescriptors[$matchedIndex - 1] ?? null;
+        if (!is_array($previousRevision)) {
+            return null;
+        }
+
+        $afterRevisionEntry = $this->findControlRevisionForReview((int)($matchedRevision['id'] ?? 0), $siteId);
+        $beforeRevisionEntry = $this->findControlRevisionForReview((int)($previousRevision['id'] ?? 0), $siteId);
+        if (!$afterRevisionEntry instanceof Entry || !$beforeRevisionEntry instanceof Entry) {
+            return null;
+        }
+
+        return [
+            'before' => $beforeRevisionEntry,
+            'after' => $afterRevisionEntry,
+            'matchedRevision' => $matchedRevision,
+            'previousRevision' => $previousRevision,
+        ];
+    }
+
+    private function resolveControlRevisionDescriptorsByCanonicalId(int $canonicalId, int $siteId = 0): array
+    {
+        if ($canonicalId <= 0) {
+            return [];
+        }
+
+        $query = (new Query())
+            ->select([
+                'elements.id',
+                'elements.canonicalId',
+                'elements.revisionId',
+                'elements.dateCreated',
+                'elements.dateUpdated',
+                'elements_sites.siteId',
+                'elements_sites.title',
+                'elements_sites.uri',
+                'revisions.num',
+                'revisions.notes',
+            ])
+            ->from(['elements' => '{{%elements}}'])
+            ->innerJoin('{{%revisions}} revisions', '[[revisions.id]] = [[elements.revisionId]]')
+            ->innerJoin('{{%elements_sites}} elements_sites', '[[elements_sites.elementId]] = [[elements.id]]')
+            ->where([
+                'elements.type' => Entry::class,
+                'elements.canonicalId' => $canonicalId,
+            ])
+            ->andWhere(['not', ['elements.revisionId' => null]])
+            ->orderBy([
+                'revisions.num' => SORT_ASC,
+                'elements.id' => SORT_ASC,
+            ]);
+
+        if ($siteId > 0) {
+            $query->andWhere(['elements_sites.siteId' => $siteId]);
+        }
+
+        $rows = $query->all();
+        if (empty($rows)) {
+            return [];
+        }
+
+        return array_values(array_map(function(array $row): array {
+            $siteId = (int)($row['siteId'] ?? 0);
+            $title = trim((string)($row['title'] ?? ''));
+            $uri = trim((string)($row['uri'] ?? ''));
+
+            return [
+                'id' => (int)($row['id'] ?? 0),
+                'canonicalId' => (int)($row['canonicalId'] ?? 0),
+                'revisionId' => (int)($row['revisionId'] ?? 0),
+                'num' => (int)($row['num'] ?? 0),
+                'siteId' => $siteId > 0 ? $siteId : null,
+                'title' => $title !== '' ? $title : null,
+                'notes' => trim((string)($row['notes'] ?? '')) ?: null,
+                'cpEditUrl' => $uri !== '' ? 'entries/' . (int)($row['id'] ?? 0) : null,
+                'dateCreated' => trim((string)($row['dateCreated'] ?? '')) ?: null,
+                'dateUpdated' => trim((string)($row['dateUpdated'] ?? '')) ?: null,
+            ];
+        }, $rows));
+    }
+
+    private function matchControlCompletedRevisionDescriptor(array $item, array $descriptors): ?array
+    {
+        if (empty($descriptors)) {
+            return null;
+        }
+
+        $requestPayload = is_array($item['requestPayload'] ?? null) ? (array)$item['requestPayload'] : [];
+        $latestExecution = is_array($item['latestExecution'] ?? null) ? (array)$item['latestExecution'] : [];
+        $requestedTitle = trim((string)($requestPayload['title'] ?? ''));
+        $draftNotes = trim((string)($requestPayload['draftNotes'] ?? ''));
+        $executedAtTs = strtotime((string)($latestExecution['executedAt'] ?? $latestExecution['dateCreated'] ?? ''));
+
+        $ranked = [];
+        foreach ($descriptors as $descriptor) {
+            $score = 0;
+            if ($draftNotes !== '' && trim((string)($descriptor['notes'] ?? '')) === $draftNotes) {
+                $score += 100;
+            }
+            if ($requestedTitle !== '' && trim((string)($descriptor['title'] ?? '')) === $requestedTitle) {
+                $score += 50;
+            }
+
+            $descriptorTs = strtotime((string)($descriptor['dateCreated'] ?? $descriptor['dateUpdated'] ?? ''));
+            $timeDistance = ($executedAtTs !== false && $descriptorTs !== false)
+                ? abs($descriptorTs - $executedAtTs)
+                : PHP_INT_MAX;
+
+            $ranked[] = [
+                'descriptor' => $descriptor,
+                'score' => $score,
+                'timeDistance' => $timeDistance,
+            ];
+        }
+
+        usort($ranked, static function(array $left, array $right): int {
+            if ($left['score'] !== $right['score']) {
+                return $right['score'] <=> $left['score'];
+            }
+            if ($left['timeDistance'] !== $right['timeDistance']) {
+                return $left['timeDistance'] <=> $right['timeDistance'];
+            }
+
+            return ((int)($right['descriptor']['num'] ?? 0)) <=> ((int)($left['descriptor']['num'] ?? 0));
+        });
+
+        $best = $ranked[0]['descriptor'] ?? null;
+        return is_array($best) ? $best : null;
     }
 
     private function buildControlDiffFieldHandles(array $item): array
@@ -3747,6 +3955,27 @@ class DashboardController extends Controller
         } else {
             $query->canonicalsOnly();
         }
+
+        if ($preferredSiteId > 0) {
+            $query->siteId($preferredSiteId);
+        } else {
+            $query->site('*');
+        }
+
+        $entry = $query->one();
+        return $entry instanceof Entry ? $entry : null;
+    }
+
+    private function findControlRevisionForReview(int $entryId, int $preferredSiteId = 0): ?Entry
+    {
+        if ($entryId <= 0) {
+            return null;
+        }
+
+        $query = Entry::find()
+            ->id($entryId)
+            ->revisions(true)
+            ->status(null);
 
         if ($preferredSiteId > 0) {
             $query->siteId($preferredSiteId);

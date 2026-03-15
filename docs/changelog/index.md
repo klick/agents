@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.22.1 (2026-03-15)
+
+- Fixed completed approval diffs for governed `entry.updateDraft` requests so `Applied / Completed` can compare the applied revision against the previous revision even after the active draft is gone.
+- Added a stale-status reset action and aligned the top `Status` verdict with the same final summary logic shown in the proof cards.
+- Refined Accounts, Approvals, and Status card framing so more of the control-plane surface now uses shared muted strip headers and Craft-native action treatments.
+
 ## 0.22.0 (2026-03-15)
 
 - Added a dedicated `Diff` action next to `Review` for governed `entry.updateDraft` approvals.

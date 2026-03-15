@@ -108,6 +108,35 @@ class ObservabilityMetricsService extends Component
         ];
     }
 
+    public function clearRuntimeCounters(): int
+    {
+        $cache = Craft::$app->getCache();
+        if (!$cache instanceof CacheInterface) {
+            return 0;
+        }
+
+        $keys = [
+            self::COUNTER_AUTH_FAILURES,
+            self::COUNTER_FORBIDDEN,
+            self::COUNTER_RATE_LIMIT,
+            self::COUNTER_REQUESTS,
+            self::COUNTER_ERRORS_5XX,
+        ];
+
+        $cleared = 0;
+        foreach ($keys as $key) {
+            $existing = $cache->get($key);
+            if ($existing === false || $existing === null) {
+                continue;
+            }
+
+            $cache->delete($key);
+            $cleared++;
+        }
+
+        return $cleared;
+    }
+
     private function getWebhookDlqSummary(): array
     {
         if (!$this->tableExists(self::TABLE_WEBHOOK_DLQ)) {

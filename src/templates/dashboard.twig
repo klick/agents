@@ -8,8 +8,10 @@
   {% include 'agents/_partials/cp-ui' %}
 
   <div class="agents-page-header">
-    <h1>{{ dashboardHeading }}</h1>
-    <p class="agents-page-intro">{{ tabIntro }}</p>
+    <div class="agents-page-header__copy">
+      <h1>{{ dashboardHeading }}</h1>
+      <p class="agents-page-intro">{{ tabIntro }}</p>
+    </div>
   </div>
 
   <div class="agents-layout-stack">
@@ -1125,6 +1127,59 @@
       {% set readinessIntegrationCapacityProofTone = readinessIntegrationCapacitySummaryTone in ['warn', 'bad'] ? readinessIntegrationCapacitySummaryTone : 'good' %}
       {% set readinessCredentialsPolicyProofTone = readinessCredentialsPolicySummaryTone in ['warn', 'bad'] ? readinessCredentialsPolicySummaryTone : 'good' %}
       {% set readinessConfidenceProofTone = readinessConfidenceSummaryTone == 'good' ? 'good' : 'warn' %}
+      {% set readinessSummaryTones = [
+        readinessHardGatesSummaryTone,
+        readinessTrafficAccessSummaryTone,
+        readinessDeliveryWebhooksSummaryTone,
+        readinessIntegrationCapacitySummaryTone,
+        readinessCredentialsPolicySummaryTone,
+        readinessConfidenceSummaryTone
+      ] %}
+      {% set readinessDisplayStateKey = readinessStateKey %}
+      {% set readinessDisplayStateLabel = readinessStateLabel %}
+      {% set readinessDisplayStateLead = readinessStateLead %}
+      {% set readinessDisplayStateSubcopy = readinessStateSubcopy %}
+      {% set readinessDisplayStateTone = readinessStateTone %}
+      {% if readinessPreviewState == '' %}
+        {% set readinessSummaryHasBad = 'bad' in readinessSummaryTones %}
+        {% set readinessSummaryHasWarn = 'warn' in readinessSummaryTones %}
+        {% set readinessSummaryHasMuted = 'muted' in readinessSummaryTones %}
+        {% if readinessSummaryHasBad %}
+          {% set readinessDisplayStateKey = 'blocked' %}
+          {% set readinessDisplayStateLabel = 'Blocked' %}
+          {% set readinessDisplayStateLead = 'Agents is not operationally fit for live machine traffic.' %}
+          {% set readinessDisplayStateSubcopy = 'Resolve the blocked summary areas below before trusting this environment for production traffic.' %}
+          {% set readinessDisplayStateTone = 'bad' %}
+        {% elseif readinessSummaryHasWarn %}
+          {% set readinessDisplayStateKey = 'degraded' %}
+          {% set readinessDisplayStateLabel = 'Degraded' %}
+          {% set readinessDisplayStateLead = 'Agents is handling traffic, but one or more visible status areas need attention.' %}
+          {% set readinessDisplayStateSubcopy = 'The headline now follows the same summary buckets shown directly below.' %}
+          {% set readinessDisplayStateTone = 'warn' %}
+        {% elseif readinessIsBootstrapState %}
+          {% set readinessDisplayStateKey = 'ready' %}
+          {% set readinessDisplayStateLabel = 'Ready' %}
+          {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
+          {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
+          {% set readinessDisplayStateTone = 'good' %}
+        {% elseif readinessHasMonitoringGap or (readinessSummaryHasMuted and not readinessHasObservationGap) %}
+          {% set readinessDisplayStateKey = 'unproven' %}
+          {% set readinessDisplayStateLabel = 'Unproven' %}
+          {% set readinessDisplayStateLead = 'No blocking issues were detected, but live-readiness confidence is limited.' %}
+          {% set readinessDisplayStateSubcopy = 'Recent traffic, account activity, or observability freshness is too thin for a high-confidence assessment.' %}
+          {% set readinessDisplayStateTone = 'muted' %}
+        {% elseif readinessHasObservationGap %}
+          {% set readinessDisplayStateKey = 'ready' %}
+          {% set readinessDisplayStateLabel = 'Ready' %}
+          {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for machine traffic.' %}
+          {% set readinessDisplayStateSubcopy = 'No issues need attention right now. Confidence signals will strengthen as routine traffic and account activity build over time.' %}
+          {% set readinessDisplayStateTone = 'good' %}
+        {% endif %}
+      {% endif %}
+      {% set readinessDisplayHeadlineLabel = readinessDisplayStateLabel %}
+      {% if readinessDisplayStateKey == 'ready' and readinessHasObservationGap %}
+        {% set readinessDisplayHeadlineLabel = 'Ready to Connect' %}
+      {% endif %}
       {% set securityWarningPreview = securityWarningsFiltered|slice(0, 4) %}
       {% set securityProfileDefaultsAppliedFields = securityPosture.profile.defaultsAppliedFields|default([]) %}
       {% set securityLatestDlqRow = webhookDeadLetters|first %}
@@ -1135,15 +1190,33 @@
         {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') %}
       {% endif %}
 
-      <section class="border p-0 agents-readiness-ready-card agents-readiness-ready-card--{{ readinessStateTone }}" id="readinessStateCard">
+      <section class="border p-0 agents-readiness-ready-card agents-readiness-ready-card--{{ readinessDisplayStateTone }}" id="readinessStateCard">
         <div class="agents-readiness-ready-top">
-          <div class="agents-readiness-ready-heading">
-            <span class="agents-readiness-ready-lamp agents-readiness-ready-lamp--{{ readinessStateTone }}" aria-hidden="true"></span>
-            <span class="agents-readiness-ready-label">{{ readinessStateLabel }}</span>
+          <div class="agents-readiness-ready-top-copy">
+            <div class="agents-readiness-ready-heading">
+              <span class="agents-readiness-ready-lamp agents-readiness-ready-lamp--{{ readinessDisplayStateTone }}" aria-hidden="true"></span>
+              <span class="agents-readiness-ready-label">{{ readinessDisplayHeadlineLabel }}</span>
+            </div>
+            <p class="agents-readiness-ready-copy">
+              {{ readinessDisplayStateLead }} {{ readinessDisplayStateSubcopy }} Last evaluated {{ readinessEvaluationLabel }}.
+            </p>
           </div>
-          <p class="agents-readiness-ready-copy">
-            {{ readinessStateLead }} {{ readinessStateSubcopy }} Last evaluated {{ readinessEvaluationLabel }}.
-          </p>
+          <form method="post" accept-charset="UTF-8" class="agents-readiness-ready-refresh-form">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/clear-status-verdicts') }}
+            {{ redirectInput('agents/status') }}
+            <button
+              class="btn agents-readiness-ready-refresh-button"
+              type="submit"
+              aria-label="Clear stale status verdicts"
+              title="Clear stale status verdicts"
+            >
+              <svg class="agents-readiness-ready-refresh-icon" viewBox="0 0 21 24.0028" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10.4982 4.75284C8.60709 4.75356 6.76709 5.36696 5.25383 6.50115C3.74056 7.63535 2.63548 9.22928 2.1041 11.0442C1.57273 12.8592 1.64366 14.7974 2.30627 16.5687C2.96888 18.3399 4.18751 19.8488 5.77963 20.8693C7.37174 21.8899 9.25165 22.3672 11.1378 22.2297C13.0239 22.0922 14.8147 21.3473 16.242 20.1066C17.6693 18.866 18.6562 17.1963 19.0549 15.3477C19.4536 13.4991 19.2427 11.571 18.4537 9.85234C18.3678 9.64338 18.3661 9.4093 18.4489 9.1991C18.5317 8.9889 18.6926 8.81886 18.8979 8.72458C19.1032 8.63029 19.337 8.61907 19.5504 8.69325C19.7637 8.76744 19.9402 8.92128 20.0427 9.12259C20.9894 11.1851 21.2425 13.4989 20.7638 15.7173C20.2852 17.9356 19.1007 19.9393 17.3878 21.428C15.6749 22.9167 13.5258 23.8104 11.2623 23.9751C8.9989 24.1399 6.74299 23.5669 4.83253 22.3419C2.92208 21.117 1.45992 19.306 0.665073 17.1804C-0.129774 15.0547 -0.214522 12.7287 0.423525 10.5508C1.06157 8.37289 2.38807 6.46033 4.20431 5.0996C6.02056 3.73888 8.22878 3.00322 10.4982 3.00284V4.75284Z" fill="currentColor"/>
+                <path d="M10.4982 7.31834V0.437336C10.4982 0.354205 10.522 0.272803 10.5666 0.202663C10.6112 0.132523 10.6749 0.0765478 10.7502 0.0412923C10.8255 0.00603685 10.9092 -0.00703951 10.9917 0.00359438C11.0741 0.0142283 11.1518 0.0481323 11.2157 0.101336L15.3457 3.54184C15.5557 3.71684 15.5557 4.03884 15.3457 4.21384L11.2157 7.65434C11.1518 7.70754 11.0741 7.74144 10.9917 7.75208C10.9092 7.76271 10.8255 7.74963 10.7502 7.71438C10.6749 7.67912 10.6112 7.62315 10.5666 7.55301C10.522 7.48287 10.4982 7.40147 10.4982 7.31834Z" fill="currentColor"/>
+              </svg>
+            </button>
+          </form>
         </div>
 
         <div class="agents-readiness-ready-summary" role="list" aria-label="Readiness summary">
@@ -1173,7 +1246,7 @@
           </div>
         </div>
 
-        <details class="agents-readiness-ready-details"{% if readinessStateTone != 'good' %} open{% endif %}>
+        <details class="agents-readiness-ready-details"{% if readinessDisplayStateTone != 'good' %} open{% endif %}>
           <summary><span>Details</span></summary>
           <div class="agents-readiness-ready-grid">
             <section class="agents-readiness-ready-proof-card" id="readinessProofHardGates">
@@ -2015,10 +2088,9 @@
 
       {% if webhookTestSinkVisible %}
         <section class="agents-webhook-test-sink-card border rounded p-0" id="webhookTestSinkSection">
-          <div class="agents-webhook-test-sink-top">
+          <div class="agents-webhook-test-sink-top agents-status-strip-card__top">
             <div class="agents-webhook-test-sink-header">
               <h2 class="agents-webhook-test-sink-title">Webhook Test Sink</h2>
-              <p class="agents-webhook-test-sink-copy">Dev-only local receiver for inspecting outbound webhook deliveries before wiring a real automation endpoint.</p>
             </div>
             {% if webhookTestSinkRequested %}
               <div class="agents-webhook-test-sink-actions">
@@ -2026,16 +2098,19 @@
                   {{ csrfInput() }}
                   {{ actionInput('agents/dashboard/send-webhook-test-sink-delivery') }}
                   {{ redirectInput('agents/status#webhookTestSinkSection') }}
-                  <button class="btn agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkCanSend %} disabled{% endif %}>Send test webhook</button>
+                  <button class="btn small agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkCanSend %} disabled{% endif %}>Send test webhook</button>
                 </form>
                 <form method="post" accept-charset="UTF-8" class="agents-webhook-test-sink-action-form">
                   {{ csrfInput() }}
                   {{ actionInput('agents/dashboard/clear-webhook-test-sink') }}
                   {{ redirectInput('agents/status#webhookTestSinkSection') }}
-                  <button class="btn agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkStorageReady or webhookTestSinkTotal == 0 %} disabled{% endif %}>Clear captures</button>
+                  <button class="btn small agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkStorageReady or webhookTestSinkTotal == 0 %} disabled{% endif %}>Clear captures</button>
                 </form>
               </div>
             {% endif %}
+          </div>
+          <div class="agents-status-strip-card__subcopy">
+            <p class="agents-webhook-test-sink-copy">Dev-only local receiver for inspecting outbound webhook deliveries before wiring a real automation endpoint.</p>
             <p class="agents-webhook-test-sink-status agents-webhook-test-sink-status--{{ webhookTestSinkStateTone }}">{{ webhookTestSinkStatusLine }}</p>
           </div>
 
@@ -2169,20 +2244,22 @@
 
       {% if notificationEnabled %}
       <section class="agents-operator-notifications-card border rounded p-0" id="operatorNotificationsSection">
-        <div class="agents-operator-notifications-top">
+        <div class="agents-operator-notifications-top agents-status-strip-card__top">
           <div class="agents-operator-notifications-header">
             <h2 class="agents-operator-notifications-title">Operator Notifications</h2>
-            <p class="agents-operator-notifications-copy">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes.</p>
           </div>
           <div class="agents-operator-notifications-actions">
-            <a href="{{ settingsUrl ~ '#notificationsSection' }}" class="btn agents-operator-notifications-button">Notification settings</a>
+            <a href="{{ settingsUrl ~ '#notificationsSection' }}" class="btn small agents-operator-notifications-button">Notification settings</a>
             <form method="post" accept-charset="UTF-8" class="agents-operator-notifications-action-form">
               {{ csrfInput() }}
               {{ actionInput('agents/dashboard/run-notifications-check') }}
               {{ redirectInput('agents/status#operatorNotificationsSection') }}
-              <button class="btn agents-operator-notifications-button" type="submit">Run status check</button>
+              <button class="btn small agents-operator-notifications-button" type="submit">Run status check</button>
             </form>
           </div>
+        </div>
+        <div class="agents-status-strip-card__subcopy">
+          <p class="agents-operator-notifications-copy">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes.</p>
           <p class="agents-operator-notifications-status agents-operator-notifications-status--{{ notificationEnabled and notificationRecipientCount > 0 ? 'good' : 'warn' }}">{{ notificationStatusLine }}</p>
         </div>
 
@@ -2322,6 +2399,11 @@
   </div>
 
   {% css %}
+    .agents-page-header__copy {
+      min-width: 0;
+      width: 100%;
+    }
+
     .agents-layout-stack {
       --agents-readiness-border: #bbc7d5;
       display: flex;
@@ -2400,12 +2482,20 @@
     .agents-readiness-ready-top {
       padding: 24px 12px;
       display: flex;
-      flex-direction: column;
       align-items: flex-start;
-      justify-content: center;
+      justify-content: space-between;
       gap: 12px;
       border-bottom: 1px solid var(--agents-readiness-border);
       text-align: left;
+    }
+
+    .agents-readiness-ready-top-copy {
+      min-width: 0;
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
     }
 
     .agents-readiness-ready-heading {
@@ -2438,6 +2528,44 @@
       color: #596673;
       font-size: 14px;
       line-height: normal;
+    }
+
+    .agents-readiness-ready-refresh-form {
+      margin: 0;
+      flex: 0 0 auto;
+    }
+
+    .agents-readiness-ready-refresh-button.btn {
+      width: 20px;
+      min-width: 20px;
+      height: 20px;
+      min-height: 20px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      background-image: none;
+      box-shadow: none;
+      color: var(--gray-500);
+    }
+
+    .agents-readiness-ready-refresh-icon {
+      display: block;
+      width: 20px;
+      height: 20px;
+      overflow: visible;
+    }
+
+    .agents-readiness-ready-refresh-button.btn:hover,
+    .agents-readiness-ready-refresh-button.btn:focus-visible {
+      background: transparent;
+      color: var(--gray-700);
+      box-shadow: none;
+    }
+
+    .agents-readiness-ready-refresh-button.btn:focus-visible {
+      outline: 2px solid var(--focus-outline-medium);
+      outline-offset: 2px;
     }
 
     .agents-readiness-ready-summary {
@@ -3027,6 +3155,21 @@
       color: #000000;
     }
 
+    .agents-status-strip-card__top {
+      align-items: center;
+      background: var(--secondary-pane-bg);
+      background-color: var(--secondary-pane-bg);
+      background-image: none;
+      padding: 12px;
+      border-bottom: 1px solid #bbc7d5;
+    }
+
+    .agents-status-strip-card__subcopy {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+    }
+
     .agents-webhook-test-sink-card {
       width: 100%;
       max-width: 1400px;
@@ -3041,8 +3184,6 @@
     .agents-webhook-test-sink-top {
       display: grid;
       gap: 6px 12px;
-      padding: 24px 12px;
-      border-bottom: 1px solid #bbc7d5;
     }
 
     .agents-webhook-test-sink-header {
@@ -3071,7 +3212,6 @@
       gap: 8px;
       flex-wrap: wrap;
       margin: 0;
-      grid-row: 1 / span 2;
       grid-column: 2;
     }
 
@@ -3079,29 +3219,13 @@
       margin: 0;
     }
 
-    .agents-webhook-test-sink-button.btn {
-      min-height: auto;
-      padding: 7px 10px;
-      border: 0;
-      border-radius: 3px;
-      background: #d4dbe4;
-      background-image: none;
-      box-shadow: none;
-      color: #000000;
-      font-size: 12px;
-      font-weight: 400;
-      line-height: normal;
+    .agents-webhook-test-sink-button.btn.small {
+      text-decoration: none;
     }
 
-    .agents-webhook-test-sink-button.btn:hover,
-    .agents-webhook-test-sink-button.btn:focus-visible {
-      background: #c6cfda;
-      color: #000000;
-    }
-
-    .agents-webhook-test-sink-button.btn[disabled] {
-      opacity: 0.5;
-      cursor: not-allowed;
+    .agents-webhook-test-sink-button.btn.small:hover,
+    .agents-webhook-test-sink-button.btn.small:focus-visible {
+      text-decoration: none;
     }
 
     .agents-webhook-test-sink-status {
@@ -3109,7 +3233,6 @@
       color: #000000;
       font-size: 12px;
       line-height: 1.45;
-      grid-column: 1;
     }
 
     .agents-webhook-test-sink-status--good {
@@ -3351,8 +3474,6 @@
     .agents-operator-notifications-top {
       display: grid;
       gap: 6px 12px;
-      padding: 24px 12px;
-      border-bottom: 1px solid #bbc7d5;
     }
 
     .agents-operator-notifications-header {
@@ -3381,7 +3502,6 @@
       gap: 8px;
       flex-wrap: wrap;
       margin: 0;
-      grid-row: 1 / span 2;
       grid-column: 2;
     }
 
@@ -3389,25 +3509,12 @@
       margin: 0;
     }
 
-    .agents-operator-notifications-button.btn {
-      min-height: auto;
-      padding: 7px 10px;
-      border: 0;
-      border-radius: 3px;
-      background: #d4dbe4;
-      background-image: none;
-      box-shadow: none;
-      color: #000000;
-      font-size: 12px;
-      font-weight: 400;
-      line-height: normal;
+    .agents-operator-notifications-button.btn.small {
       text-decoration: none;
     }
 
-    .agents-operator-notifications-button.btn:hover,
-    .agents-operator-notifications-button.btn:focus-visible {
-      background: #c6cfda;
-      color: #000000;
+    .agents-operator-notifications-button.btn.small:hover,
+    .agents-operator-notifications-button.btn.small:focus-visible {
       text-decoration: none;
     }
 
@@ -3415,7 +3522,6 @@
       margin: 0;
       font-size: 12px;
       line-height: 1.45;
-      grid-column: 1;
     }
 
     .agents-operator-notifications-status--good {
@@ -3926,6 +4032,7 @@
     @media (max-width: 767px) {
       .agents-readiness-ready-top {
         padding: 20px 12px;
+        flex-wrap: wrap;
       }
 
       .agents-readiness-ready-proof-head {
@@ -3956,6 +4063,10 @@
 
       .agents-readiness-ready-label {
         font-size: 30px;
+      }
+
+      .agents-readiness-ready-refresh-form {
+        align-self: flex-start;
       }
 
       .agents-readiness-ready-grid {

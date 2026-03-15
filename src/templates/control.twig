@@ -42,7 +42,7 @@
   <div class="agents-control-content-wrap">
   <div class="agents-control-journey">
   {% set pendingTablePanelId = 'agents-control-pending-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-pending-section{% if not controlPendingApprovals|length %} agents-control-journey-card--empty{% endif %}">
+  <section class="agents-control-journey-card agents-control-approval-card agents-control-journey-card--expanded agents-control-pending-section{% if not controlPendingApprovals|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
       <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
         {% if controlPendingApprovals|length %}
@@ -297,7 +297,7 @@
 
   {% set approvedTablePanelId = 'agents-control-approved-table-panel' %}
   <!-- Release-gate sentinel: <h2 class="h4">Approved</h2> -->
-  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-card{% if not controlApprovedApprovals|length %} agents-control-journey-card--empty{% endif %}">
+  <section class="agents-control-journey-card agents-control-approval-card agents-control-journey-card--expanded agents-control-rules-card{% if not controlApprovedApprovals|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
       <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
         {% if controlApprovedApprovals|length %}
@@ -317,8 +317,8 @@
         {% endif %}
       </h2>
     </div>
-    <div id="{{ approvedTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel">
     {% if controlApprovedApprovals|length %}
+    <div id="{{ approvedTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel">
       <div class="tablepane mx-0" style="margin-top: 0;">
         <table class="data fullwidth agents-control-table">
         <thead>
@@ -463,15 +463,13 @@
         </tbody>
         </table>
       </div>
-    {% else %}
-      <p class="agents-control-journey-card__empty">No approved requests yet.</p>
-    {% endif %}
     </div>
+    {% endif %}
   </section>
   <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
 
   {% set completedTablePanelId = 'agents-control-completed-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--collapsed{% if not controlCompletedApprovals|length %} agents-control-journey-card--empty{% endif %}">
+  <section class="agents-control-journey-card agents-control-approval-card agents-control-journey-card--collapsed{% if not controlCompletedApprovals|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
     <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlCompletedApprovals|length %}
@@ -584,7 +582,7 @@
   <div class="agents-control-journey-divider" aria-hidden="true"><span class="agents-control-journey-divider__dot"></span></div>
 
   {% set followUpTablePanelId = 'agents-control-follow-up-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--collapsed{% if not controlAttentionExecutions|length %} agents-control-journey-card--empty{% endif %}">
+  <section class="agents-control-journey-card agents-control-approval-card agents-control-journey-card--collapsed{% if not controlAttentionExecutions|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
     <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlAttentionExecutions|length %}
@@ -917,7 +915,7 @@
 
   {% if activeControlTab == 'approvals' %}
   {% set activityLogTablePanelId = 'agents-control-activity-log-table-panel' %}
-  <section class="agents-control-journey-card agents-control-journey-card--collapsed{% if not controlAuditEvents|length %} agents-control-journey-card--empty{% endif %}">
+  <section class="agents-control-journey-card agents-control-approval-card agents-control-journey-card--collapsed{% if not controlAuditEvents|length %} agents-control-journey-card--empty{% endif %}">
     <div class="agents-control-journey-card__header">
     <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
       {% if controlAuditEvents|length %}
@@ -1870,9 +1868,22 @@
       border-bottom: 0;
     }
 
+    .agents-control-approval-card .agents-control-journey-card__header,
+    .agents-control-rules-card .agents-control-journey-card__header,
+    .agents-control-rules-create-card .agents-control-journey-card__header {
+      padding: 12px;
+      background: var(--secondary-pane-bg);
+      background-color: var(--secondary-pane-bg);
+      background-image: none;
+    }
+
     .agents-control-journey-card__header:not(:has(.agents-control-stage-toggle)),
     .agents-control-journey-card__header:has(.agents-control-stage-toggle[aria-expanded='true']) {
       border-bottom: 1px solid #bbc7d5;
+    }
+
+    .agents-control-approval-card.agents-control-journey-card--empty .agents-control-journey-card__header {
+      border-bottom: 0;
     }
 
     .agents-control-journey-card--empty {
@@ -2098,9 +2109,9 @@
     .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell,
     .agents-control-table thead > tr > th {
       padding: 12px 0 !important;
-      border-bottom: 1px solid #d7e0ea;
-      background: #f8fafc !important;
-      background-color: #f8fafc !important;
+      border-bottom: 1px solid #bbc7d5;
+      background: var(--secondary-pane-bg) !important;
+      background-color: var(--secondary-pane-bg) !important;
       background-image: none !important;
       box-shadow: none !important;
       color: #596673;
@@ -2113,6 +2124,12 @@
       text-transform: none;
       vertical-align: top;
       white-space: nowrap;
+    }
+
+    .agents-control-approval-card .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell,
+    .agents-control-approval-card .agents-control-table thead > tr > th,
+    .agents-control-rules-card .agents-control-table thead > tr > th {
+      border-bottom: 0;
     }
 
     .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell:first-child,
@@ -2129,8 +2146,8 @@
     .agents-control-pending-table thead tr,
     .agents-control-table thead,
     .agents-control-table thead tr {
-      background: #f8fafc !important;
-      background-color: #f8fafc !important;
+      background: var(--secondary-pane-bg) !important;
+      background-color: var(--secondary-pane-bg) !important;
       background-image: none !important;
       box-shadow: none !important;
     }

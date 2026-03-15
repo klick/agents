@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.22.1 - 2026-03-15
+
+### Fixed
+
+- Restored reliable async `Test Account` behavior inside the Accounts details panel and kept inline validation feedback anchored under the action instead of falling back to a full postback.
+- Fixed completed approval diffs for governed `entry.updateDraft` requests by reconstructing comparisons from the applied revision when the active draft is no longer available.
+- Added a stale-status reset action and aligned the top `Status` verdict with the final rendered summary so environments no longer stay deceptively degraded after cache-backed counters drift.
+
+### Changed
+
+- Refined Accounts cards around the new shared card-surface treatment, including the muted header strip, the edge-to-edge Details panel surface, and Craft-native action buttons.
+- Polished Approvals empty states and table/card framing, including cleaner empty-card rendering, consistent muted header strips, and lighter Craft-native action buttons for review and decision surfaces.
+- Reworked the `Webhook Test Sink` and `Operator Notifications` cards on `Status` so the strip header carries only title/actions while the supporting copy sits in the body below.
+
 ## 0.22.0 - 2026-03-15
 
 ### Added

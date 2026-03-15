@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-15  
-Current release: `v0.22.0`
+Current release: `v0.22.1`
 
 ## Direction
 
@@ -101,6 +101,16 @@ Release outcome:
 - Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
 
 ## Proposed Path to `1.0.0`
+
+## Done (`v0.22.1`)
+
+- Tightened the post-`F20` operator surfaces with cleaner Accounts, Approvals, and Status card framing built around shared muted header strips and more native Craft action treatments.
+- Fixed completed approval diffs so `Applied / Completed` can still show meaningful changed rows after an approved draft has been applied and the active draft no longer exists.
+- Added an operator-facing stale-status reset action and aligned the top Status verdict with the same final summary logic shown in the proof cards.
+
+Release outcome:
+
+- The core governed-approval UX is more trustworthy in daily use, and the surrounding CP surfaces now read more consistently as Craft-native operator tooling.
 
 ## Done (`v0.22.0`)
 
