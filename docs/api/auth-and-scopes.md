@@ -1,5 +1,7 @@
 # Auth & Scopes
 
+If you are trying to decide which scopes to give a worker in plain language, start with [Scope Guide](/api/scope-guide).
+
 ## Authentication methods
 
 When token enforcement is enabled:
@@ -39,6 +41,8 @@ Capabilities/auth metadata surfaces also expose runtime profile posture:
 - `effectivePolicyVersion`
 
 ## Core scopes
+
+For an operator-facing explanation of what each scope is for and when a worker would actually need it, see [Scope Guide](/api/scope-guide).
 
 Read scopes:
 

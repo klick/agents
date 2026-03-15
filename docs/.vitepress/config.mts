@@ -10,6 +10,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Get Started', link: '/get-started/' },
+      { text: 'Workflows', link: '/workflows/' },
       { text: 'Control Plane', link: '/cp/' },
       { text: 'API', link: '/api/' },
       { text: 'Security', link: '/security/' },
@@ -39,6 +40,14 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Workflows',
+        items: [
+          { text: 'Workflow Guides', link: '/workflows/' },
+          { text: 'Governed Entry Drafts', link: '/workflows/governed-entry-drafts' },
+          { text: 'Entry Translation Drafts', link: '/workflows/entry-translation-drafts' }
+        ]
+      },
+      {
         text: 'Control Plane',
         items: [
           { text: 'Dashboard & CP', link: '/cp/' }
@@ -51,6 +60,7 @@ export default defineConfig({
           { text: 'Agent Bootstrap', link: '/api/agent-bootstrap' },
           { text: 'Starter Packs', link: '/api/starter-packs' },
           { text: 'Auth & Scopes', link: '/api/auth-and-scopes' },
+          { text: 'Scope Guide', link: '/api/scope-guide' },
           { text: 'Endpoints', link: '/api/endpoints' },
           { text: 'Errors & Rate Limits', link: '/api/errors-and-rate-limits' },
           { text: 'Incremental Sync', link: '/api/incremental-sync' },

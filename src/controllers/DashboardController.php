@@ -23,7 +23,7 @@ class DashboardController extends Controller
 
     public function actionIndex(): Response
     {
-        return $this->redirect('agents/status');
+        return $this->redirect('agents/accounts');
     }
 
     public function actionDashboard(): Response
@@ -31,7 +31,7 @@ class DashboardController extends Controller
         $request = Craft::$app->getRequest();
         $pathInfo = trim((string)$request->getPathInfo(), '/');
         if ($pathInfo === 'agents') {
-            return $this->redirect('agents/status');
+            return $this->redirect('agents/accounts');
         }
 
         $plugin = Plugin::getInstance();

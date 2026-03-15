@@ -50,7 +50,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.21.11';
+    public string $schemaVersion = '0.21.12';
 
     public static ?self $plugin = null;
 
@@ -88,6 +88,7 @@ class Plugin extends BasePlugin
         }
 
         if (Craft::$app->getRequest()->getIsCpRequest()) {
+            $this->registerSettingsPluginLinkOverride();
             $this->registerCpRoutes();
             return;
         }
@@ -101,10 +102,6 @@ class Plugin extends BasePlugin
         $item['label'] = 'Agents';
         $item['url'] = 'agents';
         $subnav = [
-            'status' => [
-                'label' => 'Status',
-                'url' => 'agents/status',
-            ],
             'accounts' => [
                 'label' => 'Accounts',
                 'url' => 'agents/accounts',
@@ -116,6 +113,10 @@ class Plugin extends BasePlugin
                 'url' => 'agents/approvals',
             ];
         }
+        $subnav['status'] = [
+            'label' => 'Status',
+            'url' => 'agents/status',
+        ];
         $subnav['settings'] = [
             'label' => 'Settings',
             'url' => 'agents/settings',
@@ -129,7 +130,7 @@ class Plugin extends BasePlugin
     {
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function(RegisterUrlRulesEvent $event): void {
             $rules = [
-                'agents' => 'agents/dashboard/dashboard',
+                'agents' => 'agents/dashboard/index',
                 'agents/status' => 'agents/dashboard/dashboard',
                 'agents/settings' => 'agents/dashboard/settings',
                 'agents/accounts' => 'agents/dashboard/credentials',
@@ -142,6 +143,36 @@ class Plugin extends BasePlugin
 
             $event->rules = array_merge($event->rules, $rules);
         });
+    }
+
+    private function registerSettingsPluginLinkOverride(): void
+    {
+        $request = Craft::$app->getRequest();
+        $pathInfo = trim((string)$request->getPathInfo(), '/');
+        if ($pathInfo !== 'settings/plugins') {
+            return;
+        }
+
+        $settingsUrl = UrlHelper::cpUrl('agents/settings');
+        $encodedSettingsUrl = json_encode($settingsUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!is_string($encodedSettingsUrl) || $encodedSettingsUrl === '') {
+            return;
+        }
+
+        Craft::$app->getView()->registerJs(<<<JS
+(() => {
+  const row = document.querySelector('tr[data-handle="agents"]');
+  const iconLink = row ? row.querySelector('.plugin-infos > a.icon') : null;
+  if (!iconLink) {
+    return;
+  }
+
+  const settingsUrl = {$encodedSettingsUrl};
+  iconLink.setAttribute('href', settingsUrl);
+  iconLink.setAttribute('title', 'Open Agents settings');
+  iconLink.setAttribute('aria-label', 'Open Agents settings');
+})();
+JS, View::POS_END);
     }
 
     private function registerSiteRoutes(): void
@@ -447,12 +478,12 @@ class Plugin extends BasePlugin
 
     public function getSettingsResponse(): mixed
     {
-        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/status'));
+        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/settings'));
     }
 
     public function getReadOnlySettingsResponse(): mixed
     {
-        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/status'));
+        return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('agents/settings'));
     }
 
     private function registerWebhookEventHooks(): void

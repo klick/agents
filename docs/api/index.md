@@ -51,6 +51,7 @@ See:
 - [Agent Bootstrap](/api/agent-bootstrap)
 - [Starter Packs](/api/starter-packs)
 - [Auth & Scopes](/api/auth-and-scopes)
+- [Scope Guide](/api/scope-guide)
 - [Endpoints](/api/endpoints)
 - [Errors & Rate Limits](/api/errors-and-rate-limits)
 - [Incremental Sync](/api/incremental-sync)

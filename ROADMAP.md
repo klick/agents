@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-13  
-Current release: `v0.21.8`
+Date: 2026-03-15  
+Current release: `v0.21.12`
 
 ## Direction
 
@@ -89,38 +89,34 @@ Release outcome:
 
 - Operators get a cleaner Agent card view now, with lifecycle governance still available for future reintroduction without backend rollback.
 
+## Done (`v0.21.x`)
+
+- Shipped operator notifications (`F17`) with email-first delivery, recipient routing, recent-delivery visibility, and scheduled status-check support.
+- Reintroduced the public operator IA around `Status`, `Approvals`, `Accounts`, and `Settings` and hardened the governed approval flow.
+- Published the first-worker bootstrap path with a public guide and example worker.
+- Bound approved governed entry-draft requests to exact saved drafts and blocked conflicting saved-draft creation to reduce ambiguous draft apply behavior.
+
+Release outcome:
+
+- Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
+
 ## Proposed Path to `1.0.0`
 
-## Planned (`v0.21.x`) External Adapter Foundation
+## Planned (`v0.22.x`) Approval Review Hardening
 
-- Implement `F12` external plugin data access.
-- Ship provider registry + registration event.
-- Add external read scopes and contract exposure in capabilities/OpenAPI/schema.
-- Ship first standalone reference adapter.
-
-Release outcome:
-
-- Agents proves it can extend safely beyond core Craft/Commerce data without bloating the core plugin.
-
-## Planned (`v0.22.x`) Operator Notifications
-
-- Implement the core of `F17`.
-- Ship email-first notifications for:
-  - degraded or blocked status
-  - approval pending decision
-  - approval decided or execution failed
-  - webhook delivery failures / DLQ growth
-- Keep additional channels behind a clean channel abstraction.
+- Implement `F20` approval content diff review surface.
+- Add a dedicated `Diff` action next to `Review` for governed entry-draft approvals.
+- Keep the first version changed-only, field-aware, and optimized for fast human judgment.
 
 Release outcome:
 
-- Operators no longer need to sit inside the CP to catch important runtime and approval events.
+- Approvers can see what changed in a few seconds instead of inferring content changes from raw payloads or metadata.
 
 ## Planned (`v0.23.x`) Production Validation and Supportability
 
 - Implement `F15` production webhook probe.
 - Tighten diagnostics and support flows around webhook delivery and runtime verification.
-- Add lightweight operator visibility for recent probe/notification outcomes if useful.
+- Add lightweight operator visibility for recent probe/notification outcomes where useful.
 
 Release outcome:
 
@@ -128,6 +124,9 @@ Release outcome:
 
 ## Planned (`v0.24.x`) Contract and Upgrade Stabilization
 
+- Implement `F21` governed write target sets and CP test helpers.
+- Add optional named target boundaries for write-capable accounts so `v1` governed entry writes can be limited to approved explicit entries and sites.
+- Add operator-friendly CP helpers for generating prefilled governed write test requests or worker config from those target sets.
 - Freeze the main CP IA.
 - Freeze canonical routes and scope naming.
 - Add full multi-site and multi-store support across the public contract:
@@ -157,7 +156,18 @@ Release outcome:
 
 - Operators and developers can move from account creation to a working scheduled workflow with far less reinvention.
 
-## Planned (`v0.26.x`) Extensibility Hardening
+## Planned (`v0.26.x`) External Adapter Foundation
+
+- Resume `F12` external plugin data access once the adapter/provider direction is reconfirmed.
+- Ship provider registry + registration event.
+- Add external read scopes and contract exposure in capabilities/OpenAPI/schema.
+- Ship the first standalone reference adapter.
+
+Release outcome:
+
+- Agents proves it can extend safely beyond core Craft/Commerce data without bloating the core plugin.
+
+## Planned (`v0.27.x`) Extensibility Hardening
 
 - Implement the useful parts of `F13`.
 - Add registry-backed scope extension and field-profile governance where needed.
@@ -167,7 +177,7 @@ Release outcome:
 
 - Agents gains controlled extensibility without collapsing into arbitrary scope sprawl.
 
-## Planned (`v0.27.x`) Agent-Assisted Operations
+## Planned (`v0.28.x`) Agent-Assisted Operations
 
 - Begin `F18`, phase 1 only.
 - Start with read-only insight and recommendation support.
@@ -177,7 +187,7 @@ Release outcome:
 
 - Agents can assist operators inside the product without weakening the trust boundary.
 
-## Planned (`v0.28.x`) Pre-1.0 Consolidation
+## Planned (`v0.29.x`) Pre-1.0 Consolidation
 
 - Focus on bug fixing, upgrade safety, onboarding, and support polish.
 - Avoid major IA churn.

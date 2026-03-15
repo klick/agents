@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.21.12 - 2026-03-15
+
+### Added
+
+- Published a public operator-facing `Scope Guide` with plain-language explanations of what each scope unlocks, when a worker would need it, and when it usually should not be assigned.
+- Published a governed `entry.updateDraft` worker example plus matching workflow docs so operators and developers can test the full approval-driven draft-write path end to end.
+- Added an `Entry Translation Drafts` account template and public workflow guide for bounded localization-draft workflows that stay inside approvals.
+
+### Changed
+
+- Made `Accounts` the canonical Agents landing page, so `admin/agents` now redirects to `admin/agents/accounts` and keeps the Accounts subnav selected.
+- Updated the Agents plugin entry from `Settings -> Plugins` to open `Agents -> Settings` inside the Agents CP instead of sending operators through the generic plugin settings path.
+- Added direct Accounts header links to the public first-worker guide and the new scope guide to make account setup and scope selection less opaque.
+- Refined the Accounts surface with a native secondary-pane account card background, calmer template-card copy color, and the revised top-level nav order of `Accounts`, `Approvals`, `Status`, and `Settings`.
+
 ## 0.21.11 - 2026-03-15
 
 ### Fixed

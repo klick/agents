@@ -2,6 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.21.12 (2026-03-15)
+
+- Published a public operator-facing `Scope Guide` with plain-language explanations of what each scope unlocks, when a worker would need it, and when it usually should not be assigned.
+- Published a governed `entry.updateDraft` worker example plus matching workflow docs so operators and developers can test the full approval-driven draft-write path end to end.
+- Added an `Entry Translation Drafts` account template and workflow guide for bounded localization-draft workflows that stay inside approvals.
+- Made `Accounts` the canonical Agents landing page, updated the Settings -> Plugins entry to open `Agents -> Settings` inside the Agents CP, and added direct header links to the first-worker guide and scope guide.
+
 ## 0.21.11 (2026-03-15)
 
 - Bound approved governed entry-draft requests to the exact saved draft created by execution so later review/apply surfaces no longer have to reconstruct draft identity from loose payload fragments.

@@ -44,5 +44,6 @@ See:
 - [Installation & Setup](/get-started/installation-setup)
 - [Configuration](/get-started/configuration)
 - [First Worker](/get-started/first-worker)
+- [Workflow Guides](/workflows/)
 - [Agent Bootstrap](/api/agent-bootstrap)
 - [Starter Packs](/api/starter-packs)
