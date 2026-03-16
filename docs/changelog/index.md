@@ -2,6 +2,11 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.22.3 (2026-03-16)
+
+- Added a third `Focus` diff tab for governed approval review with muted context and emphasized changed text for proofing-oriented reading.
+- Refined the diff modal chrome around the new Focus view with lighter header/tab surfaces, cleaner active-tab behavior, and monospaced proofing typography.
+
 ## 0.22.2 (2026-03-16)
 
 - Restored inline async `Rotate` behavior in `Accounts` so token rotation no longer drops back to a full postback.

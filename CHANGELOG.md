@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.22.3 - 2026-03-16
+
+### Added
+
+- Added a third `Focus` diff tab for governed approval review, inspired by IA Writer's Focus Mode, with muted context and emphasized changed text for proofing-oriented reading.
+
+### Changed
+
+- Refined the approval diff modal chrome around the new Focus view, including lighter Craft-native header/tab surfaces, improved active-tab treatment, and monospaced Focus typography for word-for-word review.
+
 ## 0.22.2 - 2026-03-16
 
 ### Fixed

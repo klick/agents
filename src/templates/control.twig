@@ -1367,6 +1367,10 @@
       label: 'Redline',
       url: '#agentsControlRedlineRows',
     },
+    ( 'agentsControlFocusRows' ): {
+      label: 'Focus',
+      url: '#agentsControlFocusRows',
+    },
   } %}
   <div class="agents-control-diff-modal" id="agentsControlDiffModal" hidden aria-hidden="true">
     <div class="agents-control-diff-modal__backdrop" data-control-diff-close></div>
@@ -1393,6 +1397,7 @@
         <div class="agents-control-diff-modal__pane-body">
           <div id="agentsControlDiffRows" class="agents-control-diff-rows"></div>
           <div id="agentsControlRedlineRows" class="agents-control-redline-rows" hidden></div>
+          <div id="agentsControlFocusRows" class="agents-control-focus-rows" hidden></div>
         </div>
       </div>
     </div>
@@ -1458,8 +1463,10 @@
       const diffTabTriggers = diffTabs ? Array.from(diffTabs.querySelectorAll('[data-id]')) : [];
       const diffRows = document.getElementById('agentsControlDiffRows');
       const redlineRows = document.getElementById('agentsControlRedlineRows');
+      const focusRows = document.getElementById('agentsControlFocusRows');
       const diffButtons = Array.from(document.querySelectorAll('.js-control-view-diff'));
       const diffUrl = {{ controlDiffUrl|json_encode|raw }};
+      const diffTabIds = new Set(['agentsControlDiffRows', 'agentsControlRedlineRows', 'agentsControlFocusRows']);
       let diffLastFocusedButton = null;
       let diffActiveTab = 'agentsControlDiffRows';
 
@@ -1487,7 +1494,7 @@
       };
 
       const setDiffTab = (tab) => {
-        diffActiveTab = tab === 'agentsControlRedlineRows' ? 'agentsControlRedlineRows' : 'agentsControlDiffRows';
+        diffActiveTab = diffTabIds.has(tab) ? tab : 'agentsControlDiffRows';
         diffTabTriggers.forEach((trigger) => {
           const isActive = trigger.dataset.id === diffActiveTab;
           trigger.classList.toggle('sel', isActive);
@@ -1508,6 +1515,14 @@
             redlineRows.removeAttribute('hidden');
           } else {
             redlineRows.setAttribute('hidden', 'hidden');
+          }
+        }
+
+        if (focusRows) {
+          if (diffActiveTab === 'agentsControlFocusRows') {
+            focusRows.removeAttribute('hidden');
+          } else {
+            focusRows.setAttribute('hidden', 'hidden');
           }
         }
       };
@@ -1613,8 +1628,167 @@
         }).join('');
       };
 
+      const tokenizeFocusText = (text) => {
+        const matches = String(text || '').match(/\s+|[^\s]+/gu);
+        return Array.isArray(matches) ? matches : [];
+      };
+
+      const appendFocusSegment = (segments, type, text) => {
+        if (!text) {
+          return;
+        }
+
+        const lastSegment = segments[segments.length - 1] || null;
+        if (lastSegment && lastSegment.type === type) {
+          lastSegment.text += text;
+          return;
+        }
+
+        segments.push({type, text});
+      };
+
+      const buildFocusSegments = (redlineRow, diffRow) => {
+        const redlineSegments = Array.isArray(redlineRow?.segments) ? redlineRow.segments : [];
+        const tokenEntries = [];
+        let hasChangedToken = false;
+
+        redlineSegments.forEach((segment) => {
+          const segmentType = String(segment?.type || '');
+          if (!['context', 'added'].includes(segmentType)) {
+            return;
+          }
+
+          const focusType = segmentType === 'added' ? 'changed' : 'context';
+          tokenizeFocusText(segment?.text || '').forEach((token) => {
+            tokenEntries.push({type: focusType, text: token});
+            if (focusType === 'changed' && token.trim() !== '') {
+              hasChangedToken = true;
+            }
+          });
+        });
+
+        const fallbackText = String(diffRow?.afterDisplay ?? '').trim();
+        if (tokenEntries.length === 0) {
+          if (!fallbackText || fallbackText === '—') {
+            return [];
+          }
+
+          return [{type: 'changed', text: fallbackText}];
+        }
+
+        if (!hasChangedToken) {
+          if (!fallbackText || fallbackText === '—') {
+            return [];
+          }
+
+          return [{type: 'changed', text: fallbackText}];
+        }
+
+        const changedIndices = tokenEntries.reduce((indices, token, index) => {
+          if (token.type === 'changed' && token.text.trim() !== '') {
+            indices.push(index);
+          }
+          return indices;
+        }, []);
+
+        if (changedIndices.length === 0) {
+          return [{type: 'changed', text: fallbackText || tokenEntries.map((token) => token.text).join('')}];
+        }
+
+        const windowPadding = 24;
+        const mergeGap = 8;
+        const windows = [];
+
+        changedIndices.forEach((index) => {
+          const nextWindow = {
+            start: Math.max(0, index - windowPadding),
+            end: Math.min(tokenEntries.length - 1, index + windowPadding),
+          };
+
+          const currentWindow = windows[windows.length - 1] || null;
+          if (!currentWindow) {
+            windows.push(nextWindow);
+            return;
+          }
+
+          if (nextWindow.start <= (currentWindow.end + mergeGap)) {
+            currentWindow.end = Math.max(currentWindow.end, nextWindow.end);
+            return;
+          }
+
+          windows.push(nextWindow);
+        });
+
+        const segments = [];
+        windows.forEach((window, index) => {
+          if (index === 0 && window.start > 0) {
+            appendFocusSegment(segments, 'context', '(...) ');
+          } else if (index > 0) {
+            appendFocusSegment(segments, 'context', ' (...) ');
+          }
+
+          for (let tokenIndex = window.start; tokenIndex <= window.end; tokenIndex += 1) {
+            const token = tokenEntries[tokenIndex];
+            appendFocusSegment(segments, token.type, token.text);
+          }
+
+          if (index === windows.length - 1 && window.end < (tokenEntries.length - 1)) {
+            appendFocusSegment(segments, 'context', ' (...)');
+          }
+        });
+
+        return segments;
+      };
+
+      const renderFocusRows = (rows, redline) => {
+        if (!focusRows) {
+          return;
+        }
+
+        const diffRowsList = Array.isArray(rows) ? rows : [];
+        const redlineRowsList = Array.isArray(redline?.rows) ? redline.rows : [];
+        const redlineByPath = new Map(redlineRowsList.map((row) => [String(row.path || ''), row]));
+        const focusItems = diffRowsList
+          .filter((row) => String(row?.kind || '') === 'text')
+          .map((row) => {
+            const path = String(row?.path || '');
+            return {
+              path,
+              segments: buildFocusSegments(redlineByPath.get(path) || null, row),
+            };
+          })
+          .filter((item) => Array.isArray(item.segments) && item.segments.length > 0);
+
+        if (focusItems.length === 0) {
+          focusRows.innerHTML = '<div class="agents-control-diff-empty light">No text-like field changes are available for Focus preview in this request.</div>';
+          return;
+        }
+
+        focusRows.innerHTML = focusItems.map((item, index) => {
+          const segments = item.segments.map((segment) => {
+            const segmentType = String(segment.type || 'context') === 'changed' ? 'changed' : 'context';
+            return `<span class="agents-control-focus-row__segment agents-control-focus-row__segment--${segmentType}">${escapeHtml(String(segment.text || ''))}</span>`;
+          }).join('');
+
+          const separator = index < (focusItems.length - 1)
+            ? `
+              <div class="agents-control-focus-row__separator" aria-hidden="true">
+                <span class="agents-control-focus-row__dot"></span>
+              </div>
+            `
+            : '';
+
+          return `
+            <article class="agents-control-focus-row" data-path="${escapeHtml(item.path)}">
+              <p class="agents-control-focus-row__text">${segments}</p>
+            </article>
+            ${separator}
+          `;
+        }).join('');
+      };
+
       const openDiffModal = async (button) => {
-        if (!diffModal || !diffTitle || !diffMeta || !diffIntro || !diffRows || !redlineRows) {
+        if (!diffModal || !diffTitle || !diffMeta || !diffIntro || !diffRows || !redlineRows || !focusRows) {
           return;
         }
 
@@ -1629,6 +1803,7 @@
         diffIntro.textContent = '';
         diffRows.innerHTML = '';
         redlineRows.innerHTML = '';
+        focusRows.innerHTML = '';
         setDiffTab('agentsControlDiffRows');
         setDiffStatus('Loading diff…', 'loading');
         diffModal.removeAttribute('hidden');
@@ -1670,10 +1845,12 @@
           diffIntro.textContent = diff.message || '';
           renderDiffRows(diff.rows || []);
           renderRedlineRows(diff.redline || null);
+          renderFocusRows(diff.rows || [], diff.redline || null);
           setDiffStatus('', 'info');
         } catch (error) {
           renderDiffRows([]);
           renderRedlineRows(null);
+          renderFocusRows([], null);
           diffIntro.textContent = '';
           setDiffStatus(error instanceof Error ? error.message : 'Unable to load diff.', 'error');
         }
@@ -2375,6 +2552,7 @@
       gap: 16px;
       padding: 20px 20px 12px;
       border-bottom: 1px solid var(--gray-200);
+      background: var(--gray-050);
     }
 
     .agents-control-diff-modal__heading h2 {
@@ -2410,8 +2588,13 @@
     }
 
     .agents-control-diff-modal__intro {
-      margin-top: 12px;
+      margin: 0;
       line-height: 1.45;
+    }
+
+    .agents-control-diff-modal__intro:not(:empty) {
+      padding: 12px 20px 16px;
+      background: var(--gray-050);
     }
 
     .agents-control-diff-modal__pane {
@@ -2419,7 +2602,7 @@
       flex: 1 1 auto;
       flex-direction: column;
       min-height: 0;
-      margin-top: 16px;
+      margin-top: 0;
       overflow: hidden;
       background: var(--white);
     }
@@ -2427,23 +2610,25 @@
     .agents-control-diff-modal__tabs {
       margin: 0;
       border-bottom: 1px solid var(--gray-200);
+      background: var(--gray-050);
     }
 
     .agents-control-diff-modal__tabs .scrollable {
       padding-inline: 0;
     }
 
-    .agents-control-diff-modal__tabs .pane-tabs {
-      border-radius: 0;
-      border-top: 0;
+    .agents-control-diff-modal__tabs [role='tablist'] [role='tab']:not(.sel) {
+      background: var(--gray-050);
     }
 
-    .agents-control-diff-modal__tabs [role='tablist'] [role='tab'].sel {
-      background: var(--white) !important;
-      box-shadow: inset 0 2px 0 var(--custom-text-color, var(--highlight-color));
-      border-top: 1px solid rgba(51, 64, 77, 0.1);
-      border-inline: 1px solid rgba(51, 64, 77, 0.1);
-      margin-bottom: -1px;
+    .agents-control-diff-modal__tabs [role='tablist'] [role='tab'].sel::after {
+      content: '';
+      position: absolute;
+      inset-inline: -1px;
+      bottom: -1px;
+      height: 3px;
+      background: var(--white);
+      pointer-events: none;
     }
 
     .agents-control-diff-modal__pane-body {
@@ -2460,7 +2645,8 @@
     }
 
     .agents-control-diff-rows[hidden],
-    .agents-control-redline-rows[hidden] {
+    .agents-control-redline-rows[hidden],
+    .agents-control-focus-rows[hidden] {
       display: none !important;
     }
 
@@ -2475,6 +2661,58 @@
       display: grid;
       gap: 12px;
       padding: 16px;
+    }
+
+    .agents-control-focus-rows {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 32px 56px;
+    }
+
+    .agents-control-focus-row {
+      width: min(100%, 744px);
+    }
+
+    .agents-control-focus-row__text {
+      margin: 0;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.62;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-control-focus-row__segment {
+      color: #bbc7d5;
+      font-weight: 400;
+    }
+
+    .agents-control-focus-row__segment--changed {
+      color: #596673;
+      font-weight: 700;
+    }
+
+    .agents-control-focus-row__separator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: min(100%, 744px);
+      padding: 24px 0;
+    }
+
+    .agents-control-focus-row__dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #d7e0eb;
+    }
+
+    @media (max-width: 720px) {
+      .agents-control-focus-rows {
+        padding: 32px 20px 40px;
+      }
     }
 
     .agents-control-diff-row {

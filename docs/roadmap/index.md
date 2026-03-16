@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-16
-Current release: `v0.22.2`
+Current release: `v0.22.3`
 
 ## Direction
 
@@ -101,6 +101,15 @@ Release outcome:
 - Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
 
 ## Proposed Path to `1.0.0`
+
+## Done (`v0.22.3`)
+
+- Added a third `Focus` diff tab for governed approval review with muted context, emphasized changed text, and a narrow reading column aimed at proofing flows.
+- Refined the diff modal chrome to feel more native in Craft, including lighter top surfaces, cleaner active-tab behavior, and monospaced Focus typography for word-for-word comparison.
+
+Release outcome:
+
+- Approvers now have a better text-proofing mode for high-attention review, with modal chrome that more clearly separates navigation from changed content.
 
 ## Done (`v0.22.2`)
 
