@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-17
-Current release: `v0.23.0`
+Current release: `v0.24.0`
 
 ## Direction
 
@@ -102,6 +102,17 @@ Release outcome:
 
 ## Proposed Path to `1.0.0`
 
+## Done (`v0.24.0`)
+
+- Implemented `F15` production webhook probe.
+- Added an admin-only `Webhook Probe` card in `Status` that sends a synthetic signed delivery against the live runtime webhook target.
+- Added a dedicated probe ledger with recent run history, payload inspection, triggered-by metadata, and cooldown visibility.
+- Kept the production probe separate from the dev-only `Webhook Test Sink` while reusing the same signing and outbound HTTP transport path.
+
+Release outcome:
+
+- Operators can validate live webhook transport safely in-place, without saving content or temporarily pointing delivery at a local sink.
+
 ## Done (`v0.23.0`)
 
 - Reworked `Accounts` around a Craft-style managed-account registry with a default table view, an alternate card view, and modal-hosted details/actions that keep lifecycle operations coherent in both modes.
@@ -149,16 +160,6 @@ Release outcome:
 Release outcome:
 
 - Approvers can see what changed in a few seconds instead of inferring content changes from raw payloads or metadata.
-
-## Planned (`v0.24.x`) Production Validation and Supportability
-
-- Implement `F15` production webhook probe.
-- Tighten diagnostics and support flows around webhook delivery and runtime verification.
-- Add lightweight operator visibility for recent probe/notification outcomes where useful.
-
-Release outcome:
-
-- Production environments can validate webhook transport safely without content mutation or dev-only tooling.
 
 ## Planned (`v0.25.x`) Contract and Upgrade Stabilization
 

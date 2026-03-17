@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.24.0 (2026-03-17)
+
+- Added a production-safe `Webhook Probe` card in `Status` for synthetic signed deliveries against the live receiver.
+- Added a small webhook probe ledger with recent runs, payload inspection, triggered-by metadata, and cooldown visibility.
+- Reused the shared signing/delivery path and clarified the distinction between the live probe and the dev-only `Webhook Test Sink`.
+
 ## 0.23.0 (2026-03-17)
 
 - Added a Craft-style Accounts registry table with a `Table | Cards` switch, proper table semantics, and a shared details modal for managed-account actions.

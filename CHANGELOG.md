@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.24.0 - 2026-03-17
+
+### Added
+
+- Added a production-safe `Webhook Probe` card in `Status` for synthetic signed deliveries against the live receiver without content mutation or sink repointing.
+- Added a dedicated webhook probe ledger with recent runs, payload inspection, triggered-by metadata, and cooldown-backed operator visibility.
+
+### Changed
+
+- Reused the shared webhook signing and HTTP transport path for both queued business events and direct operator-triggered probe deliveries.
+- Clarified the webhook operator docs and CP copy so the production probe and the dev-only `Webhook Test Sink` are treated as separate tools with different safety boundaries.
+
 ## 0.23.0 - 2026-03-17
 
 ### Added

@@ -11,7 +11,7 @@ Agents is the governed machine-access layer for Craft CMS and Craft Commerce. St
 ## Install
 
 ```bash
-composer require klick/agents:^0.23.0
+composer require klick/agents:^0.24.0
 php craft plugin/install agents
 ```
 
