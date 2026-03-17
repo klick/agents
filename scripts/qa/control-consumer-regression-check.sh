@@ -24,6 +24,16 @@ expect_fixed() {
   fail "$description (missing: $needle in $file)"
 }
 
+expect_absent() {
+  local needle="$1"
+  local file="$2"
+  local description="$3"
+  if grep -Fq "$needle" "$file"; then
+    fail "$description (unexpected: $needle in $file)"
+  fi
+  pass "$description"
+}
+
 API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
 DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
@@ -232,8 +242,20 @@ expect_fixed "agentsControlDiffModal" "$CONTROL_TEMPLATE" "Control CP template r
 expect_fixed "controlDiffUrl" "$CONTROL_TEMPLATE" "Control CP template passes the approval diff endpoint to the client"
 expect_fixed "Approval diff #" "$CONTROL_TEMPLATE" "Control CP template labels the diff modal per approval"
 expect_fixed "id: 'agentsControlDiffTabs'" "$CONTROL_TEMPLATE" "Control CP template renders the diff modal with Craft pane-tabs"
+expect_fixed "label: 'Structured'," "$CONTROL_TEMPLATE" "Control CP template renders the Structured diff tab"
+expect_fixed "label: 'Focus'," "$CONTROL_TEMPLATE" "Control CP template renders the Focus diff tab"
+expect_absent "label: 'Redline'," "$CONTROL_TEMPLATE" "Control CP template no longer renders the Redline diff tab"
+expect_fixed "id=\"agentsControlFocusToolbar\"" "$CONTROL_TEMPLATE" "Control CP template renders a Focus-local before/after toolbar"
+expect_fixed "data-agents-focus-mode=\"after\"" "$CONTROL_TEMPLATE" "Control CP template exposes the Focus After view toggle"
+expect_fixed "data-agents-focus-mode=\"before\"" "$CONTROL_TEMPLATE" "Control CP template exposes the Focus Before view toggle"
+expect_fixed "(…)" "$CONTROL_TEMPLATE" "Control CP template uses an ellipsis marker in Focus truncation gaps"
+expect_absent "(...)" "$CONTROL_TEMPLATE" "Control CP template no longer uses three-dot Focus truncation gaps"
 expect_fixed "agentsControlRedlineRows" "$CONTROL_TEMPLATE" "Control CP template renders the redline diff panel"
 expect_fixed "renderRedlineRows" "$CONTROL_TEMPLATE" "Control CP template renders inline redline rows from the diff payload"
+expect_fixed "{% if change.label == 'Draft notes' %}" "$CONTROL_TEMPLATE" "Control CP template extracts draft notes from review summaries"
+expect_fixed "<strong>Draft notes:</strong> {{ reviewDraftNotes }}" "$CONTROL_TEMPLATE" "Control CP template shows draft notes inline in pending approvals"
+expect_absent "<span>Proposed changes</span>" "$CONTROL_TEMPLATE" "Control CP template no longer renders the Proposed changes toggle in pending approvals"
+expect_absent "<div class=\"agents-control-pending-table__meta\">Ref: {{ approval.actionRef ?: 'n/a' }}</div>" "$CONTROL_TEMPLATE" "Control CP template no longer renders the pending approval action ref line"
 expect_fixed "Existing draft" "$CONTROL_TEMPLATE" "Control CP template surfaces conflicting draft details in approval follow-up views"
 expect_fixed "more conflicting drafts" "$CONTROL_TEMPLATE" "Control CP template summarizes additional conflicting drafts when present"
 expect_fixed "getCpPosture()" "$ADOPTION_SERVICE" "Adoption metrics service uses existing security posture API"

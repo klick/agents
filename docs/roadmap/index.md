@@ -1,7 +1,7 @@
 # Roadmap
 
-Last updated: 2026-03-16
-Current release: `v0.22.3`
+Last updated: 2026-03-17
+Current release: `v0.23.0`
 
 ## Direction
 
@@ -102,6 +102,16 @@ Release outcome:
 
 ## Proposed Path to `1.0.0`
 
+## Done (`v0.23.0`)
+
+- Reworked `Accounts` around a Craft-style managed-account registry with a default table view, an alternate card view, and modal-hosted details/actions that keep lifecycle operations coherent in both modes.
+- Simplified governed diff review down to `Structured` and `Focus`, added an `After / Before` toggle inside Focus mode, and removed stale warning/toggle copy that no longer helped approval decisions.
+- Published the public `Agents vs Element API` positioning page and refreshed CP/docs wording around the new Accounts registry model.
+
+Release outcome:
+
+- Operators can compare and manage machine identities more like a real registry, and approval review now concentrates on the two modes that actually support proofing work.
+
 ## Done (`v0.22.3`)
 
 - Added a third `Focus` diff tab for governed approval review with muted context, emphasized changed text, and a narrow reading column aimed at proofing flows.
@@ -140,7 +150,7 @@ Release outcome:
 
 - Approvers can see what changed in a few seconds instead of inferring content changes from raw payloads or metadata.
 
-## Planned (`v0.23.x`) Production Validation and Supportability
+## Planned (`v0.24.x`) Production Validation and Supportability
 
 - Implement `F15` production webhook probe.
 - Tighten diagnostics and support flows around webhook delivery and runtime verification.
@@ -150,7 +160,7 @@ Release outcome:
 
 - Production environments can validate webhook transport safely without content mutation or dev-only tooling.
 
-## Planned (`v0.24.x`) Contract and Upgrade Stabilization
+## Planned (`v0.25.x`) Contract and Upgrade Stabilization
 
 - Implement `F21` governed write target sets and CP test helpers.
 - Add optional named target boundaries for write-capable accounts so `v1` governed entry writes can be limited to approved explicit entries and sites.
@@ -173,7 +183,7 @@ Release outcome:
 
 - The product becomes materially safer for external adopters to build against, including teams running multi-site or multi-store Craft installs.
 
-## Planned (`v0.25.x`) Workflow Starter Kits and Companion Workers
+## Planned (`v0.26.x`) Workflow Starter Kits and Companion Workers
 
 - Implement `F19`.
 - Pair strong account templates with companion guides, starter workers, and bootstrap artifacts.
@@ -184,7 +194,7 @@ Release outcome:
 
 - Operators and developers can move from account creation to a working scheduled workflow with far less reinvention.
 
-## Planned (`v0.26.x`) External Adapter Foundation
+## Planned (`v0.27.x`) External Adapter Foundation
 
 - Resume `F12` external plugin data access once the adapter/provider direction is reconfirmed.
 - Ship provider registry + registration event.
@@ -195,7 +205,7 @@ Release outcome:
 
 - Agents proves it can extend safely beyond core Craft/Commerce data without bloating the core plugin.
 
-## Planned (`v0.27.x`) Extensibility Hardening
+## Planned (`v0.28.x`) Extensibility Hardening
 
 - Implement the useful parts of `F13`.
 - Add registry-backed scope extension and field-profile governance where needed.
@@ -205,17 +215,21 @@ Release outcome:
 
 - Agents gains controlled extensibility without collapsing into arbitrary scope sprawl.
 
-## Planned (`v0.28.x`) Agent-Assisted Operations
+## Planned (`v0.29.x`) Provider-Backed Orchestration and Agent-Assisted Operations
 
-- Begin `F18`, phase 1 only.
-- Start with read-only insight and recommendation support.
+- Implement `F22` provider-backed orchestration foundation for optional in-product LLM support.
+- Start with env-only site-level provider configuration as the convenient in-product path.
+- Support external assistants through the existing governed API and discovery surfaces, documented and supported in `v1` without introducing a heavy first-class external profile system.
+- Support recommendation-first jobs such as scope recommendation, summaries, and report drafting before broader in-product assistant behavior.
+- Keep per-account BYOM out of the main path unless real demand proves the extra secret-management complexity is justified.
+- Begin `F18`, phase 1 only, on top of that foundation.
 - Do not introduce broad autonomous operator control.
 
 Release outcome:
 
-- Agents can assist operators inside the product without weakening the trust boundary.
+- Agents can host constrained provider-backed reasoning for discovery, recommendations, and draft outputs inside the product without weakening the existing trust boundary.
 
-## Planned (`v0.29.x`) Pre-1.0 Consolidation
+## Planned (`v0.30.x`) Pre-1.0 Consolidation
 
 - Focus on bug fixing, upgrade safety, onboarding, and support polish.
 - Avoid major IA churn.

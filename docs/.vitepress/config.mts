@@ -36,7 +36,8 @@ export default defineConfig({
           { text: 'Get Started', link: '/get-started/' },
           { text: 'Installation & Setup', link: '/get-started/installation-setup' },
           { text: 'Configuration', link: '/get-started/configuration' },
-          { text: 'First Worker', link: '/get-started/first-worker' }
+          { text: 'First Worker', link: '/get-started/first-worker' },
+          { text: 'Agents vs Element API', link: '/get-started/agents-vs-element-api' }
         ]
       },
       {

@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.23.0 - 2026-03-17
+
+### Added
+
+- Added a Craft-style Accounts registry table view with a persisted `Table | Cards` switch, table semantics, and a shared details modal for managed-account operations.
+- Added a Focus-local `After / Before` toggle for approval diffs so reviewers can switch between the requested text and the current canonical text without leaving Focus mode.
+- Added a public `Agents vs Element API` guide to position Agents as a governed machine-access layer instead of just another JSON endpoint surface.
+
+### Changed
+
+- Reworked the Accounts overview around a flatter native-Craft table rhythm with a max-width shell, redistributed columns, quieter value stacks, and modal-hosted rotate/token reveal behavior that matches the card view.
+- Simplified governed approval review by keeping `Structured` and `Focus`, removing the old `Redline` tab, moving draft notes inline in the waiting table, and dropping non-actionable canonical-fallback warnings.
+- Refined Focus-mode proofing polish with a local toolbar, normal-weight changed text, and ellipsis glyph gap markers for cleaner marketing and review screenshots.
+
 ## 0.22.3 - 2026-03-16
 
 ### Added

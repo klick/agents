@@ -93,7 +93,9 @@ Current responsibilities:
 
 - lifecycle summary strip (`Managed accounts`, `Paused accounts`, `Need attention`)
 - one-time token reveal after create/rotate as an in-card overlay on the affected account
-- card-based managed-account overview
+- Craft-style managed-account registry with:
+  - default table view for comparison and operations
+  - alternate card view for lower-count overview and onboarding
 - create and edit flows for:
   - display name and handle
   - short operator-facing description shown on the account card

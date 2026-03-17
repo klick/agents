@@ -24,6 +24,17 @@ expect_fixed() {
   fail "$description (missing: $needle in $file)"
 }
 
+expect_pattern() {
+  local pattern="$1"
+  local file="$2"
+  local description="$3"
+  if grep -Eq "$pattern" "$file"; then
+    pass "$description"
+    return
+  fi
+  fail "$description (missing pattern: $pattern in $file)"
+}
+
 CREDENTIAL_SERVICE="$PLUGIN_ROOT/src/services/CredentialService.php"
 SECURITY_SERVICE="$PLUGIN_ROOT/src/services/SecurityPolicyService.php"
 API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
@@ -123,6 +134,18 @@ expect_fixed "agent-entry-translation-drafts" "$CP_TEMPLATE" "Credentials CP tem
 expect_fixed "Entry Translation Drafts" "$CP_TEMPLATE" "Credentials CP template names the translation-drafts account template"
 expect_fixed "agents-capability-group-title" "$CP_TEMPLATE" "Credentials CP template groups scopes by type"
 expect_fixed "scope in ['incidents:read', 'syncstate:read', 'syncstate:write', 'webhooks:dlq:read', 'webhooks:dlq:replay']" "$CP_TEMPLATE" "Credentials CP template force-adds canonical sync-state and webhook DLQ scopes into the picker"
+expect_fixed "id=\"agentsAccountsViewSwitch\"" "$CP_TEMPLATE" "Credentials CP template renders a Craft-style Accounts view switch"
+expect_fixed "data-agent-view-mode=\"table\"" "$CP_TEMPLATE" "Credentials CP template exposes a table view toggle for Accounts"
+expect_fixed "data-agent-view-mode=\"cards\"" "$CP_TEMPLATE" "Credentials CP template exposes a card view toggle for Accounts"
+expect_pattern "<table class=\"data fullwidth( big)? agents-accounts-registry\"" "$CP_TEMPLATE" "Credentials CP template renders a table-style managed-account registry"
+expect_pattern "<th scope=\"col\"[^>]*>Account</th>" "$CP_TEMPLATE" "Credentials CP template renders the Account registry column"
+expect_pattern "<th scope=\"col\"[^>]*>State</th>" "$CP_TEMPLATE" "Credentials CP template renders the State registry column"
+expect_pattern "<th scope=\"col\"[^>]*>Purpose</th>" "$CP_TEMPLATE" "Credentials CP template renders the Purpose registry column"
+expect_pattern "<th scope=\"col\"[^>]*>Owner</th>" "$CP_TEMPLATE" "Credentials CP template renders the Owner registry column"
+expect_pattern "<th scope=\"col\"[^>]*>Access</th>" "$CP_TEMPLATE" "Credentials CP template renders the Access registry column"
+expect_pattern "<th scope=\"col\"[^>]*>Last used</th>" "$CP_TEMPLATE" "Credentials CP template renders the Last used registry column"
+expect_pattern "<th scope=\"col\"[^>]*>Risk</th>" "$CP_TEMPLATE" "Credentials CP template renders the Risk registry column"
+expect_pattern "<th scope=\"col\"[^>]*>Actions</th>" "$CP_TEMPLATE" "Credentials CP template renders the Actions registry column"
 expect_fixed "simulatePulseMode" "$CP_TEMPLATE" "Credentials CP template supports pulse simulation mode query parameter"
 expect_fixed "simulationEnabledIsCount" "$CP_TEMPLATE" "Credentials CP template supports numeric simulatePulse shorthand"
 expect_fixed "simulatePulseAccounts" "$CP_TEMPLATE" "Credentials CP template supports targeted pulse simulation accounts"
@@ -131,6 +154,16 @@ expect_fixed "normalizeSimulationStartOptions" "$CP_TEMPLATE" "Credentials CP te
 expect_fixed "credentialIdsByHandle" "$CP_TEMPLATE" "Credentials CP template can target pulse simulation by account handle"
 expect_fixed "agents-agent-token-overlay" "$CP_TEMPLATE" "Credentials CP template renders the account-scoped token overlay"
 expect_fixed "revealedCredentialOverlayClose" "$CP_TEMPLATE" "Credentials CP template includes a close control for the token overlay"
+expect_fixed "agentsAccountsTableView" "$CP_TEMPLATE" "Credentials CP template renders the Accounts table view container"
+expect_fixed "agentsAccountsCardsView" "$CP_TEMPLATE" "Credentials CP template preserves the Accounts card view container"
+expect_fixed "data-agent-details-panel" "$CP_TEMPLATE" "Credentials CP template marks details panels for shared table/card behavior"
+expect_fixed "data-agent-details-template" "$CP_TEMPLATE" "Credentials CP template stores shared account detail content in hidden templates"
+expect_fixed "agents-account-details-modal-backdrop" "$CP_TEMPLATE" "Credentials CP template renders modal styling hooks for account details"
+expect_fixed "agents-account-details-modal__token-overlay" "$CP_TEMPLATE" "Credentials CP template can render the rotate token overlay inside the details modal"
+expect_fixed "agents-accounts-registry-wrap.is-editing-active tr[data-agent-detail-item][data-agent-view-mode=\"table\"]:not(.is-editing-target)" "$CP_TEMPLATE" "Credentials CP template dims unaffected table rows during inline edit"
+expect_fixed "closeDetailModal({ restoreFocus: false });" "$CP_TEMPLATE" "Credentials CP template closes any open details modal before dispatching shared edit events"
+expect_fixed "Form is shown below." "$CP_TEMPLATE" "Credentials CP template distinguishes table edit mode messaging from inline card edit mode"
+expect_fixed "data-agent-status-dot" "$CP_TEMPLATE" "Credentials CP template exposes shared status indicators for table and cards"
 expect_fixed "agents-agent-card-edit-trigger" "$CP_TEMPLATE" "Credentials CP template renders a cog-style direct edit trigger"
 expect_fixed "test-credential" "$CP_TEMPLATE" "Credentials CP template exposes account validation posting points"
 expect_fixed "Connect Worker" "$CP_TEMPLATE" "Credentials CP template groups bootstrap guidance inside the details pane"

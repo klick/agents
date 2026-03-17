@@ -11,7 +11,7 @@ Agents is the governed machine-access layer for Craft CMS and Craft Commerce. St
 ## Install
 
 ```bash
-composer require klick/agents:^0.22.3
+composer require klick/agents:^0.23.0
 php craft plugin/install agents
 ```
 
@@ -44,6 +44,7 @@ See:
 - [Installation & Setup](/get-started/installation-setup)
 - [Configuration](/get-started/configuration)
 - [First Worker](/get-started/first-worker)
+- [Agents vs Element API](/get-started/agents-vs-element-api)
 - [Workflow Guides](/workflows/)
 - [Agent Bootstrap](/api/agent-bootstrap)
 - [Starter Packs](/api/starter-packs)

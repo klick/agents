@@ -2643,11 +2643,6 @@ class DashboardController extends Controller
         }
 
         if ($draftId <= 0) {
-            $context['guards'][] = [
-                'level' => 'warning',
-                'label' => 'No draft linked',
-                'detail' => 'Approval does not reference a draft ID, so review falls back to canonical entry.',
-            ];
             return $context;
         }
 

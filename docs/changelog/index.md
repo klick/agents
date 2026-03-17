@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.23.0 (2026-03-17)
+
+- Added a Craft-style Accounts registry table with a `Table | Cards` switch, proper table semantics, and a shared details modal for managed-account actions.
+- Added an `After / Before` toggle inside Focus mode and simplified approval review down to `Structured` plus `Focus`.
+- Published a public `Agents vs Element API` page to explain when Agents is a better fit than bespoke Element API endpoints.
+
 ## 0.22.3 (2026-03-16)
 
 - Added a third `Focus` diff tab for governed approval review with muted context and emphasized changed text for proofing-oriented reading.

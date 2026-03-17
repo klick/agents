@@ -4,7 +4,7 @@ Governed machine access for Craft CMS and Craft Commerce.
 
 Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It provides one governed machine-access layer with scoped APIs, managed credentials, diagnostics, and optional approval controls, so production behavior stays predictable, observable, and auditable.
 
-Current plugin version: **0.22.3**
+Current plugin version: **0.23.0**
 
 ## Why Teams Use Agents
 
@@ -85,10 +85,11 @@ See [Execution Model](/security/execution-model) for explicit trust-boundary and
 1. [Installation & Setup](/get-started/installation-setup)
 2. [Configuration](/get-started/configuration)
 3. [First Worker](/get-started/first-worker)
-4. [Workflow Guides](/workflows/)
-5. [Get Started](/get-started/)
-6. [Status, Accounts & Approvals](/cp/)
-7. [API Overview](/api/)
-8. [Agent Bootstrap](/api/agent-bootstrap)
-9. [Starter Packs](/api/starter-packs)
-10. [Security](/security/)
+4. [Agents vs Element API](/get-started/agents-vs-element-api)
+5. [Workflow Guides](/workflows/)
+6. [Get Started](/get-started/)
+7. [Status, Accounts & Approvals](/cp/)
+8. [API Overview](/api/)
+9. [Agent Bootstrap](/api/agent-bootstrap)
+10. [Starter Packs](/api/starter-packs)
+11. [Security](/security/)

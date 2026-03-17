@@ -92,6 +92,12 @@
           {% set reviewMode = approval.reviewMode ?? 'none' %}
           {% set reviewGuards = approval.reviewGuards ?? [] %}
           {% set hasBlockingReviewGuards = approval.reviewHasBlockingGuards ?? false %}
+          {% set reviewDraftNotes = null %}
+          {% for change in approval.reviewChangeSummary ?? [] %}
+            {% if change.label == 'Draft notes' %}
+              {% set reviewDraftNotes = change.value %}
+            {% endif %}
+          {% endfor %}
           <tr class="agents-control-pending-table__row">
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--id">
               <div class="agents-control-pending-table__id-value">{{ approval.id }}</div>
@@ -118,10 +124,10 @@
                         </a>
                       {% endif %}
                     </div>
-                  {% elseif reviewMode == 'canonical' %}
-                    <div class="agents-control-pending-table__meta agents-control-review-mode">Review falls back to canonical entry.</div>
                   {% endif %}
-                  <div class="agents-control-pending-table__meta">Ref: {{ approval.actionRef ?: 'n/a' }}</div>
+                  {% if reviewDraftNotes %}
+                    <div class="agents-control-pending-table__meta"><strong>Draft notes:</strong> {{ reviewDraftNotes }}</div>
+                  {% endif %}
                 </div>
                 {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
                   <div class="agents-control-table__quick-actions">
@@ -141,29 +147,6 @@
                         data-approval-id="{{ approval.id }}"
                       >Diff</button>
                     {% endif %}
-                  </div>
-                {% endif %}
-                {% if approval.reviewChangeSummary|length %}
-                  {% set reviewChangeSummaryPanelId = 'agents-control-review-change-summary-' ~ approval.id %}
-                  <div class="agents-control-change-summary">
-                    <button
-                      class="agents-control-inline-toggle"
-                      type="button"
-                      data-control-inline-toggle
-                      data-target="{{ reviewChangeSummaryPanelId }}"
-                      aria-controls="{{ reviewChangeSummaryPanelId }}"
-                      aria-expanded="false"
-                    >
-                      <span>Proposed changes</span>
-                      <span class="agents-control-inline-chevron" aria-hidden="true"></span>
-                    </button>
-                    <div id="{{ reviewChangeSummaryPanelId }}" class="agents-control-inline-panel" hidden>
-                      <ul>
-                        {% for change in approval.reviewChangeSummary %}
-                          <li><strong>{{ change.label }}:</strong> {{ change.value }}</li>
-                        {% endfor %}
-                      </ul>
-                    </div>
                   </div>
                 {% endif %}
                 {% if reviewGuards|length %}
@@ -1363,10 +1346,6 @@
       label: 'Structured',
       url: '#agentsControlDiffRows',
     },
-    ( 'agentsControlRedlineRows' ): {
-      label: 'Redline',
-      url: '#agentsControlRedlineRows',
-    },
     ( 'agentsControlFocusRows' ): {
       label: 'Focus',
       url: '#agentsControlFocusRows',
@@ -1397,6 +1376,12 @@
         <div class="agents-control-diff-modal__pane-body">
           <div id="agentsControlDiffRows" class="agents-control-diff-rows"></div>
           <div id="agentsControlRedlineRows" class="agents-control-redline-rows" hidden></div>
+          <div id="agentsControlFocusToolbar" class="agents-control-focus-toolbar" hidden>
+            <div class="btngroup" role="group" aria-label="Focus content version">
+              <button class="btn small active" type="button" data-agents-focus-mode="after" aria-pressed="true">After</button>
+              <button class="btn small" type="button" data-agents-focus-mode="before" aria-pressed="false">Before</button>
+            </div>
+          </div>
           <div id="agentsControlFocusRows" class="agents-control-focus-rows" hidden></div>
         </div>
       </div>
@@ -1463,12 +1448,17 @@
       const diffTabTriggers = diffTabs ? Array.from(diffTabs.querySelectorAll('[data-id]')) : [];
       const diffRows = document.getElementById('agentsControlDiffRows');
       const redlineRows = document.getElementById('agentsControlRedlineRows');
+      const focusToolbar = document.getElementById('agentsControlFocusToolbar');
+      const focusModeButtons = focusToolbar ? Array.from(focusToolbar.querySelectorAll('[data-agents-focus-mode]')) : [];
       const focusRows = document.getElementById('agentsControlFocusRows');
       const diffButtons = Array.from(document.querySelectorAll('.js-control-view-diff'));
       const diffUrl = {{ controlDiffUrl|json_encode|raw }};
-      const diffTabIds = new Set(['agentsControlDiffRows', 'agentsControlRedlineRows', 'agentsControlFocusRows']);
+      const diffTabIds = new Set(['agentsControlDiffRows', 'agentsControlFocusRows']);
+      const focusViewModes = new Set(['after', 'before']);
       let diffLastFocusedButton = null;
       let diffActiveTab = 'agentsControlDiffRows';
+      let focusViewMode = 'after';
+      let focusItems = [];
 
       const escapeHtml = (value) => {
         const div = document.createElement('div');
@@ -1491,6 +1481,28 @@
         diffStatus.textContent = message;
         diffStatus.className = `agents-control-diff-modal__status agents-control-diff-modal__status--${tone}`;
         diffStatus.removeAttribute('hidden');
+      };
+
+      const syncFocusModeButtons = () => {
+        focusModeButtons.forEach((button) => {
+          const isActive = button.dataset.agentsFocusMode === focusViewMode;
+          button.classList.toggle('active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      };
+
+      const updateFocusToolbarVisibility = () => {
+        if (!focusToolbar) {
+          return;
+        }
+
+        const shouldShow = diffActiveTab === 'agentsControlFocusRows' && focusItems.length > 0;
+        if (shouldShow) {
+          focusToolbar.removeAttribute('hidden');
+          return;
+        }
+
+        focusToolbar.setAttribute('hidden', 'hidden');
       };
 
       const setDiffTab = (tab) => {
@@ -1525,6 +1537,8 @@
             focusRows.setAttribute('hidden', 'hidden');
           }
         }
+
+        updateFocusToolbarVisibility();
       };
 
       const closeDiffModal = () => {
@@ -1722,9 +1736,9 @@
         const segments = [];
         windows.forEach((window, index) => {
           if (index === 0 && window.start > 0) {
-            appendFocusSegment(segments, 'context', '(...) ');
+            appendFocusSegment(segments, 'context', '(…) ');
           } else if (index > 0) {
-            appendFocusSegment(segments, 'context', ' (...) ');
+            appendFocusSegment(segments, 'context', ' (…) ');
           }
 
           for (let tokenIndex = window.start; tokenIndex <= window.end; tokenIndex += 1) {
@@ -1733,42 +1747,53 @@
           }
 
           if (index === windows.length - 1 && window.end < (tokenEntries.length - 1)) {
-            appendFocusSegment(segments, 'context', ' (...)');
+            appendFocusSegment(segments, 'context', ' (…)');
           }
         });
 
         return segments;
       };
 
-      const renderFocusRows = (rows, redline) => {
+      const buildFocusItems = (rows, redline) => {
+        const diffRowsList = Array.isArray(rows) ? rows : [];
+        const redlineRowsList = Array.isArray(redline?.rows) ? redline.rows : [];
+        const redlineByPath = new Map(redlineRowsList.map((row) => [String(row.path || ''), row]));
+
+        return diffRowsList
+          .filter((row) => String(row?.kind || '') === 'text')
+          .map((row) => {
+            const path = String(row?.path || '');
+            const beforeDisplay = String(row?.beforeDisplay ?? '').trim();
+            const afterDisplay = String(row?.afterDisplay ?? '').trim();
+
+            return {
+              path,
+              beforeDisplay: beforeDisplay || '—',
+              afterDisplay: afterDisplay || '—',
+              afterSegments: buildFocusSegments(redlineByPath.get(path) || null, row),
+            };
+          })
+          .filter((item) => item.beforeDisplay !== '—' || item.afterDisplay !== '—' || item.afterSegments.length > 0);
+      };
+
+      const renderFocusRows = () => {
         if (!focusRows) {
           return;
         }
 
-        const diffRowsList = Array.isArray(rows) ? rows : [];
-        const redlineRowsList = Array.isArray(redline?.rows) ? redline.rows : [];
-        const redlineByPath = new Map(redlineRowsList.map((row) => [String(row.path || ''), row]));
-        const focusItems = diffRowsList
-          .filter((row) => String(row?.kind || '') === 'text')
-          .map((row) => {
-            const path = String(row?.path || '');
-            return {
-              path,
-              segments: buildFocusSegments(redlineByPath.get(path) || null, row),
-            };
-          })
-          .filter((item) => Array.isArray(item.segments) && item.segments.length > 0);
-
         if (focusItems.length === 0) {
           focusRows.innerHTML = '<div class="agents-control-diff-empty light">No text-like field changes are available for Focus preview in this request.</div>';
+          updateFocusToolbarVisibility();
           return;
         }
 
         focusRows.innerHTML = focusItems.map((item, index) => {
-          const segments = item.segments.map((segment) => {
-            const segmentType = String(segment.type || 'context') === 'changed' ? 'changed' : 'context';
-            return `<span class="agents-control-focus-row__segment agents-control-focus-row__segment--${segmentType}">${escapeHtml(String(segment.text || ''))}</span>`;
-          }).join('');
+          const text = focusViewMode === 'before'
+            ? `<p class="agents-control-focus-row__text agents-control-focus-row__text--before">${escapeHtml(item.beforeDisplay)}</p>`
+            : `<p class="agents-control-focus-row__text">${(item.afterSegments.length > 0 ? item.afterSegments : [{type: 'changed', text: item.afterDisplay}]).map((segment) => {
+              const segmentType = String(segment.type || 'context') === 'changed' ? 'changed' : 'context';
+              return `<span class="agents-control-focus-row__segment agents-control-focus-row__segment--${segmentType}">${escapeHtml(String(segment.text || ''))}</span>`;
+            }).join('')}</p>`;
 
           const separator = index < (focusItems.length - 1)
             ? `
@@ -1780,12 +1805,35 @@
 
           return `
             <article class="agents-control-focus-row" data-path="${escapeHtml(item.path)}">
-              <p class="agents-control-focus-row__text">${segments}</p>
+              ${text}
             </article>
             ${separator}
           `;
         }).join('');
+
+        updateFocusToolbarVisibility();
       };
+
+      const setFocusViewMode = (mode, rerender = true) => {
+        focusViewMode = focusViewModes.has(mode) ? mode : 'after';
+        syncFocusModeButtons();
+
+        if (rerender) {
+          renderFocusRows();
+        }
+      };
+
+      focusModeButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const nextMode = String(button.dataset.agentsFocusMode || 'after');
+          if (nextMode === focusViewMode) {
+            return;
+          }
+
+          setFocusViewMode(nextMode);
+        });
+      });
 
       const openDiffModal = async (button) => {
         if (!diffModal || !diffTitle || !diffMeta || !diffIntro || !diffRows || !redlineRows || !focusRows) {
@@ -1804,6 +1852,9 @@
         diffRows.innerHTML = '';
         redlineRows.innerHTML = '';
         focusRows.innerHTML = '';
+        focusItems = [];
+        setFocusViewMode('after', false);
+        updateFocusToolbarVisibility();
         setDiffTab('agentsControlDiffRows');
         setDiffStatus('Loading diff…', 'loading');
         diffModal.removeAttribute('hidden');
@@ -1845,12 +1896,14 @@
           diffIntro.textContent = diff.message || '';
           renderDiffRows(diff.rows || []);
           renderRedlineRows(diff.redline || null);
-          renderFocusRows(diff.rows || [], diff.redline || null);
+          focusItems = buildFocusItems(diff.rows || [], diff.redline || null);
+          renderFocusRows();
           setDiffStatus('', 'info');
         } catch (error) {
           renderDiffRows([]);
           renderRedlineRows(null);
-          renderFocusRows([], null);
+          focusItems = [];
+          renderFocusRows();
           diffIntro.textContent = '';
           setDiffStatus(error instanceof Error ? error.message : 'Unable to load diff.', 'error');
         }
@@ -2609,7 +2662,6 @@
 
     .agents-control-diff-modal__tabs {
       margin: 0;
-      border-bottom: 1px solid var(--gray-200);
       background: var(--gray-050);
     }
 
@@ -2663,11 +2715,28 @@
       padding: 16px;
     }
 
+    .agents-control-focus-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      width: min(100%, 744px);
+      margin: 0 auto;
+      padding: 28px 32px 0;
+      box-sizing: border-box;
+    }
+
+    .agents-control-focus-toolbar[hidden] {
+      display: none !important;
+    }
+
+    .agents-control-focus-toolbar .btn {
+      min-width: 72px;
+    }
+
     .agents-control-focus-rows {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 48px 32px 56px;
+      padding: 20px 32px 56px;
     }
 
     .agents-control-focus-row {
@@ -2684,6 +2753,10 @@
       overflow-wrap: anywhere;
     }
 
+    .agents-control-focus-row__text--before {
+      color: #667482;
+    }
+
     .agents-control-focus-row__segment {
       color: #bbc7d5;
       font-weight: 400;
@@ -2691,7 +2764,7 @@
 
     .agents-control-focus-row__segment--changed {
       color: #596673;
-      font-weight: 700;
+      font-weight: 400;
     }
 
     .agents-control-focus-row__separator {
@@ -2710,8 +2783,12 @@
     }
 
     @media (max-width: 720px) {
+      .agents-control-focus-toolbar {
+        padding: 24px 20px 0;
+      }
+
       .agents-control-focus-rows {
-        padding: 32px 20px 40px;
+        padding: 20px 20px 40px;
       }
     }
 

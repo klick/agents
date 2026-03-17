@@ -3,7 +3,7 @@
 ## 1. Install the plugin
 
 ```bash
-composer require klick/agents:^0.22.3
+composer require klick/agents:^0.23.0
 php craft plugin/install agents
 ```
 
