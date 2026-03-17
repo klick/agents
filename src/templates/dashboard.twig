@@ -3633,6 +3633,7 @@
     .agents-webhook-probe-status-stack {
       display: grid;
       gap: 4px;
+      justify-items: start;
     }
 
     .agents-webhook-probe-event-label {
@@ -4798,7 +4799,7 @@
       };
 
       const hydrateWebhookPayloadDialog = (dialog, trigger) => {
-        if (!dialog || !trigger || dialog.id !== 'webhookTestSinkPayloadDialog') {
+        if (!dialog || !trigger) {
           return;
         }
 
@@ -4808,9 +4809,9 @@
         const source = sourceId ? document.getElementById(sourceId) : null;
         const payload = source ? source.textContent || '{}' : '{}';
 
-        const titleEl = dialog.querySelector('#webhookTestSinkPayloadDialogTitle');
-        const copyEl = dialog.querySelector('#webhookTestSinkPayloadDialogCopy');
-        const bodyEl = dialog.querySelector('#webhookTestSinkPayloadDialogBody');
+        const titleEl = dialog.querySelector('.agents-readiness-detail-dialog-title');
+        const copyEl = dialog.querySelector('.agents-readiness-detail-dialog-copy');
+        const bodyEl = dialog.querySelector('pre');
 
         if (titleEl) {
           titleEl.textContent = title;
