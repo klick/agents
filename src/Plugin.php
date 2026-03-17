@@ -32,6 +32,7 @@ use Klick\Agents\services\SecurityPolicyService;
 use Klick\Agents\services\StarterPackService;
 use Klick\Agents\services\TemplateCatalogService;
 use Klick\Agents\services\WebhookService;
+use Klick\Agents\services\WebhookProbeService;
 use Klick\Agents\services\WebhookTestSinkService;
 
 class Plugin extends BasePlugin
@@ -63,6 +64,7 @@ class Plugin extends BasePlugin
             'readinessService' => ReadinessService::class,
             'securityPolicyService' => SecurityPolicyService::class,
             'webhookService' => WebhookService::class,
+            'webhookProbeService' => WebhookProbeService::class,
             'credentialService' => CredentialService::class,
             'controlPlaneService' => ControlPlaneService::class,
             'consumerLagService' => ConsumerLagService::class,
@@ -268,6 +270,13 @@ JS, View::POS_END);
     {
         /** @var WebhookTestSinkService $service */
         $service = $this->get('webhookTestSinkService');
+        return $service;
+    }
+
+    public function getWebhookProbeService(): WebhookProbeService
+    {
+        /** @var WebhookProbeService $service */
+        $service = $this->get('webhookProbeService');
         return $service;
     }
 

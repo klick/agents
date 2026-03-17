@@ -16,6 +16,44 @@ Optional tuning:
 
 These can also be referenced from `Agents -> Settings -> Webhooks` using env-aware fields. Prefer storing real values in the environment and keeping the Settings fields as `$PLUGIN_AGENTS_*` references.
 
+## Production probe
+
+For a production-safe transport check against the live receiver:
+
+- use `Agents -> Status -> Webhook Probe`
+- the action is admin-only
+- it sends a synthetic signed webhook through the current runtime webhook URL and secret
+- it does not require saving real content
+- it does not require temporarily pointing delivery at a dev sink
+- a five-minute cooldown prevents repeated probe spam against the receiver
+
+Probe payloads are explicitly marked so receivers can ignore or separately log them:
+
+- `eventKind: probe`
+- `isProbe: true`
+- `probeId`
+- `triggeredAt`
+- `triggeredBy`
+
+The Status card keeps a small probe ledger with:
+
+- recent attempts
+- delivered vs failed counts
+- last success / failure timestamps
+- payload inspection for the synthetic event
+
+What a successful probe proves:
+
+- the current webhook URL is reachable
+- the signing secret matches
+- outbound HTTP delivery succeeds right now
+
+What it does not prove:
+
+- a real content change hook fired
+- the normal queued business-event path was exercised
+- downstream business logic reacts to real events the same way
+
 ## Dev-only test sink
 
 For local/dev inspection without a real external receiver:

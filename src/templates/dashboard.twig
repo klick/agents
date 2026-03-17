@@ -172,6 +172,55 @@
         {% set webhookTestSinkState = 'empty' %}
         {% set webhookTestSinkStateTone = 'muted' %}
       {% endif %}
+      {% set webhookProbeConfig = webhookProbeSnapshot.config|default({}) %}
+      {% set webhookProbeSummary = webhookProbeSnapshot.summary|default({}) %}
+      {% set webhookProbeRuns = webhookProbeSnapshot.runs|default([]) %}
+      {% set webhookProbeEnabled = webhookProbeConfig.enabled ?? false %}
+      {% set webhookProbeStorageReady = webhookProbeConfig.storageReady ?? false %}
+      {% set webhookProbeUrlConfigured = webhookProbeConfig.urlConfigured ?? false %}
+      {% set webhookProbeSecretConfigured = webhookProbeConfig.secretConfigured ?? false %}
+      {% set webhookProbeTargetUrl = webhookProbeConfig.targetUrl ?? '' %}
+      {% set webhookProbeCooldownActive = webhookProbeConfig.cooldownActive ?? false %}
+      {% set webhookProbeCooldownRemainingSeconds = webhookProbeConfig.cooldownRemainingSeconds ?? 0 %}
+      {% set webhookProbeNextAllowedAt = webhookProbeConfig.nextAllowedAt ?? null %}
+      {% set webhookProbeTotal = webhookProbeSummary.total|default(0) %}
+      {% set webhookProbeDelivered = webhookProbeSummary.delivered|default(0) %}
+      {% set webhookProbeFailed = webhookProbeSummary.failed|default(0) %}
+      {% set webhookProbeLastAttemptAt = webhookProbeSummary.lastAttemptAt ?? null %}
+      {% set webhookProbeLastDeliveredAt = webhookProbeSummary.lastDeliveredAt ?? null %}
+      {% set webhookProbeLastFailedAt = webhookProbeSummary.lastFailedAt ?? null %}
+      {% set webhookProbeCanSend = webhookProbeEnabled and webhookProbeStorageReady and not webhookProbeCooldownActive %}
+      {% set webhookProbeState = 'configured' %}
+      {% set webhookProbeStateTone = 'good' %}
+      {% set webhookProbeStatusLine = 'Status: Ready to validate the live webhook target with a synthetic signed probe.' %}
+      {% set webhookProbeNotice = 'The probe uses the currently configured webhook URL and secret. It does not repoint delivery to a local sink and it does not mutate content.' %}
+      {% set webhookProbeEmptyCopy = 'No production webhook probes have been sent yet.' %}
+      {% if not webhookProbeStorageReady %}
+        {% set webhookProbeState = 'storage' %}
+        {% set webhookProbeStateTone = 'warn' %}
+        {% set webhookProbeStatusLine = 'Status: Probe storage is unavailable until plugin migrations are applied.' %}
+        {% set webhookProbeNotice = 'Run plugin migrations before using the production webhook probe.' %}
+      {% elseif not webhookProbeUrlConfigured or not webhookProbeSecretConfigured %}
+        {% set webhookProbeState = 'misconfigured' %}
+        {% set webhookProbeStateTone = 'warn' %}
+        {% set webhookProbeStatusLine = 'Status: Configure both the runtime webhook URL and signing secret before sending a production probe.' %}
+        {% set webhookProbeNotice = 'The probe only runs against the live runtime webhook transport and requires both settings to be present.' %}
+      {% elseif webhookProbeCooldownActive %}
+        {% set webhookProbeState = 'cooldown' %}
+        {% set webhookProbeStateTone = 'muted' %}
+        {% set webhookProbeStatusLine = 'Status: Cooldown active for ' ~ webhookProbeCooldownRemainingSeconds ~ ' second' ~ (webhookProbeCooldownRemainingSeconds == 1 ? '' : 's') ~ '.' %}
+        {% set webhookProbeNotice = 'Cooldown prevents repeated probe spam against the live receiver. Next allowed attempt: ' ~ (webhookProbeNextAllowedAt ? webhookProbeNextAllowedAt|date('Y-m-d, H:i:s', timezone='UTC') ~ ' UTC' : 'soon') ~ '.' %}
+      {% elseif webhookProbeTotal == 0 %}
+        {% set webhookProbeState = 'empty' %}
+        {% set webhookProbeStateTone = 'muted' %}
+        {% set webhookProbeStatusLine = 'Status: No production probe has been recorded yet.' %}
+      {% elseif webhookProbeLastFailedAt and (not webhookProbeLastDeliveredAt or webhookProbeLastFailedAt >= webhookProbeLastDeliveredAt) %}
+        {% set webhookProbeState = 'failed' %}
+        {% set webhookProbeStateTone = 'warn' %}
+        {% set webhookProbeStatusLine = 'Status: Last production probe failed at ' ~ webhookProbeLastFailedAt|date('Y-m-d, H:i:s', timezone='UTC') ~ ' UTC.' %}
+      {% elseif webhookProbeLastDeliveredAt %}
+        {% set webhookProbeStatusLine = 'Status: Last production probe succeeded at ' ~ webhookProbeLastDeliveredAt|date('Y-m-d, H:i:s', timezone='UTC') ~ ' UTC.' %}
+      {% endif %}
       {% set notificationConfig = notificationSnapshot.config|default({}) %}
       {% set notificationSummary = notificationSnapshot.summary|default({}) %}
       {% set notificationMonitor = notificationSnapshot.systemMonitor|default({ status: 'unknown', payload: {} }) %}
@@ -1666,6 +1715,7 @@
 
               <div class="agents-readiness-detail-actions">
                 <a href="{{ readinessUrl ~ '#webhookReliabilitySection' }}" class="agents-readiness-detail-action">Review webhook posture</a>
+                <a href="{{ readinessUrl ~ '#webhookProbeSection' }}" class="agents-readiness-detail-action">Open webhook probe</a>
                 <a href="{{ securityUrl ~ '#webhookDlqDetailSection' }}" class="agents-readiness-detail-action">Open dead-letter queue</a>
                 {% if webhookTestSinkVisible %}
                   <a href="{{ readinessUrl ~ '#webhookTestSinkSection' }}" class="agents-readiness-detail-action">Open test sink</a>
@@ -2086,6 +2136,170 @@
         </section>
       {% endif %}
 
+      <section class="agents-webhook-probe-card border rounded p-0" id="webhookProbeSection">
+        <div class="agents-webhook-probe-top agents-status-strip-card__top">
+          <div class="agents-webhook-probe-header">
+            <h2 class="agents-webhook-probe-title">Webhook Probe</h2>
+          </div>
+          <div class="agents-webhook-probe-actions">
+            <form method="post" accept-charset="UTF-8" class="agents-webhook-probe-action-form">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/send-webhook-probe') }}
+              {{ redirectInput('agents/status#webhookProbeSection') }}
+              <button class="btn small agents-webhook-probe-button" type="submit"{% if not webhookProbeCanSend %} disabled{% endif %}>Send production probe</button>
+            </form>
+          </div>
+        </div>
+        <div class="agents-status-strip-card__subcopy">
+          <p class="agents-webhook-probe-copy">Synthetic signed delivery against the live webhook receiver for transport validation without content mutation or sink repointing.</p>
+          <p class="agents-webhook-probe-status agents-webhook-probe-status--{{ webhookProbeStateTone }}">{{ webhookProbeStatusLine }}</p>
+        </div>
+
+        <details class="agents-readiness-ready-details"{% if webhookProbeState in ['storage', 'misconfigured', 'failed'] %} open{% endif %}>
+          <summary><span>Details</span></summary>
+          <div class="agents-status-collapsible-body">
+            <div class="agents-webhook-probe-summary">
+              <div class="agents-webhook-probe-summary-item">
+                <span class="agents-webhook-probe-summary-label">Delivered / failed</span>
+                <strong class="agents-webhook-probe-summary-value">{{ webhookProbeDelivered }} / {{ webhookProbeFailed }}</strong>
+              </div>
+              <div class="agents-webhook-probe-summary-item">
+                <span class="agents-webhook-probe-summary-label">Last attempt</span>
+                <strong class="agents-webhook-probe-summary-value">{{ webhookProbeLastAttemptAt ? webhookProbeLastAttemptAt|date('Y-m-d, H:i:s', timezone='UTC') ~ ' UTC' : 'Never' }}</strong>
+              </div>
+              <div class="agents-webhook-probe-summary-item">
+                <span class="agents-webhook-probe-summary-label">Target URL</span>
+                <strong class="agents-webhook-probe-summary-value">{{ webhookProbeTargetUrl ? 'Configured' : 'Missing' }}</strong>
+              </div>
+              <div class="agents-webhook-probe-summary-item">
+                <span class="agents-webhook-probe-summary-label">Cooldown</span>
+                <strong class="agents-webhook-probe-summary-value">{{ webhookProbeCooldownActive ? webhookProbeCooldownRemainingSeconds ~ 's remaining' : 'Ready' }}</strong>
+              </div>
+            </div>
+
+            <div class="agents-webhook-probe-row">
+              <span class="agents-webhook-probe-row-label">Target URL:</span>
+              <span class="agents-webhook-probe-row-copy">{% if webhookProbeTargetUrl %}<code class="agents-webhook-probe-url">{{ webhookProbeTargetUrl }}</code>{% else %}Not configured{% endif %}</span>
+            </div>
+            <div class="agents-webhook-probe-row">
+              <span class="agents-webhook-probe-row-label">Last success:</span>
+              <span class="agents-webhook-probe-row-copy">{{ webhookProbeLastDeliveredAt ? webhookProbeLastDeliveredAt|date('Y-m-d, H:i:s', timezone='UTC') ~ ' UTC' : 'None yet' }}</span>
+            </div>
+            <div class="agents-webhook-probe-row">
+              <span class="agents-webhook-probe-row-label">Last failure:</span>
+              <span class="agents-webhook-probe-row-copy">{{ webhookProbeLastFailedAt ? webhookProbeLastFailedAt|date('Y-m-d, H:i:s', timezone='UTC') ~ ' UTC' : 'None recorded' }}</span>
+            </div>
+
+            {% if webhookProbeNotice %}
+              <div class="agents-webhook-probe-row agents-webhook-probe-row--notice agents-webhook-probe-row--notice-{{ webhookProbeStateTone }}">
+                <p class="agents-webhook-probe-notice-copy">{{ webhookProbeNotice }}</p>
+              </div>
+            {% endif %}
+
+            <div class="agents-webhook-probe-log">
+              <div class="agents-webhook-probe-log-head">
+                <h3 class="agents-webhook-probe-log-title">Recent probe runs</h3>
+              </div>
+
+              {% if webhookProbeRuns|length %}
+                <div class="agents-webhook-probe-table-wrap">
+                  <table class="agents-webhook-probe-table">
+                    <colgroup>
+                      <col class="agents-webhook-probe-col agents-webhook-probe-col--probe">
+                      <col class="agents-webhook-probe-col agents-webhook-probe-col--actor">
+                      <col class="agents-webhook-probe-col agents-webhook-probe-col--status">
+                      <col class="agents-webhook-probe-col agents-webhook-probe-col--attempted">
+                      <col class="agents-webhook-probe-col agents-webhook-probe-col--payload">
+                    </colgroup>
+                    <thead>
+                    <tr>
+                      <th>Probe</th>
+                      <th>Triggered by</th>
+                      <th>Status</th>
+                      <th>Attempted</th>
+                      <th>Payload</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in webhookProbeRuns %}
+                      {% set probeStatusTone = row.status == 'delivered' ? 'agents-status-chip--good' : 'agents-status-chip--bad' %}
+                      <tr>
+                        <td>
+                          <div class="agents-webhook-probe-event-stack">
+                            <strong class="agents-webhook-probe-event-label">{{ row.probeId }}</strong>
+                            <span class="agents-webhook-probe-event-copy">{{ row.eventId }}</span>
+                          </div>
+                        </td>
+                        <td>{{ row.triggeredByLabel ?: 'Unknown admin' }}</td>
+                        <td>
+                          <div class="agents-webhook-probe-status-stack">
+                            <span class="agents-status-chip {{ probeStatusTone }}">{{ row.status }}</span>
+                            <span class="agents-webhook-probe-status-copy">
+                              {% if row.httpStatusCode %}
+                                HTTP {{ row.httpStatusCode }}{{ row.httpReason ? ' (' ~ row.httpReason ~ ')' : '' }}
+                              {% elseif row.errorMessage %}
+                                {{ row.errorMessage }}
+                              {% else %}
+                                n/a
+                              {% endif %}
+                            </span>
+                          </div>
+                        </td>
+                        <td>{{ row.dateCreated ? row.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
+                        <td>
+                          <button
+                            type="button"
+                            class="agents-webhook-probe-payload-trigger"
+                            data-agents-detail-open="webhookProbePayloadDialog"
+                            data-agents-payload-source="webhookProbePayload-{{ row.id }}"
+                            data-agents-payload-title="Webhook Probe Payload"
+                            data-agents-payload-copy="{{ row.probeId ~ ' · ' ~ (row.triggeredByLabel ?: 'Unknown admin') ~ ' · ' ~ (row.dateCreated ? row.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a') }}"
+                            aria-haspopup="dialog"
+                            aria-controls="webhookProbePayloadDialog"
+                          >› VIEW</button>
+                          <script type="application/json" id="webhookProbePayload-{{ row.id }}">{{ row.payloadJson }}</script>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <div class="agents-webhook-probe-empty">
+                  <p class="agents-webhook-probe-empty-copy">{{ webhookProbeEmptyCopy }}</p>
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="agents-webhook-probe-footer">
+              <ul class="agents-link-list agents-webhook-probe-notes">
+                <li>The production probe uses the live runtime webhook URL and signing secret.</li>
+                <li>Probe payloads are explicitly marked with <code>eventKind=probe</code>, <code>isProbe=true</code>, and a stable <code>probeId</code>.</li>
+                <li>A successful probe validates signed outbound HTTP delivery. It does not prove real content hooks or the normal business queue path fired.</li>
+                <li>Cooldown limits repeated probe traffic against the receiver.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--payload" id="webhookProbePayloadDialog" data-agents-detail-dialog aria-labelledby="webhookProbePayloadDialogTitle">
+        <div class="agents-readiness-detail-dialog-shell">
+          <div class="agents-readiness-detail-dialog-head">
+            <div class="agents-readiness-detail-dialog-heading">
+              <h2 class="agents-readiness-detail-dialog-title" id="webhookProbePayloadDialogTitle">Webhook Probe Payload</h2>
+              <p class="agents-readiness-detail-dialog-copy" id="webhookProbePayloadDialogCopy">Captured production probe payload.</p>
+            </div>
+            <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close webhook probe payload detail">Close</button>
+          </div>
+          <div class="agents-readiness-detail-dialog-body">
+            <div class="agents-webhook-probe-payload">
+              <pre class="border rounded p-3" id="webhookProbePayloadDialogBody">{}</pre>
+            </div>
+          </div>
+        </div>
+      </dialog>
+
       {% if webhookTestSinkVisible %}
         <section class="agents-webhook-test-sink-card border rounded p-0" id="webhookTestSinkSection">
           <div class="agents-webhook-test-sink-top agents-status-strip-card__top">
@@ -2417,6 +2631,11 @@
 
     #operatorNotificationsSection {
       order: 20;
+    }
+
+    #webhookProbeSection,
+    #webhookProbePayloadDialog {
+      order: 25;
     }
 
     #webhookTestSinkSection,
@@ -3170,6 +3389,319 @@
       padding: 12px;
     }
 
+    .agents-webhook-probe-card {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #ffffff;
+      color: #596673;
+    }
+
+    .agents-webhook-probe-top {
+      display: grid;
+      gap: 6px 12px;
+    }
+
+    .agents-webhook-probe-header {
+      min-width: 0;
+    }
+
+    .agents-webhook-probe-title {
+      margin: 0;
+      color: #596673;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-webhook-probe-copy {
+      margin: 6px 0 0;
+      color: #596673;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-probe-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 0;
+      grid-column: 2;
+    }
+
+    .agents-webhook-probe-action-form {
+      margin: 0;
+    }
+
+    .agents-webhook-probe-button.btn.small {
+      text-decoration: none;
+    }
+
+    .agents-webhook-probe-button.btn.small:hover,
+    .agents-webhook-probe-button.btn.small:focus-visible {
+      text-decoration: none;
+    }
+
+    .agents-webhook-probe-status {
+      margin: 0;
+      color: #000000;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-probe-status--good {
+      color: #000000;
+    }
+
+    .agents-webhook-probe-status--muted {
+      color: #596673;
+    }
+
+    .agents-webhook-probe-status--warn {
+      color: #c58a1b;
+    }
+
+    .agents-webhook-probe-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      padding: 1px 0 0 1px;
+      border-bottom: 1px solid #bbc7d5;
+      background: #f8fafc;
+    }
+
+    .agents-webhook-probe-summary-item {
+      min-width: 0;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: -1px 0 0 -1px;
+      border: 1px solid #bbc7d5;
+      background: transparent;
+      color: #596673;
+      text-align: left;
+    }
+
+    .agents-webhook-probe-summary-item:nth-child(-n + 4) {
+      border-top: 0;
+    }
+
+    .agents-webhook-probe-summary-item:nth-child(4n + 1) {
+      border-left: 0;
+    }
+
+    .agents-webhook-probe-summary-item:nth-child(4n) {
+      border-right: 0;
+    }
+
+    .agents-webhook-probe-summary-label {
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.35;
+    }
+
+    .agents-webhook-probe-summary-value {
+      color: #273340;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .agents-webhook-probe-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid #bbc7d5;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-probe-row--notice {
+      align-items: flex-start;
+    }
+
+    .agents-webhook-probe-row--notice-muted {
+      background: rgba(109, 119, 130, 0.06);
+    }
+
+    .agents-webhook-probe-row--notice-warn {
+      background: rgba(197, 138, 27, 0.08);
+    }
+
+    .agents-webhook-probe-row-label {
+      min-width: 110px;
+      color: #596673;
+      font-weight: 600;
+      flex: 0 0 auto;
+    }
+
+    .agents-webhook-probe-row-copy,
+    .agents-webhook-probe-notice-copy {
+      color: #596673;
+    }
+
+    .agents-webhook-probe-url {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .agents-webhook-probe-log {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .agents-webhook-probe-log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .agents-webhook-probe-log-title {
+      margin: 0;
+      color: #273340;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .agents-webhook-probe-table-wrap {
+      overflow-x: auto;
+    }
+
+    .agents-webhook-probe-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      min-width: 760px;
+    }
+
+    .agents-webhook-probe-table th {
+      padding: 0 12px 10px;
+      border-bottom: 1px solid #bbc7d5;
+      color: #596673;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+      text-transform: uppercase;
+      text-align: left;
+    }
+
+    .agents-webhook-probe-table td {
+      padding: 12px;
+      border-bottom: 1px solid #dbe2ea;
+      vertical-align: top;
+      color: #273340;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-probe-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .agents-webhook-probe-col--probe {
+      width: 29%;
+    }
+
+    .agents-webhook-probe-col--actor {
+      width: 17%;
+    }
+
+    .agents-webhook-probe-col--status {
+      width: 25%;
+    }
+
+    .agents-webhook-probe-col--attempted {
+      width: 19%;
+    }
+
+    .agents-webhook-probe-col--payload {
+      width: 10%;
+    }
+
+    .agents-webhook-probe-event-stack,
+    .agents-webhook-probe-status-stack {
+      display: grid;
+      gap: 4px;
+    }
+
+    .agents-webhook-probe-event-label {
+      color: #273340;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-webhook-probe-event-copy,
+    .agents-webhook-probe-status-copy {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-webhook-probe-payload-trigger {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: #1c6fdc;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+    }
+
+    .agents-webhook-probe-payload-trigger:hover,
+    .agents-webhook-probe-payload-trigger:focus-visible {
+      color: #1452a2;
+      text-decoration: underline;
+    }
+
+    .agents-webhook-probe-payload-trigger:focus-visible {
+      outline: 2px solid #1c6fdc;
+      outline-offset: 2px;
+    }
+
+    .agents-webhook-probe-empty {
+      padding: 0 12px 12px;
+    }
+
+    .agents-webhook-probe-empty-copy {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-webhook-probe-footer {
+      padding: 0 12px 12px;
+    }
+
+    .agents-webhook-probe-notes {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .agents-webhook-probe-payload {
+      max-height: 60vh;
+      overflow: auto;
+    }
+
     .agents-webhook-test-sink-card {
       width: 100%;
       max-width: 1400px;
@@ -3755,7 +4287,18 @@
       min-height: 0;
     }
 
+    .agents-readiness-detail-dialog--payload .agents-webhook-probe-payload {
+      margin-top: 0;
+      min-height: 0;
+    }
+
     .agents-readiness-detail-dialog--payload #webhookTestSinkPayloadDialogBody {
+      margin: 0;
+      max-width: 100%;
+      overflow: auto;
+    }
+
+    .agents-readiness-detail-dialog--payload #webhookProbePayloadDialogBody {
       margin: 0;
       max-width: 100%;
       overflow: auto;
@@ -3963,6 +4506,16 @@
         justify-content: flex-start;
       }
 
+      .agents-webhook-probe-top {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-webhook-probe-actions {
+        grid-row: auto;
+        grid-column: 1;
+        justify-content: flex-start;
+      }
+
       .agents-operator-notifications-top {
         grid-template-columns: 1fr;
       }
@@ -3974,6 +4527,10 @@
       }
 
       .agents-operator-notifications-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .agents-webhook-probe-summary {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
@@ -3989,7 +4546,24 @@
         border-right: 0;
       }
 
+      .agents-webhook-probe-summary-item:nth-child(-n + 2) {
+        border-top: 0;
+      }
+
+      .agents-webhook-probe-summary-item:nth-child(2n + 1) {
+        border-left: 0;
+      }
+
+      .agents-webhook-probe-summary-item:nth-child(2n) {
+        border-right: 0;
+      }
+
       .agents-webhook-test-sink-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .agents-webhook-probe-row {
         flex-direction: column;
         align-items: flex-start;
       }
@@ -4003,6 +4577,10 @@
       }
 
       .agents-operator-notifications-table {
+        min-width: 860px;
+      }
+
+      .agents-webhook-probe-table {
         min-width: 860px;
       }
 
@@ -4123,6 +4701,14 @@
         width: 100%;
       }
 
+      .agents-webhook-probe-top {
+        padding: 20px 12px;
+      }
+
+      .agents-webhook-probe-actions {
+        width: 100%;
+      }
+
       .agents-operator-notifications-top {
         padding: 20px 12px;
       }
@@ -4132,6 +4718,10 @@
       }
 
       .agents-operator-notifications-summary {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-webhook-probe-summary {
         grid-template-columns: 1fr;
       }
 
@@ -4151,6 +4741,22 @@
         border-bottom: 0;
       }
 
+      .agents-webhook-probe-summary-item {
+        width: 100%;
+        border-top: 1px solid var(--agents-readiness-border);
+        border-bottom: 1px solid var(--agents-readiness-border);
+        border-left: 0;
+        border-right: 0;
+      }
+
+      .agents-webhook-probe-summary-item:first-child {
+        border-top: none;
+      }
+
+      .agents-webhook-probe-summary-item:last-child {
+        border-bottom: 0;
+      }
+
       .agents-operator-notifications-summary::after {
         content: "";
         position: absolute;
@@ -4164,6 +4770,10 @@
       }
 
       .agents-operator-notifications-table {
+        min-width: 720px;
+      }
+
+      .agents-webhook-probe-table {
         min-width: 720px;
       }
     }

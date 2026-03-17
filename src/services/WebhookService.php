@@ -21,6 +21,7 @@ class WebhookService extends Component
     private const VARIANT_CLASS = 'craft\\commerce\\elements\\Variant';
     private const DEFAULT_TIMEOUT_SECONDS = 5;
     private const DEFAULT_MAX_ATTEMPTS = 3;
+    private const DEFAULT_USER_AGENT = 'klick-agents-webhook/0.23.0';
 
     private ?array $webhookConfig = null;
 
@@ -133,6 +134,59 @@ class WebhookService extends Component
     public function getCredentialSubscriptionStatePreview(string $resourceType, string $action): array
     {
         return $this->resolveCredentialSubscriptionState($resourceType, $action);
+    }
+
+    public function deliverPayloadNow(array $payload, array $config = []): array
+    {
+        $url = trim((string)($config['url'] ?? ''));
+        if ($url === '') {
+            throw new \InvalidArgumentException('Webhook URL is required.');
+        }
+
+        $secret = trim((string)($config['secret'] ?? ''));
+        if ($secret === '') {
+            throw new \InvalidArgumentException('Webhook secret is required.');
+        }
+
+        $timeoutSeconds = (int)($config['timeoutSeconds'] ?? self::DEFAULT_TIMEOUT_SECONDS);
+        if ($timeoutSeconds <= 0) {
+            $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS;
+        }
+
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!is_string($body)) {
+            throw new \RuntimeException('Unable to encode webhook payload.');
+        }
+
+        $timestamp = (string)time();
+        $signature = hash_hmac('sha256', $timestamp . '.' . $body, $secret);
+        $eventId = trim((string)($payload['id'] ?? ''));
+
+        $client = Craft::createGuzzleClient([
+            'timeout' => max(1, $timeoutSeconds),
+            'connect_timeout' => max(1, min($timeoutSeconds, 5)),
+            'http_errors' => false,
+        ]);
+
+        $response = $client->post($url, [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'User-Agent' => self::DEFAULT_USER_AGENT,
+                'X-Agents-Webhook-Id' => $eventId,
+                'X-Agents-Webhook-Timestamp' => $timestamp,
+                'X-Agents-Webhook-Signature' => 'sha256=' . $signature,
+            ],
+            'body' => $body,
+        ]);
+
+        $statusCode = (int)$response->getStatusCode();
+        $reasonPhrase = trim((string)$response->getReasonPhrase());
+
+        return [
+            'ok' => $statusCode >= 200 && $statusCode < 300,
+            'statusCode' => $statusCode,
+            'reasonPhrase' => $reasonPhrase,
+        ];
     }
 
     public function recordDeadLetter(array $payload, int $attempts, string $lastError): void

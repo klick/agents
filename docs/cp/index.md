@@ -38,6 +38,7 @@ The section root `admin/agents` opens `Accounts`.
   - `Details +` disclosure with merged proof panels for the same six domains
   - in-card `Action Mapping` table that renders only problematic signals
   - `Diagnostics Bundle` download
+  - production `Webhook Probe` card for synthetic signed delivery against the live receiver
   - separate dead-letter queue replay section for operational recovery
   - dev-only `Webhook Test Sink` section when local sink capture is enabled
   - `Operator Notifications` card when notifications are enabled, with:
@@ -53,6 +54,7 @@ This page is driven from runtime services, not hardcoded status:
 - sync-state lag summary
 - observability metrics snapshot
 - security posture
+- webhook probe ledger
 - webhook dead-letter events
 
 ## Approvals
@@ -75,11 +77,11 @@ Notable current behavior:
 - governed entry-draft approvals expose separate `Review` and `Diff` actions so content inspection is not overloaded onto the generic review flow
 - `Diff` opens a changed-only review modal with:
   - `Structured` field-aware before/after rows
-  - `Redline` text-focused review with surrounding unchanged context where the field type is suitable
+  - `Focus` text-proofing review with `After / Before` switching for canonical-vs-requested reading
 - high-risk dual-approval rows show two explicit approval buttons so operators can see progress toward the second approval at a glance
 - decision buttons stack vertically at a consistent width for clearer review actions
 - review UI includes action labels, rule/risk context, assurance mode, SLA metadata, and review guards
-- when a saved draft is linked, the diff surface targets that exact draft; otherwise it falls back to requested-versus-canonical comparison and says so explicitly
+- when a saved draft is linked, the diff surface targets that exact draft; otherwise it falls back quietly to requested-versus-canonical comparison
 - approved draft-entry flows bind to the exact saved draft created by execution so `Review` and `Apply Draft` target a stable draft identity
 - governed draft execution is blocked when the canonical entry already has another saved draft and the follow-up surfaces the conflicting draft ids and draft links for operator cleanup
 - rules can be edited and deleted inline from the embedded rules table

@@ -91,6 +91,33 @@ class DashboardController extends Controller
         } catch (Throwable $e) {
             Craft::warning('Unable to load webhook test sink snapshot for CP: ' . $e->getMessage(), __METHOD__);
         }
+        $webhookProbeSnapshot = [
+            'config' => [
+                'urlConfigured' => false,
+                'secretConfigured' => false,
+                'enabled' => false,
+                'targetUrl' => '',
+                'storageReady' => false,
+                'cooldownSeconds' => 300,
+                'cooldownActive' => false,
+                'cooldownRemainingSeconds' => 0,
+                'nextAllowedAt' => null,
+            ],
+            'summary' => [
+                'total' => 0,
+                'delivered' => 0,
+                'failed' => 0,
+                'lastAttemptAt' => null,
+                'lastDeliveredAt' => null,
+                'lastFailedAt' => null,
+            ],
+            'runs' => [],
+        ];
+        try {
+            $webhookProbeSnapshot = $plugin->getWebhookProbeService()->getCpSnapshot(10);
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load webhook probe snapshot for CP: ' . $e->getMessage(), __METHOD__);
+        }
         $notificationSnapshot = [
             'config' => [
                 'enabled' => false,
@@ -149,6 +176,7 @@ class DashboardController extends Controller
             'observabilitySnapshotJson' => $this->prettyPrintJson($observabilitySnapshot),
             'webhookDeadLetters' => $webhookDeadLetters,
             'webhookTestSinkSnapshot' => $webhookTestSinkSnapshot,
+            'webhookProbeSnapshot' => $webhookProbeSnapshot,
             'notificationSnapshot' => $notificationSnapshot,
             'securityPosture' => $securityPosture,
         ]);
@@ -828,6 +856,29 @@ class DashboardController extends Controller
         }
 
         return $this->redirectToPostedUrl(null, 'agents/status');
+    }
+
+    public function actionSendWebhookProbe(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin();
+
+        try {
+            $result = Plugin::getInstance()->getWebhookProbeService()->sendProductionProbe($this->resolveCurrentCpUser());
+            $run = is_array($result['run'] ?? null) ? (array)$result['run'] : [];
+            $eventId = trim((string)($result['eventId'] ?? ''));
+
+            $this->setSuccessFlash(sprintf(
+                'Sent production webhook probe `%s` and received HTTP %d%s.',
+                $eventId,
+                (int)($run['httpStatusCode'] ?? 0),
+                trim((string)($run['httpReason'] ?? '')) !== '' ? ' (' . trim((string)($run['httpReason'] ?? '')) . ')' : ''
+            ));
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to send production webhook probe: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/status#webhookProbeSection');
     }
 
     public function actionRunNotificationsCheck(): Response

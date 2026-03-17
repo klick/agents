@@ -27,34 +27,15 @@ class DeliverWebhookJob extends BaseJob implements RetryableJobInterface
             throw new InvalidConfigException('Webhook secret is required.');
         }
 
-        $body = json_encode($this->payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        if (!is_string($body)) {
-            throw new \RuntimeException('Unable to encode webhook payload.');
-        }
-
-        $timestamp = (string)time();
-        $signature = hash_hmac('sha256', $timestamp . '.' . $body, $this->secret);
-
-        $client = Craft::createGuzzleClient([
-            'timeout' => max(1, $this->timeoutSeconds),
-            'connect_timeout' => max(1, min($this->timeoutSeconds, 5)),
-            'http_errors' => false,
+        $result = Plugin::getInstance()->getWebhookService()->deliverPayloadNow($this->payload, [
+            'url' => $this->url,
+            'secret' => $this->secret,
+            'timeoutSeconds' => $this->timeoutSeconds,
         ]);
 
-        $response = $client->post($this->url, [
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'User-Agent' => 'klick-agents-webhook/0.1.2',
-                'X-Agents-Webhook-Id' => (string)($this->payload['id'] ?? $this->eventId),
-                'X-Agents-Webhook-Timestamp' => $timestamp,
-                'X-Agents-Webhook-Signature' => 'sha256=' . $signature,
-            ],
-            'body' => $body,
-        ]);
-
-        $statusCode = (int)$response->getStatusCode();
-        if ($statusCode < 200 || $statusCode >= 300) {
-            $reason = trim((string)$response->getReasonPhrase());
+        $statusCode = (int)($result['statusCode'] ?? 0);
+        if (!(bool)($result['ok'] ?? false)) {
+            $reason = trim((string)($result['reasonPhrase'] ?? ''));
             throw new \RuntimeException(sprintf(
                 'Webhook delivery failed with HTTP %d%s.',
                 $statusCode,
