@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.25.1 - 2026-03-18
+
+### Fixed
+
+- Restored `?simulatePulse=` activity dots in the Accounts card view so simulated pulses are visible there as well as in the table view.
+
+### Changed
+
+- Simplified Accounts cards by removing visible scope chips and the bottom action row, keeping those details inside the shared details surface instead.
+- Moved the Accounts add/edit form to an on-demand shell triggered from the top-right `+ Add` action, removing the empty add section from below the registry.
+- Expanded the account details `Connect Worker` surface with visible `.env` previews plus inline `Copy .env` / `Download .env` actions.
+- Tightened the card-view `Details` row spacing and bottom alignment for a calmer, more even registry grid.
+
 ## 0.25.0 - 2026-03-18
 
 ### Added

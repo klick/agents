@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-18
-Current release: `v0.25.0`
+Current release: `v0.25.1`
 
 ## Direction
 
@@ -110,6 +110,15 @@ Release outcome:
 - Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
 
 ## Proposed Path to `1.0.0`
+
+## Done (`v0.25.1`)
+
+- Polished the Accounts card view around quieter summaries, visible worker `.env` previews with inline copy/download actions, and the removal of the empty add-form shell below the registry.
+- Fixed card-view pulse simulation so `?simulatePulse=` lights the visible card indicators as expected.
+
+Release outcome:
+
+- The Accounts card view is calmer and more usable for day-to-day operator review, while worker bootstrap details stay one click away inside the details surface.
 
 ## Done (`v0.25.0`)
 
