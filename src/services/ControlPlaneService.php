@@ -23,6 +23,8 @@ class ControlPlaneService extends Component
     private const APPROVAL_STATUS_EXPIRED = 'expired';
     private const APPROVAL_ASSURANCE_METADATA_KEY = '_agentsApproval';
     private const APPROVAL_DRAFT_EXECUTION_METADATA_KEY = '_agentsDraftExecution';
+    private const APPROVAL_REQUESTER_METADATA_KEY = '_agentsRequester';
+    private const APPROVAL_TARGET_SET_METADATA_KEY = '_agentsTargetSets';
     private const APPROVAL_ASSURANCE_SINGLE = 'single_approval';
     private const APPROVAL_ASSURANCE_DUAL = 'dual_control';
     private const APPROVAL_ASSURANCE_DEGRADED = 'single_operator_degraded';
@@ -412,6 +414,7 @@ class ControlPlaneService extends Component
         $requestedBy = $this->resolveActorId($actor);
         $payload = $this->normalizeArray($input['payload'] ?? []);
         $metadata = $this->normalizeArray($input['metadata'] ?? []);
+        $metadata = $this->applyApprovalTargetSetConstraints($actionType, $payload, $metadata, $actor, $requestedBy);
         $policy = $this->resolvePolicyForAction($actionType);
         $slaPolicy = $this->resolveApprovalSlaPolicy($policy);
         $now = gmdate('Y-m-d H:i:s');
@@ -845,6 +848,7 @@ class ControlPlaneService extends Component
         }
 
         $approvalEntityId = null;
+        $approvalMetadata = [];
         $requiresApproval = (bool)($policy['requiresApproval'] ?? true) || $forceHumanApproval;
         if ($status === self::EXECUTION_STATUS_PENDING && $requiresApproval) {
             $approval = $approvalId > 0 ? $this->findApprovalById($approvalId) : null;
@@ -857,6 +861,7 @@ class ControlPlaneService extends Component
             } else {
                 $approvalEntityId = (int)($approval['id'] ?? 0);
                 $approvalStatus = strtolower(trim((string)($approval['status'] ?? '')));
+                $approvalMetadata = $this->decodeJsonArray((string)($approval['metadata'] ?? '[]'));
                 if ($approvalStatus !== self::APPROVAL_STATUS_APPROVED) {
                     $status = self::EXECUTION_STATUS_BLOCKED;
                     if ($approvalStatus === self::APPROVAL_STATUS_EXPIRED) {
@@ -870,6 +875,15 @@ class ControlPlaneService extends Component
                     $errorMessage = 'Linked approval action type mismatch.';
                     $resultPayload['message'] = $errorMessage;
                 }
+            }
+        }
+
+        if ($status === self::EXECUTION_STATUS_PENDING) {
+            $targetSetGuard = $this->evaluateExecutionTargetSetConstraints($actionType, $payload, $actor, $approvalMetadata);
+            if ($targetSetGuard['blocked']) {
+                $status = self::EXECUTION_STATUS_BLOCKED;
+                $errorMessage = (string)$targetSetGuard['message'];
+                $resultPayload = (array)$targetSetGuard['resultPayload'];
             }
         }
 
@@ -1945,6 +1959,183 @@ class ControlPlaneService extends Component
         }
 
         return 'system';
+    }
+
+    private function applyApprovalTargetSetConstraints(
+        string $actionType,
+        array $payload,
+        array $metadata,
+        array $actor,
+        string $requestedBy
+    ): array {
+        $managedCredentialId = isset($actor['managedCredentialId']) ? (int)$actor['managedCredentialId'] : 0;
+        if ($managedCredentialId <= 0) {
+            return $metadata;
+        }
+
+        $metadata[self::APPROVAL_REQUESTER_METADATA_KEY] = [
+            'managedCredentialId' => $managedCredentialId,
+            'credentialHandle' => $requestedBy,
+        ];
+
+        if ($actionType !== self::ACTION_ENTRY_UPDATE_DRAFT) {
+            return $metadata;
+        }
+
+        $bounds = Plugin::getInstance()->getTargetSetService()->resolveCredentialActionBounds($managedCredentialId, $actionType);
+        if (!(bool)($bounds['hasAssignments'] ?? false)) {
+            return $metadata;
+        }
+
+        $matchingTargetSets = (array)($bounds['matchingTargetSets'] ?? []);
+        if (empty($matchingTargetSets)) {
+            throw new \InvalidArgumentException('This account is bound to target sets that do not allow governed entry draft updates.');
+        }
+
+        $entryId = isset($payload['entryId']) ? (int)$payload['entryId'] : 0;
+        if ($entryId <= 0) {
+            throw new \InvalidArgumentException('payload.entryId is required for target-set-constrained governed draft updates.');
+        }
+
+        $siteId = isset($payload['siteId']) ? (int)$payload['siteId'] : 0;
+        if ($siteId <= 0) {
+            throw new \InvalidArgumentException('payload.siteId is required when this account is constrained by target sets.');
+        }
+
+        $allowedEntryIds = (array)($bounds['allowedEntryIds'] ?? []);
+        $allowedSiteIds = (array)($bounds['allowedSiteIds'] ?? []);
+        if (!in_array($entryId, $allowedEntryIds, true) || !in_array($siteId, $allowedSiteIds, true)) {
+            throw new \InvalidArgumentException($this->buildTargetSetViolationMessage($entryId, $siteId, $matchingTargetSets));
+        }
+
+        $metadata[self::APPROVAL_TARGET_SET_METADATA_KEY] = $this->buildApprovalTargetSetMetadata($matchingTargetSets);
+
+        return $metadata;
+    }
+
+    private function evaluateExecutionTargetSetConstraints(
+        string $actionType,
+        array $payload,
+        array $actor,
+        array $approvalMetadata
+    ): array {
+        $managedCredentialId = 0;
+        $requesterMetadata = $this->normalizeArray($approvalMetadata[self::APPROVAL_REQUESTER_METADATA_KEY] ?? []);
+        if (isset($requesterMetadata['managedCredentialId'])) {
+            $managedCredentialId = (int)$requesterMetadata['managedCredentialId'];
+        }
+        if ($managedCredentialId <= 0 && isset($actor['managedCredentialId'])) {
+            $managedCredentialId = (int)$actor['managedCredentialId'];
+        }
+
+        if ($managedCredentialId <= 0 || $actionType !== self::ACTION_ENTRY_UPDATE_DRAFT) {
+            return [
+                'blocked' => false,
+                'message' => null,
+                'resultPayload' => [],
+            ];
+        }
+
+        $bounds = Plugin::getInstance()->getTargetSetService()->resolveCredentialActionBounds($managedCredentialId, $actionType);
+        if (!(bool)($bounds['hasAssignments'] ?? false)) {
+            return [
+                'blocked' => false,
+                'message' => null,
+                'resultPayload' => [],
+            ];
+        }
+
+        $matchingTargetSets = (array)($bounds['matchingTargetSets'] ?? []);
+        if (empty($matchingTargetSets)) {
+            $message = 'Target set violation: account is not assigned a target set that allows this governed draft update.';
+            return [
+                'blocked' => true,
+                'message' => $message,
+                'resultPayload' => [
+                    'executionMode' => 'entry_draft_update',
+                    'message' => $message,
+                    'targetSetIds' => [],
+                    'targetSetHandles' => [],
+                    'targetSetNames' => [],
+                ],
+            ];
+        }
+
+        $entryId = isset($payload['entryId']) ? (int)$payload['entryId'] : 0;
+        $siteId = isset($payload['siteId']) ? (int)$payload['siteId'] : 0;
+        $allowedEntryIds = (array)($bounds['allowedEntryIds'] ?? []);
+        $allowedSiteIds = (array)($bounds['allowedSiteIds'] ?? []);
+        if ($entryId <= 0 || $siteId <= 0 || !in_array($entryId, $allowedEntryIds, true) || !in_array($siteId, $allowedSiteIds, true)) {
+            $message = 'Target set violation: account is not allowed to update this entry/site.';
+            $targetSetMetadata = $this->buildApprovalTargetSetMetadata($matchingTargetSets);
+
+            return [
+                'blocked' => true,
+                'message' => $message,
+                'resultPayload' => [
+                    'executionMode' => 'entry_draft_update',
+                    'message' => $message,
+                    'entryId' => $entryId > 0 ? $entryId : null,
+                    'siteId' => $siteId > 0 ? $siteId : null,
+                    'allowedEntryIds' => $allowedEntryIds,
+                    'allowedSiteIds' => $allowedSiteIds,
+                    'targetSetIds' => (array)($targetSetMetadata['targetSetIds'] ?? []),
+                    'targetSetHandles' => (array)($targetSetMetadata['targetSetHandles'] ?? []),
+                    'targetSetNames' => (array)($targetSetMetadata['targetSetNames'] ?? []),
+                ],
+            ];
+        }
+
+        return [
+            'blocked' => false,
+            'message' => null,
+            'resultPayload' => [],
+        ];
+    }
+
+    private function buildApprovalTargetSetMetadata(array $targetSets): array
+    {
+        $targetSetIds = [];
+        $targetSetHandles = [];
+        $targetSetNames = [];
+        foreach ($targetSets as $targetSet) {
+            if (!is_array($targetSet)) {
+                continue;
+            }
+
+            $targetSetId = (int)($targetSet['id'] ?? 0);
+            $targetSetHandle = trim((string)($targetSet['handle'] ?? ''));
+            $targetSetName = trim((string)($targetSet['name'] ?? ''));
+
+            if ($targetSetId > 0 && !in_array($targetSetId, $targetSetIds, true)) {
+                $targetSetIds[] = $targetSetId;
+            }
+            if ($targetSetHandle !== '' && !in_array($targetSetHandle, $targetSetHandles, true)) {
+                $targetSetHandles[] = $targetSetHandle;
+            }
+            if ($targetSetName !== '' && !in_array($targetSetName, $targetSetNames, true)) {
+                $targetSetNames[] = $targetSetName;
+            }
+        }
+
+        return [
+            'targetSetIds' => $targetSetIds,
+            'targetSetHandles' => $targetSetHandles,
+            'targetSetNames' => $targetSetNames,
+        ];
+    }
+
+    private function buildTargetSetViolationMessage(int $entryId, int $siteId, array $targetSets): string
+    {
+        $metadata = $this->buildApprovalTargetSetMetadata($targetSets);
+        $nameList = (array)($metadata['targetSetNames'] ?? []);
+        $message = 'Target set violation: this account is not allowed to request a draft update for this entry/site.';
+        if (!empty($nameList)) {
+            $message .= sprintf(' Allowed target sets: %s.', implode(', ', $nameList));
+        }
+        $message .= sprintf(' Requested entryId=%d, siteId=%d.', $entryId, $siteId);
+
+        return $message;
     }
 
     private function normalizeHandle(string $value): string

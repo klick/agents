@@ -95,6 +95,10 @@ class CredentialService extends Component
             ->all();
 
         $relatedUsersById = $this->loadReferencedUsers($rows);
+        $targetSetsByCredentialId = Plugin::getInstance()->getTargetSetService()->getTargetSetsByCredentialIds(array_map(
+            static fn(array $row): int => (int)($row['id'] ?? 0),
+            array_filter($rows, 'is_array')
+        ));
         $credentials = [];
         foreach ($rows as $row) {
             $expiry = $this->decodeExpiryPolicy($row);
@@ -124,6 +128,11 @@ class CredentialService extends Component
                 'forceHumanApproval' => $this->decodeForceHumanApproval($row),
                 'approvalRecipientUserIds' => $approvalRecipientUserIds,
                 'approvalRecipients' => $approvalRecipients,
+                'targetSetIds' => array_values(array_map(
+                    static fn(array $targetSet): int => (int)($targetSet['id'] ?? 0),
+                    $targetSetsByCredentialId[(int)($row['id'] ?? 0)] ?? []
+                )),
+                'targetSets' => $targetSetsByCredentialId[(int)($row['id'] ?? 0)] ?? [],
                 'tokenPrefix' => (string)($row['tokenPrefix'] ?? ''),
                 'scopes' => $this->normalizeScopes($this->decodeScopes((string)($row['scopes'] ?? '[]')), $defaultScopes),
                 'webhookSubscriptions' => $this->decodeWebhookSubscriptions($row),
@@ -300,6 +309,7 @@ class CredentialService extends Component
         bool $forceHumanApproval,
         string $rawToken,
         array $scopes,
+        array $targetSetIds,
         array $defaultScopes,
         array $webhookSubscriptions = [],
         array $expiryPolicy = [],
@@ -396,7 +406,17 @@ class CredentialService extends Component
             $insertData['ipAllowlist'] = $this->encodeJson($normalizedIpAllowlist);
         }
 
-        Craft::$app->getDb()->createCommand()->insert(self::TABLE, $insertData)->execute();
+        $db = Craft::$app->getDb();
+        $transaction = $db->beginTransaction();
+        try {
+            $db->createCommand()->insert(self::TABLE, $insertData)->execute();
+            $credentialId = (int)$db->getLastInsertID();
+            Plugin::getInstance()->getTargetSetService()->saveCredentialTargetSetAssignments($credentialId, $targetSetIds);
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
 
         return [
             'token' => $token,
@@ -551,6 +571,7 @@ class CredentialService extends Component
         array $approvalRecipientUserIds,
         bool $forceHumanApproval,
         array $scopes,
+        array $targetSetIds,
         array $defaultScopes,
         array $webhookSubscriptions = [],
         array $expiryPolicy = [],
@@ -621,7 +642,16 @@ class CredentialService extends Component
             $updateData['ipAllowlist'] = $this->encodeJson($normalizedIpAllowlist);
         }
 
-        Craft::$app->getDb()->createCommand()->update(self::TABLE, $updateData, ['id' => $id])->execute();
+        $db = Craft::$app->getDb();
+        $transaction = $db->beginTransaction();
+        try {
+            $db->createCommand()->update(self::TABLE, $updateData, ['id' => $id])->execute();
+            Plugin::getInstance()->getTargetSetService()->saveCredentialTargetSetAssignments($id, $targetSetIds);
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
 
         return $this->getManagedCredentialById($id, $defaultScopes);
     }

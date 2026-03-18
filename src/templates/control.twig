@@ -32,13 +32,18 @@
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
-  <div class="agents-page-header">
-    <h1>{{ controlHeading }}</h1>
-    <p class="agents-page-intro">{{ controlIntroByKey[activeControlTab] ?? 'Operate governed approval and execution workflows.' }}</p>
+  <div class="agents-page-shell">
+    <div class="agents-page-header">
+      <div class="agents-page-header__copy">
+        <h1>{{ controlHeading }}</h1>
+        <p class="agents-page-intro">{{ controlIntroByKey[activeControlTab] ?? 'Operate governed approval and execution workflows.' }}</p>
+      </div>
+    </div>
   </div>
 
   <div class="agents-layout-stack">
   {% if activeControlTab == 'approvals' %}
+  <div class="agents-page-shell">
   <div class="agents-control-content-wrap">
   <div class="agents-control-journey">
   {% set pendingTablePanelId = 'agents-control-pending-table-panel' %}
@@ -54,11 +59,11 @@
             aria-controls="{{ pendingTablePanelId }}"
             aria-expanded="true"
           >
-            <span>Waiting for Decision</span>
+            <span>Pending</span>
             <span class="agents-control-stage-chevron" aria-hidden="true"></span>
           </button>
         {% else %}
-          <span>Waiting for Decision</span>
+          <span>Pending</span>
         {% endif %}
       </h2>
     </div>
@@ -127,6 +132,9 @@
                   {% endif %}
                   {% if reviewDraftNotes %}
                     <div class="agents-control-pending-table__meta"><strong>Draft notes:</strong> {{ reviewDraftNotes }}</div>
+                  {% endif %}
+                  {% if approval.targetSetSummary %}
+                    <div class="agents-control-pending-table__meta"><strong>Target set:</strong> {{ approval.targetSetSummary }}</div>
                   {% endif %}
                 </div>
                 {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
@@ -344,6 +352,9 @@
                   Bound draft{% if boundDraftId %} #{{ boundDraftId }}{% endif %}{% if boundDraftRecordId %} · saved draft #{{ boundDraftRecordId }}{% endif %}
                 </div>
               {% endif %}
+              {% if approval.targetSetSummary %}
+                <div class="light">Target set: {{ approval.targetSetSummary }}</div>
+              {% endif %}
               {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
                 <div class="agents-control-table__quick-actions">
                   {% if approval.targetEntryId %}
@@ -502,6 +513,9 @@
                     {{ targetTitle }}
                   {% endif %}
                 </div>
+                {% if approval.targetSetSummary %}
+                  <div class="light">Target set: {{ approval.targetSetSummary }}</div>
+                {% endif %}
                 {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
                   <div class="agents-control-table__quick-actions">
                     {% if approval.targetEntryId %}
@@ -771,11 +785,13 @@
       </details>
     {% endif %}
   </section>
-
+  </div>
+  </div>
 
   <hr>
 
-
+  <div class="agents-page-shell">
+  <div class="agents-control-content-wrap">
   <section class="border rounded p-3">
     <h2 class="h4">Rules</h2>
 
@@ -955,9 +971,11 @@
   </section>
   </div>
   </div>
+  </div>
 
   <hr class="agents-control-journey-break">
 
+  <div class="agents-page-shell">
   <div class="agents-control-content-wrap">
   <div class="agents-control-journey">
   {% set rulesTablePanelId = 'agents-control-rules-table-panel' %}
@@ -1114,9 +1132,11 @@
   </section>
   </div>
   </div>
+  </div>
   {% endif %}
 
   {% if activeControlTab == 'rules' %}
+  <div class="agents-page-shell">
   <div class="agents-control-content-wrap">
   <section class="border rounded p-3">
     <h2 class="h4">Policy Simulator (Dry Run)</h2>
@@ -1214,11 +1234,13 @@
       </details>
     {% endif %}
   </section>
-
+  </div>
+  </div>
 
   <hr>
 
-
+  <div class="agents-page-shell">
+  <div class="agents-control-content-wrap">
   <section class="border rounded p-3">
     <h2 class="h4">Rules</h2>
 
@@ -1337,6 +1359,7 @@
       <p class="warning">You do not have permission to manage rules.</p>
     {% endif %}
   </section>
+  </div>
   </div>
   {% endif %}
   </div>
@@ -2012,25 +2035,6 @@
   {% css %}
     .agents-control-content-wrap {
       width: 100%;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .agents-page-header {
-      text-align: center;
-      margin: 12px 0 24px;
-    }
-
-    .agents-page-header h1 {
-      margin: 0;
-    }
-
-    .agents-page-header .agents-page-intro {
-      margin: 0 auto;
-    }
-
-    .agents-page-header + .agents-control-content-wrap {
-      margin-top: 40px;
     }
 
     .agents-control-journey {

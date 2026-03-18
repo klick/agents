@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.25.0 - 2026-03-18
+
+### Added
+
+- Added governed write `Target Sets` with reusable allowed entry/site bounds for write-capable managed accounts.
+- Added a dedicated `Agents -> Target Sets` CP page for managing bounded write lanes separately from account identity management.
+
+### Changed
+
+- Enforced target-set boundaries at both approval-request time and execution time for governed `entry.updateDraft` flows.
+- Reworked `Accounts`, `Approvals`, and `Target Sets` around shared CP page shells, cleaner section boundaries, top-right primary actions, and clearer bounded-write summaries.
+- Moved runnable worker setup back to account-scoped `.env` downloads and kept `Target Sets` focused on governance rather than execution helpers.
+
 ## 0.24.0 - 2026-03-17
 
 ### Added

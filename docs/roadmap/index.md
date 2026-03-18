@@ -1,7 +1,7 @@
 # Roadmap
 
-Last updated: 2026-03-17
-Current release: `v0.24.0`
+Last updated: 2026-03-18
+Current release: `v0.25.0`
 
 ## Direction
 
@@ -111,6 +111,17 @@ Release outcome:
 
 ## Proposed Path to `1.0.0`
 
+## Done (`v0.25.0`)
+
+- Implemented `F21` governed write target sets and CP helpers as the main operator-safety slice for bounded client automation.
+- Added reusable `Target Sets` with dedicated CP management, account assignment, approval summaries, and server-side request/execution enforcement.
+- Kept runnable worker setup account-scoped while moving target-set management into its own governance surface.
+- Continued flattening the public CP IA around shared page shells, cleaner section separators, and more consistent table-first registry views.
+
+Release outcome:
+
+- Agencies can automate explicitly approved client surfaces with clearer trust boundaries, while operators configure bounded write lanes without overloading managed accounts.
+
 ## Done (`v0.24.0`)
 
 - Implemented `F15` production webhook probe.
@@ -170,11 +181,11 @@ Release outcome:
 
 - Approvers can see what changed in a few seconds instead of inferring content changes from raw payloads or metadata.
 
-## Planned (`v0.25.x`) Bounded Client Automation and Contract Stabilization
+## Planned (`v0.25.x`) First-Run Onboarding and Contract Stabilization
 
-- Implement `F21` governed write target sets and CP test helpers as the main operator-safety feature for bounded client automation.
-- Add optional named target boundaries for write-capable accounts so `v1` governed entry writes can be limited to approved explicit entries and sites.
-- Add operator-friendly CP helpers for generating prefilled governed write test requests or worker config from those target sets.
+- Implement `F24` fresh-install start screens and first-run onboarding as the main new-install adoption slice.
+- Add a branded welcome/start surface for fresh installs with short orientation copy, doc links, and a strong first-account CTA.
+- Add a lightweight bootstrap follow-up state that guides operators from “first account exists” to “first real machine use”.
 - Freeze the main CP IA.
 - Freeze canonical routes and scope naming.
 - Add full multi-site and multi-store support across the public contract:
@@ -191,7 +202,7 @@ Release outcome:
 
 Release outcome:
 
-- Agencies can automate approved client surfaces with clearer trust boundaries, while the public contract becomes materially safer to build against.
+- New installs reach first value faster, while the public contract becomes materially safer to build against.
 
 ## Planned (`v0.26.x`) Agency Workflow Starter Kits and Companion Workers
 

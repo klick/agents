@@ -251,6 +251,7 @@ class DashboardController extends Controller
         }
 
         $approvalsWithPolicy = $this->decorateControlItemsWithActionLabels($approvalsWithPolicy);
+        $approvalsWithPolicy = $this->decorateControlApprovalsWithTargetSets($approvalsWithPolicy);
         $credentialDisplayByActorId = $this->buildControlCredentialDisplayMap($plugin);
         $approvalsWithPolicy = $this->decorateControlApprovalsWithActorLabels($approvalsWithPolicy, $credentialDisplayByActorId);
         $auditEvents = $this->decorateControlAuditEventsWithActorLabels($auditEvents, $credentialDisplayByActorId);
@@ -465,6 +466,10 @@ class DashboardController extends Controller
             }
         }
 
+        $targetSets = $plugin->isControlCpEnabled()
+            ? $plugin->getTargetSetService()->getTargetSets()
+            : [];
+
         return $this->renderCpTemplate('agents/credentials', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
@@ -479,6 +484,7 @@ class DashboardController extends Controller
             'lifecycleTopRisks' => $lifecycleTopRisks,
             'lifecycleByCredentialId' => $lifecycleByCredentialId,
             'credentialExpirySummary' => $credentialExpirySummary,
+            'targetSets' => $targetSets,
             'defaultScopes' => $defaultScopes,
             'revealedCredential' => $this->pullRevealedCredential(),
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
@@ -490,6 +496,58 @@ class DashboardController extends Controller
             'canRevokeCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_REVOKE),
             'canDeleteCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_DELETE),
         ]);
+    }
+
+    public function actionTargetSets(): Response
+    {
+        $this->requireControlCpEnabled();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+
+        $plugin = Plugin::getInstance();
+        $targetSets = $plugin->getTargetSetService()->getTargetSets();
+        $editingTargetSetId = (int)$this->request->getQueryParam('editTargetSetId', 0);
+        $targetSetFormMode = strtolower(trim((string)$this->request->getQueryParam('targetSetForm', '')));
+        $editingTargetSet = null;
+
+        if ($editingTargetSetId > 0) {
+            foreach ($targetSets as $targetSet) {
+                if ((int)($targetSet['id'] ?? 0) !== $editingTargetSetId) {
+                    continue;
+                }
+
+                $editingTargetSet = $targetSet;
+                $editingTargetSet['allowedEntries'] = $this->loadTargetSetEntryElements($editingTargetSet['allowedEntryIds'] ?? []);
+                break;
+            }
+        }
+
+        $showTargetSetForm = $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE)
+            && ($targetSetFormMode === 'create' || is_array($editingTargetSet));
+
+        return $this->renderCpTemplate('agents/target-sets', [
+            'targetSets' => $targetSets,
+            'availableSites' => $this->buildAvailableSitesForCp(),
+            'editingTargetSet' => $editingTargetSet,
+            'showTargetSetForm' => $showTargetSetForm,
+            'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
+        ]);
+    }
+
+    private function loadTargetSetEntryElements(array $entryIds): array
+    {
+        $elements = [];
+        foreach (array_values(array_unique(array_map('intval', $entryIds))) as $entryId) {
+            if ($entryId <= 0) {
+                continue;
+            }
+
+            $entry = Craft::$app->getElements()->getElementById($entryId, Entry::class, null, ['status' => null]);
+            if ($entry instanceof Entry) {
+                $elements[] = $entry;
+            }
+        }
+
+        return $elements;
     }
 
     public function actionCredentialUsagePulse(): Response
@@ -928,6 +986,7 @@ class DashboardController extends Controller
         $ownerUserId = $this->parseSingleIntegerIdBodyParam('credentialOwnerUserId');
         $token = (string)$this->request->getBodyParam('credentialToken', '');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
+        $targetSetIds = $this->parseIntegerIdsInput($this->request->getBodyParam('credentialTargetSetIds', []));
         $forceHumanApproval = $this->hasWritingCapabilityScope($scopes)
             ? $this->parseBooleanBodyParam('credentialForceHumanApproval', false)
             : false;
@@ -963,6 +1022,7 @@ class DashboardController extends Controller
                 $forceHumanApproval,
                 $token,
                 $scopes,
+                $targetSetIds,
                 $defaultScopes,
                 $webhookSubscriptions,
                 $expiryPolicy,
@@ -1000,6 +1060,7 @@ class DashboardController extends Controller
         $owner = $this->parseStringBodyParam('credentialOwnerLegacyValue', '');
         $ownerUserId = $this->parseSingleIntegerIdBodyParam('credentialOwnerUserId');
         $scopes = $this->parseScopesInput($this->request->getBodyParam('credentialScopes', ''));
+        $targetSetIds = $this->parseIntegerIdsInput($this->request->getBodyParam('credentialTargetSetIds', []));
         $forceHumanApproval = $this->hasWritingCapabilityScope($scopes)
             ? $this->parseBooleanBodyParam('credentialForceHumanApproval', false)
             : false;
@@ -1039,6 +1100,7 @@ class DashboardController extends Controller
                 $approvalRecipientUserIds,
                 $forceHumanApproval,
                 $scopes,
+                $targetSetIds,
                 $defaultScopes,
                 $webhookSubscriptions,
                 $expiryPolicy,
@@ -1055,6 +1117,87 @@ class DashboardController extends Controller
         }
 
         return $this->redirectToPostedUrl(null, 'agents/accounts');
+    }
+
+    public function actionCreateTargetSet(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireControlCpEnabled();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
+
+        try {
+            Plugin::getInstance()->getTargetSetService()->createTargetSet(
+                (string)$this->request->getBodyParam('targetSetHandle', ''),
+                (string)$this->request->getBodyParam('targetSetName', ''),
+                $this->parseStringBodyParam('targetSetDescription', ''),
+                $this->parseIntegerIdsInput($this->request->getBodyParam('targetSetAllowedEntryIds', [])),
+                $this->parseIntegerIdsInput($this->request->getBodyParam('targetSetAllowedSiteIds', []))
+            );
+            $this->setSuccessFlash('Target set created.');
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to create target set: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
+    }
+
+    public function actionUpdateTargetSet(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireControlCpEnabled();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
+
+        $targetSetId = (int)$this->request->getBodyParam('targetSetId', 0);
+        if ($targetSetId <= 0) {
+            $this->setFailFlash('Missing target set ID.');
+            return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
+        }
+
+        try {
+            $targetSet = Plugin::getInstance()->getTargetSetService()->updateTargetSet(
+                $targetSetId,
+                (string)$this->request->getBodyParam('targetSetName', ''),
+                $this->parseStringBodyParam('targetSetDescription', ''),
+                $this->parseIntegerIdsInput($this->request->getBodyParam('targetSetAllowedEntryIds', [])),
+                $this->parseIntegerIdsInput($this->request->getBodyParam('targetSetAllowedSiteIds', []))
+            );
+            if (!is_array($targetSet)) {
+                $this->setFailFlash('Target set not found.');
+                return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
+            }
+
+            $this->setSuccessFlash(sprintf('Target set `%s` updated.', (string)($targetSet['handle'] ?? 'target-set')));
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to update target set: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
+    }
+
+    public function actionDeleteTargetSet(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireControlCpEnabled();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
+
+        $targetSetId = (int)$this->request->getBodyParam('targetSetId', 0);
+        if ($targetSetId <= 0) {
+            $this->setFailFlash('Missing target set ID.');
+            return $this->redirectToPostedUrl(null, 'agents/target-sets');
+        }
+
+        try {
+            $deleted = Plugin::getInstance()->getTargetSetService()->deleteTargetSet($targetSetId);
+            $this->setSuccessFlash($deleted ? 'Target set deleted.' : 'Target set not found.');
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to delete target set: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/target-sets');
     }
 
     public function actionRotateCredential(): Response
@@ -2386,6 +2529,29 @@ class DashboardController extends Controller
             $approval['requestedByLabel'] = $this->formatControlActorLabel((string)($approval['requestedBy'] ?? ''), '', $credentialDisplayByActorId);
             $approval['decidedByLabel'] = $this->formatControlActorLabel((string)($approval['decidedBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
             $approval['secondaryDecisionByLabel'] = $this->formatControlActorLabel((string)($approval['secondaryDecisionBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
+            $decorated[] = $approval;
+        }
+
+        return $decorated;
+    }
+
+    private function decorateControlApprovalsWithTargetSets(array $approvals): array
+    {
+        $decorated = [];
+        foreach ($approvals as $approval) {
+            if (!is_array($approval)) {
+                continue;
+            }
+
+            $metadata = is_array($approval['metadata'] ?? null) ? (array)$approval['metadata'] : [];
+            $targetSetMetadata = is_array($metadata['_agentsTargetSets'] ?? null) ? (array)$metadata['_agentsTargetSets'] : [];
+            $targetSetNames = array_values(array_filter(array_map(static fn($value): string => trim((string)$value), (array)($targetSetMetadata['targetSetNames'] ?? []))));
+            $targetSetHandles = array_values(array_filter(array_map(static fn($value): string => trim((string)$value), (array)($targetSetMetadata['targetSetHandles'] ?? []))));
+            $approval['targetSetNames'] = $targetSetNames;
+            $approval['targetSetHandles'] = $targetSetHandles;
+            $approval['targetSetSummary'] = !empty($targetSetNames)
+                ? implode(', ', $targetSetNames)
+                : (!empty($targetSetHandles) ? implode(', ', $targetSetHandles) : '');
             $decorated[] = $approval;
         }
 
@@ -4545,6 +4711,17 @@ class DashboardController extends Controller
         }
 
         return $userComponent->checkPermission($permission);
+    }
+
+    private function buildAvailableSitesForCp(): array
+    {
+        return array_map(static function($site): array {
+            return [
+                'id' => (int)($site->id ?? 0),
+                'name' => (string)($site->name ?? ''),
+                'handle' => (string)($site->handle ?? ''),
+            ];
+        }, Craft::$app->getSites()->getAllSites());
     }
 
     private function resolveCurrentCpUserEmail(): string

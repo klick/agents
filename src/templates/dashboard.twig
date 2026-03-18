@@ -7,14 +7,15 @@
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
-  <div class="agents-page-header">
-    <div class="agents-page-header__copy">
-      <h1>{{ dashboardHeading }}</h1>
-      <p class="agents-page-intro">{{ tabIntro }}</p>
+  <div class="agents-page-shell">
+    <div class="agents-page-header">
+      <div class="agents-page-header__copy">
+        <h1>{{ dashboardHeading }}</h1>
+        <p class="agents-page-intro">{{ tabIntro }}</p>
+      </div>
     </div>
-  </div>
 
-  <div class="agents-layout-stack">
+    <div class="agents-layout-stack">
     {% if activeDashboardTab == 'readiness' %}
       {% set readinessPreviewState = (craft.app.request.getQueryParam('previewState') ?? '')|lower %}
       {% set readinessTabScore = readinessSummary.readinessScore|default(0) %}
@@ -2610,14 +2611,10 @@
 
     {% endif %}
 
+    </div>
   </div>
 
   {% css %}
-    .agents-page-header__copy {
-      min-width: 0;
-      width: 100%;
-    }
-
     .agents-layout-stack {
       --agents-readiness-border: #bbc7d5;
       display: flex;

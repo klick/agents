@@ -2,6 +2,12 @@
 
 Use these guides when you already understand the basic Agents bootstrap flow and want a bounded real-world worker pattern to build from.
 
+This area is becoming the workflow starter-kit layer for agencies:
+
+- bounded workflow patterns that can be reused across client sites
+- companion guides and workers that make the service repeatable
+- governed automation that stays inside explicit client boundaries
+
 These are workflow examples, not hosted product modules:
 
 - they show how to combine scoped machine access, governed draft writes, and external worker logic

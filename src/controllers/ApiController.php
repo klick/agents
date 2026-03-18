@@ -3741,6 +3741,7 @@ class ApiController extends Controller
         return [
             'actorType' => 'credential',
             'actorId' => (string)($this->authContext['credentialId'] ?? 'unknown'),
+            'managedCredentialId' => isset($this->authContext['managedCredentialId']) ? (int)$this->authContext['managedCredentialId'] : null,
             'requestId' => $this->getRequestId(),
             'ipAddress' => $this->getClientIp(),
         ];

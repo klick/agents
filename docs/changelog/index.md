@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.25.0 (2026-03-18)
+
+- Added governed write `Target Sets` with reusable allowed entry/site bounds for write-capable managed accounts.
+- Added a dedicated `Agents -> Target Sets` CP page and kept runnable worker setup account-scoped instead of target-set-scoped.
+- Enforced target-set boundaries at both approval-request time and execution time, and aligned the public CP shell around cleaner section boundaries and bounded-write summaries.
+
 ## 0.24.0 (2026-03-17)
 
 - Added a production-safe `Webhook Probe` card in `Status` for synthetic signed deliveries against the live receiver.

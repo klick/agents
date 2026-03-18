@@ -60,9 +60,11 @@ The worker supports two modes:
 ## Suggested Flow
 
 1. Create a managed account with the required scopes.
+   Optional but recommended: create one or more `Target Sets` in `Agents -> Target Sets`, then assign them in `Agents -> Accounts` so the account can only request draft updates for explicit entries/sites.
 2. Configure the worker `.env` with:
    - `ENTRY_ID`
    - `SITE_ID`
+   - optional `TARGET_SET_HANDLE` / bounded entry/site hints from the account helper
    - optional title/slug/fields changes
 3. Run the worker in `request` mode.
 4. Approve the request in `Agents -> Approvals`.
@@ -72,6 +74,7 @@ The worker supports two modes:
 ## Important Guardrails
 
 - use the correct `siteId` for the destination site/language
+- for target-set-constrained accounts, `payload.siteId` is required and must stay inside the assigned target-set boundary
 - keep the workflow approval-driven; do not auto-apply the draft
 - if another saved draft already exists, either resolve it editorially or target the exact `DRAFT_ID`
 - treat `Apply Draft` as a separate human decision

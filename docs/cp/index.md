@@ -1,4 +1,4 @@
-# Accounts, Approvals, Status & Settings
+# Accounts, Target Sets, Approvals, Status & Settings
 
 The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure runtime behavior, and, when experimental writes are enabled, review governed approval and rule flows.
 
@@ -11,6 +11,10 @@ The Agents CP subnav currently exposes:
 - **Accounts**
   - URL: `admin/agents/accounts`
   - managed machine-account lifecycle and access controls
+- **Target Sets**
+  - URL: `admin/agents/target-sets`
+  - shown only when governed-write CP is enabled
+  - reusable governed-write boundaries for bounded draft requests
 - **Approvals**
   - URL: `admin/agents/approvals`
   - shown only when governed-write CP is enabled
@@ -63,7 +67,7 @@ This page is driven from runtime services, not hardcoded status:
 
 Current sections:
 
-- `Waiting for Decision`
+- `Pending`
 - `Approved`
 - `Applied / Completed`
 - `Runs That Need Follow-up`
@@ -102,6 +106,7 @@ Current responsibilities:
   - display name and handle
   - short operator-facing description shown on the account card
   - scopes, grouped by purpose with short operator guidance
+  - reusable governed-write target-set assignments for bounded draft-write accounts
   - owner user assignment with legacy-owner fallback
   - pause/resume state
   - force-human-approval mode for write-capable accounts
@@ -111,11 +116,29 @@ Current responsibilities:
   - IP allowlist
 - lifecycle risk details per account
 - usage metadata and optional live activity indicator
+- assignment of existing `Target Sets` to write-capable accounts
+- bounded `entry.updateDraft` helper snippets for assigned target sets in account details
 - dedicated account-template section below the create form
 - suggested account profiles for common core-Craft integration shapes
 - Commerce-only scopes appear only when Craft Commerce is installed
 
 The visible page title is **Accounts**, and the route is `admin/agents/accounts`.
+
+## Target Sets
+
+`Target Sets` appears only when the governed-write CP is enabled.
+
+Current responsibilities:
+
+- reusable governed-write boundary definitions for `entry.updateDraft`
+- explicit allowed entries
+- explicit allowed sites
+- single create/edit flow for target-set maintenance
+- helper snippets for bounded worker `.env` setup and approval-request payloads
+
+`Accounts` assigns existing target sets. `Target Sets` creates and edits them.
+
+The visible page title is **Target Sets**, and the route is `admin/agents/target-sets`.
 
 ## Settings
 
@@ -170,6 +193,7 @@ In addition:
 - `Settings` actions require admin access
 - `Approvals` requires the corresponding approvals permissions
 - `Accounts` actions require the corresponding Agents Access permissions
+- `Target Sets` inherits the same Accounts visibility/manage permissions
 
 ## Deep Links
 
@@ -177,6 +201,7 @@ Primary current routes:
 
 - `admin/agents`
 - `admin/agents/accounts`
+- `admin/agents/target-sets`
 - `admin/agents/approvals`
 - `admin/agents/status`
 - `admin/agents/approvals/rules`

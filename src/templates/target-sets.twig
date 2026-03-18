@@ -1,0 +1,475 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = "Target Sets" %}
+{% set selectedSubnavItem = "targetSets" %}
+{% set targetSets = targetSets ?? [] %}
+{% set availableSites = availableSites ?? [] %}
+{% set editingTargetSet = editingTargetSet ?? null %}
+{% set showTargetSetForm = showTargetSetForm ?? false %}
+{% set canManageCredentials = canManageCredentials ?? false %}
+{% set targetSetsIndexUrl = cpUrl('agents/target-sets') %}
+{% set targetSetCreateUrl = cpUrl('agents/target-sets', { targetSetForm: 'create' }) ~ '#targetSetFormSection' %}
+
+{% block content %}
+  {% include 'agents/_partials/cp-ui' %}
+
+  <div class="agents-page-shell">
+    <div class="agents-page-header">
+      <div class="agents-page-header__copy">
+        <h1>Target Sets</h1>
+        <p class="agents-page-intro">Reusable write boundaries for governed draft accounts. Each target set defines the allowed entries and sites for <code>entry.updateDraft</code> in this version.</p>
+      </div>
+      {% if canManageCredentials %}
+        <div class="agents-page-header__actions">
+          <a class="btn submit" href="{{ targetSetCreateUrl }}">+ Add</a>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="agents-layout-stack agents-target-sets-shell">
+      <div class="agents-target-sets-registry-shell">
+        <div class="tableview tablepane agents-target-sets-registry-wrap">
+          <table class="data fullwidth big agents-target-sets-registry" data-name="Target Sets">
+            <caption class="visually-hidden">Target sets registry</caption>
+            <colgroup>
+              <col class="agents-target-sets-registry__col agents-target-sets-registry__col--name">
+              <col class="agents-target-sets-registry__col agents-target-sets-registry__col--bounds">
+              <col class="agents-target-sets-registry__col agents-target-sets-registry__col--used-by">
+              <col class="agents-target-sets-registry__col agents-target-sets-registry__col--actions">
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" class="agents-target-sets-registry__header-cell">Name</th>
+                <th scope="col" class="agents-target-sets-registry__header-cell">Bounds</th>
+                <th scope="col" class="agents-target-sets-registry__header-cell">Used by</th>
+                <th scope="col" class="agents-target-sets-registry__header-cell">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for targetSet in targetSets %}
+                {% set targetSetEntryLabels = [] %}
+                {% for allowedEntry in targetSet.allowedEntries|default([]) %}
+                  {% set targetSetEntryLabel = allowedEntry.label|default('')|trim %}
+                  {% if targetSetEntryLabel %}
+                    {% set targetSetEntryLabels = targetSetEntryLabels|merge([targetSetEntryLabel]) %}
+                  {% endif %}
+                {% endfor %}
+                {% set targetSetSiteLabels = [] %}
+                {% for allowedSite in targetSet.allowedSites|default([]) %}
+                  {% set targetSetSiteLabel = allowedSite.label|default('')|trim %}
+                  {% if targetSetSiteLabel %}
+                    {% set targetSetSiteLabels = targetSetSiteLabels|merge([targetSetSiteLabel]) %}
+                  {% endif %}
+                {% endfor %}
+                <tr class="agents-target-sets-registry__row">
+                  <th scope="row" class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--name">
+                    <div class="agents-target-sets-registry__title">{{ targetSet.name ?: targetSet.handle }}</div>
+                    <div class="agents-target-sets-registry__handle">{{ targetSet.handle }}</div>
+                    {% if targetSet.description %}
+                      <div class="agents-target-sets-registry__meta">{{ targetSet.description }}</div>
+                    {% endif %}
+                  </th>
+                  <td class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--bounds">
+                    <div class="agents-target-sets-registry__meta"><strong>Entries:</strong> {{ targetSetEntryLabels|length ? targetSetEntryLabels|join(', ') : 'none' }}</div>
+                    <div class="agents-target-sets-registry__meta"><strong>Sites:</strong> {{ targetSetSiteLabels|length ? targetSetSiteLabels|join(', ') : 'none' }}</div>
+                  </td>
+                  <td class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--used-by">
+                    {% set assignedCredentials = targetSet.assignedCredentials|default([]) %}
+                    {% if assignedCredentials|length %}
+                      <div class="agents-target-sets-registry__used-by-list">
+                        {% for assignedCredential in assignedCredentials %}
+                          <span class="agents-target-sets-registry__used-by-name">{{ assignedCredential.displayName ?: assignedCredential.handle }}</span>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <div class="agents-target-sets-registry__used-by">None</div>
+                    {% endif %}
+                  </td>
+                  <td class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--actions">
+                    <div class="buttons">
+                      {% if canManageCredentials %}
+                        <a class="btn small" href="{{ cpUrl('agents/target-sets', { editTargetSetId: targetSet.id }) }}#targetSetFormSection">Edit</a>
+                        <form method="post" accept-charset="UTF-8" onsubmit="return confirm('Delete this target set?');">
+                          {{ csrfInput() }}
+                          {{ actionInput('agents/dashboard/delete-target-set') }}
+                          {{ redirectInput('agents/target-sets') }}
+                          <input type="hidden" name="targetSetId" value="{{ targetSet.id }}">
+                          <button class="btn small" type="submit">Delete</button>
+                        </form>
+                      {% else %}
+                        <span class="light">Read-only</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% else %}
+                <tr class="agents-target-sets-registry__row agents-target-sets-registry__row--empty">
+                  <td colspan="4" class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--empty">
+                    No target sets yet.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% if canManageCredentials and showTargetSetForm %}
+        <section class="border rounded p-3 agents-target-sets-page-section" id="targetSetFormSection">
+        <div class="agents-create-header">
+          <div>
+            <h2 class="h4">{{ editingTargetSet ? 'Edit Target Set' : 'Create a Target Set' }}</h2>
+            <p class="agents-subtle agents-target-sets-page-note">{{ editingTargetSet ? 'Update the reusable allowed-entry and allowed-site boundary for governed draft requests.' : 'Define the allowed entries and sites for governed entry draft requests.' }}</p>
+          </div>
+        </div>
+
+        <div class="agents-target-sets-form-shell">
+          <form method="post" accept-charset="UTF-8" id="targetSetCreateEditForm">
+            {{ csrfInput() }}
+            <input type="hidden" name="action" value="{{ editingTargetSet ? 'agents/dashboard/update-target-set' : 'agents/dashboard/create-target-set' }}">
+            {{ redirectInput('agents/target-sets#targetSetFormSection') }}
+            <input type="hidden" name="targetSetId" value="{{ editingTargetSet.id ?? '' }}">
+
+            {{ forms.textField({
+              label: 'Name',
+              instructions: 'Human-friendly label for operators.',
+              id: 'targetSetName',
+              name: 'targetSetName',
+              placeholder: 'Legal Texts (DE)',
+              value: editingTargetSet.name ?? '',
+            }) }}
+
+            {{ forms.textField({
+              label: 'Handle',
+              instructions: 'Stable identifier for worker config and audit trails.',
+              id: 'targetSetHandle',
+              name: 'targetSetHandle',
+              required: true,
+              placeholder: 'legal-texts-de',
+              value: editingTargetSet.handle ?? '',
+              readonly: editingTargetSet ? true : false,
+            }) }}
+
+            {{ forms.textField({
+              label: 'Short description',
+              instructions: 'Optional operator-facing note.',
+              id: 'targetSetDescription',
+              name: 'targetSetDescription',
+              maxlength: 255,
+              placeholder: 'Privacy policy, cookie policy, and terms pages for DE.',
+              value: editingTargetSet.description ?? '',
+            }) }}
+
+            {{ forms.elementSelectField({
+              label: 'Allowed entries',
+              instructions: 'Select the exact entries this target set may update.',
+              id: 'targetSetAllowedEntryIds',
+              name: 'targetSetAllowedEntryIds',
+              elementType: 'craft\\elements\\Entry',
+              selectionLabel: 'Select entries'|t('app'),
+              elements: editingTargetSet ? (editingTargetSet.allowedEntries ?? []) : [],
+              limit: null,
+              viewMode: 'list-inline',
+              sources: ['*'],
+              criteria: {
+                status: null,
+              },
+            }) }}
+
+            <div class="field">
+              <div class="heading">
+                <label>Allowed sites</label>
+              </div>
+              <div class="instructions">
+                <p>Select the site IDs this target set may touch.</p>
+              </div>
+              <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked" id="targetSetAllowedSiteIdsField">
+                {% for site in availableSites %}
+                  <label class="agents-target-set-checkbox">
+                    <input type="checkbox" name="targetSetAllowedSiteIds[]" value="{{ site.id }}"{% if editingTargetSet and site.id in editingTargetSet.allowedSiteIds|default([]) %} checked{% endif %}>
+                    <span class="agents-target-set-checkbox__copy">
+                      <span class="agents-target-set-checkbox__title">{{ site.name ?: ('Site #' ~ site.id) }}</span>
+                      <span class="agents-target-set-checkbox__meta">{{ site.handle ?: ('#' ~ site.id) }}</span>
+                    </span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="agents-target-set-note">
+              <strong>Action type:</strong> <code>entry.updateDraft</code> only in this version.
+            </div>
+
+            <div class="agents-form-actions">
+              <button class="btn submit" type="submit">{{ editingTargetSet ? 'Save Target Set' : 'Create Target Set' }}</button>
+              <a class="btn" href="{{ targetSetsIndexUrl }}">Cancel</a>
+            </div>
+          </form>
+        </div>
+        </section>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <style>
+  .agents-target-sets-shell {
+    width: 100%;
+    display: grid;
+    gap: 24px;
+  }
+
+  .agents-target-sets-page-section {
+    border: 1px solid #bbc7d5;
+    border-radius: 3px;
+    background: #f1f5f9;
+    padding: 12px;
+    box-shadow: none;
+  }
+
+  .agents-target-sets-page-note {
+    margin: 6px 0 0;
+    color: #596673;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .agents-target-sets-registry-shell,
+  .agents-target-sets-form-shell {
+    width: 100%;
+  }
+
+  .agents-target-sets-registry-wrap.tablepane {
+    margin: 0;
+    padding: 0 !important;
+    border: 1px solid #bbc7d5;
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--white);
+    box-shadow: none;
+  }
+
+  .agents-target-sets-registry {
+    table-layout: fixed;
+    margin: 0;
+    width: 100%;
+    color: #596673;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
+  }
+
+  .agents-target-sets-registry thead,
+  .agents-target-sets-registry thead tr {
+    background: var(--secondary-pane-bg) !important;
+    background-color: var(--secondary-pane-bg) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  .agents-target-sets-registry thead > tr > th.agents-target-sets-registry__header-cell {
+    padding: 12px 0 !important;
+    border-bottom: 1px solid #bbc7d5;
+    background: var(--secondary-pane-bg) !important;
+    background-color: var(--secondary-pane-bg) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    color: #596673;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: normal;
+    letter-spacing: 0;
+    text-align: left;
+    text-transform: none;
+    vertical-align: top;
+    white-space: nowrap;
+  }
+
+  .agents-target-sets-registry thead > tr > th.agents-target-sets-registry__header-cell:first-child {
+    padding-left: 12px !important;
+  }
+
+  .agents-target-sets-registry thead > tr > th.agents-target-sets-registry__header-cell:last-child {
+    padding-right: 12px !important;
+  }
+
+  .agents-target-sets-registry tbody > tr > th.agents-target-sets-registry__body-cell,
+  .agents-target-sets-registry tbody > tr > td.agents-target-sets-registry__body-cell {
+    padding-top: 24px !important;
+    padding-right: 16px !important;
+    padding-bottom: 24px !important;
+    padding-left: 0 !important;
+    border-bottom: 1px solid #aab8ca;
+    vertical-align: top;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    color: #596673;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .agents-target-sets-registry tbody > tr > th.agents-target-sets-registry__body-cell:first-child,
+  .agents-target-sets-registry tbody > tr > td.agents-target-sets-registry__body-cell:first-child {
+    padding-left: 12px !important;
+  }
+
+  .agents-target-sets-registry tbody > tr > th.agents-target-sets-registry__body-cell:last-child,
+  .agents-target-sets-registry tbody > tr > td.agents-target-sets-registry__body-cell:last-child {
+    padding-right: 12px !important;
+  }
+
+  .agents-target-sets-registry tbody > tr:last-child > th.agents-target-sets-registry__body-cell,
+  .agents-target-sets-registry tbody > tr:last-child > td.agents-target-sets-registry__body-cell {
+    border-bottom: 0;
+  }
+
+  .agents-target-sets-registry tbody > tr:hover > th.agents-target-sets-registry__body-cell,
+  .agents-target-sets-registry tbody > tr:hover > td.agents-target-sets-registry__body-cell {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  .agents-target-sets-registry__col--name {
+    width: 24%;
+  }
+
+  .agents-target-sets-registry__col--bounds {
+    width: 46%;
+  }
+
+  .agents-target-sets-registry__col--used-by {
+    width: 10%;
+  }
+
+  .agents-target-sets-registry__col--actions {
+    width: 20%;
+  }
+
+  .agents-target-sets-registry__title {
+    color: #596673;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+
+  .agents-target-sets-registry__handle {
+    color: #596673;
+    font-family: 'Fira Code', 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+
+  .agents-target-sets-registry__meta {
+    margin-top: 4px;
+    color: #596673;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+  }
+
+  .agents-target-sets-registry__used-by {
+    color: #596673;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+  }
+
+  .agents-target-sets-registry__used-by-list {
+    display: grid;
+    gap: 6px;
+  }
+
+  .agents-target-sets-registry__used-by-name {
+    color: inherit;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+  }
+
+  .agents-target-sets-registry__body-cell--actions .buttons {
+    gap: 10px;
+    justify-content: flex-start;
+    margin-bottom: 0;
+  }
+
+  .agents-target-set-checkbox {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border: 1px solid #d7dde3;
+    border-radius: 3px;
+    background: var(--white);
+  }
+
+  .agents-target-set-checkbox__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .agents-target-set-checkbox__title {
+    color: #2d3a46;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .agents-target-set-checkbox__meta {
+    color: #596673;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .agents-target-set-note {
+    margin: 16px 0 0;
+    padding: 10px 12px;
+    border: 1px solid #d7dde3;
+    border-radius: 3px;
+    background: var(--white);
+    color: #596673;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .agents-target-sets-registry__body-cell--actions .btn.small {
+    min-height: auto;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 4px;
+    background: #d4dbe4;
+    box-shadow: none;
+    color: #000000;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: normal;
+  }
+
+  .agents-target-sets-registry__body-cell--actions .btn.small:hover,
+  .agents-target-sets-registry__body-cell--actions .btn.small:focus {
+    border: 0;
+    background: #c8d1dc;
+    box-shadow: none;
+    color: #000000;
+  }
+
+  @media (max-width: 767px) {
+    .agents-target-sets-registry-wrap.tablepane {
+      overflow-x: auto;
+    }
+
+    .agents-target-sets-registry {
+      min-width: 760px;
+    }
+  }
+  </style>
+{% endblock %}

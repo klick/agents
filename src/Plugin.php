@@ -31,6 +31,7 @@ use Klick\Agents\services\ReliabilitySignalService;
 use Klick\Agents\services\SecurityPolicyService;
 use Klick\Agents\services\StarterPackService;
 use Klick\Agents\services\TemplateCatalogService;
+use Klick\Agents\services\TargetSetService;
 use Klick\Agents\services\WebhookService;
 use Klick\Agents\services\WebhookProbeService;
 use Klick\Agents\services\WebhookTestSinkService;
@@ -51,7 +52,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.24.0';
+    public string $schemaVersion = '0.25.0';
 
     public static ?self $plugin = null;
 
@@ -66,6 +67,7 @@ class Plugin extends BasePlugin
             'webhookService' => WebhookService::class,
             'webhookProbeService' => WebhookProbeService::class,
             'credentialService' => CredentialService::class,
+            'targetSetService' => TargetSetService::class,
             'controlPlaneService' => ControlPlaneService::class,
             'consumerLagService' => ConsumerLagService::class,
             'adoptionMetricsService' => AdoptionMetricsService::class,
@@ -110,6 +112,10 @@ class Plugin extends BasePlugin
             ],
         ];
         if ($this->isControlCpEnabled()) {
+            $subnav['targetSets'] = [
+                'label' => 'Target Sets',
+                'url' => 'agents/target-sets',
+            ];
             $subnav['approvals'] = [
                 'label' => 'Approvals',
                 'url' => 'agents/approvals',
@@ -138,6 +144,7 @@ class Plugin extends BasePlugin
                 'agents/accounts' => 'agents/dashboard/credentials',
             ];
             if ($this->isControlCpEnabled()) {
+                $rules['agents/target-sets'] = 'agents/dashboard/target-sets';
                 $rules['agents/approvals'] = 'agents/dashboard/control';
                 $rules['agents/approvals/approvals'] = 'agents/dashboard/control';
                 $rules['agents/approvals/rules'] = 'agents/dashboard/control';
@@ -291,6 +298,13 @@ JS, View::POS_END);
     {
         /** @var CredentialService $service */
         $service = $this->get('credentialService');
+        return $service;
+    }
+
+    public function getTargetSetService(): TargetSetService
+    {
+        /** @var TargetSetService $service */
+        $service = $this->get('targetSetService');
         return $service;
     }
 
