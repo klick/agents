@@ -6,14 +6,38 @@ Agents gives Craft a safe API and control plane for AI agents, automations, and 
 
 Current plugin version: **0.24.0**
 
+## For Agencies Running Craft Sites For Clients
+
+Agents is designed for agencies and delivery teams that need to introduce automation without losing visibility, approval control, or operational accountability.
+
+## Product Positioning
+
+Agents helps agencies turn AI and automation work into a governed service layer on top of client websites. Instead of building custom endpoints or handing over risky backend access, teams get one control plane for machine credentials, approvals, diagnostics, and operational proof.
+
 ## Why Teams Use Agents
 
-- Connect:
-  - structured machine access to Craft CMS and Craft Commerce data and actions
-- Control:
-  - managed credentials, scopes, policies, approvals, and audit trail in the Craft CP
-- Operate:
-  - readiness, diagnostics, sync-state visibility, operator notifications, webhook reliability, and lifecycle posture
+- Ship automation work without inventing custom machine-access layers for every project
+- Keep approvals, audit trail, and machine credentials inside the Craft CP
+- Reuse successful workflow patterns across multiple client sites instead of rebuilding them each time
+
+## Current Product Focus
+
+Near-term product work concentrates on two outcomes:
+
+### Safer Bounded Automation
+
+Teams need to automate approved parts of a site without widening access beyond what the client or operator intended. That is where governed write boundaries, approvals, and clearer execution lanes matter.
+
+### Reusable Workflow Patterns
+
+Teams also need more than raw API access. They need reusable patterns they can carry from one project to the next:
+
+- account templates
+- starter workers
+- workflow guides
+- bootstrap artifacts
+
+That is the role of workflow starter kits: turning governed machine access into repeatable delivery patterns instead of one-off integration work.
 
 ## What Agents Provides
 
@@ -93,3 +117,5 @@ See [Execution Model](/security/execution-model) for explicit trust-boundary and
 9. [Agent Bootstrap](/api/agent-bootstrap)
 10. [Starter Packs](/api/starter-packs)
 11. [Security](/security/)
+
+If you want the roadmap view, see the [Roadmap](/roadmap/).

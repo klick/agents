@@ -1,14 +1,23 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-16
-Current release: `v0.22.2`
+Date: 2026-03-17
+Current release: `v0.24.0`
 
 ## Direction
 
 Run two explicit tracks in parallel:
 
 - `Track A (70%)`: runtime reliability and operator safety
-- `Track B (30%)`: adoption and agent-facing integration UX
+- `Track B (30%)`: agency adoption, packaged workflow UX, and agent-facing integration UX
+
+Agents is being shaped for agencies and delivery teams responsible for operating Craft sites over time, especially where automation needs to stay explainable, governable, and safe in front of clients.
+
+Near-term roadmap emphasis:
+
+- safer bounded automation for approved client surfaces
+- reusable workflow kits and delivery patterns
+- extension into real Craft stacks where teams already work
+- assistant-style operator support only after the trust boundary is stable
 
 ## Done (`v0.5.0`)
 
@@ -102,6 +111,27 @@ Release outcome:
 
 ## Proposed Path to `1.0.0`
 
+## Done (`v0.24.0`)
+
+- Implemented `F15` production webhook probe.
+- Added an admin-only `Webhook Probe` card in `Status` that sends a synthetic signed delivery against the live runtime webhook target.
+- Added a dedicated probe ledger with recent run history, payload inspection, triggered-by metadata, and cooldown visibility.
+- Kept the production probe separate from the dev-only `Webhook Test Sink` while reusing the same signing and outbound HTTP transport path.
+
+Release outcome:
+
+- Operators can validate live webhook transport safely in-place, without saving content or temporarily pointing delivery at a local sink.
+
+## Done (`v0.23.0`)
+
+- Reworked `Accounts` around a Craft-style managed-account registry with a default table view, an alternate card view, and modal-hosted details/actions that keep lifecycle operations coherent in both modes.
+- Simplified governed diff review down to `Structured` and `Focus`, added an `After / Before` toggle inside Focus mode, and removed stale warning/toggle copy that no longer helped approval decisions.
+- Published the public `Agents vs Element API` positioning page and refreshed CP/docs wording around the new Accounts registry model.
+
+Release outcome:
+
+- Operators can compare and manage machine identities more like a real registry, and approval review now concentrates on the two modes that actually support proofing work.
+
 ## Done (`v0.22.2`)
 
 - Restored async credential rotation in the Accounts details panel so rotate stays inline and can reveal the new one-time token without a full-page reload.
@@ -131,20 +161,10 @@ Release outcome:
 
 - Approvers can see what changed in a few seconds instead of inferring content changes from raw payloads or metadata.
 
-## Planned (`v0.23.x`) Production Validation and Supportability
+## Planned (`v0.25.x`) Bounded Client Automation and Contract Stabilization
 
-- Implement `F15` production webhook probe.
-- Tighten diagnostics and support flows around webhook delivery and runtime verification.
-- Add lightweight operator visibility for recent probe/notification outcomes where useful.
-
-Release outcome:
-
-- Production environments can validate webhook transport safely without content mutation or dev-only tooling.
-
-## Planned (`v0.24.x`) Contract and Upgrade Stabilization
-
-- Implement `F21` governed write target sets and CP test helpers.
-- Add optional named target boundaries for write-capable accounts so `v1` governed entry writes can be limited to approved explicit entries and sites.
+- Implement `F21` governed write target sets and CP test helpers as the main operator-safety feature for bounded client automation.
+- Add optional named target boundaries for write-capable accounts so governed entry writes can be limited to approved explicit entries and sites.
 - Add operator-friendly CP helpers for generating prefilled governed write test requests or worker config from those target sets.
 - Freeze the main CP IA.
 - Freeze canonical routes and scope naming.
@@ -162,51 +182,60 @@ Release outcome:
 
 Release outcome:
 
-- The product becomes materially safer for external adopters to build against, including teams running multi-site or multi-store Craft installs.
+- Agencies can automate approved client surfaces with clearer trust boundaries, while the public contract becomes materially safer to build against.
 
-## Planned (`v0.25.x`) Workflow Starter Kits and Companion Workers
+## Planned (`v0.26.x`) Agency Workflow Starter Kits and Companion Workers
 
 - Implement `F19`.
-- Pair strong account templates with companion guides, starter workers, and bootstrap artifacts.
+- Pair strong account templates with companion guides, starter workers, and bootstrap artifacts that agencies can reuse across client work.
 - Ship a shared worker scaffold for auth, preflight, pagination, output writing, and optional OpenAI narrative steps.
 - Start with a small curated workflow set rather than trying to ship a production app for every template.
 
 Release outcome:
 
-- Operators and developers can move from account creation to a working scheduled workflow with far less reinvention.
+- Agencies can package repeatable AI-assisted workflows as credible, governed service offerings instead of inventing each integration from scratch.
 
-## Planned (`v0.26.x`) External Adapter Foundation
+## Planned (`v0.27.x`) Agency Stack Extension Foundation
 
 - Resume `F12` external plugin data access once the adapter/provider direction is reconfirmed.
 - Ship provider registry + registration event.
 - Add external read scopes and contract exposure in capabilities/OpenAPI/schema.
-- Ship the first standalone reference adapter.
+- Prefer at least one credible agency-relevant reference adapter path so the value is visible in real Craft stacks.
 
 Release outcome:
 
-- Agents proves it can extend safely beyond core Craft/Commerce data without bloating the core plugin.
+- Agents can extend safely into the plugin ecosystems agencies already standardize on, without bloating the core plugin.
 
-## Planned (`v0.27.x`) Extensibility Hardening
+## Planned (`v0.28.x`) Agency Operator Copilot Foundation
 
-- Implement the useful parts of `F13`.
-- Add registry-backed scope extension and field-profile governance where needed.
-- Only expand after the adapter/provider direction is proven.
-
-Release outcome:
-
-- Agents gains controlled extensibility without collapsing into arbitrary scope sprawl.
-
-## Planned (`v0.28.x`) Agent-Assisted Operations
-
-- Begin `F18`, phase 1 only.
-- Start with read-only insight and recommendation support.
+- Implement `F22` provider-backed orchestration foundation for optional in-product LLM support.
+- Start with env-only site-level provider configuration as the convenient in-product path.
+- Support external assistants through the existing governed API and discovery surfaces, documented and supported in `v1` without introducing a heavy first-class external profile system.
+- Support recommendation-first jobs such as scope recommendation, summaries, report drafting, and other agency-facing explanation work before broader in-product assistant behavior.
+- Keep per-account BYOM out of the main path unless real demand proves the extra secret-management complexity is justified.
 - Do not introduce broad autonomous operator control.
 
 Release outcome:
 
-- Agents can assist operators inside the product without weakening the trust boundary.
+- Agency teams get a constrained copilot for discovery, recommendations, and client-facing drafts without weakening the existing trust boundary.
 
-## Planned (`v0.29.x`) Pre-1.0 Consolidation
+## Planned (`v0.29.x`) Agency Fleet Operations Assist and Dependency-Led Extensibility
+
+- Begin `F18`, phase 1 only.
+- Keep it read-first and recommendation-first:
+  - status visibility
+  - approval queue visibility
+  - account posture visibility
+  - guided remediation
+- Do not introduce broad delegated self-administration.
+- Implement only the useful parts of `F13` if they are required by `F12`, `F21`, or later agency-facing governance work.
+- Keep extensibility work dependency-led rather than turning it into a standalone roadmap narrative.
+
+Release outcome:
+
+- Agencies can operate more client sites with better guided insight, while extensibility grows only where it directly supports real agency workflows.
+
+## Planned (`v0.30.x`) Pre-1.0 Consolidation
 
 - Focus on bug fixing, upgrade safety, onboarding, and support polish.
 - Avoid major IA churn.
