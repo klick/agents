@@ -6,10 +6,6 @@ All notable changes to this project are documented in this file.
 
 ## 0.25.1 - 2026-03-18
 
-### Fixed
-
-- Restored `?simulatePulse=` activity dots in the Accounts card view so simulated pulses are visible there as well as in the table view.
-
 ### Changed
 
 - Simplified Accounts cards by removing visible scope chips and the bottom action row, keeping those details inside the shared details surface instead.

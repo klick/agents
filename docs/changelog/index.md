@@ -4,7 +4,6 @@ See full source changelog in repository root: `CHANGELOG.md`.
 
 ## 0.25.1 (2026-03-18)
 
-- Restored `?simulatePulse=` activity dots in the Accounts card view.
 - Simplified Accounts cards by removing visible scope chips and the bottom action row.
 - Moved the add/edit form to an on-demand top-right flow and added visible `.env` previews plus `Copy .env` in account details.
 
