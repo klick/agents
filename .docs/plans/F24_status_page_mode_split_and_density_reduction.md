@@ -328,3 +328,256 @@ A Status mockup is on the right path if:
 - current runtime and readiness logic largely stays in place for now
 - the primary value is reducing perceived density and improving action clarity
 - implementation should come later, after mockups are reviewed
+
+## Screen-by-Screen Copy Blocks
+
+Use these as starting copy for mockups. The goal is not final marketing prose. The goal is short, confident, low-density product language that helps the operator move.
+
+### 1. Setup State: `Ready to Connect`
+
+#### Verdict support line
+
+- `Core runtime is healthy and ready for your first account or integration.`
+
+Alternative:
+
+- `Agents is ready for first use. Create an account or connect a worker to get started.`
+
+#### Primary CTA
+
+- `Create managed account`
+
+#### Secondary CTA
+
+- `Connect a worker`
+
+#### Optional tertiary action
+
+- `View system details`
+
+#### Essential summary blocks
+
+Block 1:
+
+- label: `Runtime`
+- value: `Ready`
+- support: `Core services are available.`
+
+Block 2:
+
+- label: `Accounts`
+- value: `Not created`
+- support: `Create your first managed account when you're ready to connect a worker.`
+
+Block 3:
+
+- label: `Connection`
+- value: `Waiting`
+- support: `No authenticated machine activity has been seen yet.`
+
+Optional block 4:
+
+- label: `Webhooks`
+- value: `Optional`
+- support: `Enable only if you need push-based wake-ups instead of polling.`
+
+#### Guided panel
+
+Title:
+
+- `Start with one account`
+
+Body:
+
+- `You do not need to set up the whole system first. Create one managed account, connect a worker, and confirm the first authenticated request.`
+
+Checklist labels:
+
+- `Runtime is enabled`
+- `First account created`
+- `First authenticated request succeeds`
+
+#### Advanced tools section label
+
+- `Advanced tools`
+
+Intro:
+
+- `Diagnostics and webhook utilities are available when you need them, but they are not required for first setup.`
+
+### 2. Operational State: `Ready`
+
+#### Verdict support line
+
+- `Agents is operating normally. Review details only if you need to inspect the current runtime posture.`
+
+Alternative:
+
+- `The environment is healthy and ready for ongoing machine traffic.`
+
+#### Primary CTA
+
+- `View system details`
+
+#### Secondary CTA
+
+- `Open Accounts`
+
+#### Essential summary blocks
+
+Block 1:
+
+- label: `Runtime`
+- value: `Healthy`
+- support: `Core runtime is enabled and stable.`
+
+Block 2:
+
+- label: `Accounts`
+- value: `Active`
+- support: `Managed accounts are available for machine access.`
+
+Block 3:
+
+- label: `Traffic`
+- value: `Observed`
+- support: `Recent machine activity has been recorded.`
+
+Optional block 4:
+
+- label: `Webhooks`
+- value: `Configured` or `Optional`
+- support: `Delivery is available when your workflows need it.`
+
+#### Guidance panel
+
+Title:
+
+- `Everything looks healthy`
+
+Body:
+
+- `Use the detailed view for diagnostics, delivery checks, and deeper operational review.`
+
+#### Advanced tools section label
+
+- `Operational tools`
+
+Intro:
+
+- `Use these only when validating delivery paths or investigating runtime behavior.`
+
+### 3. Incident State: `Blocked`
+
+#### Verdict support line
+
+Default:
+
+- `Agents is not currently ready for live machine traffic. Resolve the issue below before relying on this environment.`
+
+If runtime disabled by env:
+
+- `Agents is disabled by environment configuration. Update the runtime setting before connecting machine traffic.`
+
+If database/services issue:
+
+- `Core runtime dependencies need attention before Agents can accept machine traffic.`
+
+#### Primary CTA
+
+Examples:
+
+- `Review runtime setting`
+- `Open plugin settings`
+- `Resolve blocking issue`
+
+#### Secondary CTA
+
+- `View system details`
+
+#### Minimal issue cards
+
+Card 1:
+
+- label: `Runtime`
+- value: `Blocked`
+- support: `Agents is currently disabled.`
+
+Card 2:
+
+- label: `Impact`
+- value: `No machine traffic`
+- support: `Guarded requests cannot run until the blocking issue is resolved.`
+
+Card 3:
+
+- label: `Next step`
+- value: `Review setting`
+- support: `Start with the blocking configuration instead of the broader system details.`
+
+#### Guided panel
+
+Title:
+
+- `Fix the blocking issue first`
+
+Body:
+
+- `Once the blocking condition is cleared, the rest of the runtime can be reviewed normally.`
+
+#### Advanced tools section intro
+
+- `Detailed diagnostics and webhook tools remain available below if you need them after resolving the primary issue.`
+
+### 4. Incident State: `Degraded`
+
+#### Verdict support line
+
+- `Agents is handling traffic, but one or more conditions need attention. Start with the affected area below.`
+
+Alternative:
+
+- `The runtime is working, but some signals need review before this environment should be treated as fully healthy.`
+
+#### Primary CTA
+
+- `Review affected area`
+
+#### Secondary CTA
+
+- `View system details`
+
+#### Minimal issue cards
+
+Card pattern:
+
+- label: affected domain, for example `Traffic`, `Delivery`, or `Observability`
+- value: `Needs attention`
+- support: one short reason only
+
+Example supports:
+
+- `Auth, scope, or rate-limit issues were observed recently.`
+- `Webhook delivery failures need review.`
+- `Monitoring confidence is limited by stale or thin signals.`
+
+#### Guided panel
+
+Title:
+
+- `Start with the highest-signal issue`
+
+Body:
+
+- `Use the detailed view if you need the full readiness breakdown, but begin with the affected area first.`
+
+## Tone Rules For Copy Review
+
+When refining mockup copy, keep these rules:
+
+- prefer `ready`, `blocked`, `waiting`, `optional`, `active`
+- avoid `posture`, `surface`, `capability`, `governance`, `telemetry` in first-view copy
+- keep support text to one sentence
+- never explain more than the next decision requires
+- if the operator can act, lead with the action
+- if the operator cannot act yet, explain why briefly and calmly
