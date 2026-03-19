@@ -1751,7 +1751,7 @@
 
       <section class="agents-status-dashboard-stack">
         <div class="agents-status-dashboard-grid">
-          <article class="agents-status-dashboard-card agents-status-dashboard-card--verdict border rounded p-0" id="readinessStateCard">
+          <article class="agents-status-dashboard-card agents-status-dashboard-card--verdict agents-readiness-ready-card agents-readiness-ready-card--{{ readinessDisplayStateTone }} border rounded p-0" id="readinessStateCard">
             <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
               <div class="agents-status-dashboard-card__header-copy">
                 <h2 class="agents-status-dashboard-card__title">Verdict</h2>
@@ -3298,13 +3298,16 @@
       min-height: 220px;
       display: flex;
       flex-direction: column;
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
       background: #ffffff;
+      box-shadow: none;
       overflow: hidden;
     }
 
     .agents-status-dashboard-card--verdict {
-      grid-column: span 2;
-      grid-row: span 2;
+      grid-column: 1 / span 2;
+      grid-row: 1 / span 2;
       min-height: 456px;
     }
 
@@ -3493,7 +3496,7 @@
       }
 
       .agents-status-dashboard-card--verdict {
-        grid-column: span 2;
+        grid-column: 1 / span 2;
         grid-row: auto;
         min-height: 360px;
       }
