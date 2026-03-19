@@ -1637,6 +1637,13 @@
       {% elseif dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0 or dashboardNotificationIssueCount > 0 %}
         {% set reviewCardBadgeTone = dashboardBlockedExecutions > 0 ? 'bad' : 'warn' %}
         {% set reviewCardBadgeLabel = 'Needs attention' %}
+        {% if dashboardBlockedExecutions > 0 %}
+          {% set reviewCardActionUrl = cpUrl('agents/approvals') ~ '#agents-control-follow-up-table-panel' %}
+        {% elseif dashboardPendingApprovals > 0 %}
+          {% set reviewCardActionUrl = cpUrl('agents/approvals') ~ '#agents-control-pending-table-panel' %}
+        {% elseif dashboardNotificationIssueCount > 0 and not statusCanViewControl %}
+          {% set reviewCardActionUrl = settingsUrl ~ '#notificationsSection' %}
+        {% endif %}
         {% if dashboardPendingApprovals > 0 %}
           {% set reviewCardLines = reviewCardLines|merge([dashboardPendingApprovals ~ ' pending approval request' ~ (dashboardPendingApprovals == 1 ? '' : 's')]) %}
         {% endif %}
@@ -1690,6 +1697,9 @@
             : 'No target sets configured yet.',
           'Create boundaries only when a worker needs governed draft writes.'
         ] %}
+        {% if dashboardTargetSets|length == 0 %}
+          {% set targetSetsCardActionUrl = cpUrl('agents/target-sets', { targetSetForm: 'create' }) ~ '#targetSetFormSection' %}
+        {% endif %}
       {% elseif dashboardWriteAccountsWithoutTargetSets > 0 %}
         {% set targetSetsCardBadgeTone = 'warn' %}
         {% set targetSetsCardBadgeLabel = 'Needs attention' %}
@@ -1698,6 +1708,12 @@
           dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's'),
           dashboardWriteAccountsWithoutTargetSets ~ ' missing boundaries'
         ] %}
+        {% if dashboardTargetSets|length == 0 %}
+          {% set targetSetsCardActionLabel = 'Create Target Set' %}
+          {% set targetSetsCardActionUrl = cpUrl('agents/target-sets', { targetSetForm: 'create' }) ~ '#targetSetFormSection' %}
+        {% else %}
+          {% set targetSetsCardActionUrl = attentionAccountsUrl ~ '#agentsCardList' %}
+        {% endif %}
       {% else %}
         {% set targetSetsCardBadgeTone = 'good' %}
         {% set targetSetsCardBadgeLabel = 'Ready' %}
@@ -1796,7 +1812,11 @@
               </div>
             </div>
             <div class="agents-status-dashboard-card__footer">
-              <a href="{{ verdictPrimaryActionUrl }}" class="btn small">{{ verdictPrimaryActionLabel }}</a>
+              {% if verdictPrimaryActionUrl == '#statusSystemDetails' %}
+                <button class="btn small" type="button" data-agents-open-status-details="statusSystemDetails">{{ verdictPrimaryActionLabel }}</button>
+              {% else %}
+                <a href="{{ verdictPrimaryActionUrl }}" class="btn small">{{ verdictPrimaryActionLabel }}</a>
+              {% endif %}
               <button class="btn small" type="button" data-agents-open-status-details="statusSystemDetails">View system details</button>
             </div>
           </article>
@@ -1878,9 +1898,16 @@
           </article>
         </div>
 
-        <section class="agents-status-dashboard-detail-card border rounded p-0">
-          <details class="agents-readiness-ready-details" id="statusSystemDetails"{% if not statusScreenPreview and readinessDisplayStateTone != 'good' %} open{% endif %}>
-          <summary><span>{{ statusScreenPreview ? 'System details' : 'Details' }}</span></summary>
+        <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--status-grid" id="statusSystemDetails" data-agents-detail-dialog aria-labelledby="statusSystemDetailsTitle">
+          <div class="agents-readiness-detail-dialog-shell">
+            <div class="agents-readiness-detail-dialog-head">
+              <div class="agents-readiness-detail-dialog-heading">
+                <h2 class="agents-readiness-detail-dialog-title" id="statusSystemDetailsTitle">System details</h2>
+                <p class="agents-readiness-detail-dialog-copy">Proof cards, action mapping, and diagnostics for the current Status verdict.</p>
+              </div>
+              <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close system details">Close</button>
+            </div>
+            <div class="agents-readiness-detail-dialog-body">
           <div class="agents-readiness-ready-grid">
             <section class="agents-readiness-ready-proof-card" id="readinessProofHardGates">
               <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessHardGateProofTone }}">Hard Gates</h3>
@@ -2087,8 +2114,9 @@
               </form>
             </section>
           {% endif %}
-        </details>
-        </section>
+            </div>
+          </div>
+        </dialog>
 
         <dialog class="agents-readiness-detail-dialog" id="trafficAccessDetailDialog" data-agents-detail-dialog aria-labelledby="trafficAccessDetailDialogTitle">
           <div class="agents-readiness-detail-dialog-shell">
@@ -3479,15 +3507,6 @@
       color: #596673;
       font-size: 13px;
       line-height: 1.45;
-    }
-
-    .agents-status-dashboard-detail-card {
-      overflow: hidden;
-      background: #ffffff;
-    }
-
-    .agents-status-dashboard-detail-card .agents-readiness-ready-details {
-      border-top: 0;
     }
 
     @media (max-width: 1279px) {
@@ -5389,6 +5408,22 @@
       max-height: min(88vh, 960px);
     }
 
+    .agents-readiness-detail-dialog--status-grid {
+      width: min(1120px, calc(100vw - 32px));
+      max-width: 1120px;
+    }
+
+    .agents-readiness-detail-dialog--status-grid .agents-readiness-detail-dialog-shell {
+      display: flex;
+      flex-direction: column;
+      max-height: min(88vh, 1100px);
+    }
+
+    .agents-readiness-detail-dialog--status-grid .agents-readiness-detail-dialog-body {
+      min-height: 0;
+      overflow-y: auto;
+    }
+
     .agents-readiness-detail-dialog--payload .agents-readiness-detail-dialog-body {
       min-height: 0;
       overflow-y: auto;
@@ -6066,6 +6101,19 @@
           }
 
           event.preventDefault();
+          if (details.matches('[data-agents-detail-dialog]')) {
+            openDialogs.set(details, statusDetailsButton);
+            if (hasNativeDialog) {
+              if (!details.open) {
+                details.showModal();
+              }
+            } else {
+              details.setAttribute('open', 'open');
+            }
+            focusFirstCloseButton(details);
+            return;
+          }
+
           details.setAttribute('open', 'open');
           const top = details.getBoundingClientRect().top + window.scrollY - 24;
           window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });

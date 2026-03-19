@@ -148,6 +148,7 @@ expect_fixed "agents-status-dashboard-card__footer" "$DASHBOARD_TEMPLATE" "Dashb
 expect_fixed "Approvals / Notifications" "$DASHBOARD_TEMPLATE" "Dashboard readiness view exposes the compact approvals and notifications card"
 expect_fixed "Target Sets" "$DASHBOARD_TEMPLATE" "Dashboard readiness view exposes the compact target sets card"
 expect_fixed "Webhooks" "$DASHBOARD_TEMPLATE" "Dashboard readiness view exposes the compact webhooks card"
+expect_fixed "agents-readiness-detail-dialog--status-grid" "$DASHBOARD_TEMPLATE" "Dashboard readiness view moves system proof cards into a modal dialog"
 expect_fixed "readinessDisplayStateKey" "$DASHBOARD_TEMPLATE" "Dashboard readiness view normalizes the rendered headline state from final summary tones"
 expect_fixed "readinessOnlyBootstrapGaps" "$DASHBOARD_TEMPLATE" "Dashboard readiness view derives a setup state from bootstrap-only confidence gaps"
 expect_fixed "readinessHasBlockingGate = (not agentsEnabled) or (not readinessDbAvailable)" "$DASHBOARD_TEMPLATE" "Dashboard readiness view does not treat missing credentials as a blocking gate on fresh install"
