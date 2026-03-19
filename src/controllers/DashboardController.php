@@ -36,12 +36,47 @@ class DashboardController extends Controller
 
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
+        $writesState = $plugin->getWritesExperimentalState();
+        $controlCpEnabled = $plugin->isControlCpEnabled();
         $readinessService = $plugin->getReadinessService();
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
+        $defaultScopes = (array)($securityPosture['authentication']['tokenScopes'] ?? []);
+        $canViewCredentials = $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+        $canViewControl = $controlCpEnabled && $this->canControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
 
         $readinessHealth = $readinessService->getHealthSummary();
         $readinessSummary = $readinessService->getReadinessSummary();
         $readinessDiagnostics = $readinessService->getReadinessDiagnostics();
+        $managedCredentials = [];
+        if ($canViewCredentials) {
+            try {
+                $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
+            } catch (Throwable $e) {
+                Craft::warning('Unable to load managed credentials for Status CP: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+        $targetSets = [];
+        if ($canViewCredentials && $controlCpEnabled) {
+            try {
+                $targetSets = $plugin->getTargetSetService()->getTargetSets();
+            } catch (Throwable $e) {
+                Craft::warning('Unable to load target sets for Status CP: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+        $controlSnapshot = [
+            'summary' => [],
+            'policies' => [],
+            'approvals' => [],
+            'executions' => [],
+            'audit' => [],
+        ];
+        if ($canViewControl) {
+            try {
+                $controlSnapshot = $plugin->getControlPlaneService()->getControlPlaneSnapshot(50);
+            } catch (Throwable $e) {
+                Craft::warning('Unable to load control snapshot for Status CP: ' . $e->getMessage(), __METHOD__);
+            }
+        }
         $consumerLagSnapshot = [
             'summary' => [
                 'count' => 0,
@@ -162,6 +197,13 @@ class DashboardController extends Controller
             'agentsEnabled' => (bool)$enabledState['enabled'],
             'agentsEnabledSource' => (string)$enabledState['source'],
             'agentsEnabledLocked' => (bool)$enabledState['locked'],
+            'writesExperimentalEnabled' => (bool)$writesState['enabled'],
+            'controlCpEnabled' => $controlCpEnabled,
+            'statusCanViewCredentials' => $canViewCredentials,
+            'statusCanViewControl' => $canViewControl,
+            'managedCredentials' => $managedCredentials,
+            'targetSets' => $targetSets,
+            'controlSnapshot' => $controlSnapshot,
             'securityWarningCounts' => (array)($securityPosture['warningCounts'] ?? []),
             'apiEndpoints' => $this->getApiEndpoints(),
             'readinessHealth' => $readinessHealth,
