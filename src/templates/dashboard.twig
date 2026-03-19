@@ -755,7 +755,10 @@
       {% set settingsUrl = cpUrl('agents/settings') %}
       {% set accountsUrl = cpUrl('agents/accounts') %}
       {% set accountsCardsUrl = cpUrl('agents/accounts', { accountView: 'cards', focusFirstVisible: 1 }) %}
+      {% set pausedAccountsUrl = cpUrl('agents/accounts', { listFilter: 'paused', focusFirstVisible: 1 }) %}
       {% set attentionAccountsUrl = cpUrl('agents/accounts', { listFilter: 'attention', focusFirstVisible: 1 }) %}
+      {% set approvalsUrl = cpUrl('agents/approvals') %}
+      {% set targetSetsUrl = cpUrl('agents/target-sets') %}
       {% set readinessUrl = cpUrl('agents/status') %}
       {% set overviewUrl = readinessUrl %}
       {% set securityUrl = readinessUrl %}
@@ -1477,6 +1480,7 @@
         {% set dashboardNotificationIssueCount = dashboardNotificationIssueCount + 1 %}
       {% endif %}
 
+      {% set showWriteDashboardCards = writesExperimentalEnabled %}
       {% set verdictPrimaryActionLabel = 'Open Accounts' %}
       {% set verdictPrimaryActionUrl = accountsCardsUrl %}
       {% if not agentsEnabled %}
@@ -1488,7 +1492,7 @@
       {% elseif statusScreenPreview == 'setup' or dashboardAccountTotal == 0 %}
         {% set verdictPrimaryActionLabel = 'Create managed account' %}
         {% set verdictPrimaryActionUrl = accountsUrl ~ '#addAgentSection' %}
-      {% elseif dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0 %}
+      {% elseif showWriteDashboardCards and (dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0) %}
         {% set verdictPrimaryActionLabel = 'Open Approvals' %}
         {% set verdictPrimaryActionUrl = cpUrl('agents/approvals') %}
       {% elseif writesExperimentalEnabled and dashboardWriteAccountsWithoutTargetSets > 0 %}
@@ -1534,7 +1538,7 @@
           copy: dashboardAccountNeedsAttention ~ ' account' ~ (dashboardAccountNeedsAttention == 1 ? '' : 's') ~ ' need review across paused, expired, or expiring states.'
         }]) %}
       {% endif %}
-      {% if dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0 or dashboardNotificationIssueCount > 0 %}
+      {% if showWriteDashboardCards and (dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0) %}
         {% set reviewQueueCopyParts = [] %}
         {% if dashboardPendingApprovals > 0 %}
           {% set reviewQueueCopyParts = reviewQueueCopyParts|merge([dashboardPendingApprovals ~ ' approval request' ~ (dashboardPendingApprovals == 1 ? '' : 's') ~ ' waiting']) %}
@@ -1545,13 +1549,20 @@
         {% if dashboardBlockedExecutions > 0 %}
           {% set reviewQueueCopyParts = reviewQueueCopyParts|merge([dashboardBlockedExecutions ~ ' governed run' ~ (dashboardBlockedExecutions == 1 ? '' : 's') ~ ' blocked']) %}
         {% endif %}
-        {% if dashboardNotificationIssueCount > 0 %}
-          {% set reviewQueueCopyParts = reviewQueueCopyParts|merge(['notification delivery or routing needs review']) %}
-        {% endif %}
         {% set verdictAttentionItems = verdictAttentionItems|merge([{
-          title: 'Approvals / Notifications',
+          title: 'Approvals',
           tone: dashboardBlockedExecutions > 0 ? 'bad' : 'warn',
           copy: reviewQueueCopyParts|join('; ') ~ '.'
+        }]) %}
+      {% endif %}
+      {% if dashboardNotificationIssueCount > 0 %}
+        {% set verdictNotificationCopy = notificationSummary.failed|default(0) > 0
+          ? notificationSummary.failed|default(0) ~ ' notification deliver' ~ (notificationSummary.failed|default(0) == 1 ? 'y failed' : 'ies failed') ~ ' and need review.'
+          : 'Notification routing or monitor state needs review.' %}
+        {% set verdictAttentionItems = verdictAttentionItems|merge([{
+          title: 'Operator Notifications',
+          tone: notificationMonitorTone == 'bad' ? 'bad' : 'warn',
+          copy: verdictNotificationCopy
         }]) %}
       {% endif %}
       {% if writesExperimentalEnabled and dashboardWriteCapableAccounts > 0 and dashboardWriteAccountsWithoutTargetSets > 0 %}
@@ -1585,6 +1596,35 @@
             : 'Nothing needs attention right now. Use the cards to jump into the current operator surfaces.'
         }]) %}
       {% endif %}
+      {% set verdictOperatorTips = showWriteDashboardCards
+        ? [
+          {
+            title: 'Keep accounts task-specific',
+            copy: 'Use separate managed accounts for reporting, review, and draft-writing instead of sharing one broad token.'
+          },
+          {
+            title: 'Start read-only first',
+            copy: 'Add write scopes and Target Sets only when a workflow truly needs governed draft updates.'
+          },
+          {
+            title: 'Use approvals for change review',
+            copy: 'When workers prepare content changes, let editors review diffs before anything is applied.'
+          }
+        ]
+        : [
+          {
+            title: 'Keep accounts task-specific',
+            copy: 'Use separate managed accounts for reporting, monitoring, and polling workers instead of sharing one broad token.'
+          },
+          {
+            title: 'Give each worker only what it needs',
+            copy: 'Confirm a healthy first connection with read-only access before expanding scopes for a worker.'
+          },
+          {
+            title: 'Add push delivery only when needed',
+            copy: 'Webhooks and probe tools are optional until external workers need push-based wake-ups instead of polling.'
+          }
+        ] %}
 
       {% set accountsCardBadgeTone = 'muted' %}
       {% set accountsCardBadgeLabel = 'Unavailable' %}
@@ -1592,36 +1632,38 @@
       {% set accountsCardActionLabel = 'Open Accounts' %}
       {% set accountsCardActionUrl = accountsUrl %}
       {% if not statusCanViewCredentials %}
-        {% set accountsCardLines = ['Account visibility depends on credential permissions for the current CP user.'] %}
+        {% set accountsCardLines = [{ text: 'Account visibility depends on credential permissions for the current CP user.' }] %}
       {% elseif statusScreenPreview == 'setup' or dashboardAccountTotal == 0 %}
         {% set accountsCardBadgeLabel = 'Not created' %}
         {% set accountsCardLines = [
-          'No managed accounts yet.',
-          'Create one account to start the first controlled connection.'
+          { text: 'No managed accounts yet.' },
+          { text: 'Create one account to start the first controlled connection.' }
         ] %}
-        {% set accountsCardActionLabel = 'Create managed account' %}
-        {% set accountsCardActionUrl = accountsUrl ~ '#addAgentSection' %}
       {% elseif dashboardAccountNeedsAttention > 0 %}
         {% set accountsCardBadgeTone = 'warn' %}
         {% set accountsCardBadgeLabel = 'Needs attention' %}
         {% set accountsCardLines = [
-          dashboardAccountActive ~ ' active',
-          dashboardAccountNeedsAttention ~ ' needing attention',
-          dashboardAccountPaused > 0
-            ? dashboardAccountPaused ~ ' paused'
-            : (dashboardAccountExpired > 0
-              ? dashboardAccountExpired ~ ' expired'
-              : dashboardAccountExpiringSoon ~ ' expiring soon')
+          { text: dashboardAccountActive ~ ' active' },
+          { text: dashboardAccountNeedsAttention ~ ' needing attention', url: attentionAccountsUrl ~ '#agentsCardList' },
+          {
+            text: dashboardAccountPaused > 0
+              ? dashboardAccountPaused ~ ' paused'
+              : (dashboardAccountExpired > 0
+                ? dashboardAccountExpired ~ ' expired'
+                : dashboardAccountExpiringSoon ~ ' expiring soon'),
+            url: dashboardAccountPaused > 0
+              ? pausedAccountsUrl ~ '#agentsCardList'
+              : attentionAccountsUrl ~ '#agentsCardList'
+          }
         ] %}
-        {% set accountsCardActionUrl = attentionAccountsUrl ~ '#agentsCardList' %}
       {% else %}
         {% set accountsCardBadgeTone = 'good' %}
         {% set accountsCardBadgeLabel = 'Ready' %}
         {% set accountsCardLines = [
-          dashboardAccountActive ~ ' active',
+          { text: dashboardAccountActive ~ ' active' },
           dashboardAccountRevoked > 0
-            ? dashboardAccountRevoked ~ ' revoked on record'
-            : 'No account issues need review right now.'
+            ? { text: dashboardAccountRevoked ~ ' revoked on record' }
+            : { text: 'No account issues need review right now.' }
         ] %}
       {% endif %}
 
@@ -1629,108 +1671,144 @@
       {% set reviewCardBadgeLabel = 'Quiet' %}
       {% set reviewCardLines = [] %}
       {% set reviewCardActionLabel = statusCanViewControl ? 'Open Approvals' : 'Open Settings' %}
-      {% set reviewCardActionUrl = statusCanViewControl ? cpUrl('agents/approvals') : (settingsUrl ~ '#notificationsSection') %}
-      {% if statusScreenPreview == 'setup' %}
+      {% set reviewCardActionUrl = statusCanViewControl ? approvalsUrl : settingsUrl %}
+      {% if not statusCanViewControl %}
+        {% set reviewCardBadgeLabel = 'Unavailable' %}
+        {% set reviewCardLines = [{ text: 'Approval visibility depends on control permissions for the current CP user.' }] %}
+      {% elseif statusScreenPreview == 'setup' %}
         {% set reviewCardLines = [
-          'No approval requests are waiting.',
-          'Operator notifications can stay quiet until you need alerts.'
+          { text: 'No approval requests are waiting.' },
+          { text: 'Approvals only appear when governed changes need review.' }
         ] %}
-      {% elseif dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0 or dashboardNotificationIssueCount > 0 %}
+      {% elseif dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0 %}
         {% set reviewCardBadgeTone = dashboardBlockedExecutions > 0 ? 'bad' : 'warn' %}
         {% set reviewCardBadgeLabel = 'Needs attention' %}
-        {% if dashboardBlockedExecutions > 0 %}
-          {% set reviewCardActionUrl = cpUrl('agents/approvals') ~ '#agents-control-follow-up-table-panel' %}
-        {% elseif dashboardPendingApprovals > 0 %}
-          {% set reviewCardActionUrl = cpUrl('agents/approvals') ~ '#agents-control-pending-table-panel' %}
-        {% elseif dashboardNotificationIssueCount > 0 and not statusCanViewControl %}
-          {% set reviewCardActionUrl = settingsUrl ~ '#notificationsSection' %}
-        {% endif %}
         {% if dashboardPendingApprovals > 0 %}
-          {% set reviewCardLines = reviewCardLines|merge([dashboardPendingApprovals ~ ' pending approval request' ~ (dashboardPendingApprovals == 1 ? '' : 's')]) %}
+          {% set reviewCardLines = reviewCardLines|merge([{
+            text: dashboardPendingApprovals ~ ' pending approval request' ~ (dashboardPendingApprovals == 1 ? '' : 's'),
+            url: approvalsUrl ~ '#agents-control-pending-table-panel'
+          }]) %}
         {% endif %}
         {% if dashboardSecondApprovalCount > 0 %}
-          {% set reviewCardLines = reviewCardLines|merge([dashboardSecondApprovalCount ~ ' needing a second approval']) %}
+          {% set reviewCardLines = reviewCardLines|merge([{
+            text: dashboardSecondApprovalCount ~ ' needing a second approval',
+            url: approvalsUrl ~ '#agents-control-pending-table-panel'
+          }]) %}
         {% endif %}
         {% if dashboardBlockedExecutions > 0 %}
-          {% set reviewCardLines = reviewCardLines|merge([dashboardBlockedExecutions ~ ' blocked execution' ~ (dashboardBlockedExecutions == 1 ? '' : 's')]) %}
-        {% elseif dashboardNotificationFailedCount > 0 %}
-          {% set reviewCardLines = reviewCardLines|merge([dashboardNotificationFailedCount ~ ' failed notification deliver' ~ (dashboardNotificationFailedCount == 1 ? 'y' : 'ies')]) %}
-        {% elseif dashboardNotificationIssueCount > 0 %}
-          {% set reviewCardLines = reviewCardLines|merge(['Notification routing or monitor state needs review.']) %}
+          {% set reviewCardLines = reviewCardLines|merge([{
+            text: dashboardBlockedExecutions ~ ' blocked execution' ~ (dashboardBlockedExecutions == 1 ? '' : 's'),
+            url: approvalsUrl ~ '#agents-control-follow-up-table-panel'
+          }]) %}
         {% endif %}
         {% if dashboardCompletedApprovals > 0 %}
-          {% set reviewCardLines = reviewCardLines|merge([dashboardCompletedApprovals ~ ' completed approval' ~ (dashboardCompletedApprovals == 1 ? '' : 's')]) %}
+          {% set reviewCardLines = reviewCardLines|merge([{
+            text: dashboardCompletedApprovals ~ ' completed approval' ~ (dashboardCompletedApprovals == 1 ? '' : 's')
+          }]) %}
         {% endif %}
       {% else %}
         {% set reviewCardBadgeTone = 'good' %}
         {% set reviewCardBadgeLabel = 'Quiet' %}
         {% set reviewCardLines = [
           dashboardCompletedApprovals > 0
-            ? dashboardCompletedApprovals ~ ' completed approval' ~ (dashboardCompletedApprovals == 1 ? '' : 's')
-            : 'No approval requests are waiting.',
-          notificationEnabled
-            ? 'Operator notifications look healthy.'
-            : 'Operator notifications are currently off.'
+            ? { text: dashboardCompletedApprovals ~ ' completed approval' ~ (dashboardCompletedApprovals == 1 ? '' : 's') }
+            : { text: 'No approval requests are waiting.' },
+          { text: 'No governed review work needs attention right now.' }
         ] %}
-        {% if dashboardCompletedApprovals > 0 and statusCanViewControl %}
-          {% set reviewCardActionLabel = 'View completed approvals' %}
-          {% set reviewCardActionUrl = cpUrl('agents/approvals') ~ '#agents-control-completed-table-panel' %}
+      {% endif %}
+
+      {% set notificationsCardBadgeTone = 'muted' %}
+      {% set notificationsCardBadgeLabel = 'Off' %}
+      {% set notificationsCardLines = [] %}
+      {% set notificationsDetailDialogId = 'operatorNotificationsDetailDialog' %}
+      {% set notificationsCardActionLabel = 'Open Settings' %}
+      {% set notificationsCardActionUrl = settingsUrl %}
+      {% if not notificationEnabled %}
+        {% set notificationsCardLines = [
+          { text: 'Operator notifications are currently off.' },
+          { text: 'Enable them when operators need email alerts.' }
+        ] %}
+      {% elseif dashboardNotificationIssueCount > 0 %}
+        {% set notificationsCardBadgeTone = notificationMonitorTone == 'bad' ? 'bad' : 'warn' %}
+        {% set notificationsCardBadgeLabel = 'Needs attention' %}
+        {% if notificationRecipientCount == 0 %}
+          {% set notificationsCardLines = notificationsCardLines|merge([{
+            text: 'No valid recipients resolve from the current settings.',
+            url: settingsUrl ~ '#notificationsSection'
+          }]) %}
         {% endif %}
+        {% if notificationSummary.failed|default(0) > 0 %}
+          {% set notificationsCardLines = notificationsCardLines|merge([{
+            text: notificationSummary.failed|default(0) ~ ' failed notification deliver' ~ (notificationSummary.failed|default(0) == 1 ? 'y' : 'ies')
+          }]) %}
+        {% endif %}
+        {% if notificationMonitorPayload.issues|default([])|length %}
+          {% set notificationsCardLines = notificationsCardLines|merge([{
+            text: notificationMonitorPayload.issues|slice(0, 1)|join(' ')
+          }]) %}
+        {% else %}
+          {% set notificationsCardLines = notificationsCardLines|merge([{
+            text: 'Notification routing or monitor state needs review.'
+          }]) %}
+        {% endif %}
+      {% else %}
+        {% set notificationsCardBadgeTone = 'good' %}
+        {% set notificationsCardBadgeLabel = 'Ready' %}
+        {% set notificationsCardLines = [
+          { text: 'Enabled for ' ~ notificationRecipientCount ~ ' recipient' ~ (notificationRecipientCount == 1 ? '' : 's') ~ '.' },
+          { text: 'No delivery issues need attention right now.' }
+        ] %}
       {% endif %}
 
       {% set targetSetsCardBadgeTone = 'muted' %}
       {% set targetSetsCardBadgeLabel = 'Unavailable' %}
       {% set targetSetsCardLines = [] %}
       {% set targetSetsCardActionLabel = 'Open Target Sets' %}
-      {% set targetSetsCardActionUrl = cpUrl('agents/target-sets') %}
+      {% set targetSetsCardActionUrl = targetSetsUrl %}
       {% if not writesExperimentalEnabled %}
         {% set targetSetsCardBadgeLabel = 'Off' %}
         {% set targetSetsCardLines = [
-          'Governed draft writes are off.',
-          'Turn on experimental writes before configuring Target Sets.'
+          { text: 'Governed draft writes are off.' },
+          { text: 'Turn on experimental writes before configuring Target Sets.' }
         ] %}
         {% set targetSetsCardActionLabel = 'Open Settings' %}
-        {% set targetSetsCardActionUrl = settingsUrl ~ '#runtimeSwitchesSection' %}
+        {% set targetSetsCardActionUrl = settingsUrl %}
       {% elseif not controlCpEnabled %}
         {% set targetSetsCardBadgeLabel = 'Unavailable' %}
         {% set targetSetsCardLines = [
-          'Target Sets need the control plane CP to be available.',
-          'This environment is not exposing that surface right now.'
+          { text: 'Target Sets need the control plane CP to be available.' },
+          { text: 'This environment is not exposing that surface right now.' }
         ] %}
       {% elseif not statusCanViewCredentials %}
-        {% set targetSetsCardLines = ['Boundary visibility depends on credential permissions for the current CP user.'] %}
+        {% set targetSetsCardLines = [{ text: 'Boundary visibility depends on credential permissions for the current CP user.' }] %}
       {% elseif statusScreenPreview == 'setup' or dashboardWriteCapableAccounts == 0 %}
         {% set targetSetsCardBadgeLabel = 'Optional' %}
         {% set targetSetsCardLines = [
           dashboardTargetSets|length > 0
-            ? dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured'
-            : 'No target sets configured yet.',
-          'Create boundaries only when a worker needs governed draft writes.'
+            ? { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' }
+            : { text: 'No target sets configured yet.' },
+          { text: 'Only needed for governed draft writes.' }
         ] %}
-        {% if dashboardTargetSets|length == 0 %}
-          {% set targetSetsCardActionUrl = cpUrl('agents/target-sets', { targetSetForm: 'create' }) ~ '#targetSetFormSection' %}
-        {% endif %}
       {% elseif dashboardWriteAccountsWithoutTargetSets > 0 %}
         {% set targetSetsCardBadgeTone = 'warn' %}
         {% set targetSetsCardBadgeLabel = 'Needs attention' %}
         {% set targetSetsCardLines = [
-          dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured',
-          dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's'),
-          dashboardWriteAccountsWithoutTargetSets ~ ' missing boundaries'
+          { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' },
+          { text: dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's') },
+          {
+            text: dashboardWriteAccountsWithoutTargetSets ~ ' missing boundaries',
+            url: dashboardTargetSets|length == 0
+              ? targetSetsUrl ~ '?targetSetForm=create#targetSetFormSection'
+              : attentionAccountsUrl ~ '#agentsCardList'
+          }
         ] %}
-        {% if dashboardTargetSets|length == 0 %}
-          {% set targetSetsCardActionLabel = 'Create Target Set' %}
-          {% set targetSetsCardActionUrl = cpUrl('agents/target-sets', { targetSetForm: 'create' }) ~ '#targetSetFormSection' %}
-        {% else %}
-          {% set targetSetsCardActionUrl = attentionAccountsUrl ~ '#agentsCardList' %}
-        {% endif %}
       {% else %}
         {% set targetSetsCardBadgeTone = 'good' %}
         {% set targetSetsCardBadgeLabel = 'Ready' %}
         {% set targetSetsCardLines = [
-          dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured',
-          dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's'),
-          'All write-capable accounts are bounded.'
+          { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' },
+          { text: dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's') },
+          { text: 'All write-capable accounts are bounded.' }
         ] %}
       {% endif %}
 
@@ -1738,40 +1816,110 @@
       {% set webhooksCardBadgeLabel = 'Optional' %}
       {% set webhooksCardLines = [] %}
       {% set webhooksCardActionLabel = 'Open Settings' %}
-      {% set webhooksCardActionUrl = settingsUrl ~ '#webhookSection' %}
+      {% set webhooksCardActionUrl = settingsUrl %}
       {% if statusScreenPreview == 'setup' %}
         {% set webhooksCardLines = [
-          'Delivery is optional for first setup.',
-          'Enable it when workers need push-based wake-ups instead of polling.'
+          { text: 'Delivery is optional for first setup.' },
+          { text: 'Optional until workers need push delivery.' }
         ] %}
       {% elseif securityWebhookMisconfigured %}
         {% set webhooksCardBadgeTone = 'warn' %}
         {% set webhooksCardBadgeLabel = 'Needs attention' %}
         {% set webhooksCardLines = [
-          'Webhook URL and secret must both be configured.',
-          'Runtime delivery is only partially configured right now.'
+          { text: 'Webhook URL and secret must both be configured.', url: settingsUrl ~ '#webhookSection' },
+          { text: 'Runtime delivery is only partially configured right now.', url: settingsUrl ~ '#webhookSection' }
         ] %}
       {% elseif telemetryDlqFailed > 0 %}
         {% set webhooksCardBadgeTone = 'warn' %}
         {% set webhooksCardBadgeLabel = 'Needs attention' %}
         {% set webhooksCardLines = [
-          webhookEnabledForReadiness ? 'Delivery is configured.' : 'Delivery is not configured.',
-          telemetryDlqFailed ~ ' failed deliver' ~ (telemetryDlqFailed == 1 ? 'y needs replay or investigation.' : 'ies need replay or investigation.'),
-          webhookProbeStatusLine|replace({'Status: ': ''})
+          { text: webhookEnabledForReadiness ? 'Delivery is configured.' : 'Delivery is not configured.' },
+          { text: telemetryDlqFailed ~ ' failed deliver' ~ (telemetryDlqFailed == 1 ? 'y needs replay or investigation.' : 'ies need replay or investigation.'), url: readinessUrl ~ '#webhookDlqDetailSection' },
+          { text: webhookProbeStatusLine|replace({'Status: ': ''}) }
         ] %}
       {% elseif webhookEnabledForReadiness %}
         {% set webhooksCardBadgeTone = 'good' %}
         {% set webhooksCardBadgeLabel = 'Ready' %}
         {% set webhooksCardLines = [
-          'Delivery is configured.',
-          webhookProbeStatusLine|replace({'Status: ': ''})
+          { text: 'Delivery is configured.' },
+          { text: webhookProbeStatusLine|replace({'Status: ': ''}) }
         ] %}
       {% else %}
         {% set webhooksCardLines = [
-          'Delivery is not configured.',
+          { text: 'Delivery is not configured.' },
           webhookProbeStorageReady
-            ? 'Add a webhook URL and secret when external workers need push-based wake-ups.'
-            : 'Run plugin migrations before using webhook utilities.'
+            ? { text: 'Optional until workers need push delivery.' }
+            : { text: 'Run plugin migrations before using webhook utilities.' }
+        ] %}
+      {% endif %}
+
+      {% set webhookProbeCardBadgeTone = webhookProbeStateTone %}
+      {% set webhookProbeCardBadgeLabel = webhookProbeState in ['configured', 'failed'] ? 'Ready' : (webhookProbeState == 'misconfigured' or webhookProbeState == 'storage' ? 'Needs attention' : (webhookProbeState == 'cooldown' ? 'Cooldown' : 'Optional')) %}
+      {% set webhookProbeCardLines = [] %}
+      {% set webhookProbeDetailDialogId = 'webhookProbeDetailDialog' %}
+      {% set webhookProbeCardActionLabel = 'Open Settings' %}
+      {% set webhookProbeCardActionUrl = settingsUrl %}
+      {% if webhookProbeState == 'misconfigured' %}
+        {% set webhookProbeCardLines = [
+          { text: 'Runtime webhook URL or secret is missing.', url: settingsUrl ~ '#webhookSection' },
+          { text: webhookProbeStatusLine|replace({'Status: ': ''}) }
+        ] %}
+      {% elseif webhookProbeState == 'storage' %}
+        {% set webhookProbeCardLines = [
+          { text: webhookProbeStatusLine|replace({'Status: ': ''}) },
+          { text: 'Run plugin migrations before using the production probe.' }
+        ] %}
+      {% elseif webhookProbeState == 'failed' %}
+        {% set webhookProbeCardBadgeTone = 'warn' %}
+        {% set webhookProbeCardBadgeLabel = 'Needs attention' %}
+        {% set webhookProbeCardLines = [
+          { text: webhookProbeStatusLine|replace({'Status: ': ''}) }
+        ] %}
+      {% elseif webhookProbeState == 'cooldown' %}
+        {% set webhookProbeCardLines = [
+          { text: webhookProbeStatusLine|replace({'Status: ': ''}) },
+          { text: 'Next allowed attempt: ' ~ (webhookProbeNextAllowedAt ? webhookProbeNextAllowedAt|date('Y-m-d, H:i:s', timezone='UTC') ~ ' UTC' : 'soon') }
+        ] %}
+      {% elseif webhookProbeState == 'empty' %}
+        {% set webhookProbeCardLines = [
+          { text: 'Live receiver can be probed.' },
+          { text: 'No production probe has been recorded yet.' }
+        ] %}
+      {% else %}
+        {% set webhookProbeCardLines = [
+          { text: 'Live receiver can be probed.' },
+          { text: webhookProbeStatusLine|replace({'Status: ': ''}) }
+        ] %}
+      {% endif %}
+
+      {% set webhookTestSinkCardBadgeTone = webhookTestSinkStateTone %}
+      {% set webhookTestSinkCardBadgeLabel = webhookTestSinkState in ['configured', 'empty'] ? 'Ready' : (webhookTestSinkState in ['misconfigured', 'storage', 'dev-disabled'] ? 'Needs attention' : 'Dev only') %}
+      {% set webhookTestSinkCardLines = [] %}
+      {% set webhookTestSinkDetailDialogId = 'webhookTestSinkDetailDialog' %}
+      {% if not webhookTestSinkRequested %}
+        {% set webhookTestSinkCardLines = [
+          { text: 'Dev-only local capture is currently off.' },
+          { text: 'Enable it only when you need to inspect outbound deliveries locally.' }
+        ] %}
+      {% elseif webhookTestSinkState == 'misconfigured' %}
+        {% set webhookTestSinkCardLines = [
+          { text: 'Runtime webhook transport is not fully pointed at the local sink.', url: settingsUrl ~ '#webhookSection' },
+          { text: 'Target is ' ~ webhookTestSinkWebhookTargetLabel ~ ' and secret is ' ~ webhookTestSinkWebhookSecretLabel ~ '.' }
+        ] %}
+      {% elseif webhookTestSinkState == 'storage' %}
+        {% set webhookTestSinkCardLines = [
+          { text: webhookTestSinkStatusLine|replace({'Status: ': ''}) },
+          { text: 'Run plugin migrations to create the local capture table.' }
+        ] %}
+      {% elseif webhookTestSinkState == 'dev-disabled' %}
+        {% set webhookTestSinkCardLines = [
+          { text: webhookTestSinkStatusLine|replace({'Status: ': ''}) },
+          { text: 'The sink only runs when Craft devMode is enabled.' }
+        ] %}
+      {% else %}
+        {% set webhookTestSinkCardLines = [
+          { text: 'Dev-only local capture is active.' },
+          { text: webhookTestSinkStatusLine|replace({'Status: ': ''}) }
         ] %}
       {% endif %}
 
@@ -1809,17 +1957,31 @@
                   {{ readinessDisplayStateLead }} {{ readinessDisplayStateSubcopy }} Last evaluated {{ readinessEvaluationLabel }}.
                 </p>
               </div>
-              <div class="agents-status-dashboard-verdict__attention">
-                <div class="agents-status-dashboard-verdict__label">Needs attention</div>
-                <div class="agents-status-dashboard-verdict__items" role="list" aria-label="Status items needing attention">
-                  {% for item in verdictAttentionItems %}
-                    <article class="agents-status-dashboard-attention-item agents-status-dashboard-attention-item--{{ item.tone }}" role="listitem">
-                      <strong class="agents-status-dashboard-attention-item__title">{{ item.title }}</strong>
-                      <p class="agents-status-dashboard-attention-item__copy">{{ item.copy }}</p>
-                    </article>
-                  {% endfor %}
+              {% if readinessDisplayStateTone == 'good' %}
+                <div class="agents-status-dashboard-verdict__tips">
+                  <div class="agents-status-dashboard-verdict__label">How to work with Agents</div>
+                  <div class="agents-status-dashboard-tips__items" role="list" aria-label="Operator tips for working with Agents">
+                    {% for tip in verdictOperatorTips %}
+                      <article class="agents-status-dashboard-tip-item" role="listitem">
+                        <strong class="agents-status-dashboard-tip-item__title">{{ tip.title }}</strong>
+                        <p class="agents-status-dashboard-tip-item__copy">{{ tip.copy }}</p>
+                      </article>
+                    {% endfor %}
+                  </div>
                 </div>
-              </div>
+              {% else %}
+                <div class="agents-status-dashboard-verdict__attention">
+                  <div class="agents-status-dashboard-verdict__label">Needs attention</div>
+                  <div class="agents-status-dashboard-verdict__items" role="list" aria-label="Status items needing attention">
+                    {% for item in verdictAttentionItems %}
+                      <article class="agents-status-dashboard-attention-item agents-status-dashboard-attention-item--{{ item.tone }}" role="listitem">
+                        <strong class="agents-status-dashboard-attention-item__title">{{ item.title }}</strong>
+                        <p class="agents-status-dashboard-attention-item__copy">{{ item.copy }}</p>
+                      </article>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
             </div>
             <div class="agents-status-dashboard-card__footer">
               {% if verdictPrimaryActionUrl == '#statusSystemDetails' %}
@@ -1841,7 +2003,13 @@
             <div class="agents-status-dashboard-card__body">
               <ul class="agents-status-dashboard-card__list">
                 {% for line in accountsCardLines %}
-                  <li>{{ line }}</li>
+                  <li>
+                    {% if (line.url ?? '') != '' %}
+                      <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                    {% else %}
+                      {{ line.text }}
+                    {% endif %}
+                  </li>
                 {% endfor %}
               </ul>
             </div>
@@ -1850,43 +2018,87 @@
             </div>
           </article>
 
-          <article class="agents-status-dashboard-card border rounded p-0">
-            <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
-              <div class="agents-status-dashboard-card__header-copy">
-                <h2 class="agents-status-dashboard-card__title">Approvals / Notifications</h2>
+          {% if showWriteDashboardCards %}
+            <article class="agents-status-dashboard-card border rounded p-0">
+              <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
+                <div class="agents-status-dashboard-card__header-copy">
+                  <h2 class="agents-status-dashboard-card__title">Approvals</h2>
+                </div>
+                <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ reviewCardBadgeTone }}">{{ reviewCardBadgeLabel }}</span>
               </div>
-              <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ reviewCardBadgeTone }}">{{ reviewCardBadgeLabel }}</span>
-            </div>
-            <div class="agents-status-dashboard-card__body">
-              <ul class="agents-status-dashboard-card__list">
-                {% for line in reviewCardLines %}
-                  <li>{{ line }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-            <div class="agents-status-dashboard-card__footer">
-              <a href="{{ reviewCardActionUrl }}" class="btn small">{{ reviewCardActionLabel }}</a>
-            </div>
-          </article>
+              <div class="agents-status-dashboard-card__body">
+                <ul class="agents-status-dashboard-card__list">
+                  {% for line in reviewCardLines %}
+                    <li>
+                      {% if (line.url ?? '') != '' %}
+                        <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                      {% else %}
+                        {{ line.text }}
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="agents-status-dashboard-card__footer">
+                <a href="{{ reviewCardActionUrl }}" class="btn small">{{ reviewCardActionLabel }}</a>
+              </div>
+            </article>
+          {% endif %}
 
           <article class="agents-status-dashboard-card border rounded p-0">
             <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
               <div class="agents-status-dashboard-card__header-copy">
-                <h2 class="agents-status-dashboard-card__title">Target Sets</h2>
+                <h2 class="agents-status-dashboard-card__title">Operator Notifications</h2>
               </div>
-              <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ targetSetsCardBadgeTone }}">{{ targetSetsCardBadgeLabel }}</span>
+              <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ notificationsCardBadgeTone }}">{{ notificationsCardBadgeLabel }}</span>
             </div>
             <div class="agents-status-dashboard-card__body">
               <ul class="agents-status-dashboard-card__list">
-                {% for line in targetSetsCardLines %}
-                  <li>{{ line }}</li>
+                {% for line in notificationsCardLines %}
+                  <li>
+                    {% if (line.url ?? '') != '' %}
+                      <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                    {% else %}
+                      {{ line.text }}
+                    {% endif %}
+                  </li>
                 {% endfor %}
               </ul>
             </div>
             <div class="agents-status-dashboard-card__footer">
-              <a href="{{ targetSetsCardActionUrl }}" class="btn small">{{ targetSetsCardActionLabel }}</a>
+              <a href="{{ notificationsCardActionUrl }}" class="btn small">{{ notificationsCardActionLabel }}</a>
+              {% if notificationEnabled and not statusScreenPreview %}
+                <button class="btn small" type="button" data-agents-open-status-details="{{ notificationsDetailDialogId }}">View details</button>
+              {% endif %}
             </div>
           </article>
+
+          {% if showWriteDashboardCards %}
+            <article class="agents-status-dashboard-card border rounded p-0">
+              <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
+                <div class="agents-status-dashboard-card__header-copy">
+                  <h2 class="agents-status-dashboard-card__title">Target Sets</h2>
+                </div>
+                <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ targetSetsCardBadgeTone }}">{{ targetSetsCardBadgeLabel }}</span>
+              </div>
+              <div class="agents-status-dashboard-card__body">
+                <ul class="agents-status-dashboard-card__list">
+                  {% for line in targetSetsCardLines %}
+                    <li>
+                      {% if (line.url ?? '') != '' %}
+                        <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                      {% else %}
+                        {{ line.text }}
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="agents-status-dashboard-card__footer">
+                <a href="{{ targetSetsCardActionUrl }}" class="btn small">{{ targetSetsCardActionLabel }}</a>
+              </div>
+            </article>
+          {% endif %}
 
           <article class="agents-status-dashboard-card border rounded p-0">
             <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
@@ -1898,12 +2110,75 @@
             <div class="agents-status-dashboard-card__body">
               <ul class="agents-status-dashboard-card__list">
                 {% for line in webhooksCardLines %}
-                  <li>{{ line }}</li>
+                  <li>
+                    {% if (line.url ?? '') != '' %}
+                      <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                    {% else %}
+                      {{ line.text }}
+                    {% endif %}
+                  </li>
                 {% endfor %}
               </ul>
             </div>
             <div class="agents-status-dashboard-card__footer">
               <a href="{{ webhooksCardActionUrl }}" class="btn small">{{ webhooksCardActionLabel }}</a>
+            </div>
+          </article>
+
+          <article class="agents-status-dashboard-card border rounded p-0">
+            <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
+              <div class="agents-status-dashboard-card__header-copy">
+                <h2 class="agents-status-dashboard-card__title">Webhook Probe</h2>
+              </div>
+              <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ webhookProbeCardBadgeTone }}">{{ webhookProbeCardBadgeLabel }}</span>
+            </div>
+            <div class="agents-status-dashboard-card__body">
+              <ul class="agents-status-dashboard-card__list">
+                {% for line in webhookProbeCardLines %}
+                  <li>
+                    {% if (line.url ?? '') != '' %}
+                      <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                    {% else %}
+                      {{ line.text }}
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="agents-status-dashboard-card__footer">
+              <a href="{{ webhookProbeCardActionUrl }}" class="btn small">{{ webhookProbeCardActionLabel }}</a>
+              {% if not statusScreenPreview %}
+                <button class="btn small" type="button" data-agents-open-status-details="{{ webhookProbeDetailDialogId }}">View details</button>
+              {% endif %}
+            </div>
+          </article>
+
+          <article class="agents-status-dashboard-card border rounded p-0">
+            <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
+              <div class="agents-status-dashboard-card__header-copy">
+                <h2 class="agents-status-dashboard-card__title">Webhook Test Sink</h2>
+              </div>
+              <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ webhookTestSinkCardBadgeTone }}">{{ webhookTestSinkCardBadgeLabel }}</span>
+            </div>
+            <div class="agents-status-dashboard-card__body">
+              <ul class="agents-status-dashboard-card__list">
+                {% for line in webhookTestSinkCardLines %}
+                  <li>
+                    {% if (line.url ?? '') != '' %}
+                      <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                    {% else %}
+                      {{ line.text }}
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="agents-status-dashboard-card__footer">
+              {% if webhookTestSinkVisible and not statusScreenPreview %}
+                <button class="btn small" type="button" data-agents-open-status-details="{{ webhookTestSinkDetailDialogId }}">View details</button>
+              {% else %}
+                <a href="{{ settingsUrl }}" class="btn small">Open Settings</a>
+              {% endif %}
             </div>
           </article>
         </div>
@@ -2810,28 +3085,36 @@
       {% endif %}
 
       {% if not statusScreenPreview %}
-      <section class="agents-webhook-probe-card border rounded p-0" id="webhookProbeSection">
-        <div class="agents-webhook-probe-top agents-status-strip-card__top">
-          <div class="agents-webhook-probe-header">
-            <h2 class="agents-webhook-probe-title">Webhook Probe</h2>
+      <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--status-grid" id="{{ webhookProbeDetailDialogId }}" data-agents-detail-dialog aria-labelledby="webhookProbeDetailDialogTitle">
+        <div class="agents-readiness-detail-dialog-shell">
+          <div class="agents-readiness-detail-dialog-head">
+            <div class="agents-readiness-detail-dialog-heading">
+              <h2 class="agents-readiness-detail-dialog-title" id="webhookProbeDetailDialogTitle">Webhook Probe</h2>
+              <p class="agents-readiness-detail-dialog-copy">Synthetic signed delivery against the live webhook receiver, with probe history and one-click validation controls.</p>
+            </div>
+            <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close webhook probe detail">Close</button>
           </div>
-          <div class="agents-webhook-probe-actions">
-            <form method="post" accept-charset="UTF-8" class="agents-webhook-probe-action-form">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/send-webhook-probe') }}
-              {{ redirectInput('agents/status#webhookProbeSection') }}
-              <button class="btn small agents-webhook-probe-button" type="submit"{% if not webhookProbeCanSend %} disabled{% endif %}>Send production probe</button>
-            </form>
-          </div>
-        </div>
-        <div class="agents-status-strip-card__subcopy">
-          <p class="agents-webhook-probe-copy">Synthetic signed delivery against the live webhook receiver for transport validation without content mutation or sink repointing.</p>
-          <p class="agents-webhook-probe-status agents-webhook-probe-status--{{ webhookProbeStateTone }}">{{ webhookProbeStatusLine }}</p>
-        </div>
+          <div class="agents-readiness-detail-dialog-body">
+            <section class="agents-webhook-probe-card border rounded p-0" id="webhookProbeSection">
+              <div class="agents-webhook-probe-top agents-status-strip-card__top">
+                <div class="agents-webhook-probe-header">
+                  <h2 class="agents-webhook-probe-title">Webhook Probe</h2>
+                </div>
+                <div class="agents-webhook-probe-actions">
+                  <form method="post" accept-charset="UTF-8" class="agents-webhook-probe-action-form">
+                    {{ csrfInput() }}
+                    {{ actionInput('agents/dashboard/send-webhook-probe') }}
+                    {{ redirectInput('agents/status') }}
+                    <button class="btn small agents-webhook-probe-button" type="submit"{% if not webhookProbeCanSend %} disabled{% endif %}>Send production probe</button>
+                  </form>
+                </div>
+              </div>
+              <div class="agents-status-strip-card__subcopy">
+                <p class="agents-webhook-probe-copy">Synthetic signed delivery against the live webhook receiver for transport validation without content mutation or sink repointing.</p>
+                <p class="agents-webhook-probe-status agents-webhook-probe-status--{{ webhookProbeStateTone }}">{{ webhookProbeStatusLine }}</p>
+              </div>
 
-        <details class="agents-readiness-ready-details"{% if webhookProbeState in ['storage', 'misconfigured', 'failed'] %} open{% endif %}>
-          <summary><span>Details</span></summary>
-          <div class="agents-status-collapsible-body">
+              <div class="agents-status-collapsible-body">
             <div class="agents-webhook-probe-summary">
               <div class="agents-webhook-probe-summary-item">
                 <span class="agents-webhook-probe-summary-label">Delivered / failed</span>
@@ -2953,9 +3236,11 @@
                 <li>Cooldown limits repeated probe traffic against the receiver.</li>
               </ul>
             </div>
+              </div>
+            </section>
           </div>
-        </details>
-      </section>
+        </div>
+      </dialog>
       {% endif %}
 
       <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--payload" id="webhookProbePayloadDialog" data-agents-detail-dialog aria-labelledby="webhookProbePayloadDialogTitle">
@@ -2976,36 +3261,44 @@
       </dialog>
 
       {% if webhookTestSinkVisible and not statusScreenPreview %}
-        <section class="agents-webhook-test-sink-card border rounded p-0" id="webhookTestSinkSection">
-          <div class="agents-webhook-test-sink-top agents-status-strip-card__top">
-            <div class="agents-webhook-test-sink-header">
-              <h2 class="agents-webhook-test-sink-title">Webhook Test Sink</h2>
-            </div>
-            {% if webhookTestSinkRequested %}
-              <div class="agents-webhook-test-sink-actions">
-                <form method="post" accept-charset="UTF-8" class="agents-webhook-test-sink-action-form">
-                  {{ csrfInput() }}
-                  {{ actionInput('agents/dashboard/send-webhook-test-sink-delivery') }}
-                  {{ redirectInput('agents/status#webhookTestSinkSection') }}
-                  <button class="btn small agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkCanSend %} disabled{% endif %}>Send test webhook</button>
-                </form>
-                <form method="post" accept-charset="UTF-8" class="agents-webhook-test-sink-action-form">
-                  {{ csrfInput() }}
-                  {{ actionInput('agents/dashboard/clear-webhook-test-sink') }}
-                  {{ redirectInput('agents/status#webhookTestSinkSection') }}
-                  <button class="btn small agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkStorageReady or webhookTestSinkTotal == 0 %} disabled{% endif %}>Clear captures</button>
-                </form>
+        <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--status-grid" id="{{ webhookTestSinkDetailDialogId }}" data-agents-detail-dialog aria-labelledby="webhookTestSinkDetailDialogTitle">
+          <div class="agents-readiness-detail-dialog-shell">
+            <div class="agents-readiness-detail-dialog-head">
+              <div class="agents-readiness-detail-dialog-heading">
+                <h2 class="agents-readiness-detail-dialog-title" id="webhookTestSinkDetailDialogTitle">Webhook Test Sink</h2>
+                <p class="agents-readiness-detail-dialog-copy">Dev-only local capture for outbound deliveries, with one-click test sends and payload inspection.</p>
               </div>
-            {% endif %}
-          </div>
-          <div class="agents-status-strip-card__subcopy">
-            <p class="agents-webhook-test-sink-copy">Dev-only local receiver for inspecting outbound webhook deliveries before wiring a real automation endpoint.</p>
-            <p class="agents-webhook-test-sink-status agents-webhook-test-sink-status--{{ webhookTestSinkStateTone }}">{{ webhookTestSinkStatusLine }}</p>
-          </div>
+              <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close webhook test sink detail">Close</button>
+            </div>
+            <div class="agents-readiness-detail-dialog-body">
+              <section class="agents-webhook-test-sink-card border rounded p-0" id="webhookTestSinkSection">
+                <div class="agents-webhook-test-sink-top agents-status-strip-card__top">
+                  <div class="agents-webhook-test-sink-header">
+                    <h2 class="agents-webhook-test-sink-title">Webhook Test Sink</h2>
+                  </div>
+                  {% if webhookTestSinkRequested %}
+                    <div class="agents-webhook-test-sink-actions">
+                      <form method="post" accept-charset="UTF-8" class="agents-webhook-test-sink-action-form">
+                        {{ csrfInput() }}
+                        {{ actionInput('agents/dashboard/send-webhook-test-sink-delivery') }}
+                        {{ redirectInput('agents/status') }}
+                        <button class="btn small agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkCanSend %} disabled{% endif %}>Send test webhook</button>
+                      </form>
+                      <form method="post" accept-charset="UTF-8" class="agents-webhook-test-sink-action-form">
+                        {{ csrfInput() }}
+                        {{ actionInput('agents/dashboard/clear-webhook-test-sink') }}
+                        {{ redirectInput('agents/status') }}
+                        <button class="btn small agents-webhook-test-sink-button" type="submit"{% if not webhookTestSinkStorageReady or webhookTestSinkTotal == 0 %} disabled{% endif %}>Clear captures</button>
+                      </form>
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="agents-status-strip-card__subcopy">
+                  <p class="agents-webhook-test-sink-copy">Dev-only local receiver for inspecting outbound webhook deliveries before wiring a real automation endpoint.</p>
+                  <p class="agents-webhook-test-sink-status agents-webhook-test-sink-status--{{ webhookTestSinkStateTone }}">{{ webhookTestSinkStatusLine }}</p>
+                </div>
 
-          <details class="agents-readiness-ready-details">
-            <summary><span>Details</span></summary>
-            <div class="agents-status-collapsible-body">
+                <div class="agents-status-collapsible-body">
               <div class="agents-webhook-test-sink-row agents-webhook-test-sink-row--url">
                 <span class="agents-webhook-test-sink-row-label">Sink URL:</span>
                 <code class="agents-webhook-test-sink-url">{{ webhookTestSinkUrl }}</code>
@@ -3109,9 +3402,11 @@
                   <li>The sink keeps the latest {{ webhookTestSinkRetentionLimit }} captured deliveries.</li>
                 </ul>
               </div>
+                </div>
+              </section>
             </div>
-          </details>
-        </section>
+          </div>
+        </dialog>
 
         <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--payload" id="webhookTestSinkPayloadDialog" data-agents-detail-dialog aria-labelledby="webhookTestSinkPayloadDialogTitle">
           <div class="agents-readiness-detail-dialog-shell">
@@ -3132,29 +3427,37 @@
       {% endif %}
 
       {% if notificationEnabled and not statusScreenPreview %}
-      <section class="agents-operator-notifications-card border rounded p-0" id="operatorNotificationsSection">
-        <div class="agents-operator-notifications-top agents-status-strip-card__top">
-          <div class="agents-operator-notifications-header">
-            <h2 class="agents-operator-notifications-title">Operator Notifications</h2>
+      <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--status-grid" id="{{ notificationsDetailDialogId }}" data-agents-detail-dialog aria-labelledby="operatorNotificationsDetailDialogTitle">
+        <div class="agents-readiness-detail-dialog-shell">
+          <div class="agents-readiness-detail-dialog-head">
+            <div class="agents-readiness-detail-dialog-heading">
+              <h2 class="agents-readiness-detail-dialog-title" id="operatorNotificationsDetailDialogTitle">Operator Notifications</h2>
+              <p class="agents-readiness-detail-dialog-copy">Recipient coverage, monitor status, and recent delivery history for operator-facing email alerts.</p>
+            </div>
+            <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close operator notifications detail">Close</button>
           </div>
-          <div class="agents-operator-notifications-actions">
-            <a href="{{ settingsUrl ~ '#notificationsSection' }}" class="btn small agents-operator-notifications-button">Notification settings</a>
-            <form method="post" accept-charset="UTF-8" class="agents-operator-notifications-action-form">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/run-notifications-check') }}
-              {{ redirectInput('agents/status#operatorNotificationsSection') }}
-              <button class="btn small agents-operator-notifications-button" type="submit">Run status check</button>
-            </form>
-          </div>
-        </div>
-        <div class="agents-status-strip-card__subcopy">
-          <p class="agents-operator-notifications-copy">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes.</p>
-          <p class="agents-operator-notifications-status agents-operator-notifications-status--{{ notificationEnabled and notificationRecipientCount > 0 ? 'good' : 'warn' }}">{{ notificationStatusLine }}</p>
-        </div>
+          <div class="agents-readiness-detail-dialog-body">
+            <section class="agents-operator-notifications-card border rounded p-0" id="operatorNotificationsSection">
+              <div class="agents-operator-notifications-top agents-status-strip-card__top">
+                <div class="agents-operator-notifications-header">
+                  <h2 class="agents-operator-notifications-title">Operator Notifications</h2>
+                </div>
+                <div class="agents-operator-notifications-actions">
+                  <a href="{{ settingsUrl ~ '#notificationsSection' }}" class="btn small agents-operator-notifications-button">Notification settings</a>
+                  <form method="post" accept-charset="UTF-8" class="agents-operator-notifications-action-form">
+                    {{ csrfInput() }}
+                    {{ actionInput('agents/dashboard/run-notifications-check') }}
+                    {{ redirectInput('agents/status') }}
+                    <button class="btn small agents-operator-notifications-button" type="submit">Run status check</button>
+                  </form>
+                </div>
+              </div>
+              <div class="agents-status-strip-card__subcopy">
+                <p class="agents-operator-notifications-copy">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes.</p>
+                <p class="agents-operator-notifications-status agents-operator-notifications-status--{{ notificationEnabled and notificationRecipientCount > 0 ? 'good' : 'warn' }}">{{ notificationStatusLine }}</p>
+              </div>
 
-        <details class="agents-readiness-ready-details">
-          <summary><span>Details</span></summary>
-          <div class="agents-status-collapsible-body">
+              <div class="agents-status-collapsible-body">
             <div class="agents-operator-notifications-summary">
               <div class="agents-operator-notifications-summary-item">
                 <span class="agents-operator-notifications-summary-label">Recipients</span>
@@ -3278,9 +3581,11 @@
                 </div>
               {% endif %}
             </div>
+              </div>
+            </section>
           </div>
-        </details>
-      </section>
+        </div>
+      </dialog>
       {% endif %}
 
     {% endif %}
@@ -3441,6 +3746,24 @@
       border-top: 0;
     }
 
+    .agents-status-dashboard-card__list-link {
+      display: block;
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .agents-status-dashboard-card__list-link:hover {
+      color: #0d4ea6;
+      text-decoration: underline;
+    }
+
+    .agents-status-dashboard-card__list-link:focus-visible {
+      outline: 2px solid #0d4ea6;
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
     .agents-status-dashboard-card__footer {
       margin-top: auto;
       padding: 12px;
@@ -3462,6 +3785,20 @@
       gap: 10px;
     }
 
+    .agents-status-dashboard-verdict__tips {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      padding-top: 14px;
+      border-top: 1px dashed var(--gray-300);
+    }
+
+    .agents-status-dashboard-verdict__tips .agents-status-dashboard-verdict__label {
+      color: #8a97a5;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
     .agents-status-dashboard-verdict__label {
       color: #596673;
       font-size: 12px;
@@ -3472,6 +3809,12 @@
     }
 
     .agents-status-dashboard-verdict__items {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .agents-status-dashboard-tips__items {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
@@ -3519,6 +3862,26 @@
       line-height: 1.45;
     }
 
+    .agents-status-dashboard-tip-item {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .agents-status-dashboard-tip-item__title {
+      color: #273340;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .agents-status-dashboard-tip-item__copy {
+      margin: 0;
+      color: #596673;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
     @media (max-width: 1279px) {
       .agents-status-dashboard-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3543,7 +3906,8 @@
         min-height: 0;
       }
 
-      .agents-status-dashboard-verdict__items {
+      .agents-status-dashboard-verdict__items,
+      .agents-status-dashboard-tips__items {
         grid-template-columns: minmax(0, 1fr);
       }
     }
@@ -3627,8 +3991,8 @@
     }
 
     .agents-readiness-ready-lamp {
-      width: 24px;
-      height: 24px;
+      width: 18px;
+      height: 18px;
       border-radius: 999px;
       background: var(--agents-readiness-accent);
       flex: 0 0 auto;
@@ -3636,7 +4000,7 @@
 
     .agents-readiness-ready-label {
       color: inherit;
-      font-size: 32px;
+      font-size: 24px;
       font-weight: 800;
       line-height: 1;
       text-transform: uppercase;
@@ -4206,7 +4570,7 @@
     }
 
     .agents-readiness-detail-dialog-body {
-      padding: 18px;
+      padding: 0;
       display: flex;
       flex-direction: column;
       gap: 16px;
