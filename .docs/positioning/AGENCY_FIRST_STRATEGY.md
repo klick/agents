@@ -6,6 +6,7 @@ Date: 2026-03-18
 See also:
 
 - `ACTIVATION_FUNNEL.md` for the internal install -> activation -> retention model
+- `FIRST_ACCOUNT_SETUP_JOURNEY.md` for the concrete setup flow through first account creation
 
 ## Decision
 
