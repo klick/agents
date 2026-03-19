@@ -1452,6 +1452,7 @@
       {% endfor %}
       {% set dashboardPendingApprovals = statusCanViewControl ? (dashboardControlSummary.approvalsPending|default(0)) : 0 %}
       {% set dashboardBlockedExecutions = statusCanViewControl ? (dashboardControlSummary.executionsBlocked|default(0)) : 0 %}
+      {% set dashboardCompletedApprovals = statusCanViewControl ? (dashboardControlSummary.executionsSucceeded|default(0)) : 0 %}
       {% set dashboardSecondApprovalCount = 0 %}
       {% if statusCanViewControl %}
         {% for approval in dashboardApprovals %}
@@ -1657,15 +1658,24 @@
         {% elseif dashboardNotificationIssueCount > 0 %}
           {% set reviewCardLines = reviewCardLines|merge(['Notification routing or monitor state needs review.']) %}
         {% endif %}
+        {% if dashboardCompletedApprovals > 0 %}
+          {% set reviewCardLines = reviewCardLines|merge([dashboardCompletedApprovals ~ ' completed approval' ~ (dashboardCompletedApprovals == 1 ? '' : 's')]) %}
+        {% endif %}
       {% else %}
         {% set reviewCardBadgeTone = 'good' %}
         {% set reviewCardBadgeLabel = 'Quiet' %}
         {% set reviewCardLines = [
-          'No approval requests are waiting.',
+          dashboardCompletedApprovals > 0
+            ? dashboardCompletedApprovals ~ ' completed approval' ~ (dashboardCompletedApprovals == 1 ? '' : 's')
+            : 'No approval requests are waiting.',
           notificationEnabled
             ? 'Operator notifications look healthy.'
             : 'Operator notifications are currently off.'
         ] %}
+        {% if dashboardCompletedApprovals > 0 and statusCanViewControl %}
+          {% set reviewCardActionLabel = 'View completed approvals' %}
+          {% set reviewCardActionUrl = cpUrl('agents/approvals') ~ '#agents-control-completed-table-panel' %}
+        {% endif %}
       {% endif %}
 
       {% set targetSetsCardBadgeTone = 'muted' %}
