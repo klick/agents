@@ -3,6 +3,10 @@
 Status: canonical internal strategy note  
 Date: 2026-03-18
 
+See also:
+
+- `ACTIVATION_FUNNEL.md` for the internal install -> activation -> retention model
+
 ## Decision
 
 Agents is being built first for agencies that run Craft sites on behalf of clients.
