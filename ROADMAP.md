@@ -217,10 +217,11 @@ Release outcome:
 
 ## Planned (`v0.27.x`) Agency Stack Extension Foundation
 
-- Resume `F12` external plugin data access once the adapter/provider direction is reconfirmed.
+- Start `F12` external plugin data access after the current product rough edges are tightened and the adapter contract is ready to stabilize.
 - Ship provider registry + registration event.
 - Add external read scopes and contract exposure in capabilities/OpenAPI/schema.
-- Prefer at least one credible agency-relevant reference adapter path so the value is visible in real Craft stacks.
+- Keep the foundation independent of external collaboration or a specific reference adapter landing first.
+- Treat any later concrete adapter as a follow-up proof point, not a prerequisite for the adapter-ready core.
 
 Release outcome:
 
