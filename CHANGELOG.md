@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.25.2 - 2026-03-20
+
+### Changed
+
+- Reworked `Status` into a compact dashboard built around a large verdict card plus operator-facing bento cards for `Accounts`, `Approvals`, `Operator Notifications`, `Target Sets`, `Webhooks`, `Webhook Probe`, and `Webhook Test Sink`.
+- Moved the dense Status proof grid and utility detail surfaces into modals, while keeping only compact signals and action rows in the default dashboard view.
+- Tightened Status interactions so only problematic rows deep-link into specific follow-up surfaces, while card footer buttons return to the unfiltered operator pages.
+- Hid write-related Status cards when governed writes are disabled and refined the healthy verdict state with operator tips instead of empty attention chrome.
+- Switched the `Accounts` card registry to a four-column desktop grid and removed plugin-level table-header bottom borders for a calmer CP rhythm.
+
 ## 0.25.1 - 2026-03-18
 
 ### Changed

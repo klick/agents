@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-18
-Current release: `v0.25.1`
+Date: 2026-03-20
+Current release: `v0.25.2`
 
 ## Direction
 
@@ -110,6 +110,16 @@ Release outcome:
 - Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
 
 ## Proposed Path to `1.0.0`
+
+## Done (`v0.25.2`)
+
+- Reworked `Status` into a compact dashboard with a larger verdict anchor, compact operator cards, and modal-hosted detail/probe/sink surfaces.
+- Tightened Status routing so only problematic rows deep-link into specific follow-up views, while footer actions return to the unfiltered operator pages.
+- Switched the `Accounts` card registry to a four-column desktop grid and removed plugin-level table-header bottom borders for a calmer CP rhythm.
+
+Release outcome:
+
+- Status now behaves more like an operator dashboard than a diagnostics console, while the surrounding CP surfaces stay visually flatter and easier to scan.
 
 ## Done (`v0.25.1`)
 

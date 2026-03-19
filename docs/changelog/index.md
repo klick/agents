@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.25.2 (2026-03-20)
+
+- Reworked `Status` into a compact dashboard with a large verdict card, focused operator cards, and modal-hosted detail/probe/sink surfaces.
+- Limited deep links to problematic Status rows, hid write-related cards when governed writes are off, and replaced empty green-state verdict chrome with operator tips.
+- Switched the `Accounts` card registry to a four-column desktop grid and removed plugin-level table-header bottom borders for a calmer CP rhythm.
+
 ## 0.25.1 (2026-03-18)
 
 - Simplified Accounts cards by removing visible scope chips and the bottom action row.
