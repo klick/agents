@@ -18,6 +18,17 @@
     <div class="agents-layout-stack">
     {% if activeDashboardTab == 'readiness' %}
       {% set readinessPreviewState = (craft.app.request.getQueryParam('previewState') ?? '')|lower %}
+      {% set statusScreenPreview = (craft.app.request.getQueryParam('statusScreen') ?? '')|lower %}
+      {% if statusScreenPreview not in ['setup', 'operational', 'incident'] %}
+        {% set statusScreenPreview = '' %}
+      {% endif %}
+      {% if statusScreenPreview == 'setup' and readinessPreviewState == '' %}
+        {% set readinessPreviewState = 'ready' %}
+      {% elseif statusScreenPreview == 'operational' and readinessPreviewState == '' %}
+        {% set readinessPreviewState = 'ready' %}
+      {% elseif statusScreenPreview == 'incident' and readinessPreviewState == '' %}
+        {% set readinessPreviewState = 'degraded' %}
+      {% endif %}
       {% set readinessTabScore = readinessSummary.readinessScore|default(0) %}
       {% set readinessTabStatus = (readinessSummary.status|default('unknown'))|lower %}
       {% set readinessTabWarnings = readinessDiagnostics.warnings|length %}
@@ -743,10 +754,12 @@
       ] %}
       {% set settingsUrl = cpUrl('agents/settings') %}
       {% set accountsUrl = cpUrl('agents/accounts') %}
+      {% set accountsCardsUrl = cpUrl('agents/accounts', { accountView: 'cards', focusFirstVisible: 1 }) %}
       {% set attentionAccountsUrl = cpUrl('agents/accounts', { listFilter: 'attention', focusFirstVisible: 1 }) %}
       {% set readinessUrl = cpUrl('agents/status') %}
       {% set overviewUrl = readinessUrl %}
       {% set securityUrl = readinessUrl %}
+      {% set firstWorkerGuideUrl = 'https://marcusscheller.com/docs/agents/get-started/first-worker' %}
       {% set readinessActionRows = [
         {
           signal: 'Runtime disabled',
@@ -1230,6 +1243,157 @@
       {% if readinessDisplayStateKey == 'ready' and readinessHasObservationGap %}
         {% set readinessDisplayHeadlineLabel = 'Ready to Connect' %}
       {% endif %}
+      {% set statusScreenPrimaryActionLabel = '' %}
+      {% set statusScreenPrimaryActionUrl = '' %}
+      {% set statusScreenSecondaryActionLabel = '' %}
+      {% set statusScreenSecondaryActionUrl = '' %}
+      {% set statusScreenShowDetailsCta = false %}
+      {% set statusScreenSummaryCards = [] %}
+      {% set statusScreenGuideTitle = '' %}
+      {% set statusScreenGuideBody = '' %}
+      {% set statusScreenGuideChecklist = [] %}
+      {% set statusScreenIssueCards = [] %}
+      {% set statusScreenAdvancedToolsCopy = '' %}
+      {% if statusScreenPreview == 'setup' %}
+        {% set readinessDisplayStateKey = 'ready' %}
+        {% set readinessDisplayStateLabel = 'Ready' %}
+        {% set readinessDisplayHeadlineLabel = 'Ready to Connect' %}
+        {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
+        {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
+        {% set readinessDisplayStateTone = 'good' %}
+        {% set statusScreenPrimaryActionLabel = 'Create managed account' %}
+        {% set statusScreenPrimaryActionUrl = accountsUrl ~ '#addAgentSection' %}
+        {% set statusScreenSecondaryActionLabel = 'Guide to create your first worker' %}
+        {% set statusScreenSecondaryActionUrl = firstWorkerGuideUrl %}
+        {% set statusScreenShowDetailsCta = true %}
+        {% set statusScreenSummaryCards = [
+          {
+            label: 'Runtime',
+            value: 'Ready',
+            tone: 'good',
+            copy: 'Core services are available.'
+          },
+          {
+            label: 'Accounts',
+            value: 'Not created',
+            tone: 'muted',
+            copy: 'Create your first managed account when you are ready to connect a worker.'
+          },
+          {
+            label: 'Connection',
+            value: 'Waiting',
+            tone: 'muted',
+            copy: 'No authenticated machine activity has been seen yet.'
+          },
+          {
+            label: 'Webhooks',
+            value: 'Optional',
+            tone: 'muted',
+            copy: 'Enable only if you need push-based wake-ups instead of polling.'
+          },
+        ] %}
+        {% set statusScreenGuideTitle = 'Start with one account' %}
+        {% set statusScreenGuideBody = 'You do not need to set up the whole system first. Create one managed account, connect a worker, and confirm the first authenticated request.' %}
+        {% set statusScreenGuideChecklist = [
+          'Runtime is enabled',
+          'First account created',
+          'First authenticated request succeeds'
+        ] %}
+        {% set statusScreenAdvancedToolsCopy = 'Diagnostics and webhook utilities are available when you need them, but they are not required for first setup.' %}
+      {% elseif statusScreenPreview == 'operational' %}
+        {% set readinessDisplayStateKey = 'ready' %}
+        {% set readinessDisplayStateLabel = 'Ready' %}
+        {% set readinessDisplayHeadlineLabel = 'Ready' %}
+        {% set readinessDisplayStateLead = 'The environment is healthy and ready for ongoing machine traffic.' %}
+        {% set readinessDisplayStateSubcopy = 'Review details only if you need to inspect the current runtime posture.' %}
+        {% set readinessDisplayStateTone = 'good' %}
+        {% set statusScreenPrimaryActionLabel = 'Open Accounts' %}
+        {% set statusScreenPrimaryActionUrl = accountsCardsUrl %}
+        {% set statusScreenShowDetailsCta = true %}
+        {% set statusScreenSummaryCards = [
+          {
+            label: 'Runtime',
+            value: 'Healthy',
+            tone: 'good',
+            copy: 'Core runtime is enabled and stable.'
+          },
+          {
+            label: 'Accounts',
+            value: 'Active',
+            tone: 'good',
+            copy: 'Managed accounts are available for machine access.'
+          },
+          {
+            label: 'Traffic',
+            value: 'Observed',
+            tone: 'good',
+            copy: 'Recent machine activity has been recorded.'
+          },
+          {
+            label: 'Webhooks',
+            value: webhookEnabledForReadiness ? 'Configured' : 'Optional',
+            tone: webhookEnabledForReadiness ? 'good' : 'muted',
+            copy: 'Delivery is available when your workflows need it.'
+          },
+        ] %}
+        {% set statusScreenGuideTitle = 'Everything looks healthy' %}
+        {% set statusScreenGuideBody = 'Use the detailed view for diagnostics, delivery checks, and deeper operational review.' %}
+        {% set statusScreenAdvancedToolsCopy = 'Operational tools remain available when you need delivery checks, notifications, or deeper diagnostics.' %}
+      {% elseif statusScreenPreview == 'incident' %}
+        {% set statusScreenShowDetailsCta = true %}
+        {% if readinessDisplayStateKey == 'blocked' %}
+          {% set statusScreenPrimaryActionLabel = 'Review runtime setting' %}
+          {% set statusScreenPrimaryActionUrl = settingsUrl ~ '#runtimeSwitchesSection' %}
+          {% set statusScreenIssueCards = [
+            {
+              label: 'Runtime',
+              value: 'Blocked',
+              tone: 'bad',
+              copy: 'Agents is currently disabled.'
+            },
+            {
+              label: 'Impact',
+              value: 'No machine traffic',
+              tone: 'bad',
+              copy: 'Guarded requests cannot run until the blocking issue is resolved.'
+            },
+            {
+              label: 'Next step',
+              value: 'Review setting',
+              tone: 'warn',
+              copy: 'Start with the blocking configuration instead of the broader system details.'
+            },
+          ] %}
+          {% set statusScreenGuideTitle = 'Fix the blocking issue first' %}
+          {% set statusScreenGuideBody = 'Once the blocking condition is cleared, the rest of the runtime can be reviewed normally.' %}
+        {% else %}
+          {% set statusScreenPrimaryActionLabel = 'Open Accounts' %}
+          {% set statusScreenPrimaryActionUrl = attentionAccountsUrl ~ '#agentsCardList' %}
+          {% set statusScreenIssueCards = [
+            {
+              label: 'Traffic',
+              value: 'Needs attention',
+              tone: 'warn',
+              copy: 'Auth, scope, or rate-limit issues were observed recently.'
+            },
+            {
+              label: 'Delivery',
+              value: webhookEnabledForReadiness ? 'Needs attention' : 'Optional',
+              tone: webhookEnabledForReadiness ? 'warn' : 'muted',
+              copy: webhookEnabledForReadiness ? 'Webhook delivery failures need review.' : 'Webhook delivery is available when your workflows need it.'
+            },
+            {
+              label: 'Observability',
+              value: 'Needs attention',
+              tone: 'warn',
+              copy: 'Monitoring confidence is limited by stale or thin signals.'
+            },
+          ] %}
+          {% set statusScreenGuideTitle = 'Start with the highest-signal issue' %}
+          {% set statusScreenGuideBody = 'Use the detailed view if you need the full readiness breakdown, but begin with the affected area first.' %}
+        {% endif %}
+        {% set statusScreenAdvancedToolsCopy = 'Detailed diagnostics and webhook utilities remain available below if you need them after addressing the primary issue.' %}
+      {% endif %}
       {% set securityWarningPreview = securityWarningsFiltered|slice(0, 4) %}
       {% set securityProfileDefaultsAppliedFields = securityPosture.profile.defaultsAppliedFields|default([]) %}
       {% set securityLatestDlqRow = webhookDeadLetters|first %}
@@ -1269,35 +1433,85 @@
           </form>
         </div>
 
-        <div class="agents-readiness-ready-summary" role="list" aria-label="Readiness summary">
-          <div class="agents-readiness-ready-summary-item" role="listitem">
-            <span class="agents-readiness-ready-summary-label">Hard Gates</span>
-            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessHardGatesSummaryTone }}{% if readinessHardGatesSummaryTone == 'bad' %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessHardGatesSummaryLabel }}</strong>
+        {% if statusScreenPreview %}
+          <div class="agents-status-screen-actions">
+            {% if statusScreenPrimaryActionLabel and statusScreenPrimaryActionUrl %}
+              <a href="{{ statusScreenPrimaryActionUrl }}" class="btn formsubmit">{{ statusScreenPrimaryActionLabel }}</a>
+            {% endif %}
+            {% if statusScreenSecondaryActionLabel and statusScreenSecondaryActionUrl %}
+              <a href="{{ statusScreenSecondaryActionUrl }}" class="btn small"{% if statusScreenSecondaryActionUrl starts with 'http' %} target="_blank" rel="noopener"{% endif %}>{{ statusScreenSecondaryActionLabel }}</a>
+            {% endif %}
+            {% if statusScreenShowDetailsCta %}
+              <button class="btn small" type="button" data-agents-open-status-details="statusSystemDetails">View system details</button>
+            {% endif %}
           </div>
-          <div class="agents-readiness-ready-summary-item" role="listitem">
-            <span class="agents-readiness-ready-summary-label">Traffic / Access</span>
-            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessTrafficAccessSummaryTone }}{% if readinessTrafficAccessSummaryTone == 'bad' or securityAuthSummaryTone == 'warn' %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessTrafficAccessSummaryLabel }}</strong>
-          </div>
-          <div class="agents-readiness-ready-summary-item" role="listitem">
-            <span class="agents-readiness-ready-summary-label">Delivery / Webhooks</span>
-            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessDeliveryWebhooksSummaryTone }}{% if readinessDeliveryWebhooksSummaryTone == 'bad' or securityWebhookMisconfigured %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessDeliveryWebhooksSummaryLabel }}</strong>
-          </div>
-          <div class="agents-readiness-ready-summary-item" role="listitem">
-            <span class="agents-readiness-ready-summary-label">Integration / Capacity</span>
-            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessIntegrationCapacitySummaryTone }}{% if readinessConsumerLagCriticalCount > 0 or telemetryQueueDepth > 50 %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessIntegrationCapacitySummaryLabel }}</strong>
-          </div>
-          <div class="agents-readiness-ready-summary-item" role="listitem">
-            <span class="agents-readiness-ready-summary-label">Accounts / Policy</span>
-            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessCredentialsPolicySummaryTone }}{% if readinessCredentialsPolicySummaryTone in ['warn', 'bad'] %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessCredentialsPolicySummaryLabel }}</strong>
-          </div>
-          <div class="agents-readiness-ready-summary-item" role="listitem">
-            <span class="agents-readiness-ready-summary-label">Confidence / Observability</span>
-            <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessConfidenceSummaryTone }}{% if reliabilitySignalsCritical > 0 %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessConfidenceSummaryLabel }}</strong>
-          </div>
-        </div>
 
-        <details class="agents-readiness-ready-details"{% if readinessDisplayStateTone != 'good' %} open{% endif %}>
-          <summary><span>Details</span></summary>
+          {% if statusScreenPreview in ['setup', 'operational'] %}
+            <div class="agents-status-screen-summary-grid" role="list" aria-label="Status essentials">
+              {% for card in statusScreenSummaryCards %}
+                <article class="agents-status-screen-summary-card" role="listitem">
+                  <span class="agents-status-screen-summary-card__label">{{ card.label }}</span>
+                  <strong class="agents-status-screen-summary-card__value agents-status-screen-summary-card__value--{{ card.tone }}">{{ card.value }}</strong>
+                  <p class="agents-status-screen-summary-card__copy">{{ card.copy }}</p>
+                </article>
+              {% endfor %}
+            </div>
+          {% elseif statusScreenPreview == 'incident' %}
+            <div class="agents-status-screen-summary-grid agents-status-screen-summary-grid--incident" role="list" aria-label="Current issues">
+              {% for card in statusScreenIssueCards %}
+                <article class="agents-status-screen-summary-card agents-status-screen-summary-card--incident" role="listitem">
+                  <span class="agents-status-screen-summary-card__label">{{ card.label }}</span>
+                  <strong class="agents-status-screen-summary-card__value agents-status-screen-summary-card__value--{{ card.tone }}">{{ card.value }}</strong>
+                  <p class="agents-status-screen-summary-card__copy">{{ card.copy }}</p>
+                </article>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <section class="agents-status-screen-guide">
+            <div class="agents-status-screen-guide__header">
+              <h2 class="agents-status-screen-guide__title">{{ statusScreenGuideTitle }}</h2>
+            </div>
+            <p class="agents-status-screen-guide__copy">{{ statusScreenGuideBody }}</p>
+            {% if statusScreenGuideChecklist|length %}
+              <ul class="agents-status-screen-guide__checklist">
+                {% for item in statusScreenGuideChecklist %}
+                  <li>{{ item }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </section>
+        {% else %}
+          <div class="agents-readiness-ready-summary" role="list" aria-label="Readiness summary">
+            <div class="agents-readiness-ready-summary-item" role="listitem">
+              <span class="agents-readiness-ready-summary-label">Hard Gates</span>
+              <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessHardGatesSummaryTone }}{% if readinessHardGatesSummaryTone == 'bad' %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessHardGatesSummaryLabel }}</strong>
+            </div>
+            <div class="agents-readiness-ready-summary-item" role="listitem">
+              <span class="agents-readiness-ready-summary-label">Traffic / Access</span>
+              <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessTrafficAccessSummaryTone }}{% if readinessTrafficAccessSummaryTone == 'bad' or securityAuthSummaryTone == 'warn' %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessTrafficAccessSummaryLabel }}</strong>
+            </div>
+            <div class="agents-readiness-ready-summary-item" role="listitem">
+              <span class="agents-readiness-ready-summary-label">Delivery / Webhooks</span>
+              <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessDeliveryWebhooksSummaryTone }}{% if readinessDeliveryWebhooksSummaryTone == 'bad' or securityWebhookMisconfigured %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessDeliveryWebhooksSummaryLabel }}</strong>
+            </div>
+            <div class="agents-readiness-ready-summary-item" role="listitem">
+              <span class="agents-readiness-ready-summary-label">Integration / Capacity</span>
+              <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessIntegrationCapacitySummaryTone }}{% if readinessConsumerLagCriticalCount > 0 or telemetryQueueDepth > 50 %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessIntegrationCapacitySummaryLabel }}</strong>
+            </div>
+            <div class="agents-readiness-ready-summary-item" role="listitem">
+              <span class="agents-readiness-ready-summary-label">Accounts / Policy</span>
+              <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessCredentialsPolicySummaryTone }}{% if readinessCredentialsPolicySummaryTone in ['warn', 'bad'] %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessCredentialsPolicySummaryLabel }}</strong>
+            </div>
+            <div class="agents-readiness-ready-summary-item" role="listitem">
+              <span class="agents-readiness-ready-summary-label">Confidence / Observability</span>
+              <strong class="agents-readiness-ready-summary-value agents-readiness-ready-summary-value--{{ readinessConfidenceSummaryTone }}{% if reliabilitySignalsCritical > 0 %} agents-readiness-ready-summary-value--alert{% endif %}">{{ readinessConfidenceSummaryLabel }}</strong>
+            </div>
+          </div>
+        {% endif %}
+
+        <details class="agents-readiness-ready-details" id="statusSystemDetails"{% if not statusScreenPreview and readinessDisplayStateTone != 'good' %} open{% endif %}>
+          <summary><span>{{ statusScreenPreview ? 'System details' : 'Details' }}</span></summary>
           <div class="agents-readiness-ready-grid">
             <section class="agents-readiness-ready-proof-card" id="readinessProofHardGates">
               <h3 class="agents-readiness-ready-proof-title agents-readiness-ready-proof-title--{{ readinessHardGateProofTone }}">Hard Gates</h3>
@@ -1447,7 +1661,7 @@
             </section>
           </div>
 
-          {% if readinessActionRowsProblematic|length %}
+          {% if readinessActionRowsProblematic|length and (not statusScreenPreview or statusScreenPreview == 'incident') %}
             <div class="agents-readiness-actions-block" id="readinessActionMappingSection">
               <div id="securityActionMappingSection" hidden></div>
               <div class="agents-readiness-actions-head">
@@ -1494,14 +1708,16 @@
             </div>
           {% endif %}
 
-          <section class="agents-diagnostics-bundle-card" id="diagnosticsBundleSection">
-            <form method="post" accept-charset="UTF-8" class="agents-diagnostics-bundle-form">
-              {{ csrfInput() }}
-              {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
-              {{ redirectInput('agents/status') }}
-              <button class="btn agents-diagnostics-bundle-button" type="submit">Download Diagnostics Bundle (.json)</button>
-            </form>
-          </section>
+          {% if not statusScreenPreview %}
+            <section class="agents-diagnostics-bundle-card" id="diagnosticsBundleSection">
+              <form method="post" accept-charset="UTF-8" class="agents-diagnostics-bundle-form">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
+                {{ redirectInput('agents/status') }}
+                <button class="btn agents-diagnostics-bundle-button" type="submit">Download Diagnostics Bundle (.json)</button>
+              </form>
+            </section>
+          {% endif %}
         </details>
 
         <dialog class="agents-readiness-detail-dialog" id="trafficAccessDetailDialog" data-agents-detail-dialog aria-labelledby="trafficAccessDetailDialogTitle">
@@ -2081,7 +2297,55 @@
         </dialog>
       </section>
 
-      {% if webhookDeadLetters|length %}
+      {% if statusScreenPreview %}
+        <section class="agents-status-advanced-tools-card border rounded p-0" id="statusAdvancedToolsSection">
+          <div class="agents-status-strip-card__top">
+            <div class="agents-status-advanced-tools-card__header">
+              <h2 class="agents-status-advanced-tools-card__title">Advanced tools</h2>
+            </div>
+          </div>
+          <div class="agents-status-strip-card__subcopy">
+            <p class="agents-status-advanced-tools-card__copy">{{ statusScreenAdvancedToolsCopy }}</p>
+          </div>
+          <details class="agents-readiness-ready-details">
+            <summary><span>Show tools</span></summary>
+            <div class="agents-status-collapsible-body agents-status-advanced-tools-card__body">
+              <section class="agents-diagnostics-bundle-card" id="diagnosticsBundleSection">
+                <form method="post" accept-charset="UTF-8" class="agents-diagnostics-bundle-form">
+                  {{ csrfInput() }}
+                  {{ actionInput('agents/dashboard/download-diagnostics-bundle') }}
+                  {{ redirectInput('agents/status') }}
+                  <button class="btn agents-diagnostics-bundle-button" type="submit">Download Diagnostics Bundle (.json)</button>
+                </form>
+              </section>
+              <div class="agents-status-advanced-tools-card__list" role="list" aria-label="Advanced tools">
+                <div class="agents-status-advanced-tools-card__item" role="listitem">
+                  <strong>Webhook Probe</strong>
+                  <span>Synthetic signed delivery against the live receiver.</span>
+                </div>
+                <div class="agents-status-advanced-tools-card__item" role="listitem">
+                  <strong>Webhook Test Sink</strong>
+                  <span>Dev-only local capture for inspecting outbound deliveries.</span>
+                </div>
+                {% if notificationEnabled %}
+                  <div class="agents-status-advanced-tools-card__item" role="listitem">
+                    <strong>Operator Notifications</strong>
+                    <span>Email-first delivery checks and recent notification visibility.</span>
+                  </div>
+                {% endif %}
+                {% if webhookDeadLetters|length %}
+                  <div class="agents-status-advanced-tools-card__item" role="listitem">
+                    <strong>Webhook Dead-Letter Queue</strong>
+                    <span>Replay and inspect failed webhook deliveries.</span>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          </details>
+        </section>
+      {% endif %}
+
+      {% if webhookDeadLetters|length and not statusScreenPreview %}
         <section class="border rounded p-3" id="webhookDlqDetailSection">
           <h2 class="h4">Webhook Dead-Letter Queue</h2>
           <p class="agents-subtle">Final delivery failures are stored here and can be replayed.</p>
@@ -2137,6 +2401,7 @@
         </section>
       {% endif %}
 
+      {% if not statusScreenPreview %}
       <section class="agents-webhook-probe-card border rounded p-0" id="webhookProbeSection">
         <div class="agents-webhook-probe-top agents-status-strip-card__top">
           <div class="agents-webhook-probe-header">
@@ -2283,6 +2548,7 @@
           </div>
         </details>
       </section>
+      {% endif %}
 
       <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--payload" id="webhookProbePayloadDialog" data-agents-detail-dialog aria-labelledby="webhookProbePayloadDialogTitle">
         <div class="agents-readiness-detail-dialog-shell">
@@ -2301,7 +2567,7 @@
         </div>
       </dialog>
 
-      {% if webhookTestSinkVisible %}
+      {% if webhookTestSinkVisible and not statusScreenPreview %}
         <section class="agents-webhook-test-sink-card border rounded p-0" id="webhookTestSinkSection">
           <div class="agents-webhook-test-sink-top agents-status-strip-card__top">
             <div class="agents-webhook-test-sink-header">
@@ -2457,7 +2723,7 @@
         </dialog>
       {% endif %}
 
-      {% if notificationEnabled %}
+      {% if notificationEnabled and not statusScreenPreview %}
       <section class="agents-operator-notifications-card border rounded p-0" id="operatorNotificationsSection">
         <div class="agents-operator-notifications-top agents-status-strip-card__top">
           <div class="agents-operator-notifications-header">
@@ -2884,6 +3150,172 @@
 
     .agents-readiness-ready-summary-value--alert {
       color: var(--agents-readiness-alert-color);
+    }
+
+    .agents-status-screen-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--agents-readiness-border);
+      background: #ffffff;
+    }
+
+    .agents-status-screen-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      padding: 1px 0 0 1px;
+      border-bottom: 1px solid var(--agents-readiness-border);
+      background: #f8fafc;
+    }
+
+    .agents-status-screen-summary-grid--incident {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .agents-status-screen-summary-card {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+      padding: 14px 12px;
+      margin: -1px 0 0 -1px;
+      border: 1px solid var(--agents-readiness-border);
+      background: transparent;
+      color: #596673;
+      text-align: left;
+    }
+
+    .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(-n + 4) {
+      border-top: 0;
+    }
+
+    .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(-n + 3) {
+      border-top: 0;
+    }
+
+    .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(4n + 1) {
+      border-left: 0;
+    }
+
+    .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(4n) {
+      border-right: 0;
+    }
+
+    .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(3n + 1) {
+      border-left: 0;
+    }
+
+    .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(3n) {
+      border-right: 0;
+    }
+
+    .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(4n + 1):nth-last-child(-n + 4),
+    .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(4n + 1):nth-last-child(-n + 4) ~ .agents-status-screen-summary-card,
+    .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(3n + 1):nth-last-child(-n + 3),
+    .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(3n + 1):nth-last-child(-n + 3) ~ .agents-status-screen-summary-card {
+      border-bottom: 0;
+    }
+
+    .agents-status-screen-summary-card--incident {
+      background: #ffffff;
+    }
+
+    .agents-status-screen-summary-card__label {
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.3;
+    }
+
+    .agents-status-screen-summary-card__value {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+
+    .agents-status-screen-summary-card__value--good {
+      color: #108e80;
+    }
+
+    .agents-status-screen-summary-card__value--warn {
+      color: #c58a1b;
+    }
+
+    .agents-status-screen-summary-card__value--bad {
+      color: #c24f42;
+    }
+
+    .agents-status-screen-summary-card__value--muted {
+      color: #6d7782;
+    }
+
+    .agents-status-screen-summary-card__copy {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: normal;
+    }
+
+    .agents-status-screen-guide {
+      display: grid;
+      gap: 8px;
+      padding: 16px 12px 18px;
+      background: #ffffff;
+      color: #596673;
+    }
+
+    .agents-status-screen-guide__header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .agents-status-screen-guide__title {
+      margin: 0;
+      color: #273340;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .agents-status-screen-guide__copy {
+      margin: 0;
+      color: #596673;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 78ch;
+    }
+
+    .agents-status-screen-guide__checklist {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+      color: #596673;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .agents-status-screen-guide__checklist li {
+      position: relative;
+      padding-left: 20px;
+    }
+
+    .agents-status-screen-guide__checklist li::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 0;
+      width: 12px;
+      height: 12px;
+      background-color: #108e80;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 24 4 15 5.414 13.586 13 21.171 26.586 7.586 28 9 13 24z'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 24 4 15 5.414 13.586 13 21.171 26.586 7.586 28 9 13 24z'/%3E%3C/svg%3E") center / contain no-repeat;
     }
 
     .agents-readiness-ready-details > summary {
@@ -3369,6 +3801,79 @@
     .agents-diagnostics-bundle-button.btn:focus-visible {
       background: #c6cfda;
       color: #000000;
+    }
+
+    .agents-status-advanced-tools-card {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #ffffff;
+      color: #596673;
+    }
+
+    .agents-status-advanced-tools-card__header {
+      min-width: 0;
+    }
+
+    .agents-status-advanced-tools-card__title {
+      margin: 0;
+      color: #273340;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .agents-status-advanced-tools-card__copy {
+      margin: 0;
+      color: #596673;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 78ch;
+    }
+
+    .agents-status-advanced-tools-card__body {
+      display: grid;
+      gap: 0;
+    }
+
+    .agents-status-advanced-tools-card__body .agents-diagnostics-bundle-card {
+      max-width: none;
+      margin: 0;
+    }
+
+    .agents-status-advanced-tools-card__list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      padding: 1px 0 0 1px;
+      border-top: 1px solid #bbc7d5;
+      background: #f8fafc;
+    }
+
+    .agents-status-advanced-tools-card__item {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+      padding: 14px 12px;
+      margin: -1px 0 0 -1px;
+      border: 1px solid #bbc7d5;
+      background: transparent;
+    }
+
+    .agents-status-advanced-tools-card__item strong {
+      color: #273340;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .agents-status-advanced-tools-card__item span {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
     }
 
     .agents-status-strip-card__top {
@@ -4464,6 +4969,42 @@
     }
 
     @media (max-width: 1023px) {
+      .agents-status-screen-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card,
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card {
+        border-top: 1px solid var(--agents-readiness-border);
+        border-bottom: 1px solid var(--agents-readiness-border);
+      }
+
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(-n + 2),
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(-n + 2) {
+        border-top: 0;
+      }
+
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(2n + 1),
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(2n + 1) {
+        border-left: 0;
+      }
+
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(2n),
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(2n) {
+        border-right: 0;
+      }
+
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(2n + 1):nth-last-child(-n + 2),
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card:nth-child(2n + 1):nth-last-child(-n + 2) ~ .agents-status-screen-summary-card,
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(2n + 1):nth-last-child(-n + 2),
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:nth-child(2n + 1):nth-last-child(-n + 2) ~ .agents-status-screen-summary-card {
+        border-bottom: 0;
+      }
+
+      .agents-status-advanced-tools-card__list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .agents-readiness-ready-summary {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -4606,6 +5147,35 @@
     }
 
     @media (max-width: 767px) {
+      .agents-status-screen-actions {
+        align-items: stretch;
+      }
+
+      .agents-status-screen-actions > .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .agents-status-screen-summary-grid,
+      .agents-status-screen-summary-grid--incident,
+      .agents-status-advanced-tools-card__list {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card,
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card,
+      .agents-status-advanced-tools-card__item {
+        border-top: 1px solid var(--agents-readiness-border);
+        border-right: 0;
+        border-left: 0;
+      }
+
+      .agents-status-screen-summary-grid > .agents-status-screen-summary-card:first-child,
+      .agents-status-screen-summary-grid--incident > .agents-status-screen-summary-card:first-child,
+      .agents-status-advanced-tools-card__item:first-child {
+        border-top: 0;
+      }
+
       .agents-readiness-ready-top {
         padding: 20px 12px;
         flex-wrap: wrap;
@@ -4878,6 +5448,21 @@
       });
 
       document.addEventListener('click', (event) => {
+        const statusDetailsButton = event.target.closest('[data-agents-open-status-details]');
+        if (statusDetailsButton) {
+          const detailsId = statusDetailsButton.getAttribute('data-agents-open-status-details');
+          const details = detailsId ? document.getElementById(detailsId) : null;
+          if (!details) {
+            return;
+          }
+
+          event.preventDefault();
+          details.setAttribute('open', 'open');
+          const top = details.getBoundingClientRect().top + window.scrollY - 24;
+          window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+          return;
+        }
+
         const openButton = event.target.closest('[data-agents-detail-open]');
         if (openButton) {
           const dialogId = openButton.getAttribute('data-agents-detail-open');
