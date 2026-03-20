@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-20
-Current release: `v0.25.3`
+Current release: `v0.25.4`
 
 ## Direction
 
@@ -110,6 +110,16 @@ Release outcome:
 - Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
 
 ## Proposed Path to `1.0.0`
+
+## Done (`v0.25.4`)
+
+- Added configurable approval timing directly to `Rules`, covering due, escalation, and expiry windows.
+- Reworked the `Approvals` tables around operator-readable cells, compact symbol actions, CP-user approval links, and clearer dual-control progress.
+- Surfaced past-due approval requests in the `Status` approvals card.
+
+Release outcome:
+
+- Governed approvals are easier to scan, explain, and act on, while approval timing is now configured where operators already manage the rule itself.
 
 ## Done (`v0.25.3`)
 

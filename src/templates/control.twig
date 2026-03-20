@@ -15,6 +15,7 @@
 {% set controlRulesRedirect = activeControlTab == 'approvals' ? 'agents/approvals' : 'agents/approvals/rules' %}
 {% set controlDiffUrl = cpUrl('agents/approvals/diff') %}
 {% set editingPolicy = controlEditingPolicy ?? null %}
+{% set editingPolicyConfig = editingPolicy.config ?? {} %}
 {% set isEditingPolicy = editingPolicy is iterable and editingPolicy.handle is defined and editingPolicy.handle %}
 {% set rulesTableExpanded = activeControlTab == 'rules' %}
 {% set rulesFormExpanded = activeControlTab == 'rules' or isEditingPolicy %}
@@ -23,6 +24,9 @@
   { label: 'Any governed action', value: '*' },
 ] %}
 {% set currentEditingActionPattern = editingPolicy.actionPattern ?? '' %}
+{% set editingPolicyApprovalSlaMinutes = editingPolicyConfig.approvalSlaMinutes ?? '' %}
+{% set editingPolicyEscalateAfterMinutes = editingPolicyConfig.escalateAfterMinutes ?? '' %}
+{% set editingPolicyExpireAfterMinutes = editingPolicyConfig.expireAfterMinutes ?? '' %}
 {% if currentEditingActionPattern and currentEditingActionPattern not in ['entry.updatedraft', '*'] %}
   {% set controlActionPatternOptions = controlActionPatternOptions|merge([
     { label: 'Legacy / custom pattern (' ~ currentEditingActionPattern ~ ')', value: currentEditingActionPattern }
@@ -74,9 +78,9 @@
         <colgroup>
           <col class="agents-control-pending-table__col agents-control-pending-table__col--id">
           <col class="agents-control-pending-table__col agents-control-pending-table__col--action">
+          <col class="agents-control-pending-table__col agents-control-pending-table__col--reason">
           <col class="agents-control-pending-table__col agents-control-pending-table__col--rule">
           <col class="agents-control-pending-table__col agents-control-pending-table__col--requested">
-          <col class="agents-control-pending-table__col agents-control-pending-table__col--reason">
           <col class="agents-control-pending-table__col agents-control-pending-table__col--sla">
           <col class="agents-control-pending-table__col agents-control-pending-table__col--decision">
         </colgroup>
@@ -84,10 +88,10 @@
         <tr>
           <th class="agents-control-pending-table__cell agents-control-pending-table__cell--id">#</th>
           <th class="agents-control-pending-table__cell agents-control-pending-table__cell--action">Action</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--reason">Reason</th>
           <th class="agents-control-pending-table__cell agents-control-pending-table__cell--rule">Rule</th>
           <th class="agents-control-pending-table__cell agents-control-pending-table__cell--requested">Requested</th>
-          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--reason">Reason</th>
-          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--sla">SLA</th>
+          <th class="agents-control-pending-table__cell agents-control-pending-table__cell--sla">Due</th>
           <th class="agents-control-pending-table__cell agents-control-pending-table__cell--decision">Decision</th>
         </tr>
         </thead>
@@ -168,68 +172,37 @@
                 {% endif %}
               </div>
             </td>
+            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--reason">
+              <div class="agents-control-pending-table__reason-copy">{{ approval.reason ?: 'n/a' }}</div>
+            </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--rule">
               <div class="agents-control-pending-table__cell-stack agents-control-pending-table__cell-stack--rule">
-                {% if policy %}
-                  <span class="agents-control-pending-table__risk-badge">Risk {{ policy.riskLevel|upper }}</span>
-                  <div class="agents-control-pending-table__detail-stack">
-                    <div class="agents-control-pending-table__meta">Rule: {{ policy.handle }}</div>
-                    <div class="agents-control-pending-table__meta">Approval required: {{ policy.requiresApproval ? 'yes' : 'no' }}</div>
+                {% set approvalsNeeded = approval.requiredApprovals|default(1) %}
+                {% set approvalsLeft = approval.approvalsRemaining|default(0) %}
+                {% set assuranceLabel = approval.assuranceModeLabel
+                  ?: (approvalsNeeded > 1
+                    ? 'Dual control'
+                    : ((policy and policy.requiresApproval) ? 'Single approval' : 'No approval')) %}
+                <div class="agents-control-pending-table__detail-stack">
+                  <div class="agents-control-pending-table__meta">{{ policy.displayName ?: 'Default rule' }}</div>
+                  <div class="agents-control-pending-table__meta">Assurance: {{ assuranceLabel }}</div>
+                  {% if approvalsNeeded > 1 %}
                     <div class="agents-control-pending-table__meta">
-                      Approvals: {{ approval.approvalCount|default(0) }}/{{ approval.requiredApprovals|default(1) }}
-                      {% if approval.approvalsRemaining|default(0) > 0 %}
-                        ({{ approval.approvalsRemaining }} remaining)
-                      {% endif %}
+                      {{ approvalsNeeded }} {{ approvalsNeeded == 1 ? 'approval' : 'approvals' }} needed, {{ approvalsLeft }} {{ approvalsLeft == 1 ? 'approval' : 'approvals' }} left
                     </div>
-                  </div>
-                {% else %}
-                  <span class="agents-control-pending-table__meta">Default rule</span>
-                {% endif %}
-                {% if approval.assuranceModeLabel %}
-                  <div class="agents-control-pending-table__detail-stack">
-                    <div class="agents-control-pending-table__meta">
-                      Assurance: <strong>{{ approval.assuranceModeLabel }}</strong>
-                      {% if approval.assuranceEvaluatedAt %}
-                        <span>· evaluated {{ approval.assuranceEvaluatedAt|date('Y-m-d, H:i:s', timezone='UTC') }}</span>
-                      {% endif %}
-                      {% if approval.assuranceActiveCpUserCount is not null %}
-                        <span>· active CP users {{ approval.assuranceActiveCpUserCount }}</span>
-                      {% endif %}
-                    </div>
-                  </div>
-                {% endif %}
-                {% if approval.assuranceReasonLabel %}
-                  <div class="agents-control-review-guard agents-control-review-guard--warning" style="margin-top: 6px;">
-                    {{ approval.assuranceReasonLabel }}
-                  </div>
-                {% endif %}
-                {% if approval.decidedBy %}
-                  <div class="agents-control-pending-table__detail-stack">
-                    <div class="agents-control-pending-table__meta">Primary approver: {{ approval.decidedByLabel ?: approval.decidedBy }}</div>
-                    <div class="agents-control-pending-table__meta">Primary ID: {{ approval.decidedBy }}</div>
-                  </div>
-                {% endif %}
+                  {% endif %}
+                </div>
               </div>
             </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--requested">
               <div class="agents-control-pending-table__detail-stack">
                 <div class="agents-control-pending-table__meta">{{ approval.requestedByLabel ?: approval.requestedBy }}</div>
-                {% if approval.requestedBy %}
-                  <div class="agents-control-pending-table__meta">{{ approval.requestedBy }}</div>
-                {% endif %}
                 <div class="agents-control-pending-table__meta">{{ approval.dateCreated ? approval.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
               </div>
             </td>
-            <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--reason">
-              <div class="agents-control-pending-table__reason-copy">{{ approval.reason ?: 'n/a' }}</div>
-            </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--sla">
               <div class="agents-control-pending-table__detail-stack">
-                <div class="agents-control-pending-table__meta">{{ approval.slaState|default('none') }}</div>
-                <div class="agents-control-pending-table__meta">due: {{ approval.slaDueAt ? approval.slaDueAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
-                {% if approval.escalatedAt %}
-                  <div class="agents-control-pending-table__meta">escalated: {{ approval.escalatedAt|date('Y-m-d, H:i:s', timezone='UTC') }}</div>
-                {% endif %}
+                <div class="agents-control-pending-table__meta">{{ approval.slaDueAt ? approval.slaDueAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
               </div>
             </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--decision">
@@ -247,28 +220,24 @@
                       {{ redirectInput('agents/approvals') }}
                       <input type="hidden" name="approvalId" value="{{ approval.id }}">
                       <input type="hidden" name="decision" value="rejected">
-                      <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--reject" type="submit">Reject</button>
+                      <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--reject" type="submit" aria-label="Reject" title="Reject">&times;</button>
                     </form>
                     {% set dualApprovalRequired = approval.requiredApprovals|default(1) > 1 %}
                     {% set approvalButtonCount = dualApprovalRequired ? 2 : 1 %}
                     {% set approvalsRecorded = approval.approvalCount|default(0) %}
                     {% for approvalButtonIndex in 1..approvalButtonCount %}
                       {% set approvalSlotConsumed = dualApprovalRequired and approvalsRecorded >= approvalButtonIndex %}
+                      {% set approvalButtonLabel = dualApprovalRequired ? 'Approve ' ~ approvalButtonIndex : 'Approve' %}
                       <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-control-pending-table__decision-form" data-confirm-message="Approve request #{{ approval.id }} ({{ approval.actionType }})? It will execute automatically once required approvals are complete.">
                         {{ csrfInput() }}
                         {{ actionInput('agents/dashboard/decide-control-approval') }}
                         {{ redirectInput('agents/approvals') }}
                         <input type="hidden" name="approvalId" value="{{ approval.id }}">
                         <input type="hidden" name="decision" value="approved">
-                        <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--approve" type="submit"{% if hasBlockingReviewGuards or approvalSlotConsumed %} disabled{% endif %}>{{ dualApprovalRequired ? 'Approve ' ~ approvalButtonIndex : 'Approve' }}</button>
+                        <button class="btn agents-control-pending-table__decision-button agents-control-pending-table__decision-button--approve" type="submit" aria-label="{{ approvalButtonLabel }}" title="{{ approvalButtonLabel }}"{% if hasBlockingReviewGuards or approvalSlotConsumed %} disabled{% endif %}>&#10003;</button>
                       </form>
                     {% endfor %}
                   </div>
-                  {% if approval.requiredApprovals|default(1) > 1 and approval.approvalsRemaining|default(0) > 1 %}
-                    <div class="agents-control-pending-table__decision-note">
-                      This is the first approval step. Action executes automatically after final required approval.
-                    </div>
-                  {% endif %}
                 </div>
               {% else %}
                 <span class="agents-control-pending-table__meta">Read-only</span>
@@ -314,12 +283,12 @@
         <table class="data fullwidth agents-control-table">
         <thead>
         <tr>
-          <th>Request #</th>
+          <th>#</th>
           <th>Action</th>
-          <th>Approver</th>
+          <th>Approved by</th>
           <th>Approved</th>
           <th>Execution</th>
-          <th>Actions</th>
+          <th>Next step</th>
         </tr>
         </thead>
         <tbody>
@@ -338,7 +307,6 @@
             <td>#{{ approval.id }}</td>
             <td>
               <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
-              <span class="agents-actor-raw">{{ approval.actionType }}</span>
               {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
               <div class="light">
                 {% if approval.targetEntryCpUrl %}
@@ -373,24 +341,16 @@
                       data-approval-id="{{ approval.id }}"
                     >Diff</button>
                   {% endif %}
-                </div>
-              {% endif %}
-              <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+                  </div>
+                {% endif %}
             </td>
             <td>
               <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
-              {% if approval.decidedBy %}
-                <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
-              {% endif %}
               {% if approval.assuranceModeLabel %}
                 <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
               {% endif %}
-              {% if approval.assuranceReasonLabel %}
-                <div class="light">{{ approval.assuranceReasonLabel }}</div>
-              {% endif %}
               {% if approval.secondaryDecisionBy %}
-                <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
-                <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
+                <div class="light">Second approver: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
               {% endif %}
             </td>
             <td>{{ approval.decidedAt ? approval.decidedAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
@@ -487,11 +447,11 @@
       <div id="{{ completedTablePanelId }}" class="agents-control-section-panel agents-control-journey-card__panel" hidden>
         <div class="tablepane mx-0" style="margin-top: 0;">
           <table class="data fullwidth agents-control-table">
-          <thead>
-          <tr>
-            <th>Request #</th>
+        <thead>
+        <tr>
+            <th>#</th>
             <th>Action</th>
-            <th>Approver</th>
+            <th>Approved by</th>
             <th>Completed</th>
             <th>Outcome</th>
           </tr>
@@ -501,13 +461,12 @@
             {% set latestExecution = approval.latestExecution ?? null %}
             {% set completionState = approval.completionState ?? {} %}
             <tr>
-              <td>#{{ approval.id }}</td>
-              <td>
-                <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
-                <span class="agents-actor-raw">{{ approval.actionType }}</span>
-                {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
-                <div class="light">
-                  {% if approval.targetEntryCpUrl %}
+            <td>#{{ approval.id }}</td>
+            <td>
+              <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
+              {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
+              <div class="light">
+                {% if approval.targetEntryCpUrl %}
                     <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
                   {% else %}
                     {{ targetTitle }}
@@ -532,26 +491,29 @@
                         class="btn small js-control-view-diff agents-control-diff-btn"
                         type="button"
                         data-approval-id="{{ approval.id }}"
-                      >Diff</button>
-                    {% endif %}
-                  </div>
-                {% endif %}
-                <span class="agents-actor-raw">Ref: {{ approval.actionRef ?: 'n/a' }}</span>
+                    >Diff</button>
+                  {% endif %}
+                </div>
+              {% endif %}
               </td>
               <td>
-                <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
-                {% if approval.decidedBy %}
-                  <span class="agents-actor-raw">{{ approval.decidedBy }}</span>
-                {% endif %}
-                {% if approval.assuranceModeLabel %}
-                  <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
-                {% endif %}
-                {% if approval.assuranceReasonLabel %}
-                  <div class="light">{{ approval.assuranceReasonLabel }}</div>
-                {% endif %}
+                <div>
+                  {% if approval.decidedByCpUrl %}
+                    <a href="{{ approval.decidedByCpUrl }}">{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</a>
+                  {% else %}
+                    {{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}
+                  {% endif %}
+                  <span class="light">{{ approval.decidedAt ? approval.decidedAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</span>
+                </div>
                 {% if approval.secondaryDecisionBy %}
-                  <div class="light">2nd: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
-                  <span class="agents-actor-raw">2nd ID: {{ approval.secondaryDecisionBy }}</span>
+                  <div>
+                    {% if approval.secondaryDecisionByCpUrl %}
+                      <a href="{{ approval.secondaryDecisionByCpUrl }}">{{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</a>
+                    {% else %}
+                      {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}
+                    {% endif %}
+                    <span class="light">{{ approval.secondaryDecisionAt ? approval.secondaryDecisionAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</span>
+                  </div>
                 {% endif %}
               </td>
               <td>
@@ -605,7 +567,7 @@
           <table class="data fullwidth agents-control-table">
           <thead>
           <tr>
-            <th>Run #</th>
+            <th>#</th>
             <th>Action</th>
             <th>Status</th>
             <th>Rule</th>
@@ -619,7 +581,6 @@
               <td>#{{ execution.id }}</td>
               <td>
                 <div class="agents-control-table__action-title">{{ execution.actionLabel ?: 'Unknown action' }}</div>
-                <span class="agents-actor-raw">{{ execution.actionType }}</span>
                 {% set targetTitle = execution.targetTitle ?: 'Untitled target' %}
                 <div class="light">
                   {% if execution.targetEntryCpUrl %}
@@ -647,16 +608,13 @@
                       >Diff</button>
                     {% endif %}
                   </div>
-                {% else %}
-                  <span class="agents-actor-raw">Ref: {{ execution.actionRef ?: 'n/a' }}</span>
                 {% endif %}
-                <span class="agents-actor-raw">Ref: {{ execution.actionRef ?: 'n/a' }}</span>
               </td>
-              <td><strong>{{ execution.status }}</strong></td>
+              <td><strong>{{ execution.status|replace({'_': ' '})|title }}</strong></td>
               <td>
                 {% if policy %}
-                  <span class="badge">RISK {{ policy.riskLevel|upper }}</span>
-                  <div class="light">Rule: <code>{{ policy.handle }}</code></div>
+                  <div>{{ policy.displayName ?? policy.handle }}</div>
+                  <div class="light">Rule: {{ policy.handle }}</div>
                 {% else %}
                   <span class="light">Default rule</span>
                 {% endif %}
@@ -813,7 +771,7 @@
         <tbody>
         {% for policy in controlPolicies %}
           <tr>
-            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName }}</span></td>
+            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName ?? policy.handle }}</span></td>
             <td><code>{{ policy.actionPattern }}</code></td>
             <td>{{ policy.riskLevel|upper }}</td>
             <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
@@ -887,6 +845,38 @@
               value: editingPolicy.riskLevel ?? 'medium',
             }) }}
 
+            <div class="agents-control-rule-timing-fields">
+              {{ forms.textField({
+                label: 'Due after (minutes)',
+                instructions: 'Set when approval requests should become due. Leave empty to disable due timing.',
+                name: 'approvalSlaMinutes',
+                type: 'number',
+                min: 0,
+                value: editingPolicyApprovalSlaMinutes,
+                placeholder: '60',
+              }) }}
+
+              {{ forms.textField({
+                label: 'Escalate after (minutes)',
+                instructions: 'Optional escalation threshold before expiry. Leave empty to disable escalation.',
+                name: 'escalateAfterMinutes',
+                type: 'number',
+                min: 0,
+                value: editingPolicyEscalateAfterMinutes,
+                placeholder: '120',
+              }) }}
+
+              {{ forms.textField({
+                label: 'Expire after (minutes)',
+                instructions: 'Optional expiry threshold. Leave empty to keep requests open until decided.',
+                name: 'expireAfterMinutes',
+                type: 'number',
+                min: 0,
+                value: editingPolicyExpireAfterMinutes,
+                placeholder: '240',
+              }) }}
+            </div>
+
             <div style="margin-bottom: 8px;">
               <input type="hidden" name="requiresApproval" value="0">
               <label><input type="checkbox" name="requiresApproval" value="1" {{ (editingPolicy.requiresApproval ?? true) ? 'checked' }}> Require approval</label>
@@ -951,13 +941,10 @@
           {% for event in controlAuditEvents %}
             <tr>
               <td>{{ event.dateCreated ? event.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
-              <td><code>{{ event.category }}</code></td>
-              <td>{{ event.action }} ({{ event.outcome }})</td>
+              <td>{{ event.category|replace({'.': ' / '})|title }}</td>
+              <td>{{ event.action|replace({'_': ' '})|title }} · {{ event.outcome|replace({'_': ' '})|title }}</td>
               <td>
                 <div>{{ event.actorLabel ?: (event.actorId ?: 'n/a') }}</div>
-                {% if event.actorId %}
-                  <span class="agents-actor-raw">{{ event.actorType }} / {{ event.actorId }}</span>
-                {% endif %}
               </td>
               <td>{{ event.summary ?: 'n/a' }}</td>
             </tr>
@@ -1019,7 +1006,7 @@
         <tbody>
         {% for policy in controlPolicies %}
           <tr>
-            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName }}</span></td>
+            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName ?? policy.handle }}</span></td>
             <td><code>{{ policy.actionPattern }}</code></td>
             <td>{{ policy.riskLevel|upper }}</td>
             <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
@@ -1107,6 +1094,38 @@
             ],
           value: editingPolicy.riskLevel ?? 'medium',
         }) }}
+
+        <div class="agents-control-rule-timing-fields">
+          {{ forms.textField({
+            label: 'Due after (minutes)',
+            instructions: 'Set when approval requests should become due. Leave empty to disable due timing.',
+            name: 'approvalSlaMinutes',
+            type: 'number',
+            min: 0,
+            value: editingPolicyApprovalSlaMinutes,
+            placeholder: '60',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Escalate after (minutes)',
+            instructions: 'Optional escalation threshold before expiry. Leave empty to disable escalation.',
+            name: 'escalateAfterMinutes',
+            type: 'number',
+            min: 0,
+            value: editingPolicyEscalateAfterMinutes,
+            placeholder: '120',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Expire after (minutes)',
+            instructions: 'Optional expiry threshold. Leave empty to keep requests open until decided.',
+            name: 'expireAfterMinutes',
+            type: 'number',
+            min: 0,
+            value: editingPolicyExpireAfterMinutes,
+            placeholder: '240',
+          }) }}
+        </div>
 
         <div style="margin-bottom: 8px;">
           <input type="hidden" name="requiresApproval" value="0">
@@ -1262,7 +1281,7 @@
         <tbody>
         {% for policy in controlPolicies %}
           <tr>
-            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName }}</span></td>
+            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName ?? policy.handle }}</span></td>
             <td><code>{{ policy.actionPattern }}</code></td>
             <td>{{ policy.riskLevel|upper }}</td>
             <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
@@ -1335,6 +1354,38 @@
               ],
               value: editingPolicy.riskLevel ?? 'medium',
             }) }}
+
+            <div class="agents-control-rule-timing-fields">
+              {{ forms.textField({
+                label: 'Due after (minutes)',
+                instructions: 'Set when approval requests should become due. Leave empty to disable due timing.',
+                name: 'approvalSlaMinutes',
+                type: 'number',
+                min: 0,
+                value: editingPolicyApprovalSlaMinutes,
+                placeholder: '60',
+              }) }}
+
+              {{ forms.textField({
+                label: 'Escalate after (minutes)',
+                instructions: 'Optional escalation threshold before expiry. Leave empty to disable escalation.',
+                name: 'escalateAfterMinutes',
+                type: 'number',
+                min: 0,
+                value: editingPolicyEscalateAfterMinutes,
+                placeholder: '120',
+              }) }}
+
+              {{ forms.textField({
+                label: 'Expire after (minutes)',
+                instructions: 'Optional expiry threshold. Leave empty to keep requests open until decided.',
+                name: 'expireAfterMinutes',
+                type: 'number',
+                min: 0,
+                value: editingPolicyExpireAfterMinutes,
+                placeholder: '240',
+              }) }}
+            </div>
 
             <div style="margin-bottom: 8px;">
               <input type="hidden" name="requiresApproval" value="0">
@@ -2552,24 +2603,15 @@
       line-height: 1.45;
     }
 
-    .agents-control-pending-table__risk-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 10px;
-      border-radius: 22px;
-      background: #596673;
-      color: #ffffff;
-      font-size: 10px;
-      font-weight: 400;
-      letter-spacing: 0;
-      line-height: normal;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-
     .agents-control-diff-modal[hidden] {
       display: none !important;
+    }
+
+    .agents-control-rule-timing-fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 8px;
     }
 
     .agents-control-diff-modal {
@@ -2978,21 +3020,21 @@
     }
 
     .agents-control-pending-table__decision-actions {
-      display: inline-grid;
-      grid-auto-flow: row;
+      display: flex;
+      flex-wrap: wrap;
       gap: 10px;
-      align-items: stretch;
-      justify-items: stretch;
+      align-items: center;
     }
 
     .agents-control-pending-table__decision-form {
-      display: block;
+      display: inline-flex;
       margin: 0;
     }
 
     .agents-control-pending-table__decision-button {
-      display: block;
-      width: 100%;
+      display: inline-flex;
+      width: auto;
+      min-width: 88px;
       min-height: auto;
       padding: 7px 10px;
       border-radius: 3px;
@@ -3004,6 +3046,8 @@
     }
 
     .agents-control-pending-table__decision-button--reject {
+      min-width: 34px;
+      padding: 7px 8px;
       border: 1px solid #d4dbe4;
       background: #d4dbe4;
       color: #000000;
@@ -3017,27 +3061,23 @@
     }
 
     .agents-control-pending-table__decision-button--approve {
-      border: 1px solid #d72222;
-      background: #d72222;
+      min-width: 34px;
+      padding: 7px 8px;
+      border: 1px solid #13854d;
+      background: #13854d;
       color: #ffffff;
     }
 
     .agents-control-pending-table__decision-button--approve:hover,
     .agents-control-pending-table__decision-button--approve:focus {
-      border-color: #be1d1d;
-      background: #be1d1d;
+      border-color: #0f6f40;
+      background: #0f6f40;
       color: #ffffff;
     }
 
     .agents-control-pending-table__decision-button[disabled] {
-      opacity: 0.45;
+      opacity: 0.6;
       cursor: not-allowed;
-    }
-
-    .agents-control-pending-table__decision-note {
-      color: #596673;
-      font-size: 12px;
-      line-height: 1.45;
     }
 
     .agents-control-pending-table__col--id,
@@ -3049,7 +3089,7 @@
     .agents-control-pending-table__col--action,
     .agents-control-pending-table__cell--action,
     .agents-control-pending-table__body-cell--action {
-      width: 330px;
+      width: 392px;
     }
 
     .agents-control-pending-table__col--rule,
@@ -3079,7 +3119,19 @@
     .agents-control-pending-table__col--decision,
     .agents-control-pending-table__cell--decision,
     .agents-control-pending-table__body-cell--decision {
-      width: 194px;
+      width: 156px;
+    }
+
+    @media (min-width: 1280px) {
+      .agents-control-pending-table__col--decision,
+      .agents-control-pending-table__cell--decision,
+      .agents-control-pending-table__body-cell--decision {
+        width: 188px;
+      }
+
+      .agents-control-pending-table__decision-actions {
+        flex-wrap: nowrap;
+      }
     }
   {% endcss %}
 {% endblock %}

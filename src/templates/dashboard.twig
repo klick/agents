@@ -1467,14 +1467,19 @@
       {% set dashboardBlockedExecutions = statusCanViewControl ? (dashboardControlSummary.executionsBlocked|default(0)) : 0 %}
       {% set dashboardCompletedApprovals = statusCanViewControl ? (dashboardControlSummary.executionsSucceeded|default(0)) : 0 %}
       {% set dashboardSecondApprovalCount = 0 %}
+      {% set dashboardPastDueApprovalCount = 0 %}
       {% if statusCanViewControl %}
         {% for approval in dashboardApprovals %}
           {% set approvalStatus = (approval.status ?? '')|lower|trim %}
+          {% set approvalSlaState = (approval.slaState ?? '')|lower|trim %}
           {% set approvalsRemaining = approval.approvalsRemaining|default(0) %}
           {% set requiredApprovals = approval.requiredApprovals|default(1) %}
           {% set approvalCount = approval.approvalCount|default(requiredApprovals - approvalsRemaining) %}
           {% if approvalStatus == 'pending' and requiredApprovals > 1 and approvalsRemaining == 1 and approvalCount > 0 %}
             {% set dashboardSecondApprovalCount = dashboardSecondApprovalCount + 1 %}
+          {% endif %}
+          {% if approvalStatus == 'pending' and approvalSlaState == 'overdue' %}
+            {% set dashboardPastDueApprovalCount = dashboardPastDueApprovalCount + 1 %}
           {% endif %}
         {% endfor %}
       {% endif %}
@@ -1552,6 +1557,9 @@
         {% endif %}
         {% if dashboardSecondApprovalCount > 0 %}
           {% set reviewQueueCopyParts = reviewQueueCopyParts|merge([dashboardSecondApprovalCount ~ ' needing a second approval']) %}
+        {% endif %}
+        {% if dashboardPastDueApprovalCount > 0 %}
+          {% set reviewQueueCopyParts = reviewQueueCopyParts|merge([dashboardPastDueApprovalCount ~ ' past due']) %}
         {% endif %}
         {% if dashboardBlockedExecutions > 0 %}
           {% set reviewQueueCopyParts = reviewQueueCopyParts|merge([dashboardBlockedExecutions ~ ' governed run' ~ (dashboardBlockedExecutions == 1 ? '' : 's') ~ ' blocked']) %}
@@ -1711,6 +1719,12 @@
         {% if dashboardSecondApprovalCount > 0 %}
           {% set reviewCardLines = reviewCardLines|merge([{
             text: dashboardSecondApprovalCount ~ ' needing a second approval',
+            url: approvalsUrl ~ '#agents-control-pending-table-panel'
+          }]) %}
+        {% endif %}
+        {% if dashboardPastDueApprovalCount > 0 %}
+          {% set reviewCardLines = reviewCardLines|merge([{
+            text: dashboardPastDueApprovalCount ~ ' past due approval request' ~ (dashboardPastDueApprovalCount == 1 ? '' : 's'),
             url: approvalsUrl ~ '#agents-control-pending-table-panel'
           }]) %}
         {% endif %}

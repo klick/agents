@@ -1633,15 +1633,43 @@ class DashboardController extends Controller
         $service = Plugin::getInstance()->getControlPlaneService();
 
         try {
+            $handle = (string)$this->request->getBodyParam('handle', '');
+            $originalHandle = (string)$this->request->getBodyParam('originalHandle', '');
+            $existingConfig = [];
+            foreach ($service->getPolicies() as $candidatePolicy) {
+                $candidateHandle = (string)($candidatePolicy['handle'] ?? '');
+                if (($originalHandle !== '' && $candidateHandle === $originalHandle) || ($originalHandle === '' && $candidateHandle === $handle)) {
+                    $existingConfig = (array)($candidatePolicy['config'] ?? []);
+                    break;
+                }
+            }
+
+            $config = array_merge(
+                $existingConfig,
+                $this->parseJsonBodyParam((string)$this->request->getBodyParam('configJson', ''))
+            );
+
+            foreach ([
+                'approvalSlaMinutes' => $this->parseNullableIntegerBodyParam('approvalSlaMinutes'),
+                'escalateAfterMinutes' => $this->parseNullableIntegerBodyParam('escalateAfterMinutes'),
+                'expireAfterMinutes' => $this->parseNullableIntegerBodyParam('expireAfterMinutes'),
+            ] as $configKey => $value) {
+                if ($value === null || $value <= 0) {
+                    unset($config[$configKey]);
+                } else {
+                    $config[$configKey] = $value;
+                }
+            }
+
             $policy = $service->upsertPolicy([
-                'handle' => (string)$this->request->getBodyParam('handle', ''),
-                'originalHandle' => (string)$this->request->getBodyParam('originalHandle', ''),
+                'handle' => $handle,
+                'originalHandle' => $originalHandle,
                 'displayName' => (string)$this->request->getBodyParam('displayName', ''),
                 'actionPattern' => (string)$this->request->getBodyParam('actionPattern', ''),
                 'requiresApproval' => $this->parseBooleanBodyParam('requiresApproval', true),
                 'enabled' => $this->parseBooleanBodyParam('enabled', true),
                 'riskLevel' => (string)$this->request->getBodyParam('riskLevel', 'medium'),
-                'config' => $this->parseJsonBodyParam((string)$this->request->getBodyParam('configJson', '')),
+                'config' => $config,
             ], $this->buildCpActorContext());
 
             $this->setSuccessFlash(sprintf('Rule `%s` saved.', (string)($policy['handle'] ?? 'rule')));
@@ -2516,8 +2544,14 @@ class DashboardController extends Controller
             }
 
             $policy = $service->resolvePolicyForAction($actionType);
+            $handle = (string)($policy['handle'] ?? '');
+            $displayName = trim((string)($policy['displayName'] ?? ''));
+            if ($displayName === '') {
+                $displayName = $handle !== '' ? $this->humanizeActorToken($handle) : 'Default rule';
+            }
             $hints[$actionType] = [
-                'handle' => (string)($policy['handle'] ?? ''),
+                'handle' => $handle,
+                'displayName' => $displayName,
                 'riskLevel' => (string)($policy['riskLevel'] ?? 'unknown'),
                 'requiresApproval' => (bool)($policy['requiresApproval'] ?? true),
                 'enabled' => (bool)($policy['enabled'] ?? true),
@@ -2571,6 +2605,8 @@ class DashboardController extends Controller
             $approval['requestedByLabel'] = $this->formatControlActorLabel((string)($approval['requestedBy'] ?? ''), '', $credentialDisplayByActorId);
             $approval['decidedByLabel'] = $this->formatControlActorLabel((string)($approval['decidedBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
             $approval['secondaryDecisionByLabel'] = $this->formatControlActorLabel((string)($approval['secondaryDecisionBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
+            $approval['decidedByCpUrl'] = $this->resolveCpUserEditUrlFromActorId((string)($approval['decidedBy'] ?? ''));
+            $approval['secondaryDecisionByCpUrl'] = $this->resolveCpUserEditUrlFromActorId((string)($approval['secondaryDecisionBy'] ?? ''));
             $decorated[] = $approval;
         }
 
@@ -4519,6 +4555,31 @@ class DashboardController extends Controller
         $user = Craft::$app->getUsers()->getUserByUsernameOrEmail($normalized);
         $cache[$normalized] = $this->extractCpUserDisplayName($user);
         return $cache[$normalized];
+    }
+
+    private function resolveCpUserEditUrlFromActorId(string $actorId): ?string
+    {
+        $normalizedActorId = trim($actorId);
+        if ($normalizedActorId === '') {
+            return null;
+        }
+
+        $userId = 0;
+        if (preg_match('/^cp:user-(\d+)$/', $normalizedActorId, $matches) === 1) {
+            $userId = (int)$matches[1];
+        } elseif (preg_match('/^cp:(.+)$/', $normalizedActorId, $matches) === 1) {
+            $username = trim((string)($matches[1] ?? ''));
+            if ($username !== '') {
+                $user = Craft::$app->getUsers()->getUserByUsernameOrEmail($username);
+                $userId = (int)($user->id ?? 0);
+            }
+        }
+
+        if ($userId <= 0) {
+            return null;
+        }
+
+        return UrlHelper::cpUrl('users/' . $userId);
     }
 
     private function extractCpUserDisplayName(mixed $user): ?string

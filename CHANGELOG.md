@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.25.4 - 2026-03-20
+
+### Changed
+
+- Made approval timing first-class in `Rules` with configurable `Due after`, `Escalate after`, and `Expire after` minute fields that persist alongside existing rule config.
+- Reworked the `Approvals` tables around clearer operator language and less implementation noise, including a `Due` column, cleaner pending/approved/completed cells, dual-control progress in pending rule cells, and linked CP-user approvers in `Applied / Completed`.
+- Tightened pending approval actions with compact symbol buttons, rebalanced table column widths, and surfaced past-due approval requests in the `Status` approvals card.
+
 ## 0.25.3 - 2026-03-20
 
 ### Fixed

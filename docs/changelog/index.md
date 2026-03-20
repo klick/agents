@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.25.4 (2026-03-20)
+
+- Added configurable approval timing fields to `Rules` for due, escalation, and expiry minutes.
+- Reworked the `Approvals` tables to use clearer operator wording, less raw implementation detail, linked CP-user approvers in `Applied / Completed`, and dual-control progress in pending rule cells.
+- Surfaced past-due approval requests in the `Status` approvals card and tightened pending approval actions around compact symbol buttons.
+
 ## 0.25.3 (2026-03-20)
 
 - Fixed `Webhook Probe` and `Webhook Test Sink` payload dialogs so JSON renders correctly instead of showing HTML entities.
