@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.25.5 (2026-03-20)
+
+- Reworked the `Accounts` template shelf around agency-first workflow profiles and a tighter default set of reusable service patterns.
+- Added `SEO & Metadata Auditor`, `Commerce Catalog QA`, `Accessibility Review`, and `Launch QA`, and moved narrower templates into a secondary `More templates` section.
+- Hid governed-write and Commerce-only templates when those capabilities are unavailable, and removed the old `Site Structure Review` shelf entry.
+
 ## 0.25.4 (2026-03-20)
 
 - Added configurable approval timing fields to `Rules` for due, escalation, and expiry minutes.

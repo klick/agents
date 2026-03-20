@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-20
-Current release: `v0.25.4`
+Current release: `v0.25.5`
 
 ## Direction
 
@@ -110,6 +110,16 @@ Release outcome:
 - Operators now have materially stronger support surfaces for notifications, account bootstrap, and governed draft approvals.
 
 ## Proposed Path to `1.0.0`
+
+## Done (`v0.25.5`)
+
+- Reworked the `Accounts` template shelf around agency-first workflow profiles and split it into a tighter default set plus a secondary `More templates` section.
+- Added stronger service-shaped templates for SEO/metadata, Commerce catalog review, accessibility review, and launch QA, while removing the old `Site Structure Review` shelf entry.
+- Hid governed-write and Commerce-specific templates when those capabilities are unavailable so the shelf matches the site’s actual operating surface.
+
+Release outcome:
+
+- The default account-template shelf is easier for agencies to explain, safer to start from, and better aligned with repeatable client delivery patterns.
 
 ## Done (`v0.25.4`)
 
