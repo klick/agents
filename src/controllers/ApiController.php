@@ -1302,6 +1302,7 @@ class ApiController extends Controller
 
         $config = $this->getSecurityConfig();
         $pluginVersion = $this->resolvePluginVersion();
+        $externalRegistry = Plugin::getInstance()->getExternalResourceRegistryService();
         $endpoints = [
             ['method' => 'GET', 'path' => '/health', 'requiredScopes' => ['health:read']],
             ['method' => 'GET', 'path' => '/readiness', 'requiredScopes' => ['readiness:read']],
@@ -1379,6 +1380,8 @@ class ApiController extends Controller
                 static fn(array $endpoint): bool => !str_starts_with((string)($endpoint['path'] ?? ''), '/addresses')
             ));
         }
+        $externalResources = $externalRegistry->getCapabilitiesResources();
+        $endpoints = array_merge($endpoints, $externalRegistry->getCapabilityEndpoints());
 
         return $this->jsonResponse([
             'service' => 'agents',
@@ -1396,6 +1399,7 @@ class ApiController extends Controller
                 'grantedScopes' => $this->getGrantedScopes(),
                 'availableScopes' => $this->availableScopes(),
             ],
+            'externalResources' => $externalResources,
             'errorCodes' => $this->errorTaxonomy(),
             'endpoints' => $endpoints,
             'commands' => [
@@ -2143,6 +2147,12 @@ class ApiController extends Controller
                 unset($paths[$path]);
             }
         }
+        $paths = array_merge(
+            $paths,
+            Plugin::getInstance()->getExternalResourceRegistryService()->buildOpenApiPaths(
+                fn(array $responses): array => $this->openApiGuardedResponses($responses)
+            )
+        );
 
         $apiServerUrl = rtrim((string)Craft::$app->getRequest()->getHostInfo(), '/') . '/agents/v1';
 
@@ -2169,6 +2179,80 @@ class ApiController extends Controller
             ],
             'security' => $this->buildOpenApiSecurity($config),
         ]);
+    }
+
+    public function actionExternalResourceIndex(string $pluginHandle, string $resourceHandle): Response
+    {
+        $resource = Plugin::getInstance()->getExternalResourceRegistryService()->getResource($pluginHandle, $resourceHandle);
+        if ($resource === null) {
+            return $this->errorResponse(404, self::ERROR_NOT_FOUND, sprintf('Unknown external resource `%s/%s`.', $pluginHandle, $resourceHandle));
+        }
+
+        /** @var \Klick\Agents\external\ExternalResourceDefinition $definition */
+        $definition = $resource['definition'];
+        $pluginHandle = strtolower(trim($pluginHandle));
+        $resourceHandle = strtolower(trim($resourceHandle));
+        $scope = $definition->scopeKey($pluginHandle);
+        if (($guard = $this->guardRequest($scope)) !== null) {
+            return $guard;
+        }
+
+        try {
+            $result = $resource['provider']->fetchResourceList($definition->handle, $this->externalResourceQueryParams());
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Failed to resolve external resource list: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to read external plugin resource.');
+        }
+
+        return $this->jsonResponse($this->buildExternalResourcePayload(
+            $pluginHandle,
+            $resourceHandle,
+            $scope,
+            $result
+        ));
+    }
+
+    public function actionExternalResourceShow(string $pluginHandle, string $resourceHandle, string $resourceId): Response
+    {
+        $resource = Plugin::getInstance()->getExternalResourceRegistryService()->getResource($pluginHandle, $resourceHandle);
+        if ($resource === null) {
+            return $this->errorResponse(404, self::ERROR_NOT_FOUND, sprintf('Unknown external resource `%s/%s`.', $pluginHandle, $resourceHandle));
+        }
+
+        /** @var \Klick\Agents\external\ExternalResourceDefinition $definition */
+        $definition = $resource['definition'];
+        if (!$definition->supportsDetail()) {
+            return $this->errorResponse(404, self::ERROR_NOT_FOUND, sprintf('External resource `%s/%s` does not expose item lookup.', $pluginHandle, $resourceHandle));
+        }
+
+        $pluginHandle = strtolower(trim($pluginHandle));
+        $resourceHandle = strtolower(trim($resourceHandle));
+        $scope = $definition->scopeKey($pluginHandle);
+        if (($guard = $this->guardRequest($scope)) !== null) {
+            return $guard;
+        }
+
+        try {
+            $item = $resource['provider']->fetchResourceItem($definition->handle, trim($resourceId), $this->externalResourceQueryParams());
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Failed to resolve external resource item: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to read external plugin resource.');
+        }
+
+        if ($item === null) {
+            return $this->errorResponse(404, self::ERROR_NOT_FOUND, sprintf('External resource item `%s` was not found.', $resourceId));
+        }
+
+        return $this->jsonResponse($this->buildExternalResourcePayload(
+            $pluginHandle,
+            $resourceHandle,
+            $scope,
+            ['data' => $item]
+        ));
     }
 
     public function actionAuthWhoami(): Response
@@ -3410,6 +3494,11 @@ class ApiController extends Controller
                 unset($scopes[$scope]);
             }
         }
+        $scopes = array_merge(
+            $scopes,
+            Plugin::getInstance()->getExternalResourceRegistryService()->getCapabilityScopes()
+        );
+        ksort($scopes);
 
         return $scopes;
     }
@@ -5204,8 +5293,46 @@ class ApiController extends Controller
                 $catalogs['v1']['control.executions.list']
             );
         }
+        $catalogs['v1'] = array_merge(
+            $catalogs['v1'],
+            Plugin::getInstance()->getExternalResourceRegistryService()->buildSchemaCatalog('/agents/v1')
+        );
+        ksort($catalogs['v1']);
 
         return $catalogs;
+    }
+
+    private function externalResourceQueryParams(): array
+    {
+        $queryParams = Craft::$app->getRequest()->getQueryParams();
+        if (!is_array($queryParams)) {
+            return [];
+        }
+
+        unset($queryParams['apiToken']);
+        return $queryParams;
+    }
+
+    private function buildExternalResourcePayload(string $pluginHandle, string $resourceHandle, string $scope, array $result): array
+    {
+        $payload = [
+            'service' => 'agents',
+            'version' => $this->resolvePluginVersion(),
+            'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            'provider' => [
+                'plugin' => strtolower(trim($pluginHandle)),
+                'resource' => strtolower(trim($resourceHandle)),
+                'scope' => strtolower(trim($scope)),
+            ],
+            'data' => $result['data'] ?? [],
+            'meta' => is_array($result['meta'] ?? null) ? $result['meta'] : [],
+        ];
+
+        if (isset($result['page']) && is_array($result['page'])) {
+            $payload['page'] = $result['page'];
+        }
+
+        return $payload;
     }
 
     private function respondWithPayload(array $payload, bool $expectSingle = false, string $notFoundMessage = 'Resource not found.'): Response

@@ -16,12 +16,14 @@ use craft\services\UserPermissions;
 use craft\web\UrlManager;
 use craft\web\View;
 use yii\base\Event;
+use Klick\Agents\events\RegisterExternalResourceProvidersEvent;
 use Klick\Agents\models\Settings;
 use Klick\Agents\services\AdoptionMetricsService;
 use Klick\Agents\services\ControlPlaneService;
 use Klick\Agents\services\ConsumerLagService;
 use Klick\Agents\services\CredentialService;
 use Klick\Agents\services\DiagnosticsBundleService;
+use Klick\Agents\services\ExternalResourceRegistryService;
 use Klick\Agents\services\IncidentFeedService;
 use Klick\Agents\services\LifecycleGovernanceService;
 use Klick\Agents\services\NotificationService;
@@ -77,10 +79,14 @@ class Plugin extends BasePlugin
             'notificationService' => NotificationService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
             'incidentFeedService' => IncidentFeedService::class,
+            'externalResourceRegistryService' => ExternalResourceRegistryService::class,
             'templateCatalogService' => TemplateCatalogService::class,
             'starterPackService' => StarterPackService::class,
             'webhookTestSinkService' => WebhookTestSinkService::class,
         ]);
+        Craft::$app->onInit(function (): void {
+            $this->refreshExternalResourceProviders();
+        });
         $this->registerWebhookEventHooks();
         $this->registerPermissionHooks();
         $this->logSecurityConfigurationWarnings();
@@ -227,6 +233,8 @@ JS, View::POS_END);
                 'agents/v1/schema' => 'agents/api/schema',
                 'agents/v1/capabilities' => 'agents/api/capabilities',
                 'agents/v1/openapi.json' => 'agents/api/openapi',
+                'agents/v1/plugins/<pluginHandle:[a-zA-Z0-9._-]+>/<resourceHandle:[a-zA-Z0-9._-]+>' => 'agents/api/external-resource-index',
+                'agents/v1/plugins/<pluginHandle:[a-zA-Z0-9._-]+>/<resourceHandle:[a-zA-Z0-9._-]+>/<resourceId:[^/]+>' => 'agents/api/external-resource-show',
                 'agents/v1/auth/whoami' => 'agents/api/auth-whoami',
                 'agents/v1/adoption/metrics' => 'agents/api/adoption-metrics',
                 'agents/v1/metrics' => 'agents/api/metrics',
@@ -378,6 +386,13 @@ JS, View::POS_END);
         return $service;
     }
 
+    public function getExternalResourceRegistryService(): ExternalResourceRegistryService
+    {
+        /** @var ExternalResourceRegistryService $service */
+        $service = $this->get('externalResourceRegistryService');
+        return $service;
+    }
+
     public function getTemplateCatalogService(): TemplateCatalogService
     {
         /** @var TemplateCatalogService $service */
@@ -473,6 +488,23 @@ JS, View::POS_END);
     public function isAddressesApiEnabled(): bool
     {
         return (bool)App::parseBooleanEnv('$PLUGIN_AGENTS_ENABLE_ADDRESSES_API');
+    }
+
+    public function refreshExternalResourceProviders(): void
+    {
+        $registry = $this->getExternalResourceRegistryService();
+        $registry->clear();
+
+        $event = new RegisterExternalResourceProvidersEvent();
+        Event::trigger(self::class, self::EVENT_REGISTER_EXTERNAL_RESOURCE_PROVIDERS, $event);
+
+        foreach ($event->providers as $provider) {
+            try {
+                $registry->registerProvider($provider);
+            } catch (\Throwable $e) {
+                Craft::warning('Skipping external resource provider registration: ' . $e->getMessage(), __METHOD__);
+            }
+        }
     }
 
     protected function createSettingsModel(): ?Model
