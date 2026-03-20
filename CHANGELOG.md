@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.26.0 - 2026-03-20
+
+### Added
+
+- Added the `F12` external adapter foundation: provider registry, registration event, dynamic external-resource routes, and external scope exposure through capabilities, OpenAPI, and schema.
+- Added grouped `External plugin scopes` in `Accounts` so operators can assign adapter-backed read scopes by provider and resource instead of dealing with raw scope strings only.
+- Added a minimal standalone `Retour` reference adapter package under `adapters/retour` plus public adapter docs and an opt-in real-install QA harness.
+
+### Changed
+
+- Tightened the external-adapter regression surface and release gate so reference adapter files, docs, and optional real-install validation are part of the release workflow.
+
 ## 0.25.5 - 2026-03-20
 
 ### Changed

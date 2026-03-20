@@ -243,7 +243,21 @@ Release outcome:
 
 - New installs reach first value faster, while the public contract becomes materially safer to build against.
 
-## Planned (`v0.26.x`) Agency Workflow Starter Kits and Companion Workers
+## Released (`v0.26.0`) Agency Stack Extension Foundation
+
+- Delivered the first `F12` slice:
+  - provider registry + registration event
+  - dynamic external-resource routes
+  - external read scopes merged into capabilities/OpenAPI/schema
+  - `Accounts` scope assignment grouped by provider and resource
+- Added a minimal standalone `Retour` reference adapter package as the first end-to-end proof of the contract.
+- Kept the foundation independent of outside collaboration and positioned concrete adapters as optional follow-up proof points, not prerequisites.
+
+Release outcome:
+
+- Agents can extend safely into plugin ecosystems agencies already standardize on, and the adapter contract is now real enough to build against.
+
+## Planned (`v0.27.x`) Agency Workflow Starter Kits and Companion Workers
 
 - Implement `F19`.
 - Pair strong account templates with companion guides, starter workers, and bootstrap artifacts that agencies can reuse across client work.
@@ -253,18 +267,6 @@ Release outcome:
 Release outcome:
 
 - Agencies can package repeatable AI-assisted workflows as credible, governed service offerings instead of inventing each integration from scratch.
-
-## Planned (`v0.27.x`) Agency Stack Extension Foundation
-
-- Start `F12` external plugin data access after the current product rough edges are tightened and the adapter contract is ready to stabilize.
-- Ship provider registry + registration event.
-- Add external read scopes and contract exposure in capabilities/OpenAPI/schema.
-- Keep the foundation independent of external collaboration or a specific reference adapter landing first.
-- Treat any later concrete adapter as a follow-up proof point, not a prerequisite for the adapter-ready core.
-
-Release outcome:
-
-- Agents can extend safely into the plugin ecosystems agencies already standardize on, without bloating the core plugin.
 
 ## Planned (`v0.28.x`) Agency Operator Copilot Foundation
 

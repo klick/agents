@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.26.0 (2026-03-20)
+
+- Added the `F12` external adapter foundation: provider registry, registration event, dynamic external-resource routes, and external scope exposure through capabilities, OpenAPI, and schema.
+- Added grouped `External plugin scopes` in `Accounts` so operators can assign adapter-backed read scopes by provider and resource.
+- Added a minimal standalone `Retour` reference adapter package, public adapter docs, and an opt-in real-install QA harness.
+
 ## 0.25.5 (2026-03-20)
 
 - Reworked the `Accounts` template shelf around agency-first workflow profiles and a tighter default set of reusable service patterns.
