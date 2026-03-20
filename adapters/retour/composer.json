@@ -1,0 +1,22 @@
+{
+  "name": "klick/agents-retour",
+  "description": "Retour adapter for Agents external plugin resources.",
+  "type": "craft-plugin",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "craftcms/cms": "^5.0.0",
+    "klick/agents": "^0.26"
+  },
+  "autoload": {
+    "psr-4": {
+      "Klick\\AgentsRetour\\": "src/"
+    }
+  },
+  "extra": {
+    "name": "Agents Retour Adapter",
+    "handle": "agents-retour",
+    "class": "Klick\\AgentsRetour\\Plugin",
+    "developerUrl": "https://marcusscheller.com"
+  }
+}

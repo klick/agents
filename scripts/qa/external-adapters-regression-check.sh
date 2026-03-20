@@ -34,6 +34,10 @@ EVENT_CLASS="$PLUGIN_ROOT/src/events/RegisterExternalResourceProvidersEvent.php"
 HELPER_SCRIPT="$PLUGIN_ROOT/scripts/qa/helpers/external_provider_contract_smoke.php"
 DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
 CREDENTIALS_TEMPLATE="$PLUGIN_ROOT/src/templates/credentials.twig"
+RETOUR_ADAPTER_PLUGIN="$PLUGIN_ROOT/adapters/retour/src/Plugin.php"
+RETOUR_ADAPTER_PROVIDER="$PLUGIN_ROOT/adapters/retour/src/RetourExternalResourceProvider.php"
+RETOUR_ADAPTER_COMPOSER="$PLUGIN_ROOT/adapters/retour/composer.json"
+EXTERNAL_ADAPTERS_DOC="$PLUGIN_ROOT/docs/api/external-plugin-adapters.md"
 
 expect_fixed "EVENT_REGISTER_EXTERNAL_RESOURCE_PROVIDERS" "$PLUGIN_FILE" "Plugin declares external provider registration event"
 expect_fixed "externalResourceRegistryService" "$PLUGIN_FILE" "Plugin registers external resource registry service"
@@ -58,6 +62,12 @@ expect_fixed "'externalResourceProviders' => \$externalResourceProviders" "$DASH
 expect_fixed "External plugin scopes" "$CREDENTIALS_TEMPLATE" "Accounts CP template renders an external plugin scopes section"
 expect_fixed "provider.resources" "$CREDENTIALS_TEMPLATE" "Accounts CP template groups external scopes by provider resources"
 expect_fixed "resource.scope" "$CREDENTIALS_TEMPLATE" "Accounts CP template binds external scope checkbox values from the provider registry"
+expect_fixed "RegisterExternalResourceProvidersEvent" "$RETOUR_ADAPTER_PLUGIN" "Reference adapter plugin registers against the external provider event"
+expect_fixed "class RetourExternalResourceProvider" "$RETOUR_ADAPTER_PROVIDER" "Reference adapter provider class exists"
+expect_fixed "handle: 'redirects'" "$RETOUR_ADAPTER_PROVIDER" "Reference adapter exposes the Retour redirects resource"
+expect_fixed "\"klick/agents\": \"^0.26\"" "$RETOUR_ADAPTER_COMPOSER" "Reference adapter requires the current F12 foundation release line"
+expect_fixed "External Plugin Adapters" "$EXTERNAL_ADAPTERS_DOC" "External adapter docs page exists"
+expect_fixed "Agents -> Accounts" "$EXTERNAL_ADAPTERS_DOC" "External adapter docs explain CP scope assignment"
 
 php "$HELPER_SCRIPT"
 

@@ -114,3 +114,15 @@ Credential management permissions:
 - `agents-rotateCredentials`
 - `agents-revokeCredentials`
 - `agents-deleteCredentials`
+
+## External plugin scopes
+
+Adapter-backed resources use explicit per-resource read scopes:
+
+- `plugins:{plugin}:{resource}:read`
+
+Example:
+
+- `plugins:retour:redirects:read`
+
+These scopes only appear when an external provider is registered and the target plugin is actually available on the site. In the control panel they show up under `Accounts -> Scopes -> External plugin scopes`.

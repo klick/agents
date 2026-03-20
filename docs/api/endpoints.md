@@ -230,6 +230,20 @@ Notes:
   - `metadata.agentId`
   - `metadata.traceId`
 
+## External plugin endpoints
+
+When an external resource provider is registered, Agents also exposes:
+
+- `GET /plugins/{plugin}/{resource}`
+- `GET /plugins/{plugin}/{resource}/{id}`
+
+Example:
+
+- `GET /plugins/retour/redirects`
+- `GET /plugins/retour/redirects/123`
+
+These endpoints are read-only and are only advertised when the adapter/plugin pair is actually available on the site.
+
 ## Request/response examples
 
 Set once:

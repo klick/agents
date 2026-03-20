@@ -51,6 +51,7 @@ See:
 - [Agent Bootstrap](/api/agent-bootstrap)
 - [Starter Packs](/api/starter-packs)
 - [Auth & Scopes](/api/auth-and-scopes)
+- [External Plugin Adapters](/api/external-plugin-adapters)
 - [Scope Guide](/api/scope-guide)
 - [Endpoints](/api/endpoints)
 - [Errors & Rate Limits](/api/errors-and-rate-limits)
