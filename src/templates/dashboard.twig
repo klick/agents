@@ -1419,6 +1419,7 @@
       {% set dashboardAccountNeedsAttention = 0 %}
       {% set dashboardWriteCapableAccounts = 0 %}
       {% set dashboardWriteAccountsWithoutTargetSets = 0 %}
+      {% set dashboardWritableEntryIds = [] %}
       {% for credential in dashboardManagedCredentials %}
         {% set credentialMode = (credential.mode ?? '')|lower %}
         {% if credentialMode == 'revoked' %}
@@ -1453,6 +1454,15 @@
           {% endif %}
         {% endif %}
       {% endfor %}
+      {% for targetSet in dashboardTargetSets %}
+        {% for entryId in targetSet.allowedEntryIds|default([]) %}
+          {% if entryId > 0 and entryId not in dashboardWritableEntryIds %}
+            {% set dashboardWritableEntryIds = dashboardWritableEntryIds|merge([entryId]) %}
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+      {% set dashboardWritableElementCount = dashboardWritableEntryIds|length %}
+      {% set dashboardAccountStateSummary = dashboardAccountActive ~ ' active, ' ~ dashboardAccountPaused ~ ' paused, ' ~ dashboardAccountRevoked ~ ' revoked' %}
       {% set dashboardPendingApprovals = statusCanViewControl ? (dashboardControlSummary.approvalsPending|default(0)) : 0 %}
       {% set dashboardBlockedExecutions = statusCanViewControl ? (dashboardControlSummary.executionsBlocked|default(0)) : 0 %}
       {% set dashboardCompletedApprovals = statusCanViewControl ? (dashboardControlSummary.executionsSucceeded|default(0)) : 0 %}
@@ -1495,9 +1505,6 @@
       {% elseif showWriteDashboardCards and (dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0) %}
         {% set verdictPrimaryActionLabel = 'Open Approvals' %}
         {% set verdictPrimaryActionUrl = cpUrl('agents/approvals') %}
-      {% elseif writesExperimentalEnabled and dashboardWriteAccountsWithoutTargetSets > 0 %}
-        {% set verdictPrimaryActionLabel = 'Open Target Sets' %}
-        {% set verdictPrimaryActionUrl = cpUrl('agents/target-sets') %}
       {% elseif securityWebhookMisconfigured or telemetryDlqFailed > 0 %}
         {% set verdictPrimaryActionLabel = 'Open webhook settings' %}
         {% set verdictPrimaryActionUrl = settingsUrl ~ '#webhookSection' %}
@@ -1563,13 +1570,6 @@
           title: 'Operator Notifications',
           tone: notificationMonitorTone == 'bad' ? 'bad' : 'warn',
           copy: verdictNotificationCopy
-        }]) %}
-      {% endif %}
-      {% if writesExperimentalEnabled and dashboardWriteCapableAccounts > 0 and dashboardWriteAccountsWithoutTargetSets > 0 %}
-        {% set verdictAttentionItems = verdictAttentionItems|merge([{
-          title: 'Target Sets',
-          tone: 'warn',
-          copy: dashboardWriteAccountsWithoutTargetSets ~ ' write-capable account' ~ (dashboardWriteAccountsWithoutTargetSets == 1 ? '' : 's') ~ ' still need bounded target coverage.'
         }]) %}
       {% endif %}
       {% if securityWebhookMisconfigured or telemetryDlqFailed > 0 or (webhookEnabledForReadiness and webhookProbeState in ['storage', 'misconfigured', 'failed']) %}
@@ -1642,29 +1642,48 @@
       {% elseif dashboardAccountNeedsAttention > 0 %}
         {% set accountsCardBadgeTone = 'warn' %}
         {% set accountsCardBadgeLabel = 'Needs attention' %}
-        {% set accountsCardLines = [
-          { text: dashboardAccountActive ~ ' active' },
-          { text: dashboardAccountNeedsAttention ~ ' needing attention', url: attentionAccountsUrl ~ '#agentsCardList' },
-          {
-            text: dashboardAccountPaused > 0
-              ? dashboardAccountPaused ~ ' paused'
-              : (dashboardAccountExpired > 0
+        {% set accountsCardLines = [{ text: dashboardAccountStateSummary }] %}
+        {% if showWriteDashboardCards and dashboardWriteCapableAccounts > 0 %}
+          {% set accountsCardLines = accountsCardLines|merge([{ text: dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's') }]) %}
+        {% endif %}
+        {% if dashboardAccountNeedsAttention > 0 %}
+          {% set accountsCardLines = accountsCardLines|merge([{ text: dashboardAccountNeedsAttention ~ ' needing attention', url: attentionAccountsUrl ~ '#agentsCardList' }]) %}
+          {% if dashboardAccountExpired > 0 or dashboardAccountExpiringSoon > 0 %}
+            {% set accountsCardLines = accountsCardLines|merge([{
+              text: dashboardAccountExpired > 0
                 ? dashboardAccountExpired ~ ' expired'
-                : dashboardAccountExpiringSoon ~ ' expiring soon'),
-            url: dashboardAccountPaused > 0
-              ? pausedAccountsUrl ~ '#agentsCardList'
-              : attentionAccountsUrl ~ '#agentsCardList'
-          }
-        ] %}
+                : dashboardAccountExpiringSoon ~ ' expiring soon',
+              url: attentionAccountsUrl ~ '#agentsCardList'
+            }]) %}
+          {% endif %}
+        {% endif %}
+        {% if showWriteDashboardCards and dashboardWriteAccountsWithoutTargetSets > 0 %}
+          {% set accountsCardLines = accountsCardLines|merge([{
+            text: dashboardWriteAccountsWithoutTargetSets ~ ' account' ~ (dashboardWriteAccountsWithoutTargetSets == 1 ? '' : 's') ~ ' with unrestricted write access',
+            url: attentionAccountsUrl ~ '#agentsCardList'
+          }]) %}
+        {% endif %}
+      {% elseif showWriteDashboardCards and dashboardWriteAccountsWithoutTargetSets > 0 %}
+        {% set accountsCardBadgeTone = 'muted' %}
+        {% set accountsCardBadgeLabel = 'Review' %}
+        {% set accountsCardLines = [{ text: dashboardAccountStateSummary }] %}
+        {% set accountsCardLines = accountsCardLines|merge([{ text: dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's') }]) %}
+        {% set accountsCardLines = accountsCardLines|merge([{
+          text: dashboardWriteAccountsWithoutTargetSets ~ ' account' ~ (dashboardWriteAccountsWithoutTargetSets == 1 ? '' : 's') ~ ' with unrestricted write access',
+          url: attentionAccountsUrl ~ '#agentsCardList'
+        }]) %}
       {% else %}
         {% set accountsCardBadgeTone = 'good' %}
         {% set accountsCardBadgeLabel = 'Ready' %}
-        {% set accountsCardLines = [
-          { text: dashboardAccountActive ~ ' active' },
-          dashboardAccountRevoked > 0
-            ? { text: dashboardAccountRevoked ~ ' revoked on record' }
-            : { text: 'No account issues need review right now.' }
-        ] %}
+        {% set accountsCardLines = [{ text: dashboardAccountStateSummary }] %}
+        {% if showWriteDashboardCards and dashboardWriteCapableAccounts > 0 %}
+          {% set accountsCardLines = accountsCardLines|merge([{ text: dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's') }]) %}
+          {% set accountsCardLines = accountsCardLines|merge([{ text: 'All write-capable accounts are bounded.' }]) %}
+        {% else %}
+          {% set accountsCardLines = accountsCardLines|merge([
+            { text: 'No account issues need review right now.' }
+          ]) %}
+        {% endif %}
       {% endif %}
 
       {% set reviewCardBadgeTone = 'muted' %}
@@ -1787,28 +1806,22 @@
           dashboardTargetSets|length > 0
             ? { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' }
             : { text: 'No target sets configured yet.' },
-          { text: 'Only needed for governed draft writes.' }
+          dashboardTargetSets|length > 0
+            ? { text: dashboardWritableElementCount ~ ' writable element' ~ (dashboardWritableElementCount == 1 ? '' : 's') ~ ' across all target sets' }
+            : { text: 'Only needed for governed draft writes.' }
         ] %}
-      {% elseif dashboardWriteAccountsWithoutTargetSets > 0 %}
-        {% set targetSetsCardBadgeTone = 'warn' %}
-        {% set targetSetsCardBadgeLabel = 'Needs attention' %}
+      {% elseif dashboardTargetSets|length == 0 %}
+        {% set targetSetsCardBadgeLabel = 'Optional' %}
         {% set targetSetsCardLines = [
-          { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' },
-          { text: dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's') },
-          {
-            text: dashboardWriteAccountsWithoutTargetSets ~ ' missing boundaries',
-            url: dashboardTargetSets|length == 0
-              ? targetSetsUrl ~ '?targetSetForm=create#targetSetFormSection'
-              : attentionAccountsUrl ~ '#agentsCardList'
-          }
+          { text: 'No target sets configured yet.' },
+          { text: 'Only needed for governed draft writes.' }
         ] %}
       {% else %}
         {% set targetSetsCardBadgeTone = 'good' %}
         {% set targetSetsCardBadgeLabel = 'Ready' %}
         {% set targetSetsCardLines = [
           { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' },
-          { text: dashboardWriteCapableAccounts ~ ' write-capable account' ~ (dashboardWriteCapableAccounts == 1 ? '' : 's') },
-          { text: 'All write-capable accounts are bounded.' }
+          { text: dashboardWritableElementCount ~ ' writable element' ~ (dashboardWritableElementCount == 1 ? '' : 's') ~ ' across all target sets' }
         ] %}
       {% endif %}
 
@@ -3214,7 +3227,7 @@
                             aria-haspopup="dialog"
                             aria-controls="webhookProbePayloadDialog"
                           >› VIEW</button>
-                          <script type="application/json" id="webhookProbePayload-{{ row.id }}">{{ row.payloadJson }}</script>
+                          <script type="application/json" id="webhookProbePayload-{{ row.id }}">{{ row.payloadJson|raw }}</script>
                         </td>
                       </tr>
                     {% endfor %}
@@ -3376,7 +3389,7 @@
                               aria-haspopup="dialog"
                               aria-controls="webhookTestSinkPayloadDialog"
                             >› VIEW</button>
-                            <script type="application/json" id="webhookTestSinkPayload-{{ row.id }}">{{ row.payloadJson }}</script>
+                            <script type="application/json" id="webhookTestSinkPayload-{{ row.id }}">{{ row.payloadJson|raw }}</script>
                           </td>
                         </tr>
                       {% endfor %}

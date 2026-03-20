@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.25.3 (2026-03-20)
+
+- Fixed `Webhook Probe` and `Webhook Test Sink` payload dialogs so JSON renders correctly instead of showing HTML entities.
+- Clarified the `Accounts` status card summary with active, paused, and revoked totals on the first line.
+- Softened unbounded write-capable accounts from a constant `Needs attention` fault to a visible `Review` posture when no other account issues exist.
+
 ## 0.25.2 (2026-03-20)
 
 - Reworked `Status` into a compact dashboard with a large verdict card, focused operator cards, and modal-hosted detail/probe/sink surfaces.

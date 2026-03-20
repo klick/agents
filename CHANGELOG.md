@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.25.3 - 2026-03-20
+
+### Fixed
+
+- Fixed `Webhook Probe` and `Webhook Test Sink` payload dialogs so JSON renders as readable JSON instead of HTML-escaped entity text.
+- Clarified the `Accounts` status card summary to show active, paused, and revoked totals on the first line.
+- Reframed write-capable accounts without assigned target boundaries as a visible `Review` posture instead of a persistent `Needs attention` fault when no other account issues exist.
+
 ## 0.25.2 - 2026-03-20
 
 ### Changed

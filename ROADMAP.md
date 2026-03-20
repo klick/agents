@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-20
-Current release: `v0.25.2`
+Current release: `v0.25.3`
 
 ## Direction
 
@@ -111,7 +111,7 @@ Release outcome:
 
 ## Proposed Path to `1.0.0`
 
-## Done (`v0.25.2`)
+## Done (`v0.25.3`)
 
 - Reworked `Status` into a compact dashboard with a larger verdict anchor, compact operator cards, and modal-hosted detail/probe/sink surfaces.
 - Tightened Status routing so only problematic rows deep-link into specific follow-up views, while footer actions return to the unfiltered operator pages.
