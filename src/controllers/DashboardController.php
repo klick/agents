@@ -460,6 +460,7 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
         $defaultScopes = (array)($posture['authentication']['tokenScopes'] ?? []);
+        $externalResourceProviders = $plugin->getExternalResourceRegistryService()->getCapabilitiesResources();
         $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
         $lifecycleSnapshot = [
             'service' => 'agents',
@@ -528,6 +529,7 @@ class DashboardController extends Controller
             'credentialExpirySummary' => $credentialExpirySummary,
             'targetSets' => $targetSets,
             'defaultScopes' => $defaultScopes,
+            'externalResourceProviders' => $externalResourceProviders,
             'revealedCredential' => $this->pullRevealedCredential(),
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
             'workerBootstrapSiteUrl' => UrlHelper::siteUrl(''),
