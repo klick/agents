@@ -1,0 +1,46 @@
+{% set variant = variant ?? 'orbit' %}
+
+{% if variant == 'node' %}
+  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <circle cx="10" cy="24" r="4"></circle>
+    <circle cx="24" cy="10" r="4"></circle>
+    <circle cx="38" cy="24" r="4"></circle>
+    <circle cx="24" cy="38" r="4"></circle>
+    <path d="M13.5 21.5L20.5 14.5M27.5 14.5L34.5 21.5M34.5 26.5L27.5 33.5M20.5 33.5L13.5 26.5"></path>
+  </svg>
+{% elseif variant == 'shield' %}
+  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <path d="M24 6l13 5v10c0 8.5-5.5 15.2-13 18-7.5-2.8-13-9.5-13-18V11l13-5z"></path>
+    <path d="M24 14v18"></path>
+    <path d="M16 22h16"></path>
+  </svg>
+{% elseif variant == 'bot' %}
+  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <rect x="12" y="14" width="24" height="18" rx="6"></rect>
+    <path d="M24 8v6"></path>
+    <path d="M17 37v-5M31 37v-5"></path>
+    <circle cx="20" cy="23" r="2"></circle>
+    <circle cx="28" cy="23" r="2"></circle>
+    <path d="M18 28h12"></path>
+  </svg>
+{% elseif variant == 'spark' %}
+  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <path d="M24 8l3.5 9.5L37 21l-9.5 3.5L24 34l-3.5-9.5L11 21l9.5-3.5L24 8z"></path>
+    <path d="M10 10l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z"></path>
+    <path d="M38 28l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5 1.5-4z"></path>
+  </svg>
+{% elseif variant == 'grid' %}
+  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <rect x="10" y="10" width="10" height="10" rx="2"></rect>
+    <rect x="28" y="10" width="10" height="10" rx="2"></rect>
+    <rect x="10" y="28" width="10" height="10" rx="2"></rect>
+    <rect x="28" y="28" width="10" height="10" rx="2"></rect>
+  </svg>
+{% else %}
+  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <circle cx="24" cy="24" r="13"></circle>
+    <circle cx="32.5" cy="15.5" r="4"></circle>
+    <circle cx="15.5" cy="32.5" r="4"></circle>
+    <path d="M12 24c3-5 8-8 12-8s9 3 12 8c-3 5-8 8-12 8s-9-3-12-8z"></path>
+  </svg>
+{% endif %}

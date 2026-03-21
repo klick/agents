@@ -8,6 +8,7 @@ use Klick\Agents\models\Settings;
 use craft\elements\Entry;
 use craft\elements\User;
 use craft\db\Query;
+use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use craft\web\View;
@@ -20,10 +21,66 @@ class DashboardController extends Controller
     private const SESSION_REVEALED_CREDENTIAL = 'agents.revealedCredential';
     private const SESSION_CONTROL_SIMULATION = 'agents.controlSimulation';
     private const CONTROL_TABS = ['approvals', 'rules'];
+    private const ONBOARDING_PREVIEW_PARAM = 'onboardingPreview';
 
     public function actionIndex(): Response
     {
-        return $this->redirect('agents/accounts');
+        return $this->redirect($this->resolveCpHomeUrl());
+    }
+
+    public function actionStart(): Response
+    {
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+
+        $plugin = Plugin::getInstance();
+        $previewStage = $plugin->getOnboardingStateService()->normalizePreviewStage(
+            (string)$this->request->getQueryParam(self::ONBOARDING_PREVIEW_PARAM, '')
+        );
+        $onboardingState = $plugin->getOnboardingStateService()->getCpState($this->getDefaultScopes(), $previewStage);
+
+        if (!(bool)($onboardingState['active'] ?? false) && $previewStage === null) {
+            return $this->redirect('agents/accounts');
+        }
+
+        $requestedStep = strtolower(trim((string)$this->request->getQueryParam('onboardingStep', '')));
+        if (($onboardingState['stage'] ?? 'welcome') === 'welcome' && $requestedStep === 'create') {
+            $onboardingState['stage'] = 'create';
+        }
+
+        $revealedCredential = $this->pullRevealedCredential();
+        if (($onboardingState['stage'] ?? '') === 'ready' && (!is_array($revealedCredential) || trim((string)($revealedCredential['token'] ?? '')) === '')) {
+            if ($previewStage === 'ready') {
+                $revealedCredential = [
+                    'id' => 1,
+                    'token' => 'agent-change-audit-zpHoG1vphh4bkzM3VS',
+                    'handle' => 'agent-change-audit',
+                    'displayName' => 'Operations integration',
+                    'action' => 'created',
+                    'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+                ];
+            }
+        }
+
+        $revealedCredentialToken = is_array($revealedCredential) ? trim((string)($revealedCredential['token'] ?? '')) : '';
+        $revealedCredentialWorkerEnv = $revealedCredentialToken !== ''
+            ? $this->buildWorkerEnvExport($revealedCredentialToken)
+            : '';
+        $revealedCredentialEnvFilename = is_array($revealedCredential)
+            ? $this->buildWorkerEnvFilename((string)($revealedCredential['handle'] ?? ''))
+            : 'agents-worker.env';
+
+        return $this->renderCpTemplate('agents/start', [
+            'onboardingState' => $onboardingState,
+            'onboardingPreviewStage' => $previewStage,
+            'revealedCredential' => $revealedCredential,
+            'revealedCredentialWorkerEnv' => $revealedCredentialWorkerEnv,
+            'revealedCredentialEnvFilename' => $revealedCredentialEnvFilename,
+            'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
+            'accountsUrl' => UrlHelper::cpUrl('agents/accounts'),
+            'statusUrl' => UrlHelper::cpUrl('agents/status'),
+            'getStartedUrl' => 'https://marcusscheller.com/docs/agents/get-started/',
+            'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
+        ]);
     }
 
     public function actionDashboard(): Response
@@ -31,7 +88,7 @@ class DashboardController extends Controller
         $request = Craft::$app->getRequest();
         $pathInfo = trim((string)$request->getPathInfo(), '/');
         if ($pathInfo === 'agents') {
-            return $this->redirect('agents/accounts');
+            return $this->redirect($this->resolveCpHomeUrl());
         }
 
         $plugin = Plugin::getInstance();
@@ -1082,12 +1139,69 @@ class DashboardController extends Controller
                 'action' => 'created',
                 'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
+            $plugin->getOnboardingStateService()->markFirstAccountCreated();
             $this->setSuccessFlash(sprintf('Account `%s` created. Copy the API token now; it will only be shown once.', (string)($credential['handle'] ?? 'credential')));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
             $this->setFailFlash('Unable to create account: ' . $e->getMessage());
         }
+
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
+    }
+
+    public function actionCreateOnboardingCredential(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE);
+
+        $plugin = Plugin::getInstance();
+        $displayName = trim((string)$this->request->getBodyParam('credentialDisplayName', ''));
+        $description = $this->parseStringBodyParam('credentialDescription', '');
+
+        try {
+            $handle = $this->buildOnboardingCredentialHandle($displayName);
+            $result = $plugin->getCredentialService()->createManagedCredential(
+                $handle,
+                $displayName,
+                $description,
+                $this->resolveCurrentCpUserEmail(),
+                $this->resolveCurrentCpUserId(),
+                [],
+                false,
+                '',
+                $this->defaultOnboardingScopes(),
+                [],
+                $this->getDefaultScopes()
+            );
+            $credential = (array)($result['credential'] ?? []);
+            $this->storeRevealedCredential([
+                'id' => (int)($credential['id'] ?? 0),
+                'token' => (string)($result['token'] ?? ''),
+                'handle' => (string)($credential['handle'] ?? ''),
+                'displayName' => (string)($credential['displayName'] ?? ''),
+                'action' => 'created',
+                'generatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
+            ]);
+            $plugin->getOnboardingStateService()->markFirstAccountCreated();
+            $this->setSuccessFlash(sprintf('Account `%s` created. Connect your first worker next.', (string)($credential['displayName'] ?? $credential['handle'] ?? 'credential')));
+            return $this->redirectToPostedUrl(null, 'agents/start');
+        } catch (\InvalidArgumentException $e) {
+            $this->setFailFlash($e->getMessage());
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to create first account: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/start?onboardingStep=create');
+    }
+
+    public function actionDismissOnboarding(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+
+        Plugin::getInstance()->getOnboardingStateService()->markDismissed();
+        $this->setSuccessFlash('Onboarding dismissed. You can continue in Accounts.');
 
         return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
@@ -4832,6 +4946,73 @@ class DashboardController extends Controller
         }
 
         return $userComponent->checkPermission($permission);
+    }
+
+    private function resolveCpHomeUrl(): string
+    {
+        $previewStage = Plugin::getInstance()->getOnboardingStateService()->normalizePreviewStage(
+            (string)$this->request->getQueryParam(self::ONBOARDING_PREVIEW_PARAM, '')
+        );
+        if ($previewStage !== null) {
+            return UrlHelper::cpUrl('agents/start', [self::ONBOARDING_PREVIEW_PARAM => $previewStage]);
+        }
+
+        if ($this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW)
+            && Plugin::getInstance()->getOnboardingStateService()->isOnboardingActive($this->getDefaultScopes())
+        ) {
+            return UrlHelper::cpUrl('agents/start');
+        }
+
+        return UrlHelper::cpUrl('agents/accounts');
+    }
+
+    private function defaultOnboardingScopes(): array
+    {
+        return [
+            'auth:read',
+            'health:read',
+            'readiness:read',
+            'capabilities:read',
+            'openapi:read',
+        ];
+    }
+
+    private function buildOnboardingCredentialHandle(string $displayName): string
+    {
+        $source = trim($displayName);
+        if ($source === '') {
+            $source = 'managed-account';
+        }
+
+        $normalized = method_exists(StringHelper::class, 'toKebabCase')
+            ? (string)StringHelper::toKebabCase($source)
+            : strtolower($source);
+        $normalized = preg_replace('/[^a-z0-9._:-]+/i', '-', $normalized) ?: '';
+        $normalized = trim(strtolower($normalized), '-');
+        if ($normalized === '') {
+            $normalized = 'managed-account';
+        }
+
+        $baseHandle = str_starts_with($normalized, 'agent-') ? $normalized : 'agent-' . $normalized;
+        $existingHandles = [];
+        foreach (Plugin::getInstance()->getCredentialService()->getManagedCredentials($this->getDefaultScopes()) as $credential) {
+            if (!is_array($credential)) {
+                continue;
+            }
+            $handle = strtolower(trim((string)($credential['handle'] ?? '')));
+            if ($handle !== '') {
+                $existingHandles[$handle] = true;
+            }
+        }
+
+        $candidate = $baseHandle;
+        $suffix = 2;
+        while (isset($existingHandles[$candidate])) {
+            $candidate = $baseHandle . '-' . $suffix;
+            $suffix++;
+        }
+
+        return $candidate;
     }
 
     private function buildAvailableSitesForCp(): array

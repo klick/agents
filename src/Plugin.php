@@ -27,6 +27,7 @@ use Klick\Agents\services\ExternalResourceRegistryService;
 use Klick\Agents\services\IncidentFeedService;
 use Klick\Agents\services\LifecycleGovernanceService;
 use Klick\Agents\services\NotificationService;
+use Klick\Agents\services\OnboardingStateService;
 use Klick\Agents\services\ObservabilityMetricsService;
 use Klick\Agents\services\ReadinessService;
 use Klick\Agents\services\ReliabilitySignalService;
@@ -54,7 +55,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.27.1';
+    public string $schemaVersion = '0.28.0';
 
     public static ?self $plugin = null;
 
@@ -77,6 +78,7 @@ class Plugin extends BasePlugin
             'reliabilitySignalService' => ReliabilitySignalService::class,
             'lifecycleGovernanceService' => LifecycleGovernanceService::class,
             'notificationService' => NotificationService::class,
+            'onboardingStateService' => OnboardingStateService::class,
             'diagnosticsBundleService' => DiagnosticsBundleService::class,
             'incidentFeedService' => IncidentFeedService::class,
             'externalResourceRegistryService' => ExternalResourceRegistryService::class,
@@ -145,6 +147,7 @@ class Plugin extends BasePlugin
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function(RegisterUrlRulesEvent $event): void {
             $rules = [
                 'agents' => 'agents/dashboard/index',
+                'agents/start' => 'agents/dashboard/start',
                 'agents/status' => 'agents/dashboard/dashboard',
                 'agents/settings' => 'agents/dashboard/settings',
                 'agents/accounts' => 'agents/dashboard/credentials',
@@ -376,6 +379,13 @@ JS, View::POS_END);
     {
         /** @var NotificationService $service */
         $service = $this->get('notificationService');
+        return $service;
+    }
+
+    public function getOnboardingStateService(): OnboardingStateService
+    {
+        /** @var OnboardingStateService $service */
+        $service = $this->get('onboardingStateService');
         return $service;
     }
 

@@ -1,0 +1,543 @@
+{% extends "_layouts/cp" %}
+
+{% set title = 'Start' %}
+{% set selectedSubnavItem = null %}
+{% set onboardingState = onboardingState ?? {} %}
+{% set onboardingStage = onboardingState.stage ?? 'welcome' %}
+{% set onboardingPreviewStage = onboardingPreviewStage ?? null %}
+{% set canManageCredentials = canManageCredentials ?? false %}
+{% set revealedCredential = revealedCredential ?? null %}
+{% set revealedCredentialToken = revealedCredential.token ?? '' %}
+{% set revealedCredentialWorkerEnv = revealedCredentialWorkerEnv ?? '' %}
+{% set revealedCredentialEnvFilename = revealedCredentialEnvFilename ?? 'agents-worker.env' %}
+{% set accountsUrl = accountsUrl ?? cpUrl('agents/accounts') %}
+{% set statusUrl = statusUrl ?? cpUrl('agents/status') %}
+{% set getStartedUrl = getStartedUrl ?? 'https://marcusscheller.com/docs/agents/get-started/' %}
+{% set firstWorkerGuideUrl = firstWorkerGuideUrl ?? 'https://marcusscheller.com/docs/agents/get-started/first-worker' %}
+{% set onboardingPreviewParam = 'onboardingPreview' %}
+{% set avatarVariants = ['orbit', 'node', 'shield', 'bot', 'spark', 'grid'] %}
+{% set firstCredential = onboardingState.firstCredential ?? null %}
+{% set onboardingCreateUrl = cpUrl('agents/start', onboardingPreviewStage ? { (onboardingPreviewParam): onboardingPreviewStage, onboardingStep: 'create' } : { onboardingStep: 'create' }) %}
+
+{% block content %}
+  {% include 'agents/_partials/cp-ui' %}
+
+  <div class="agents-onboarding-shell">
+    <div class="agents-onboarding-hero-strip" aria-hidden="true">
+      <div class="agents-onboarding-hero-grid">
+        {% for index in 1..90 %}
+          {% set variant = avatarVariants[(loop.index0 % avatarVariants|length)] %}
+          <div class="agents-onboarding-hero-avatar agents-onboarding-hero-avatar--{{ variant }}">
+            {% include 'agents/_partials/onboarding-avatar' with { variant: variant } only %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="agents-onboarding-shell__inner">
+      <div class="agents-onboarding-logo" aria-hidden="true">
+        <div class="agents-onboarding-logo__mark">
+          <svg viewBox="0 0 266 266" focusable="false" aria-hidden="true">
+            <rect width="266" height="266" rx="133" fill="#D72222"></rect>
+            <path d="M133.771 175.055L128.504 158.775H96.4246L91.3174 175.055L103.287 176.97V188.461H64.9834V176.81L73.2826 175.533L105.043 77.539H126.749L159.147 175.214L166.808 176.81V188.461H122.12V176.97L133.771 175.055ZM108.075 119.195L100.415 144.571H124.674L117.173 119.195C114.938 112.013 113.821 106.746 113.023 100.202H112.704C111.746 106.586 110.31 111.693 108.075 119.195Z" fill="#ffffff"></path>
+            <path d="M186.492 125.02C178.672 125.02 172.128 118.636 172.128 110.496C172.128 102.836 178.672 96.2921 186.492 96.2921C194.472 96.2921 201.016 102.836 201.016 110.496C201.016 118.636 194.472 125.02 186.492 125.02ZM186.492 169.708C178.672 169.708 172.128 163.164 172.128 155.184C172.128 147.364 178.672 140.98 186.492 140.98C194.472 140.98 201.016 147.364 201.016 155.184C201.016 163.164 194.472 169.708 186.492 169.708Z" fill="#ffffff"></path>
+          </svg>
+        </div>
+      </div>
+
+      {% if onboardingStage == 'create' %}
+        <section class="agents-onboarding-panel agents-onboarding-panel--create">
+          <header class="agents-onboarding-copy">
+            <h1>Create your first <em>managed account</em></h1>
+            <p>A managed account is the machine identity your worker will use to connect to this site. Start with a name and short note. You can refine access later.</p>
+          </header>
+
+          {% if canManageCredentials %}
+            <div class="agents-onboarding-form-card">
+              <form method="post" accept-charset="UTF-8" class="agents-onboarding-form">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/create-onboarding-credential') }}
+                {{ redirectInput('agents/start') }}
+
+                <div class="agents-onboarding-form__header">
+                  <h2>Account details</h2>
+                </div>
+
+                <label class="agents-onboarding-field">
+                  <span class="agents-onboarding-field__label">Display name</span>
+                  <span class="agents-onboarding-field__hint">Name shown to operators in Agents.</span>
+                  <input type="text" name="credentialDisplayName" value="{{ craft.app.request.getBodyParam('credentialDisplayName', 'Operations integration') }}" placeholder="Operations integration" required>
+                </label>
+
+                <label class="agents-onboarding-field">
+                  <span class="agents-onboarding-field__label">Short description (optional)</span>
+                  <span class="agents-onboarding-field__hint">Optional note for other operators.</span>
+                  <input type="text" name="credentialDescription" value="{{ craft.app.request.getBodyParam('credentialDescription', 'What this account is for') }}" placeholder="What this account is for">
+                </label>
+
+                <div class="agents-onboarding-form__actions">
+                  <button class="btn submit" type="submit">Create account</button>
+                </div>
+              </form>
+            </div>
+          {% else %}
+            <div class="agents-onboarding-form-card">
+              <p class="agents-onboarding-form-card__notice">You can view onboarding, but creating the first account requires the normal Accounts manage permission in Craft.</p>
+              <a class="btn" href="{{ accountsUrl }}">Open Accounts</a>
+            </div>
+          {% endif %}
+        </section>
+      {% elseif onboardingStage == 'ready' %}
+        <section class="agents-onboarding-panel agents-onboarding-panel--ready">
+          <header class="agents-onboarding-copy">
+            <h1>Your first managed account is ready</h1>
+            <p>Use this token to connect your first worker to this site. You can reveal it only once.</p>
+          </header>
+
+          <div class="agents-onboarding-token-card">
+            <div class="agents-onboarding-token-card__copy">
+              <h2>Connect your first worker</h2>
+              {% if revealedCredentialToken %}
+                <p>Use this one-time reveal to export worker config and then run the example worker.</p>
+                <p class="agents-onboarding-token-card__token" id="onboardingRevealedTokenPreview">{{ revealedCredentialToken }}</p>
+                <textarea id="onboardingRevealedToken" hidden readonly>{{ revealedCredentialToken }}</textarea>
+                <textarea id="onboardingRevealedWorkerEnv" hidden readonly>{{ revealedCredentialWorkerEnv }}</textarea>
+                <p>Copy the token or download a ready-to-run <code>.env</code> file, then follow the first worker guide.</p>
+                <div class="agents-onboarding-token-card__actions">
+                  <button class="btn" type="button" data-onboarding-copy-token>Copy token</button>
+                  <button class="btn" type="button" data-onboarding-download-env data-filename="{{ revealedCredentialEnvFilename }}">Download .env</button>
+                  <a class="btn" href="{{ firstWorkerGuideUrl }}" target="_blank" rel="noopener">Open Guide</a>
+                </div>
+                <p class="agents-onboarding-token-card__note">This token is only shown once. Download the worker config now if you need a ready-to-run bootstrap artifact.</p>
+                <p class="agents-onboarding-token-card__feedback" id="onboardingTokenFeedback" aria-live="polite"></p>
+              {% else %}
+                <p>Your first managed account exists{% if firstCredential and (firstCredential.displayName ?? '') %}: <strong>{{ firstCredential.displayName }}</strong>{% endif %}. Open Accounts to inspect connection details or rotate a fresh token reveal.</p>
+                <div class="agents-onboarding-token-card__actions">
+                  <a class="btn" href="{{ accountsUrl }}">Open Accounts</a>
+                  <a class="btn" href="{{ firstWorkerGuideUrl }}" target="_blank" rel="noopener">Open Guide</a>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="agents-onboarding-panel__footer">
+            <a class="btn submit" href="{{ accountsUrl }}">Open Accounts</a>
+          </div>
+        </section>
+      {% else %}
+        <section class="agents-onboarding-panel agents-onboarding-panel--welcome">
+          <header class="agents-onboarding-copy">
+            <h1>Create your first <em>managed account</em></h1>
+            <p>Give your first worker a controlled way to access this site. Create one managed account now and connect it in the next step.</p>
+          </header>
+
+          <div class="agents-onboarding-panel__cta">
+            {% if canManageCredentials %}
+              <a class="btn submit" href="{{ onboardingCreateUrl }}">Create first account</a>
+            {% else %}
+              <a class="btn" href="{{ accountsUrl }}">Open Accounts</a>
+            {% endif %}
+          </div>
+
+          <div class="agents-onboarding-panel__links">
+            <a href="{{ getStartedUrl }}" target="_blank" rel="noopener">How this works</a>
+            <form method="post" accept-charset="UTF-8">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/dismiss-onboarding') }}
+              {{ redirectInput(accountsUrl) }}
+              <button type="submit" class="agents-onboarding-link-button">Skip for now</button>
+            </form>
+          </div>
+        </section>
+      {% endif %}
+    </div>
+  </div>
+
+  <style>
+    .agents-onboarding-shell {
+      position: relative;
+      min-height: calc(100vh - 84px);
+      overflow: hidden;
+      padding: 48px 24px 64px;
+      background: #ffffff;
+    }
+
+    .agents-onboarding-shell__inner {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 48px;
+      padding-top: 8px;
+    }
+
+    .agents-onboarding-hero-strip {
+      position: absolute;
+      top: -36px;
+      left: -24px;
+      right: -24px;
+      height: 230px;
+      overflow: hidden;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.92) 72%, rgba(255, 255, 255, 0) 100%);
+    }
+
+    .agents-onboarding-hero-grid {
+      display: grid;
+      grid-template-columns: repeat(18, minmax(0, 1fr));
+      gap: 20px 24px;
+      width: calc(100% + 48px);
+      min-width: 1280px;
+      margin-left: -24px;
+      padding: 18px 24px 120px;
+      transform: translateY(-18px);
+    }
+
+    .agents-onboarding-hero-avatar {
+      width: 40px;
+      height: 40px;
+      color: rgba(187, 199, 213, 0.5);
+    }
+
+    .agents-onboarding-hero-avatar svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .agents-onboarding-logo {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    .agents-onboarding-logo__mark {
+      width: 104px;
+      height: 104px;
+      padding: 7px;
+      border: 5px solid #ffffff;
+      border-radius: 999px;
+      background: #d72222;
+      box-shadow: 0 6px 18px rgba(215, 34, 34, 0.08);
+    }
+
+    .agents-onboarding-logo__mark svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .agents-onboarding-panel {
+      width: 100%;
+      max-width: 1400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 48px;
+    }
+
+    .agents-onboarding-copy {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+      align-items: center;
+    }
+
+    .agents-onboarding-copy h1 {
+      margin: 0;
+      color: #d72222;
+      font-size: 48px;
+      line-height: 1.05;
+      font-weight: 700;
+      max-width: 980px;
+    }
+
+    .agents-onboarding-copy h1 em {
+      font-style: italic;
+    }
+
+    .agents-onboarding-copy p {
+      margin: 0;
+      max-width: 780px;
+      color: #596673;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    .agents-onboarding-panel--create .agents-onboarding-copy h1,
+    .agents-onboarding-panel--ready .agents-onboarding-copy h1 {
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .agents-onboarding-panel--create .agents-onboarding-copy p,
+    .agents-onboarding-panel--ready .agents-onboarding-copy p {
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 700;
+      max-width: 640px;
+    }
+
+    .agents-onboarding-panel__cta {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .agents-onboarding-panel__cta .btn.submit {
+      min-height: 0;
+      padding: 11px 16px;
+      font-size: 18px;
+      border-radius: 6px;
+    }
+
+    .agents-onboarding-panel__links {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .agents-onboarding-panel__links a,
+    .agents-onboarding-link-button {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.4;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .agents-onboarding-panel__links a {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .agents-onboarding-form-card {
+      width: 100%;
+      max-width: 600px;
+      border: 1px solid #c0ccdc;
+      border-radius: 5px;
+      padding: 12px;
+      background: #eff5fa;
+      box-shadow: 0 4px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    .agents-onboarding-form-card__notice {
+      margin: 0 0 16px;
+      color: #596673;
+    }
+
+    .agents-onboarding-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .agents-onboarding-form__header h2,
+    .agents-onboarding-token-card__copy h2 {
+      margin: 0;
+      color: #596673;
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 700;
+    }
+
+    .agents-onboarding-field {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .agents-onboarding-field__label {
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .agents-onboarding-field__hint {
+      color: #7a8795;
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    .agents-onboarding-field input {
+      width: 100%;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #fbfcfe;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.4;
+      box-shadow: none;
+    }
+
+    .agents-onboarding-form__actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 2px;
+    }
+
+    .agents-onboarding-form__actions .btn.submit,
+    .agents-onboarding-panel__footer .btn.submit {
+      min-height: 0;
+      padding: 8px 12px;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+
+    .agents-onboarding-token-card {
+      width: 100%;
+      max-width: 520px;
+      border: 1px solid #aab8ca;
+      border-radius: 3px;
+      background: #ffffff;
+      padding: 18px 22px;
+    }
+
+    .agents-onboarding-token-card__copy {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .agents-onboarding-token-card__copy p {
+      margin: 0;
+      max-width: 340px;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .agents-onboarding-token-card__token {
+      color: #d72222 !important;
+      font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      max-width: none !important;
+    }
+
+    .agents-onboarding-token-card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .agents-onboarding-token-card__actions .btn {
+      min-height: 0;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      background: #d4dbe4;
+      border-color: #d4dbe4;
+      color: #18212a;
+      box-shadow: none;
+    }
+
+    .agents-onboarding-token-card__note,
+    .agents-onboarding-token-card__feedback {
+      font-size: 10px !important;
+      max-width: 360px !important;
+    }
+
+    .agents-onboarding-panel__footer {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    @media (max-width: 960px) {
+      .agents-onboarding-shell {
+        padding: 36px 16px 48px;
+      }
+
+      .agents-onboarding-copy h1 {
+        font-size: 34px;
+      }
+
+      .agents-onboarding-copy p {
+        font-size: 18px;
+      }
+
+      .agents-onboarding-panel--create .agents-onboarding-copy h1,
+      .agents-onboarding-panel--ready .agents-onboarding-copy h1 {
+        font-size: 22px;
+      }
+
+      .agents-onboarding-hero-grid {
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+      }
+
+      .agents-onboarding-token-card,
+      .agents-onboarding-form-card {
+        max-width: 100%;
+      }
+    }
+  </style>
+
+  <script>
+    (() => {
+      const copyButton = document.querySelector('[data-onboarding-copy-token]');
+      const downloadButton = document.querySelector('[data-onboarding-download-env]');
+      const tokenInput = document.getElementById('onboardingRevealedToken');
+      const workerEnvInput = document.getElementById('onboardingRevealedWorkerEnv');
+      const feedback = document.getElementById('onboardingTokenFeedback');
+
+      if (copyButton && tokenInput) {
+        copyButton.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(tokenInput.value || '');
+            if (feedback) {
+              feedback.textContent = 'Token copied.';
+            }
+          } catch (error) {
+            tokenInput.hidden = false;
+            tokenInput.focus();
+            tokenInput.select();
+            if (feedback) {
+              feedback.textContent = 'Copy failed. Select the token manually.';
+            }
+          }
+        });
+      }
+
+      if (downloadButton && workerEnvInput) {
+        downloadButton.addEventListener('click', () => {
+          const blob = new Blob([workerEnvInput.value || ''], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = downloadButton.dataset.filename || 'agents-worker.env';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+          if (feedback) {
+            feedback.textContent = '.env download started.';
+          }
+        });
+      }
+    })();
+  </script>
+{% endblock %}
