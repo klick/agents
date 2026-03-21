@@ -35,6 +35,7 @@ class DashboardController extends Controller
         }
 
         $plugin = Plugin::getInstance();
+        $settings = $this->getSettingsModel();
         $enabledState = $plugin->getAgentsEnabledState();
         $writesState = $plugin->getWritesExperimentalState();
         $controlCpEnabled = $plugin->isControlCpEnabled();
@@ -221,6 +222,8 @@ class DashboardController extends Controller
             'webhookProbeSnapshot' => $webhookProbeSnapshot,
             'notificationSnapshot' => $notificationSnapshot,
             'securityPosture' => $securityPosture,
+            'governedContentRefreshWorkflowUrl' => 'https://marcusscheller.com/docs/agents/workflows/governed-content-refresh',
+            'canManageApprovals' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
         ]);
     }
 
@@ -345,8 +348,6 @@ class DashboardController extends Controller
             'controlPolicyHintsByActionType' => $policyHintsByActionType,
             'controlSimulationResult' => $this->pullControlSimulationResult(),
             'controlSnapshotJson' => $this->prettyPrintJson($snapshot),
-            'allowCpApprovalRequests' => (bool)$settings->allowCpApprovalRequests,
-            'governedContentRefreshWorkflowUrl' => 'https://marcusscheller.com/docs/agents/workflows/governed-content-refresh',
             'canManagePolicies' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE),
             'canManageApprovals' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
             'canExecuteActions' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE),
@@ -534,9 +535,9 @@ class DashboardController extends Controller
             'revealedCredential' => $this->pullRevealedCredential(),
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
             'governedContentRefreshWorkflowUrl' => 'https://marcusscheller.com/docs/agents/workflows/governed-content-refresh',
-            'allowCpApprovalRequests' => (bool)$this->getSettingsModel()->allowCpApprovalRequests,
             'workerBootstrapSiteUrl' => UrlHelper::siteUrl(''),
             'workerBootstrapBaseUrl' => UrlHelper::siteUrl('agents/v1'),
+            'canManageApprovals' => $plugin->isControlCpEnabled() && $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
             'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
             'canPauseCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
             'canRotateCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_ROTATE),
@@ -712,9 +713,6 @@ class DashboardController extends Controller
         $settingsData['enableWritesExperimental'] = $writesLocked
             ? (bool)$settings->enableWritesExperimental
             : $this->parseBooleanBodyParam('enableWritesExperimental', (bool)$settings->enableWritesExperimental);
-        $settingsData['allowCpApprovalRequests'] = $plugin->isControlCpEnabled()
-            ? $this->parseBooleanBodyParam('allowCpApprovalRequests', (bool)$settings->allowCpApprovalRequests)
-            : false;
         $settingsData['enableCredentialUsageIndicator'] = $credentialUsageIndicatorLocked
             ? (bool)$settings->enableCredentialUsageIndicator
             : $this->parseBooleanBodyParam('enableCredentialUsageIndicator', (bool)$settings->enableCredentialUsageIndicator);
@@ -1717,12 +1715,6 @@ class DashboardController extends Controller
         $this->requireControlCpEnabled();
         $this->requirePostRequest();
         $this->requireControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE);
-
-        $settings = $this->getSettingsModel();
-        if (!(bool)$settings->allowCpApprovalRequests) {
-            $this->setFailFlash('Manual form is off (agent-first mode). Ask your integration to submit the request via API.');
-            return $this->redirectToPostedUrl(null, 'agents/approvals');
-        }
 
         $service = Plugin::getInstance()->getControlPlaneService();
         $idempotencyKey = trim((string)$this->request->getBodyParam('idempotencyKey', ''));

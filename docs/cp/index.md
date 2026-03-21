@@ -45,6 +45,7 @@ The section root `admin/agents` opens `Accounts`.
   - production `Webhook Probe` card for synthetic signed delivery against the live receiver
   - separate dead-letter queue replay section for operational recovery
   - dev-only `Webhook Test Sink` section when local sink capture is enabled
+  - `Manual Request Test` tool for setup and one-off governed draft-request fallback when governed writing is enabled
   - `Operator Notifications` card when notifications are enabled, with:
     - resolved recipient visibility
     - recent delivery outcomes
@@ -90,6 +91,7 @@ Notable current behavior:
 - governed draft execution is blocked when the canonical entry already has another saved draft and the follow-up surfaces the conflicting draft ids and draft links for operator cleanup
 - rules can be edited and deleted inline from the embedded rules table
 - rule forms use a human-readable governed-action selector for the current core action set
+- manual request creation no longer lives here; the operator fallback/test tool sits in `Status`
 
 ## Accounts
 
@@ -165,9 +167,6 @@ Current sections:
 - **Reliability Thresholds**
   - sync-state lag warn threshold
   - sync-state lag critical threshold
-- **Manual Fallback**
-  - `Allow manual approval requests in Approvals`
-  - shown only when Approvals is available
 - **Configuration Locks**
   - explains when values are locked by env vars or `config/agents.php`
 

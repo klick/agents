@@ -163,7 +163,7 @@ expect_absent "targetSetAllowedSiteIds" "$CP_TEMPLATE" "Credentials CP template 
 expect_fixed "Governed write helpers" "$CP_TEMPLATE" "Credentials CP template exposes governed write helper snippets in account details"
 expect_fixed "Governed content refresh" "$CP_TEMPLATE" "Credentials CP template exposes the governed content refresh helper for eligible accounts"
 expect_fixed "governedContentRefreshWorkflowUrl" "$CP_TEMPLATE" "Credentials CP template links the governed content refresh workflow"
-expect_fixed "Create request in Approvals" "$CP_TEMPLATE" "Credentials CP template can hand operators off to the manual approval-request composer"
+expect_fixed "Open manual request test" "$CP_TEMPLATE" "Credentials CP template can hand operators off to the manual request test tool"
 expect_fixed "data-agent-download-worker-env" "$CP_TEMPLATE" "Credentials CP template exposes account-level worker env downloads in detail views"
 expect_fixed "data-agent-copy-worker-env" "$CP_TEMPLATE" "Credentials CP template exposes account-level worker env copy actions in detail views"
 expect_fixed "agents-worker-env-preview" "$CP_TEMPLATE" "Credentials CP template renders visible worker env previews in detail views"

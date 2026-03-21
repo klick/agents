@@ -1,6 +1,5 @@
 {% import '_includes/forms' as forms %}
 
-{% set requestsFeatureEnabled = controlCpEnabled ?? false %}
 {% set writesExperimentalSettingLocked = writesExperimentalSettingLocked ?? false %}
 {% set writesExperimentalLockedByEnv = writesExperimentalLockedByEnv ?? false %}
 {% set writesExperimentalConfigLocked = writesExperimentalConfigLocked ?? false %}
@@ -82,27 +81,6 @@
       </section>
     </div>
   </section>
-
-  {% if requestsFeatureEnabled %}
-    <section class="agents-settings-focus-panel" id="settingsFocusApprovals" data-agents-settings-focus-panel hidden>
-      <div class="agents-settings-focus-grid">
-        <section class="border rounded p-3" id="manualFallbackSection">
-          <h2 class="h4">Approvals</h2>
-          <p class="agents-subtle">Keep this off for agent-first workflows. Enable only if operators must create requests manually.</p>
-
-          {{ forms.lightswitchField({
-            first: true,
-            label: 'Allow manual approval requests in Approvals',
-            instructions: 'Fallback only. Recommended: agents/integrations create requests, humans only approve/reject.',
-            name: 'allowCpApprovalRequests',
-            on: settings.allowCpApprovalRequests ?? false,
-            onLabel: false,
-            offLabel: false,
-          }) }}
-        </section>
-      </div>
-    </section>
-  {% endif %}
 
   <section class="agents-settings-focus-panel" id="settingsFocusDelivery" data-agents-settings-focus-panel hidden>
     <div class="agents-settings-focus-grid">

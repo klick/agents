@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.27.1 - 2026-03-21
+
+### Changed
+
+- Moved the manual governed draft-request tool out of `Approvals` and into `Status` as a setup/fallback utility, and removed the separate Settings toggle so it now follows governed-writing availability.
+- Refined the `Status` verdict and card surfaces around linked operator guides, quieter text-link action rows, and less button-heavy secondary detail actions.
+- Tightened the surrounding CP handoff copy so `Accounts` and `Status` point operators at the manual request test only when that flow is actually available to them.
+
 ## 0.27.0 - 2026-03-21
 
 ### Added

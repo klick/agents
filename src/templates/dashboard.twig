@@ -1,4 +1,5 @@
 {% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
 {% set title = 'Agents Status' %}
 {% set selectedSubnavItem = 'status' %}
 {% set dashboardHeading = 'Status' %}
@@ -763,6 +764,8 @@
       {% set overviewUrl = readinessUrl %}
       {% set securityUrl = readinessUrl %}
       {% set firstWorkerGuideUrl = 'https://marcusscheller.com/docs/agents/get-started/first-worker' %}
+      {% set scopeGuideUrl = 'https://marcusscheller.com/docs/agents/api/scope-guide' %}
+      {% set webhooksGuideUrl = 'https://marcusscheller.com/docs/agents/webhooks' %}
       {% set readinessActionRows = [
         {
           signal: 'Runtime disabled',
@@ -1608,29 +1611,35 @@
         ? [
           {
             title: 'Keep accounts task-specific',
-            copy: 'Use separate managed accounts for reporting, review, and draft-writing instead of sharing one broad token.'
+            copy: 'Use separate managed accounts for reporting, review, and draft-writing instead of sharing one broad token.',
+            url: scopeGuideUrl
           },
           {
             title: 'Start read-only first',
-            copy: 'Add write scopes and Target Sets only when a workflow truly needs governed draft updates.'
+            copy: 'Add write scopes and Target Sets only when a workflow truly needs governed draft updates.',
+            url: firstWorkerGuideUrl
           },
           {
-            title: 'Use approvals for change review',
-            copy: 'When workers prepare content changes, let editors review diffs before anything is applied.'
+            title: 'Governed Content Refresh',
+            copy: 'When workers prepare content changes, let editors review diffs before anything is applied.',
+            url: governedContentRefreshWorkflowUrl
           }
         ]
         : [
           {
             title: 'Keep accounts task-specific',
-            copy: 'Use separate managed accounts for reporting, monitoring, and polling workers instead of sharing one broad token.'
+            copy: 'Use separate managed accounts for reporting, monitoring, and polling workers instead of sharing one broad token.',
+            url: scopeGuideUrl
           },
           {
             title: 'Give each worker only what it needs',
-            copy: 'Confirm a healthy first connection with read-only access before expanding scopes for a worker.'
+            copy: 'Confirm a healthy first connection with read-only access before expanding scopes for a worker.',
+            url: firstWorkerGuideUrl
           },
           {
             title: 'Add push delivery only when needed',
-            copy: 'Webhooks and probe tools are optional until external workers need push-based wake-ups instead of polling.'
+            copy: 'Webhooks and probe tools are optional until external workers need push-based wake-ups instead of polling.',
+            url: webhooksGuideUrl
           }
         ] %}
 
@@ -1950,6 +1959,18 @@
         ] %}
       {% endif %}
 
+      {% set manualRequestToolEnabled = showWriteDashboardCards and canManageApprovals %}
+      {% set manualRequestToolDetailDialogId = 'manualRequestToolDetailDialog' %}
+      {% set manualRequestToolCardBadgeTone = 'muted' %}
+      {% set manualRequestToolCardBadgeLabel = 'Fallback' %}
+      {% set manualRequestToolCardLines = [] %}
+      {% if manualRequestToolEnabled %}
+        {% set manualRequestToolCardLines = [
+          { text: 'Setup and fallback tool for one-off governed draft requests.' },
+          { text: 'Use it before a worker exists or while a worker is temporarily unavailable.' }
+        ] %}
+      {% endif %}
+
       <section class="agents-status-dashboard-stack">
         <div class="agents-status-dashboard-grid">
           <article class="agents-status-dashboard-card agents-status-dashboard-card--verdict agents-readiness-ready-card agents-readiness-ready-card--{{ readinessDisplayStateTone }} border rounded p-0" id="readinessStateCard">
@@ -1990,7 +2011,13 @@
                   <div class="agents-status-dashboard-tips__items" role="list" aria-label="Operator tips for working with Agents">
                     {% for tip in verdictOperatorTips %}
                       <article class="agents-status-dashboard-tip-item" role="listitem">
-                        <strong class="agents-status-dashboard-tip-item__title">{{ tip.title }}</strong>
+                        <strong class="agents-status-dashboard-tip-item__title">
+                          {% if (tip.url ?? '') != '' %}
+                            <a href="{{ tip.url }}" class="agents-status-dashboard-tip-item__title-link" target="_blank" rel="noopener">{{ tip.title }}</a>
+                          {% else %}
+                            {{ tip.title }}
+                          {% endif %}
+                        </strong>
                         <p class="agents-status-dashboard-tip-item__copy">{{ tip.copy }}</p>
                       </article>
                     {% endfor %}
@@ -2012,11 +2039,11 @@
             </div>
             <div class="agents-status-dashboard-card__footer">
               {% if verdictPrimaryActionUrl == '#statusSystemDetails' %}
-                <button class="btn small" type="button" data-agents-open-status-details="statusSystemDetails">{{ verdictPrimaryActionLabel }}</button>
+                <button class="agents-status-dashboard-card__footer-link" type="button" data-agents-open-status-details="statusSystemDetails">{{ verdictPrimaryActionLabel }} &rarr;</button>
               {% else %}
-                <a href="{{ verdictPrimaryActionUrl }}" class="btn small">{{ verdictPrimaryActionLabel }}</a>
+                <a href="{{ verdictPrimaryActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ verdictPrimaryActionLabel }} &rarr;</a>
               {% endif %}
-              <button class="btn small" type="button" data-agents-open-status-details="statusSystemDetails">View system details</button>
+              <button class="agents-status-dashboard-card__footer-link agents-status-dashboard-card__footer-link--secondary" type="button" data-agents-open-status-details="statusSystemDetails">View system details</button>
             </div>
           </article>
 
@@ -2041,7 +2068,7 @@
               </ul>
             </div>
             <div class="agents-status-dashboard-card__footer">
-              <a href="{{ accountsCardActionUrl }}" class="btn small">{{ accountsCardActionLabel }}</a>
+              <a href="{{ accountsCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ accountsCardActionLabel }} &rarr;</a>
             </div>
           </article>
 
@@ -2067,7 +2094,7 @@
                 </ul>
               </div>
               <div class="agents-status-dashboard-card__footer">
-                <a href="{{ reviewCardActionUrl }}" class="btn small">{{ reviewCardActionLabel }}</a>
+                <a href="{{ reviewCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ reviewCardActionLabel }} &rarr;</a>
               </div>
             </article>
           {% endif %}
@@ -2093,9 +2120,9 @@
               </ul>
             </div>
             <div class="agents-status-dashboard-card__footer">
-              <a href="{{ notificationsCardActionUrl }}" class="btn small">{{ notificationsCardActionLabel }}</a>
+              <a href="{{ notificationsCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ notificationsCardActionLabel }} &rarr;</a>
               {% if notificationEnabled and not statusScreenPreview %}
-                <button class="btn small" type="button" data-agents-open-status-details="{{ notificationsDetailDialogId }}">View details</button>
+                <button class="agents-status-dashboard-card__footer-link agents-status-dashboard-card__footer-link--secondary" type="button" data-agents-open-status-details="{{ notificationsDetailDialogId }}">View details</button>
               {% endif %}
             </div>
           </article>
@@ -2122,7 +2149,7 @@
                 </ul>
               </div>
               <div class="agents-status-dashboard-card__footer">
-                <a href="{{ targetSetsCardActionUrl }}" class="btn small">{{ targetSetsCardActionLabel }}</a>
+                <a href="{{ targetSetsCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ targetSetsCardActionLabel }} &rarr;</a>
               </div>
             </article>
           {% endif %}
@@ -2148,7 +2175,7 @@
               </ul>
             </div>
             <div class="agents-status-dashboard-card__footer">
-              <a href="{{ webhooksCardActionUrl }}" class="btn small">{{ webhooksCardActionLabel }}</a>
+              <a href="{{ webhooksCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ webhooksCardActionLabel }} &rarr;</a>
             </div>
           </article>
 
@@ -2173,9 +2200,9 @@
               </ul>
             </div>
             <div class="agents-status-dashboard-card__footer">
-              <a href="{{ webhookProbeCardActionUrl }}" class="btn small">{{ webhookProbeCardActionLabel }}</a>
+              <a href="{{ webhookProbeCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ webhookProbeCardActionLabel }} &rarr;</a>
               {% if not statusScreenPreview %}
-                <button class="btn small" type="button" data-agents-open-status-details="{{ webhookProbeDetailDialogId }}">View details</button>
+                <button class="agents-status-dashboard-card__footer-link agents-status-dashboard-card__footer-link--secondary" type="button" data-agents-open-status-details="{{ webhookProbeDetailDialogId }}">View details</button>
               {% endif %}
             </div>
           </article>
@@ -2202,12 +2229,33 @@
             </div>
             <div class="agents-status-dashboard-card__footer">
               {% if webhookTestSinkVisible and not statusScreenPreview %}
-                <button class="btn small" type="button" data-agents-open-status-details="{{ webhookTestSinkDetailDialogId }}">View details</button>
+                <button class="agents-status-dashboard-card__footer-link agents-status-dashboard-card__footer-link--secondary" type="button" data-agents-open-status-details="{{ webhookTestSinkDetailDialogId }}">View details</button>
               {% else %}
-                <a href="{{ settingsUrl }}" class="btn small">Open Settings</a>
+                <a href="{{ settingsUrl }}" class="agents-status-dashboard-card__footer-link">Open Settings &rarr;</a>
               {% endif %}
             </div>
           </article>
+
+          {% if manualRequestToolEnabled and not statusScreenPreview %}
+            <article class="agents-status-dashboard-card border rounded p-0" id="manualRequestToolCard">
+              <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
+                <div class="agents-status-dashboard-card__header-copy">
+                  <h2 class="agents-status-dashboard-card__title">Manual Request Test</h2>
+                </div>
+                <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ manualRequestToolCardBadgeTone }}">{{ manualRequestToolCardBadgeLabel }}</span>
+              </div>
+              <div class="agents-status-dashboard-card__body">
+                <ul class="agents-status-dashboard-card__list">
+                  {% for line in manualRequestToolCardLines %}
+                    <li>{{ line.text }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="agents-status-dashboard-card__footer">
+                <button class="agents-status-dashboard-card__footer-link agents-status-dashboard-card__footer-link--secondary" type="button" data-agents-open-status-details="{{ manualRequestToolDetailDialogId }}">View details</button>
+              </div>
+            </article>
+          {% endif %}
         </div>
 
         <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--status-grid" id="statusSystemDetails" data-agents-detail-dialog aria-labelledby="statusSystemDetailsTitle">
@@ -3453,6 +3501,169 @@
         </dialog>
       {% endif %}
 
+      {% if manualRequestToolEnabled and not statusScreenPreview %}
+        <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--status-grid" id="{{ manualRequestToolDetailDialogId }}" data-agents-detail-dialog aria-labelledby="manualRequestToolDetailDialogTitle">
+          <div class="agents-readiness-detail-dialog-shell">
+            <div class="agents-readiness-detail-dialog-head">
+              <div class="agents-readiness-detail-dialog-heading">
+                <h2 class="agents-readiness-detail-dialog-title" id="manualRequestToolDetailDialogTitle">Manual Request Test</h2>
+                <p class="agents-readiness-detail-dialog-copy">Setup and fallback tool for creating one governed <code>entry.updateDraft</code> request by hand before a worker is in place.</p>
+              </div>
+              <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close manual request test detail">Close</button>
+            </div>
+            <div class="agents-readiness-detail-dialog-body">
+              <section class="agents-webhook-probe-card border rounded p-0" id="manualRequestToolDetailSection">
+                <div class="agents-webhook-probe-top agents-status-strip-card__top">
+                  <div class="agents-webhook-probe-header">
+                    <h2 class="agents-webhook-probe-title">Manual Request Test</h2>
+                  </div>
+                  <div class="agents-webhook-probe-actions">
+                    <a class="btn small agents-webhook-probe-button" href="{{ governedContentRefreshWorkflowUrl }}" target="_blank" rel="noopener">Open workflow</a>
+                    <a class="btn small agents-webhook-probe-button" href="{{ approvalsUrl }}">Open Approvals</a>
+                  </div>
+                </div>
+                <div class="agents-status-strip-card__subcopy">
+                  <p class="agents-webhook-probe-copy">Use this only for setup, testing, or one-off fallback before a worker exists or while it is temporarily unavailable.</p>
+                  <p class="agents-webhook-probe-status agents-webhook-probe-status--muted">Final approval in Craft will execute the stored draft payload.</p>
+                </div>
+
+                <div class="agents-status-collapsible-body">
+                  <div class="agents-status-manual-request-notes">
+                    <ul class="agents-link-list">
+                      <li>Creates one governed <code>entry.updateDraft</code> request from the control plane.</li>
+                      <li>Best for proving a bounded lane before a worker is scheduled.</li>
+                      <li>Once a worker exists, let the worker create the request instead.</li>
+                    </ul>
+                  </div>
+
+                  <form method="post" accept-charset="UTF-8" class="js-confirm-form agents-status-manual-request-form" data-confirm-message="Create this approval request?">
+                    {{ csrfInput() }}
+                    {{ actionInput('agents/dashboard/request-control-approval') }}
+                    {{ redirectInput('agents/approvals#agents-control-pending-table-panel') }}
+                    <input type="hidden" name="actionType" value="entry.updateDraft">
+                    <input type="hidden" name="metadataSource" value="cp-manual-request">
+                    <input type="hidden" name="metadataAgentId" value="cp-manual-request">
+
+                    <div class="agents-control-manual-request-grid">
+                      {{ forms.textField({
+                        label: 'Entry ID',
+                        name: 'payloadEntryId',
+                        required: true,
+                        type: 'number',
+                        min: 1,
+                        placeholder: '1001',
+                      }) }}
+
+                      {{ forms.textField({
+                        label: 'Site ID',
+                        name: 'payloadSiteId',
+                        required: true,
+                        type: 'number',
+                        min: 1,
+                        placeholder: '1',
+                      }) }}
+
+                      {{ forms.textField({
+                        label: 'Action ref',
+                        name: 'actionRef',
+                        placeholder: 'CONTENT-REFRESH-1001-1',
+                      }) }}
+
+                      {{ forms.textField({
+                        label: 'Idempotency key',
+                        instructions: 'Optional but recommended for repeatable manual requests.',
+                        name: 'idempotencyKey',
+                        placeholder: 'content-refresh-1001-1',
+                      }) }}
+                    </div>
+
+                    {{ forms.textField({
+                      label: 'Reason',
+                      name: 'reason',
+                      required: true,
+                      value: 'Prepare draft update for editorial review',
+                      placeholder: 'Prepare scheduled content refresh draft for editorial review',
+                    }) }}
+
+                    <div class="agents-control-manual-request-grid">
+                      {{ forms.textField({
+                        label: 'Draft name',
+                        name: 'payloadDraftName',
+                        value: 'Manual governed draft',
+                        placeholder: 'Manual governed draft',
+                      }) }}
+
+                      {{ forms.textField({
+                        label: 'Draft title',
+                        name: 'payloadTitle',
+                        placeholder: 'Updated Draft Title',
+                      }) }}
+
+                      {{ forms.textField({
+                        label: 'Draft slug',
+                        name: 'payloadSlug',
+                        placeholder: 'updated-draft-title',
+                      }) }}
+
+                      {{ forms.textField({
+                        label: 'Existing draft ID',
+                        instructions: 'Optional. Use when you want to target a specific saved draft.',
+                        name: 'payloadDraftId',
+                        type: 'number',
+                        min: 1,
+                        placeholder: '123',
+                      }) }}
+                    </div>
+
+                    {{ forms.textareaField({
+                      label: 'Draft notes',
+                      instructions: 'Stored with the request and visible during approval review.',
+                      name: 'payloadDraftNotes',
+                      rows: 3,
+                      value: 'Prepared by manual governed request for editorial review.',
+                      placeholder: 'Prepared by manual governed request for editorial review.',
+                    }) }}
+
+                    {{ forms.textareaField({
+                      label: 'Field values JSON',
+                      instructions: 'JSON object assigned to payload.fields. Example: {\"summary\":\"Draft prepared for review.\"}',
+                      name: 'payloadFieldsJson',
+                      rows: 4,
+                      placeholder: '{\"summary\":\"Draft prepared for review.\"}',
+                    }) }}
+
+                    <details class="agents-control-manual-request-advanced">
+                      <summary><strong>Advanced JSON overrides</strong></summary>
+                      <div class="agents-control-manual-request-advanced__body">
+                        {{ forms.textareaField({
+                          label: 'Payload JSON override',
+                          instructions: 'Merged after the guided fields. Duplicate keys here win.',
+                          name: 'payloadJson',
+                          rows: 4,
+                          placeholder: '{\"fields\":{\"summary\":\"Override value\"}}',
+                        }) }}
+
+                        {{ forms.textareaField({
+                          label: 'Metadata JSON override',
+                          instructions: 'Optional metadata merged onto the default CP manual metadata.',
+                          name: 'metadataJson',
+                          rows: 3,
+                          placeholder: '{\"channel\":\"control-panel\"}',
+                        }) }}
+                      </div>
+                    </details>
+
+                    <div class="agents-status-manual-request-actions">
+                      <button class="btn submit" type="submit">Create approval request</button>
+                    </div>
+                  </form>
+                </div>
+              </section>
+            </div>
+          </div>
+        </dialog>
+      {% endif %}
+
       {% if notificationEnabled and not statusScreenPreview %}
       <dialog class="agents-readiness-detail-dialog agents-readiness-detail-dialog--status-grid" id="{{ notificationsDetailDialogId }}" data-agents-detail-dialog aria-labelledby="operatorNotificationsDetailDialogTitle">
         <div class="agents-readiness-detail-dialog-shell">
@@ -3802,6 +4013,46 @@
       background: #ffffff;
     }
 
+    .agents-status-dashboard-card__footer-link {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #596673;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.4;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .agents-status-dashboard-card__footer-link:hover,
+    .agents-status-dashboard-card__footer-link:focus {
+      color: #3c4856;
+    }
+
+    .agents-status-dashboard-card__footer-link:focus-visible {
+      outline: 2px solid #8a97a5;
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
+    .agents-status-dashboard-card__footer-link--secondary {
+      color: #7f8c99;
+    }
+
+    .agents-status-dashboard-card__footer-link--secondary:hover,
+    .agents-status-dashboard-card__footer-link--secondary:focus {
+      color: #596673;
+    }
+
+    .agents-status-dashboard-card__footer-link--secondary:focus-visible {
+      outline-color: #8a97a5;
+    }
+
     .agents-status-dashboard-verdict {
       display: grid;
       gap: 12px;
@@ -3900,6 +4151,17 @@
       font-size: 13px;
       font-weight: 700;
       line-height: 1.25;
+    }
+
+    .agents-status-dashboard-tip-item__title-link {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .agents-status-dashboard-tip-item__title-link:hover,
+    .agents-status-dashboard-tip-item__title-link:focus {
+      color: var(--link-color);
     }
 
     .agents-status-dashboard-tip-item__copy {
@@ -5232,6 +5494,25 @@
     .agents-webhook-probe-payload {
       max-height: 60vh;
       overflow: auto;
+    }
+
+    .agents-status-manual-request-notes {
+      margin-bottom: 16px;
+    }
+
+    .agents-status-manual-request-form {
+      margin-top: 8px;
+    }
+
+    .agents-status-manual-request-form .field {
+      max-width: none;
+    }
+
+    .agents-status-manual-request-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
     }
 
     .agents-webhook-test-sink-card {
@@ -6573,6 +6854,23 @@
             closeDialog(openDialog);
           }
         });
+      }
+
+      const detailQueryParams = new URLSearchParams(window.location.search);
+      const requestedStatusTool = (detailQueryParams.get('tool') || '').trim().toLowerCase();
+      if (requestedStatusTool === 'manual-request-test') {
+        const dialog = document.getElementById('manualRequestToolDetailDialog');
+        if (dialog) {
+          openDialogs.set(dialog, null);
+          if (hasNativeDialog) {
+            if (!dialog.open) {
+              dialog.showModal();
+            }
+          } else {
+            dialog.setAttribute('open', 'open');
+          }
+          focusFirstCloseButton(dialog);
+        }
       }
     })();
   {% endjs %}

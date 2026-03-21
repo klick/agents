@@ -2,8 +2,13 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
-## 0.27.0 (2026-03-21)
+## 0.27.1 (2026-03-21)
 
+- Moved the manual governed draft-request tool out of `Approvals` and into `Status` as a setup/fallback utility, and removed the separate Settings toggle so it now follows governed-writing availability.
+- Refined the `Status` verdict and card surfaces around linked operator guides, quieter text-link action rows, and less button-heavy secondary detail actions.
+- Tightened the surrounding CP handoff copy so `Accounts` and `Status` point operators at the manual request test only when that flow is actually available to them.
+
+## 0.27.0 (2026-03-21)
 - Added the first `F19` workflow-starter slice with a public `Governed Content Refresh` guide and companion worker scaffold.
 - Added manual governed `entry.updateDraft` approval requests directly in `Approvals` and refreshed the surrounding operator wording/date treatment.
 - Polished `Accounts`, `Approvals`, and `Target Sets` around calmer table cells, clearer worker helpers, and more consistent Craft-native link/date behavior.
