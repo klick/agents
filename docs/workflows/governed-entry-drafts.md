@@ -92,6 +92,7 @@ That makes it a strong first write-side test before you build more specialized w
 
 ## Related
 
+- [Governed Content Refresh](/workflows/governed-content-refresh)
 - [First Worker](/get-started/first-worker)
 - [Entry Translation Drafts](/workflows/entry-translation-drafts)
 - [Starter Packs](/api/starter-packs)

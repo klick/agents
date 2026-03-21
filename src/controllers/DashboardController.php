@@ -346,6 +346,7 @@ class DashboardController extends Controller
             'controlSimulationResult' => $this->pullControlSimulationResult(),
             'controlSnapshotJson' => $this->prettyPrintJson($snapshot),
             'allowCpApprovalRequests' => (bool)$settings->allowCpApprovalRequests,
+            'governedContentRefreshWorkflowUrl' => 'https://marcusscheller.com/docs/agents/workflows/governed-content-refresh',
             'canManagePolicies' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_POLICIES_MANAGE),
             'canManageApprovals' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_APPROVALS_MANAGE),
             'canExecuteActions' => $this->canControlPermission(Plugin::PERMISSION_CONTROL_ACTIONS_EXECUTE),
@@ -532,6 +533,8 @@ class DashboardController extends Controller
             'externalResourceProviders' => $externalResourceProviders,
             'revealedCredential' => $this->pullRevealedCredential(),
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
+            'governedContentRefreshWorkflowUrl' => 'https://marcusscheller.com/docs/agents/workflows/governed-content-refresh',
+            'allowCpApprovalRequests' => (bool)$this->getSettingsModel()->allowCpApprovalRequests,
             'workerBootstrapSiteUrl' => UrlHelper::siteUrl(''),
             'workerBootstrapBaseUrl' => UrlHelper::siteUrl('agents/v1'),
             'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
@@ -1723,16 +1726,36 @@ class DashboardController extends Controller
 
         $service = Plugin::getInstance()->getControlPlaneService();
         $idempotencyKey = trim((string)$this->request->getBodyParam('idempotencyKey', ''));
-        $guidedPayload = $this->buildGuidedMap([
+        $legacyPayload = $this->buildGuidedMap([
             'orderId' => 'payloadOrderId',
             'returnId' => 'payloadReturnId',
             'customerId' => 'payloadCustomerId',
             'note' => 'payloadNote',
         ]);
-        $guidedMetadata = $this->buildGuidedMap([
+        $entryDraftPayload = $this->buildGuidedMap([
+            'entryId' => 'payloadEntryId',
+            'siteId' => 'payloadSiteId',
+            'draftId' => 'payloadDraftId',
+            'draftName' => 'payloadDraftName',
+            'draftNotes' => 'payloadDraftNotes',
+            'title' => 'payloadTitle',
+            'slug' => 'payloadSlug',
+        ]);
+        $entryDraftFields = $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadFieldsJson', ''));
+        if (!empty($entryDraftFields)) {
+            $entryDraftPayload['fields'] = $entryDraftFields;
+        }
+
+        $guidedMetadata = array_replace([
+            'source' => 'cp-manual-request',
+            'agentId' => 'cp-manual-request',
+            'traceId' => sprintf('cp-manual-%s', gmdate('YmdHis')),
+        ], $this->buildGuidedMap([
             'source' => 'metadataSource',
             'channel' => 'metadataChannel',
-        ]);
+            'agentId' => 'metadataAgentId',
+            'traceId' => 'metadataTraceId',
+        ]));
 
         try {
             $rawPayload = $this->parseJsonBodyParam((string)$this->request->getBodyParam('payloadJson', ''));
@@ -1742,7 +1765,7 @@ class DashboardController extends Controller
                 'actionRef' => (string)$this->request->getBodyParam('actionRef', ''),
                 'reason' => (string)$this->request->getBodyParam('reason', ''),
                 'idempotencyKey' => $idempotencyKey,
-                'payload' => array_replace($guidedPayload, $rawPayload),
+                'payload' => array_replace($legacyPayload, $entryDraftPayload, $rawPayload),
                 'metadata' => array_replace($guidedMetadata, $rawMetadata),
             ], $this->buildCpActorContext());
 
@@ -2605,6 +2628,7 @@ class DashboardController extends Controller
             }
 
             $approval['requestedByLabel'] = $this->formatControlActorLabel((string)($approval['requestedBy'] ?? ''), '', $credentialDisplayByActorId);
+            $approval['requestedByCpUrl'] = $this->resolveCpUserEditUrlFromActorId((string)($approval['requestedBy'] ?? ''));
             $approval['decidedByLabel'] = $this->formatControlActorLabel((string)($approval['decidedBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
             $approval['secondaryDecisionByLabel'] = $this->formatControlActorLabel((string)($approval['secondaryDecisionBy'] ?? ''), 'cp-user', $credentialDisplayByActorId);
             $approval['decidedByCpUrl'] = $this->resolveCpUserEditUrlFromActorId((string)($approval['decidedBy'] ?? ''));

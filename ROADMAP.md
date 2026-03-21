@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
-Date: 2026-03-20
-Current release: `v0.25.5`
+Date: 2026-03-21
+Current release: `v0.27.0`
 
 ## Direction
 
@@ -211,7 +211,7 @@ Release outcome:
 
 - Approvers can see what changed in a few seconds instead of inferring content changes from raw payloads or metadata.
 
-## Planned (`v0.25.x`) First-Run Onboarding and Contract Stabilization
+## Planned (Pre-`1.0.0`) First-Run Onboarding and Contract Stabilization
 
 - Implement `F24` fresh-install start screens and first-run onboarding as the main new-install adoption slice.
 - Add a branded welcome/start surface for fresh installs with short orientation copy, doc links, and a strong first-account CTA.
@@ -248,16 +248,18 @@ Release outcome:
 
 - Agents can extend safely into plugin ecosystems agencies already standardize on, and the adapter contract is now real enough to build against.
 
-## Planned (`v0.27.x`) Agency Workflow Starter Kits and Companion Workers
+## Released (`v0.27.0`) Agency Workflow Starter Kits and Companion Workers
 
-- Implement `F19`.
-- Pair strong account templates with companion guides, starter workers, and bootstrap artifacts that agencies can reuse across client work.
-- Ship a shared worker scaffold for auth, preflight, pagination, output writing, and optional OpenAI narrative steps.
-- Start with a small curated workflow set rather than trying to ship a production app for every template.
+- Delivered the first `F19` slice:
+  - public `Governed Content Refresh` workflow guide
+  - companion worker scaffold under `examples/workers/governed-content-refresh/`
+  - direct CP links from `Approvals` and account worker helpers into the starter-kit path
+- Added manual control-plane approval requests for governed `entry.updateDraft` so operators can test and use bounded draft-write flows without leaving Craft.
+- Reworked the surrounding `Approvals`, `Accounts`, and `Target Sets` surfaces around calmer copy, relative short dates, clearer worker/bootstrap helpers, and cleaner registry tables.
 
 Release outcome:
 
-- Agencies can package repeatable AI-assisted workflows as credible, governed service offerings instead of inventing each integration from scratch.
+- Agencies now have the first repeatable starter-kit workflow and companion worker path for bounded governed draft refresh work, alongside calmer operator-facing CP surfaces.
 
 ## Planned (`v0.28.x`) Agency Operator Copilot Foundation
 
@@ -310,6 +312,41 @@ Before `1.0.0`, the following must be stable:
 - managed-account lifecycle behavior
 - webhook delivery and verification model
 - upgrade and migration expectations
+
+## Post-`1.0.0` Candidate (`F25`) Commerce Governed Writes
+
+Internal spec:
+
+- `.docs/positioning/F25_COMMERCE_GOVERNED_WRITES.md`
+
+- Evaluate Commerce mutations through the same trust-boundary model as governed entry drafts, not as unrestricted Commerce admin APIs.
+- Prioritize the work in phases:
+  - Phase 1: bounded price updates for existing products/variants
+  - Phase 2: discount coupon/code creation with explicit limits
+  - Phase 3: product creation only after the first two phases prove the governance model
+- Treat price updates as the strongest first slice:
+  - clear agency value
+  - bounded review surface
+  - easier operator reasoning than full product creation
+- Treat coupon/code creation as valuable but higher risk:
+  - requires explicit store scoping
+  - expiry / usage-limit constraints
+  - code uniqueness rules
+  - promotion-policy review
+- Keep full product creation deliberately later:
+  - much higher catalog complexity
+  - more operator review burden
+  - greater risk around variants, slugs, tax, inventory, shipping, and merchandising completeness
+- Reuse `F21` target-bound governance patterns, but extend them with Commerce-specific write bounds such as:
+  - store and currency selectors
+  - max price delta / percentage movement
+  - allowed discount archetypes
+  - explicit product/variant collections
+  - scheduled effective windows where applicable
+
+Release outcome:
+
+- Agencies can support governed pricing and promotion workflows in Craft Commerce without exposing broad machine-admin power, while full catalog creation stays behind a higher bar.
 
 ## Parked / Not Before `1.0.0` Unless Reassessed
 

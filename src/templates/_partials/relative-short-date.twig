@@ -1,0 +1,25 @@
+{% set rawValue = value ?? null %}
+{% set fallbackText = fallback ?? 'n/a' %}
+
+{% if rawValue %}
+  {% set shortDate = rawValue|date('y/m/d', timezone='UTC') %}
+  {% set valueTimestamp = rawValue|date('U') %}
+  {% set nowTimestamp = 'now'|date('U') %}
+  {% set ageSeconds = nowTimestamp - valueTimestamp %}
+  {% if ageSeconds < 0 %}
+    {{ shortDate }}
+  {% elseif ageSeconds < 86400 %}
+    Today
+  {% elseif ageSeconds < 172800 %}
+    Yesterday
+  {% else %}
+    {% set daysAgo = (ageSeconds / 86400)|round(0, 'floor') %}
+    {% if daysAgo <= 7 %}
+      {{ daysAgo }} days ago
+    {% else %}
+      {{ shortDate }}
+    {% endif %}
+  {% endif %}
+{% else %}
+  {{ fallbackText }}
+{% endif %}

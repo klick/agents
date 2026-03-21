@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.27.0 (2026-03-21)
+
+- Added the first `F19` workflow-starter slice with a public `Governed Content Refresh` guide and companion worker scaffold.
+- Added manual governed `entry.updateDraft` approval requests directly in `Approvals` and refreshed the surrounding operator wording/date treatment.
+- Polished `Accounts`, `Approvals`, and `Target Sets` around calmer table cells, clearer worker helpers, and more consistent Craft-native link/date behavior.
+
 ## 0.26.0 (2026-03-20)
 
 - Added the `F12` external adapter foundation: provider registry, registration event, dynamic external-resource routes, and external scope exposure through capabilities, OpenAPI, and schema.

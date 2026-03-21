@@ -65,7 +65,6 @@
                 <tr class="agents-target-sets-registry__row">
                   <th scope="row" class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--name">
                     <div class="agents-target-sets-registry__title">{{ targetSet.name ?: targetSet.handle }}</div>
-                    <div class="agents-target-sets-registry__handle">{{ targetSet.handle }}</div>
                     {% if targetSet.description %}
                       <div class="agents-target-sets-registry__meta">{{ targetSet.description }}</div>
                     {% endif %}
@@ -274,7 +273,6 @@
     background-image: none !important;
     box-shadow: none !important;
     color: #596673;
-    font-size: 12px;
     font-weight: 700;
     line-height: normal;
     letter-spacing: 0;
@@ -305,7 +303,6 @@
     background-image: none !important;
     box-shadow: none !important;
     color: #596673;
-    font-size: 12px;
     font-weight: 400;
     line-height: 1.45;
     text-align: left;
@@ -357,27 +354,15 @@
     line-height: 1.45;
   }
 
-  .agents-target-sets-registry__handle {
-    color: #596673;
-    font-family: 'Fira Code', 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-    font-size: 12px;
-    font-weight: 400;
-    font-style: normal;
-    line-height: 1.45;
-    word-break: break-word;
-  }
-
   .agents-target-sets-registry__meta {
     margin-top: 4px;
     color: #596673;
-    font-size: 12px;
     font-weight: 400;
     line-height: 1.45;
   }
 
   .agents-target-sets-registry__used-by {
     color: #596673;
-    font-size: 12px;
     font-weight: 400;
     line-height: 1.45;
   }
@@ -389,7 +374,6 @@
 
   .agents-target-sets-registry__used-by-name {
     color: inherit;
-    font-size: 12px;
     font-weight: 400;
     line-height: 1.45;
   }
@@ -449,7 +433,6 @@
     background: #d4dbe4;
     box-shadow: none;
     color: #000000;
-    font-size: 12px;
     font-weight: 400;
     line-height: normal;
   }

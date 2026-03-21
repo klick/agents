@@ -27,6 +27,17 @@
 {% set editingPolicyApprovalSlaMinutes = editingPolicyConfig.approvalSlaMinutes ?? '' %}
 {% set editingPolicyEscalateAfterMinutes = editingPolicyConfig.escalateAfterMinutes ?? '' %}
 {% set editingPolicyExpireAfterMinutes = editingPolicyConfig.expireAfterMinutes ?? '' %}
+{% set createRuleDefaults = {
+  handle: '',
+  displayName: '',
+  actionPattern: 'entry.updatedraft',
+  riskLevel: 'medium',
+  requiresApproval: true,
+  enabled: true,
+  approvalSlaMinutes: '',
+  escalateAfterMinutes: '',
+  expireAfterMinutes: '',
+} %}
 {% if currentEditingActionPattern and currentEditingActionPattern not in ['entry.updatedraft', '*'] %}
   {% set controlActionPatternOptions = controlActionPatternOptions|merge([
     { label: 'Legacy / custom pattern (' ~ currentEditingActionPattern ~ ')', value: currentEditingActionPattern }
@@ -49,6 +60,138 @@
   {% if activeControlTab == 'approvals' %}
   <div class="agents-page-shell">
   <div class="agents-control-content-wrap">
+  {% if allowCpApprovalRequests and canManageApprovals %}
+  <section id="manualApprovalRequestSection" class="agents-control-journey-card agents-control-approval-card agents-control-journey-card--expanded agents-control-manual-request-card">
+    <div class="agents-control-journey-card__header">
+      <h2 class="agents-control-journey-card__title">Create Request</h2>
+    </div>
+    <div class="agents-control-journey-card__body">
+      <p class="light">Fallback for operator-led setup. Use this when you need to create a governed draft request before a worker exists. Final approval in Craft will execute the stored draft payload.</p>
+      <p class="light"><a href="{{ governedContentRefreshWorkflowUrl }}" target="_blank" rel="noopener">Open the governed content refresh workflow</a></p>
+      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Create this approval request?">
+        {{ csrfInput() }}
+        {{ actionInput('agents/dashboard/request-control-approval') }}
+        {{ redirectInput('agents/approvals#manualApprovalRequestSection') }}
+        <input type="hidden" name="actionType" value="entry.updateDraft">
+        <input type="hidden" name="metadataSource" value="cp-manual-request">
+        <input type="hidden" name="metadataAgentId" value="cp-manual-request">
+
+        <div class="agents-control-manual-request-grid">
+          {{ forms.textField({
+            label: 'Entry ID',
+            name: 'payloadEntryId',
+            required: true,
+            type: 'number',
+            min: 1,
+            placeholder: '1001',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Site ID',
+            name: 'payloadSiteId',
+            required: true,
+            type: 'number',
+            min: 1,
+            placeholder: '1',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Action ref',
+            name: 'actionRef',
+            placeholder: 'CONTENT-REFRESH-1001-1',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Idempotency key',
+            instructions: 'Optional but recommended for repeatable manual requests.',
+            name: 'idempotencyKey',
+            placeholder: 'content-refresh-1001-1',
+          }) }}
+        </div>
+
+        {{ forms.textField({
+          label: 'Reason',
+          name: 'reason',
+          required: true,
+          value: 'Prepare draft update for editorial review',
+          placeholder: 'Prepare scheduled content refresh draft for editorial review',
+        }) }}
+
+        <div class="agents-control-manual-request-grid">
+          {{ forms.textField({
+            label: 'Draft name',
+            name: 'payloadDraftName',
+            value: 'Manual governed draft',
+            placeholder: 'Manual governed draft',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Draft title',
+            name: 'payloadTitle',
+            placeholder: 'Updated Draft Title',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Draft slug',
+            name: 'payloadSlug',
+            placeholder: 'updated-draft-title',
+          }) }}
+
+          {{ forms.textField({
+            label: 'Existing draft ID',
+            instructions: 'Optional. Use when you want to target a specific saved draft.',
+            name: 'payloadDraftId',
+            type: 'number',
+            min: 1,
+            placeholder: '123',
+          }) }}
+        </div>
+
+        {{ forms.textareaField({
+          label: 'Draft notes',
+          instructions: 'Stored with the request and visible during approval review.',
+          name: 'payloadDraftNotes',
+          rows: 3,
+          value: 'Prepared by manual governed request for editorial review.',
+          placeholder: 'Prepared by manual governed request for editorial review.',
+        }) }}
+
+        {{ forms.textareaField({
+          label: 'Field values JSON',
+          instructions: 'JSON object assigned to payload.fields. Example: {\"summary\":\"Draft prepared for review.\"}',
+          name: 'payloadFieldsJson',
+          rows: 4,
+          placeholder: '{\"summary\":\"Draft prepared for review.\"}',
+        }) }}
+
+        <details class="agents-control-manual-request-advanced">
+          <summary><strong>Advanced JSON overrides</strong></summary>
+          <div class="agents-control-manual-request-advanced__body">
+            {{ forms.textareaField({
+              label: 'Payload JSON override',
+              instructions: 'Merged after the guided fields. Duplicate keys here win.',
+              name: 'payloadJson',
+              rows: 4,
+              placeholder: '{\"fields\":{\"summary\":\"Override value\"}}',
+            }) }}
+
+            {{ forms.textareaField({
+              label: 'Metadata JSON override',
+              instructions: 'Optional metadata merged onto the default CP manual metadata.',
+              name: 'metadataJson',
+              rows: 3,
+              placeholder: '{\"channel\":\"control-panel\"}',
+            }) }}
+          </div>
+        </details>
+
+        <div class="agents-control-rule-form-actions">
+          <button class="btn submit" type="submit">Create approval request</button>
+        </div>
+      </form>
+    </div>
+  </section>
+  {% endif %}
   <div class="agents-control-journey">
   {% set pendingTablePanelId = 'agents-control-pending-table-panel' %}
   <section class="agents-control-journey-card agents-control-approval-card agents-control-journey-card--expanded agents-control-pending-section{% if not controlPendingApprovals|length %} agents-control-journey-card--empty{% endif %}">
@@ -125,7 +268,7 @@
                   </div>
                   {% if reviewMode == 'draft' %}
                     <div class="agents-control-pending-table__meta agents-control-review-mode">
-                      Reviewing draft{% if approval.reviewDraftId %} #{{ approval.reviewDraftId }}{% endif %}
+                      Reviewing draft{% if approval.reviewDraftId %} <code class="agents-inline-code">#{{ approval.reviewDraftId }}</code>{% endif %}
                       {% if approval.targetEntryCanonicalCpUrl %}
                         ·
                         <a href="{{ cpUrl(approval.targetEntryCanonicalCpUrl) }}" class="agents-control-target-link agents-control-pending-table__canonical-link">
@@ -138,7 +281,7 @@
                     <div class="agents-control-pending-table__meta"><strong>Draft notes:</strong> {{ reviewDraftNotes }}</div>
                   {% endif %}
                   {% if approval.targetSetSummary %}
-                    <div class="agents-control-pending-table__meta"><strong>Target set:</strong> {{ approval.targetSetSummary }}</div>
+                    <div class="agents-control-pending-table__meta"><strong>Target set:</strong> <code class="agents-inline-code">{{ approval.targetSetSummary }}</code></div>
                   {% endif %}
                 </div>
                 {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
@@ -178,17 +321,11 @@
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--rule">
               <div class="agents-control-pending-table__cell-stack agents-control-pending-table__cell-stack--rule">
                 {% set approvalsNeeded = approval.requiredApprovals|default(1) %}
-                {% set approvalsLeft = approval.approvalsRemaining|default(0) %}
-                {% set assuranceLabel = approval.assuranceModeLabel
-                  ?: (approvalsNeeded > 1
-                    ? 'Dual control'
-                    : ((policy and policy.requiresApproval) ? 'Single approval' : 'No approval')) %}
                 <div class="agents-control-pending-table__detail-stack">
                   <div class="agents-control-pending-table__meta">{{ policy.displayName ?: 'Default rule' }}</div>
-                  <div class="agents-control-pending-table__meta">Assurance: {{ assuranceLabel }}</div>
                   {% if approvalsNeeded > 1 %}
                     <div class="agents-control-pending-table__meta">
-                      {{ approvalsNeeded }} {{ approvalsNeeded == 1 ? 'approval' : 'approvals' }} needed, {{ approvalsLeft }} {{ approvalsLeft == 1 ? 'approval' : 'approvals' }} left
+                      {{ approvalsNeeded }} {{ approvalsNeeded == 1 ? 'approval' : 'approvals' }} needed
                     </div>
                   {% endif %}
                 </div>
@@ -196,13 +333,28 @@
             </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--requested">
               <div class="agents-control-pending-table__detail-stack">
-                <div class="agents-control-pending-table__meta">{{ approval.requestedByLabel ?: approval.requestedBy }}</div>
-                <div class="agents-control-pending-table__meta">{{ approval.dateCreated ? approval.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
+                {% set requestedByActorId = approval.requestedBy ?? '' %}
+                {% set isManagedRequester = requestedByActorId starts with 'agent:' %}
+                <div class="agents-control-pending-table__meta">
+                  {% if isManagedRequester %}
+                    <span class="agents-control-pending-table__requester-label">
+                      <span class="agents-control-pending-table__requester-icon" aria-hidden="true">
+                        <svg focusable="false" preserveAspectRatio="xMidYMid meet" fill="currentColor" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M18 10H20V12H18z"></path><path d="M12 10H14V12H12z"></path><path d="M26,20H21V18h1a2.0023,2.0023,0,0,0,2-2V12h2V10H24V8a2.0023,2.0023,0,0,0-2-2H20V2H18V6H14V2H12V6H10A2.0023,2.0023,0,0,0,8,8v2H6v2H8v4a2.0023,2.0023,0,0,0,2,2h1v2H6a2.0023,2.0023,0,0,0-2,2v8H6V22H26v8h2V22A2.0023,2.0023,0,0,0,26,20ZM10,8H22v8H10Zm3,10h6v2H13Z"></path><title>Bot</title></svg>
+                      </span>
+                      <span>{{ approval.requestedByLabel ?: approval.requestedBy }}</span>
+                    </span>
+                  {% elseif approval.requestedByCpUrl %}
+                    <a href="{{ approval.requestedByCpUrl }}">{{ approval.requestedByLabel ?: approval.requestedBy }}</a>
+                  {% else %}
+                    {{ approval.requestedByLabel ?: approval.requestedBy }}
+                  {% endif %}
+                </div>
+                <div class="agents-control-pending-table__meta{% if isManagedRequester %} agents-control-pending-table__meta--requested-date{% endif %}">{{ include('agents/_partials/relative-short-date', { value: approval.dateCreated }, with_context = false) }}</div>
               </div>
             </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--sla">
               <div class="agents-control-pending-table__detail-stack">
-                <div class="agents-control-pending-table__meta">{{ approval.slaDueAt ? approval.slaDueAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
+                <div class="agents-control-pending-table__meta">{{ include('agents/_partials/relative-short-date', { value: approval.slaDueAt }, with_context = false) }}</div>
               </div>
             </td>
             <td class="agents-control-pending-table__body-cell agents-control-pending-table__body-cell--decision">
@@ -299,12 +451,25 @@
           {% set boundDraftRecordId = approval.boundDraftRecordId ?? null %}
           {% set boundDraftMessage = approval.boundDraftMessage ?? null %}
           {% set boundDraftConflicts = approval.boundDraftConflicts ?? [] %}
+          {% set latestExecutionErrorMessage = latestExecution ? (latestExecution.errorMessage ?? null) : null %}
+          {% set latestExecutionResultPayload = latestExecution.resultPayload ?? {} %}
+          {% set latestExecutionConflictType = latestExecutionResultPayload.conflictType ?? (approval.boundDraftConflictType ?? null) %}
+          {% set latestExecutionConflicts = latestExecutionResultPayload.conflictingDrafts ?? boundDraftConflicts %}
+          {% set hasSavedDraftConflict = approval.actionType|lower == 'entry.updatedraft' and latestExecutionConflictType == 'savedDraftExists' %}
+          {% set latestExecutionDisplayMessage = hasSavedDraftConflict
+            ? 'This entry already has an open draft.'
+            : (latestExecutionErrorMessage ?: (latestExecutionResultPayload.message ?? 'This run needs a quick check.'))
+          %}
+          {% set latestExecutionNextStepMessage = hasSavedDraftConflict
+            ? 'Open the existing draft or have the worker target that draft ID.'
+            : (latestExecutionErrorMessage ?: (latestExecutionResultPayload.message ?? boundDraftMessage ?? 'This draft update needs a quick check.'))
+          %}
           {% set canApplyDraft = approval.actionType|lower == 'entry.updatedraft'
             and approval.targetEntryDraftRecordId
             and (executionStatus == '' or executionStatus == 'succeeded')
           %}
           <tr>
-            <td>#{{ approval.id }}</td>
+            <td><span class="agents-control-table__id-value">{{ approval.id }}</span></td>
             <td>
               <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
               {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
@@ -317,55 +482,43 @@
               </div>
               {% if approval.actionType|lower == 'entry.updatedraft' and (boundDraftId or boundDraftRecordId) %}
                 <div class="light">
-                  Bound draft{% if boundDraftId %} #{{ boundDraftId }}{% endif %}{% if boundDraftRecordId %} · saved draft #{{ boundDraftRecordId }}{% endif %}
+                  Bound draft{% if boundDraftId %} <code class="agents-inline-code">#{{ boundDraftId }}</code>{% endif %}{% if boundDraftRecordId %} · saved draft <code class="agents-inline-code">#{{ boundDraftRecordId }}</code>{% endif %}
                 </div>
               {% endif %}
-              {% if approval.targetSetSummary %}
-                <div class="light">Target set: {{ approval.targetSetSummary }}</div>
-              {% endif %}
-              {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
-                <div class="agents-control-table__quick-actions">
-                  {% if approval.targetEntryId %}
-                    <button
-                      class="btn small js-control-review-entry agents-control-review-btn"
-                      type="button"
-                      data-entry-id="{{ approval.targetEntryId }}"
-                      data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                      data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                    >Review</button>
-                  {% endif %}
-                  {% if approval.actionType|lower == 'entry.updatedraft' %}
-                    <button
-                      class="btn small js-control-view-diff agents-control-diff-btn"
-                      type="button"
-                      data-approval-id="{{ approval.id }}"
-                    >Diff</button>
-                  {% endif %}
-                  </div>
-                {% endif %}
             </td>
             <td>
-              <div>{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</div>
-              {% if approval.assuranceModeLabel %}
-                <div class="light">Assurance: {{ approval.assuranceModeLabel }}</div>
-              {% endif %}
+              <div>
+                {% if approval.decidedByCpUrl %}
+                  <a href="{{ approval.decidedByCpUrl }}">{{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}</a>
+                {% else %}
+                  {{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}
+                {% endif %}
+                <span class="light">, {{ include('agents/_partials/relative-short-date', { value: approval.decidedAt }, with_context = false) }}</span>
+              </div>
               {% if approval.secondaryDecisionBy %}
-                <div class="light">Second approver: {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</div>
+                <div>
+                  {% if approval.secondaryDecisionByCpUrl %}
+                    <a href="{{ approval.secondaryDecisionByCpUrl }}">{{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}</a>
+                  {% else %}
+                    {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}
+                  {% endif %}
+                  <span class="light">, {{ include('agents/_partials/relative-short-date', { value: approval.secondaryDecisionAt }, with_context = false) }}</span>
+                </div>
               {% endif %}
             </td>
-            <td>{{ approval.decidedAt ? approval.decidedAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
+            <td>{{ include('agents/_partials/relative-short-date', { value: approval.decidedAt }, with_context = false) }}</td>
             <td>
               {% if latestExecution %}
                 <div><strong>{{ latestExecution.status|upper }}</strong></div>
-                <div class="light">run #{{ latestExecution.id }}</div>
-                <div class="light">{{ (latestExecution.executedAt ?: latestExecution.dateCreated) ? (latestExecution.executedAt ?: latestExecution.dateCreated)|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</div>
+                <div class="light">run <code class="agents-inline-code">{{ latestExecution.id }}</code></div>
+                <div class="light">{{ include('agents/_partials/relative-short-date', { value: (latestExecution.executedAt ?: latestExecution.dateCreated) }, with_context = false) }}</div>
                 {% if latestExecution.resultPayload.draftId ?? null %}
                   <div class="light">
-                    Draft #{{ latestExecution.resultPayload.draftId }}{% if latestExecution.resultPayload.draftRecordId ?? null %} · saved draft #{{ latestExecution.resultPayload.draftRecordId }}{% endif %}
+                    Draft <code class="agents-inline-code">#{{ latestExecution.resultPayload.draftId }}</code>{% if latestExecution.resultPayload.draftRecordId ?? null %} · saved draft <code class="agents-inline-code">#{{ latestExecution.resultPayload.draftRecordId }}</code>{% endif %}
                   </div>
                 {% endif %}
                 {% if executionStatus in ['blocked', 'failed'] %}
-                  <div class="light">{{ latestExecution.errorMessage ?: (latestExecution.resultPayload.message ?? 'Execution needs follow-up.') }}</div>
+                  <div class="light">{{ latestExecutionDisplayMessage }}</div>
                 {% endif %}
               {% else %}
                 <span class="light">n/a</span>
@@ -388,25 +541,25 @@
                   <button class="btn submit small" type="submit">Apply Draft</button>
                 </form>
               {% elseif approval.actionType|lower == 'entry.updatedraft' and executionStatus in ['blocked', 'failed'] %}
-                <div class="light">{{ latestExecution.errorMessage ?: (latestExecution.resultPayload.message ?? boundDraftMessage ?? 'Draft execution needs follow-up.') }}</div>
-                {% if (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|length %}
-                  {% for conflict in (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|slice(0, 2) %}
+                <div class="light">{{ latestExecutionNextStepMessage }}</div>
+                {% if latestExecutionConflicts|length %}
+                  {% for conflict in latestExecutionConflicts|slice(0, 2) %}
                     <div class="light">
-                      Existing draft{% if conflict.id ?? null %} #{{ conflict.id }}{% endif %}{% if conflict.draftRecordId ?? null %} · saved draft #{{ conflict.draftRecordId }}{% endif %}{% if conflict.draftName ?? null %} · {{ conflict.draftName }}{% elseif conflict.title ?? null %} · {{ conflict.title }}{% endif %}
+                      Open draft{% if conflict.id ?? null %} <code class="agents-inline-code">#{{ conflict.id }}</code>{% endif %}{% if conflict.draftRecordId ?? null %} · saved draft <code class="agents-inline-code">#{{ conflict.draftRecordId }}</code>{% endif %}{% if conflict.draftName ?? null %} · {{ conflict.draftName }}{% elseif conflict.title ?? null %} · {{ conflict.title }}{% endif %}
                       {% if conflict.cpEditUrl ?? null %}
                         · <a href="{{ cpUrl(conflict.cpEditUrl) }}" class="agents-control-target-link">open</a>
                       {% endif %}
                     </div>
                   {% endfor %}
-                  {% if (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|length > 2 %}
-                    <div class="light">+ {{ (latestExecution.resultPayload.conflictingDrafts ?? boundDraftConflicts)|length - 2 }} more conflicting drafts</div>
+                  {% if latestExecutionConflicts|length > 2 %}
+                    <div class="light">+ {{ latestExecutionConflicts|length - 2 }} more open drafts</div>
                   {% endif %}
                 {% endif %}
               {% elseif approval.actionType|lower == 'entry.updatedraft' and approval.reviewDraftId %}
                 {% if latestExecution and latestExecution.status|lower != 'succeeded' %}
-                  <span class="light">Apply blocked: run {{ latestExecution.status|lower }}.</span>
+                  <span class="light">Can’t apply yet. The latest run is {{ latestExecution.status|lower }}.</span>
                 {% else %}
-                  <span class="light">Draft not available to apply.</span>
+                  <span class="light">No draft is available to apply.</span>
                 {% endif %}
               {% else %}
                 <span class="light">n/a</span>
@@ -461,40 +614,17 @@
             {% set latestExecution = approval.latestExecution ?? null %}
             {% set completionState = approval.completionState ?? {} %}
             <tr>
-            <td>#{{ approval.id }}</td>
+            <td><span class="agents-control-table__id-value">{{ approval.id }}</span></td>
             <td>
               <div class="agents-control-table__action-title">{{ approval.actionLabel ?: 'Unknown action' }}</div>
               {% set targetTitle = approval.targetTitle ?: 'Untitled target' %}
-              <div class="light">
-                {% if approval.targetEntryCpUrl %}
+                <div class="light">
+                  {% if approval.targetEntryCpUrl %}
                     <a href="{{ cpUrl(approval.targetEntryCpUrl) }}" class="agents-control-target-link">{{ targetTitle }}</a>
                   {% else %}
                     {{ targetTitle }}
                   {% endif %}
                 </div>
-                {% if approval.targetSetSummary %}
-                  <div class="light">Target set: {{ approval.targetSetSummary }}</div>
-                {% endif %}
-                {% if approval.targetEntryId or approval.actionType|lower == 'entry.updatedraft' %}
-                  <div class="agents-control-table__quick-actions">
-                    {% if approval.targetEntryId %}
-                      <button
-                        class="btn small js-control-review-entry agents-control-review-btn"
-                        type="button"
-                        data-entry-id="{{ approval.targetEntryId }}"
-                        data-site-id="{{ approval.targetEntrySiteId ?: 0 }}"
-                        data-entry-url="{{ approval.targetEntryCpUrl ? cpUrl(approval.targetEntryCpUrl) : '' }}"
-                      >Review</button>
-                    {% endif %}
-                    {% if approval.actionType|lower == 'entry.updatedraft' %}
-                      <button
-                        class="btn small js-control-view-diff agents-control-diff-btn"
-                        type="button"
-                        data-approval-id="{{ approval.id }}"
-                    >Diff</button>
-                  {% endif %}
-                </div>
-              {% endif %}
               </td>
               <td>
                 <div>
@@ -503,7 +633,7 @@
                   {% else %}
                     {{ approval.decidedByLabel ?: (approval.decidedBy ?: 'n/a') }}
                   {% endif %}
-                  <span class="light">{{ approval.decidedAt ? approval.decidedAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</span>
+                  <span class="light">, {{ include('agents/_partials/relative-short-date', { value: approval.decidedAt }, with_context = false) }}</span>
                 </div>
                 {% if approval.secondaryDecisionBy %}
                   <div>
@@ -512,14 +642,14 @@
                     {% else %}
                       {{ approval.secondaryDecisionByLabel ?: approval.secondaryDecisionBy }}
                     {% endif %}
-                    <span class="light">{{ approval.secondaryDecisionAt ? approval.secondaryDecisionAt|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</span>
+                    <span class="light">, {{ include('agents/_partials/relative-short-date', { value: approval.secondaryDecisionAt }, with_context = false) }}</span>
                   </div>
                 {% endif %}
               </td>
               <td>
                 <div><strong>{{ completionState.label ?: 'COMPLETED' }}</strong></div>
                 {% if completionState.at %}
-                  <div class="light">{{ completionState.at|date('Y-m-d, H:i:s', timezone='UTC') }}</div>
+                  <div class="light">{{ include('agents/_partials/relative-short-date', { value: completionState.at }, with_context = false) }}</div>
                 {% else %}
                   <div class="light">n/a</div>
                 {% endif %}
@@ -527,7 +657,7 @@
               <td>
                 <div class="light">{{ completionState.detail ?: 'Completed.' }}</div>
                 {% if latestExecution %}
-                  <div class="light">run #{{ latestExecution.id }} · {{ latestExecution.status|upper }}</div>
+                  <div class="light">run <code class="agents-inline-code">{{ latestExecution.id }}</code> · {{ latestExecution.status|upper }}</div>
                 {% endif %}
               </td>
             </tr>
@@ -576,9 +706,17 @@
           </thead>
           <tbody>
           {% for execution in controlAttentionExecutions %}
+            {% set executionResultPayload = execution.resultPayload ?? {} %}
+            {% set executionConflictType = executionResultPayload.conflictType ?? null %}
+            {% set executionConflicts = executionResultPayload.conflictingDrafts ?? [] %}
+            {% set hasExecutionSavedDraftConflict = execution.actionType|lower == 'entry.updatedraft' and executionConflictType == 'savedDraftExists' %}
+            {% set executionDisplayMessage = hasExecutionSavedDraftConflict
+              ? 'This entry already has an open draft.'
+              : (execution.errorMessage ?: (executionResultPayload.message ?? 'Check the rule or approval setup and try again.'))
+            %}
             {% set policy = execution.policy ?? null %}
             <tr>
-              <td>#{{ execution.id }}</td>
+              <td><span class="agents-control-table__id-value">{{ execution.id }}</span></td>
               <td>
                 <div class="agents-control-table__action-title">{{ execution.actionLabel ?: 'Unknown action' }}</div>
                 {% set targetTitle = execution.targetTitle ?: 'Untitled target' %}
@@ -614,24 +752,25 @@
               <td>
                 {% if policy %}
                   <div>{{ policy.displayName ?? policy.handle }}</div>
-                  <div class="light">Rule: {{ policy.handle }}</div>
+                  <div class="light">Rule: <code class="agents-inline-code">{{ policy.handle }}</code></div>
                 {% else %}
                   <span class="light">Default rule</span>
                 {% endif %}
               </td>
               <td>
-                <div>{{ execution.errorMessage ?: (execution.resultPayload.message ?? 'Check rule/approval requirements and retry.') }}</div>
-                {% if execution.resultPayload.conflictType ?? null == 'savedDraftExists' and (execution.resultPayload.conflictingDrafts ?? [])|length %}
-                  {% for conflict in execution.resultPayload.conflictingDrafts|slice(0, 2) %}
+                <div>{{ executionDisplayMessage }}</div>
+                {% if hasExecutionSavedDraftConflict and executionConflicts|length %}
+                  <div class="light">Open the existing draft or have the worker target that draft ID.</div>
+                  {% for conflict in executionConflicts|slice(0, 2) %}
                     <div class="light">
-                      Existing draft{% if conflict.id ?? null %} #{{ conflict.id }}{% endif %}{% if conflict.draftRecordId ?? null %} · saved draft #{{ conflict.draftRecordId }}{% endif %}{% if conflict.draftName ?? null %} · {{ conflict.draftName }}{% elseif conflict.title ?? null %} · {{ conflict.title }}{% endif %}
+                      Open draft{% if conflict.id ?? null %} <code class="agents-inline-code">#{{ conflict.id }}</code>{% endif %}{% if conflict.draftRecordId ?? null %} · saved draft <code class="agents-inline-code">#{{ conflict.draftRecordId }}</code>{% endif %}{% if conflict.draftName ?? null %} · {{ conflict.draftName }}{% elseif conflict.title ?? null %} · {{ conflict.title }}{% endif %}
                       {% if conflict.cpEditUrl ?? null %}
                         · <a href="{{ cpUrl(conflict.cpEditUrl) }}" class="agents-control-target-link">open</a>
                       {% endif %}
                     </div>
                   {% endfor %}
-                  {% if execution.resultPayload.conflictingDrafts|length > 2 %}
-                    <div class="light">+ {{ execution.resultPayload.conflictingDrafts|length - 2 }} more conflicting drafts</div>
+                  {% if executionConflicts|length > 2 %}
+                    <div class="light">+ {{ executionConflicts|length - 2 }} more open drafts</div>
                   {% endif %}
                 {% endif %}
               </td>
@@ -755,11 +894,10 @@
 
     {% if controlPolicies|length %}
       <div class="tablepane mx-0" style="margin-top: 0; margin-bottom: 12px;">
-        <table class="data fullwidth agents-control-table">
+        <table class="data fullwidth agents-control-table agents-control-rules-table">
         <thead>
         <tr>
-          <th>Rule key</th>
-          <th>Matches action</th>
+          <th>Rule</th>
           <th>Risk</th>
           <th>Approval required</th>
           <th>Active</th>
@@ -770,10 +908,10 @@
         </thead>
         <tbody>
         {% for policy in controlPolicies %}
+          {% set policyRiskTone = policy.riskLevel == 'low' ? 'good' : (policy.riskLevel == 'critical' ? 'bad' : 'warn') %}
           <tr>
-            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName ?? policy.handle }}</span></td>
-            <td><code>{{ policy.actionPattern }}</code></td>
-            <td>{{ policy.riskLevel|upper }}</td>
+            <td>{{ policy.displayName ?? policy.handle }}</td>
+            <td><span class="badge badge--{{ policyRiskTone }} agents-pill">{{ policy.riskLevel|upper }}</span></td>
             <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
             <td>{{ policy.enabled ? 'yes' : 'no' }}</td>
             {% if canManagePolicies %}
@@ -810,19 +948,19 @@
             <input type="hidden" name="originalHandle" value="{{ editingPolicy.handle ?? '' }}">
 
             {{ forms.textField({
-              label: isEditingPolicy ? 'Rule key (stable)' : 'Rule key',
-              instructions: isEditingPolicy ? 'Stable machine key for this rule. Changing it renames the rule.' : 'Stable machine key for this rule.',
-              name: 'handle',
-              required: true,
-              value: editingPolicy.handle ?? '',
-              placeholder: 'entry-draft-high-risk',
-            }) }}
-
-            {{ forms.textField({
               label: 'Rule name',
               name: 'displayName',
               value: editingPolicy.displayName ?? '',
               placeholder: 'Entry Draft High Risk',
+            }) }}
+
+            {{ forms.textField({
+              label: 'Rule key (stable)',
+              instructions: 'Stable machine key for this rule. Changing it renames the rule.',
+              name: 'handle',
+              required: true,
+              value: editingPolicy.handle ?? '',
+              placeholder: 'entry-draft-high-risk',
             }) }}
 
             {{ forms.selectField({
@@ -927,10 +1065,10 @@
     {% if controlAuditEvents|length %}
       <div id="{{ activityLogTablePanelId }}" class="agents-control-section-panel agents-control-journey-card__panel" hidden>
         <div class="tablepane mx-0" style="margin-top: 0;">
-          <table class="data fullwidth agents-control-table">
+          <table class="data fullwidth agents-control-table agents-control-table--activity-log">
           <thead>
           <tr>
-            <th>Time</th>
+            <th>Date</th>
             <th>Type</th>
             <th>Event</th>
             <th>Actor</th>
@@ -940,7 +1078,7 @@
           <tbody>
           {% for event in controlAuditEvents %}
             <tr>
-              <td>{{ event.dateCreated ? event.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') : 'n/a' }}</td>
+              <td>{{ include('agents/_partials/relative-short-date', { value: event.dateCreated }, with_context = false) }}</td>
               <td>{{ event.category|replace({'.': ' / '})|title }}</td>
               <td>{{ event.action|replace({'_': ' '})|title }} · {{ event.outcome|replace({'_': ' '})|title }}</td>
               <td>
@@ -960,7 +1098,7 @@
   </div>
   </div>
 
-  <hr class="agents-control-journey-break">
+  <hr class="agents-control-journey-break agents-section-break">
 
   <div class="agents-page-shell">
   <div class="agents-control-content-wrap">
@@ -990,11 +1128,10 @@
     <div id="{{ rulesTablePanelId }}" class="agents-control-journey-card__body agents-control-section-panel" {% if controlPolicies|length and not rulesTableExpanded %}hidden{% endif %}>
     {% if controlPolicies|length %}
       <div class="tablepane mx-0" style="margin-top: 0;">
-        <table class="data fullwidth agents-control-table">
+        <table class="data fullwidth agents-control-table agents-control-rules-table">
         <thead>
         <tr>
-          <th>Rule key</th>
-          <th>Matches action</th>
+          <th>Rule</th>
           <th>Risk</th>
           <th>Approval required</th>
           <th>Active</th>
@@ -1005,16 +1142,33 @@
         </thead>
         <tbody>
         {% for policy in controlPolicies %}
+          {% set policyConfig = policy.config ?? {} %}
+          {% set policyEditorPayload = {
+            handle: policy.handle ?? '',
+            displayName: policy.displayName ?? '',
+            actionPattern: policy.actionPattern ?? 'entry.updatedraft',
+            riskLevel: policy.riskLevel ?? 'medium',
+            requiresApproval: policy.requiresApproval is defined ? (policy.requiresApproval ? true : false) : true,
+            enabled: policy.enabled is defined ? (policy.enabled ? true : false) : true,
+            approvalSlaMinutes: policyConfig.approvalSlaMinutes ?? '',
+            escalateAfterMinutes: policyConfig.escalateAfterMinutes ?? '',
+            expireAfterMinutes: policyConfig.expireAfterMinutes ?? '',
+          } %}
+          {% set policyRiskTone = policy.riskLevel == 'low' ? 'good' : (policy.riskLevel == 'critical' ? 'bad' : 'warn') %}
           <tr>
-            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName ?? policy.handle }}</span></td>
-            <td><code>{{ policy.actionPattern }}</code></td>
-            <td>{{ policy.riskLevel|upper }}</td>
+            <td>{{ policy.displayName ?? policy.handle }}</td>
+            <td><span class="badge badge--{{ policyRiskTone }} agents-pill">{{ policy.riskLevel|upper }}</span></td>
             <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
             <td>{{ policy.enabled ? 'yes' : 'no' }}</td>
             {% if canManagePolicies %}
               <td>
                 <div class="agents-control-rule-actions">
-                  <a class="btn small" href="{{ cpUrl(controlRulesRedirect, { editRule: policy.handle }) }}#{{ rulesFormPanelId }}">Edit</a>
+                  <a
+                    class="btn small"
+                    href="{{ cpUrl(controlRulesRedirect, { editRule: policy.handle }) }}#{{ rulesFormPanelId }}"
+                    data-control-rule-edit
+                    data-policy-json="{{ policyEditorPayload|json_encode|e('html_attr') }}"
+                  >Edit</a>
                   <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Delete rule `{{ policy.handle }}`?">
                     {{ csrfInput() }}
                     {{ actionInput('agents/dashboard/delete-control-policy') }}
@@ -1035,7 +1189,17 @@
     {% endif %}
     </div>
   </section>
-  <section class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-create-card">
+  <section
+    class="agents-control-journey-card agents-control-journey-card--expanded agents-control-rules-create-card"
+    data-control-rule-editor
+    data-control-rule-create-title="Create or Update Rule"
+    data-control-rule-edit-title="Edit Rule"
+    data-control-rule-create-submit-label="Save Rule"
+    data-control-rule-edit-submit-label="Save Changes"
+    data-control-rule-create-json="{{ createRuleDefaults|json_encode|e('html_attr') }}"
+    data-control-rule-panel-id="{{ rulesFormPanelId }}"
+    data-control-rule-close-on-cancel="true"
+  >
     <div class="agents-control-journey-card__header">
       <h2 class="agents-control-journey-card__title agents-control-journey-card__title--toggle">
         <button
@@ -1046,33 +1210,35 @@
           aria-controls="{{ rulesFormPanelId }}"
           aria-expanded="{{ rulesFormExpanded ? 'true' : 'false' }}"
         >
-          <span>{{ isEditingPolicy ? 'Edit Rule' : 'Create or Update Rule' }}</span>
+          <span data-control-rule-editor-title>{{ isEditingPolicy ? 'Edit Rule' : 'Create or Update Rule' }}</span>
           <span class="agents-control-stage-chevron" aria-hidden="true"></span>
         </button>
       </h2>
     </div>
     <div id="{{ rulesFormPanelId }}" class="agents-control-journey-card__body agents-control-section-panel" {% if not rulesFormExpanded %}hidden{% endif %}>
     {% if canManagePolicies %}
-      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
+      <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?" data-control-rule-form>
         {{ csrfInput() }}
         {{ actionInput('agents/dashboard/upsert-control-policy') }}
         {{ redirectInput(controlRulesRedirect) }}
         <input type="hidden" name="originalHandle" value="{{ editingPolicy.handle ?? '' }}">
 
         {{ forms.textField({
-          label: isEditingPolicy ? 'Rule key (stable)' : 'Rule key',
-          instructions: isEditingPolicy ? 'Stable machine key for this rule. Changing it renames the rule.' : 'Stable machine key for this rule.',
+          label: 'Rule name',
+          id: 'controlRuleDisplayName',
+          name: 'displayName',
+          value: editingPolicy.displayName ?? '',
+          placeholder: 'Entry Draft High Risk',
+        }) }}
+
+        {{ forms.textField({
+          label: 'Rule key (stable)',
+          id: 'controlRuleHandle',
+          instructions: 'Stable machine key for this rule. Changing it renames the rule.',
           name: 'handle',
           required: true,
           value: editingPolicy.handle ?? '',
           placeholder: 'entry-draft-high-risk',
-        }) }}
-
-        {{ forms.textField({
-          label: 'Rule name',
-          name: 'displayName',
-          value: editingPolicy.displayName ?? '',
-          placeholder: 'Entry Draft High Risk',
         }) }}
 
         {{ forms.selectField({
@@ -1138,10 +1304,8 @@
         </div>
 
         <div class="agents-control-rule-form-actions">
-          <button class="btn submit" type="submit">{{ isEditingPolicy ? 'Save Changes' : 'Save Rule' }}</button>
-          {% if isEditingPolicy %}
-            <a class="btn" href="{{ cpUrl(controlRulesRedirect) }}">Cancel Edit</a>
-          {% endif %}
+          <button class="btn submit" type="submit" data-control-rule-submit>{{ isEditingPolicy ? 'Save Changes' : 'Save Rule' }}</button>
+          <a class="btn" href="{{ cpUrl(controlRulesRedirect) }}" data-control-rule-cancel {% if not isEditingPolicy %}hidden{% endif %}>Cancel Edit</a>
         </div>
       </form>
     {% else %}
@@ -1268,8 +1432,7 @@
         <table class="data fullwidth agents-control-table">
         <thead>
         <tr>
-          <th>Rule key</th>
-          <th>Matches action</th>
+          <th>Rule</th>
           <th>Risk</th>
           <th>Approval required</th>
           <th>Active</th>
@@ -1280,16 +1443,33 @@
         </thead>
         <tbody>
         {% for policy in controlPolicies %}
+          {% set policyConfig = policy.config ?? {} %}
+          {% set policyEditorPayload = {
+            handle: policy.handle ?? '',
+            displayName: policy.displayName ?? '',
+            actionPattern: policy.actionPattern ?? 'entry.updatedraft',
+            riskLevel: policy.riskLevel ?? 'medium',
+            requiresApproval: policy.requiresApproval is defined ? (policy.requiresApproval ? true : false) : true,
+            enabled: policy.enabled is defined ? (policy.enabled ? true : false) : true,
+            approvalSlaMinutes: policyConfig.approvalSlaMinutes ?? '',
+            escalateAfterMinutes: policyConfig.escalateAfterMinutes ?? '',
+            expireAfterMinutes: policyConfig.expireAfterMinutes ?? '',
+          } %}
+          {% set policyRiskTone = policy.riskLevel == 'low' ? 'good' : (policy.riskLevel == 'critical' ? 'bad' : 'warn') %}
           <tr>
-            <td><code>{{ policy.handle }}</code><br><span class="light">{{ policy.displayName ?? policy.handle }}</span></td>
-            <td><code>{{ policy.actionPattern }}</code></td>
-            <td>{{ policy.riskLevel|upper }}</td>
+            <td>{{ policy.displayName ?? policy.handle }}</td>
+            <td><span class="badge badge--{{ policyRiskTone }} agents-pill">{{ policy.riskLevel|upper }}</span></td>
             <td>{{ policy.requiresApproval ? 'yes' : 'no' }}</td>
             <td>{{ policy.enabled ? 'yes' : 'no' }}</td>
             {% if canManagePolicies %}
               <td>
                 <div class="agents-control-rule-actions">
-                  <a class="btn small" href="{{ cpUrl(controlRulesRedirect, { editRule: policy.handle }) }}">Edit</a>
+                  <a
+                    class="btn small"
+                    href="{{ cpUrl(controlRulesRedirect, { editRule: policy.handle }) }}"
+                    data-control-rule-edit
+                    data-policy-json="{{ policyEditorPayload|json_encode|e('html_attr') }}"
+                  >Edit</a>
                   <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Delete rule `{{ policy.handle }}`?">
                     {{ csrfInput() }}
                     {{ actionInput('agents/dashboard/delete-control-policy') }}
@@ -1310,29 +1490,40 @@
     {% endif %}
 
     {% if canManagePolicies %}
-      <details {% if isEditingPolicy %}open{% endif %}>
-        <summary><strong>{{ isEditingPolicy ? 'Edit rule' : 'Create or update a rule' }}</strong></summary>
+      <details
+        {% if isEditingPolicy %}open{% endif %}
+        data-control-rule-editor
+        data-control-rule-create-title="Create or update a rule"
+        data-control-rule-edit-title="Edit rule"
+        data-control-rule-create-submit-label="Save Rule"
+        data-control-rule-edit-submit-label="Save Changes"
+        data-control-rule-create-json="{{ createRuleDefaults|json_encode|e('html_attr') }}"
+        data-control-rule-close-on-cancel="true"
+      >
+        <summary><strong data-control-rule-editor-title>{{ isEditingPolicy ? 'Edit rule' : 'Create or update a rule' }}</strong></summary>
         <div style="margin-top: 8px;">
-          <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?">
+          <form method="post" accept-charset="UTF-8" class="js-confirm-form" data-confirm-message="Save this rule?" data-control-rule-form>
             {{ csrfInput() }}
             {{ actionInput('agents/dashboard/upsert-control-policy') }}
             {{ redirectInput(controlRulesRedirect) }}
             <input type="hidden" name="originalHandle" value="{{ editingPolicy.handle ?? '' }}">
 
             {{ forms.textField({
-              label: isEditingPolicy ? 'Rule key (stable)' : 'Rule key',
-              instructions: isEditingPolicy ? 'Stable machine key for this rule. Changing it renames the rule.' : 'Stable machine key for this rule.',
+              label: 'Rule name',
+              id: 'controlRuleDisplayName',
+              name: 'displayName',
+              value: editingPolicy.displayName ?? '',
+              placeholder: 'Entry Draft High Risk',
+            }) }}
+
+            {{ forms.textField({
+              label: 'Rule key (stable)',
+              id: 'controlRuleHandle',
+              instructions: 'Stable machine key for this rule. Changing it renames the rule.',
               name: 'handle',
               required: true,
               value: editingPolicy.handle ?? '',
               placeholder: 'entry-draft-high-risk',
-            }) }}
-
-            {{ forms.textField({
-              label: 'Rule name',
-              name: 'displayName',
-              value: editingPolicy.displayName ?? '',
-              placeholder: 'Entry Draft High Risk',
             }) }}
 
             {{ forms.selectField({
@@ -1398,10 +1589,8 @@
             </div>
 
             <div class="agents-control-rule-form-actions">
-              <button class="btn submit" type="submit">{{ isEditingPolicy ? 'Save Changes' : 'Save Rule' }}</button>
-              {% if isEditingPolicy %}
-                <a class="btn" href="{{ cpUrl(controlRulesRedirect) }}">Cancel Edit</a>
-              {% endif %}
+              <button class="btn submit" type="submit" data-control-rule-submit>{{ isEditingPolicy ? 'Save Changes' : 'Save Rule' }}</button>
+              <a class="btn" href="{{ cpUrl(controlRulesRedirect) }}" data-control-rule-cancel {% if not isEditingPolicy %}hidden{% endif %}>Cancel Edit</a>
             </div>
           </form>
         </div>
@@ -2080,6 +2269,157 @@
         });
       });
 
+      const parseRuleEditorJson = (raw, fallback = {}) => {
+        if (!raw) {
+          return { ...fallback };
+        }
+
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            return { ...fallback, ...parsed };
+          }
+        } catch (error) {
+          console.warn('Unable to parse rule editor JSON payload.', error);
+        }
+
+        return { ...fallback };
+      };
+
+      const ruleEditor = document.querySelector('[data-control-rule-editor]');
+      if (ruleEditor) {
+        const ruleNameField = document.getElementById('controlRuleDisplayName');
+        const ruleHandleField = document.getElementById('controlRuleHandle');
+        if (ruleNameField && ruleHandleField && typeof Craft !== 'undefined' && typeof Craft.BaseInputGenerator === 'function') {
+          const RuleKebabHandleGenerator = Craft.BaseInputGenerator.extend({
+            generateTargetValue(sourceVal) {
+              let handle = (sourceVal || '').replace(/<(.*?)>/g, '');
+              handle = handle.replace(/['"‘’“”ʻ\[\]\(\)\{\}:]/g, '').toLowerCase();
+              handle = Craft.asciiString(handle);
+              handle = handle.replace(/^[^a-z]+/, '');
+              return Craft.filterArray(handle.split(/[^a-z0-9]+/)).join('-');
+            },
+          });
+
+          new RuleKebabHandleGenerator('#controlRuleDisplayName', '#controlRuleHandle');
+        }
+
+        const ruleForm = ruleEditor.querySelector('[data-control-rule-form]');
+        const ruleEditorTitle = ruleEditor.querySelector('[data-control-rule-editor-title]');
+        const ruleEditorSubmit = ruleEditor.querySelector('[data-control-rule-submit]');
+        const ruleEditorCancel = ruleEditor.querySelector('[data-control-rule-cancel]');
+        const createRuleDefaults = parseRuleEditorJson(ruleEditor.dataset.controlRuleCreateJson, {});
+        const ruleEditorPanelId = ruleEditor.dataset.controlRulePanelId || '';
+        const ruleEditorPanel = ruleEditorPanelId ? document.getElementById(ruleEditorPanelId) : null;
+        const ruleEditorToggle = ruleEditorPanelId ? document.querySelector(`[data-control-section-toggle][data-target="${ruleEditorPanelId}"]`) : null;
+
+        const openRuleEditor = () => {
+          if (ruleEditorPanel) {
+            ruleEditorPanel.removeAttribute('hidden');
+          }
+          if (ruleEditorToggle) {
+            ruleEditorToggle.setAttribute('aria-expanded', 'true');
+          }
+          if (ruleEditor.tagName === 'DETAILS') {
+            ruleEditor.open = true;
+          }
+        };
+
+        const closeRuleEditor = () => {
+          if (ruleEditor.dataset.controlRuleCloseOnCancel === 'true') {
+            if (ruleEditorPanel) {
+              ruleEditorPanel.setAttribute('hidden', 'hidden');
+            }
+            if (ruleEditorToggle) {
+              ruleEditorToggle.setAttribute('aria-expanded', 'false');
+            }
+            if (ruleEditor.tagName === 'DETAILS') {
+              ruleEditor.open = false;
+            }
+          }
+        };
+
+        const getRuleField = (name) => ruleForm ? ruleForm.querySelector(`[name="${name}"]`) : null;
+
+        const setRuleFieldValue = (name, value) => {
+          const field = getRuleField(name);
+          if (!field) {
+            return;
+          }
+          field.value = value == null ? '' : String(value);
+        };
+
+        const setRuleCheckboxValue = (name, value) => {
+          const field = getRuleField(name);
+          if (!field) {
+            return;
+          }
+          field.checked = !!value;
+        };
+
+        const updateRuleEditorPresentation = (isEditing) => {
+          if (ruleEditorTitle) {
+            ruleEditorTitle.textContent = isEditing
+              ? (ruleEditor.dataset.controlRuleEditTitle || 'Edit Rule')
+              : (ruleEditor.dataset.controlRuleCreateTitle || 'Create or Update Rule');
+          }
+          if (ruleEditorSubmit) {
+            ruleEditorSubmit.textContent = isEditing
+              ? (ruleEditor.dataset.controlRuleEditSubmitLabel || 'Save Changes')
+              : (ruleEditor.dataset.controlRuleCreateSubmitLabel || 'Save Rule');
+          }
+          if (ruleEditorCancel) {
+            ruleEditorCancel.hidden = !isEditing;
+          }
+        };
+
+        const hydrateRuleEditor = (payload, isEditing) => {
+          if (!ruleForm) {
+            return;
+          }
+
+          const mergedPayload = { ...createRuleDefaults, ...(payload || {}) };
+          setRuleFieldValue('originalHandle', isEditing ? (mergedPayload.handle || '') : '');
+          setRuleFieldValue('handle', mergedPayload.handle || '');
+          setRuleFieldValue('displayName', mergedPayload.displayName || '');
+          setRuleFieldValue('actionPattern', mergedPayload.actionPattern || createRuleDefaults.actionPattern || 'entry.updatedraft');
+          setRuleFieldValue('riskLevel', mergedPayload.riskLevel || createRuleDefaults.riskLevel || 'medium');
+          setRuleFieldValue('approvalSlaMinutes', mergedPayload.approvalSlaMinutes ?? '');
+          setRuleFieldValue('escalateAfterMinutes', mergedPayload.escalateAfterMinutes ?? '');
+          setRuleFieldValue('expireAfterMinutes', mergedPayload.expireAfterMinutes ?? '');
+          setRuleCheckboxValue('requiresApproval', mergedPayload.requiresApproval ?? true);
+          setRuleCheckboxValue('enabled', mergedPayload.enabled ?? true);
+
+          updateRuleEditorPresentation(isEditing);
+          openRuleEditor();
+
+          const displayNameField = getRuleField('displayName');
+          if (displayNameField) {
+            displayNameField.focus({ preventScroll: true });
+          }
+          ruleEditor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        };
+
+        document.querySelectorAll('[data-control-rule-edit]').forEach((trigger) => {
+          trigger.addEventListener('click', (event) => {
+            if (!ruleForm) {
+              return;
+            }
+            event.preventDefault();
+            const payload = parseRuleEditorJson(trigger.dataset.policyJson, createRuleDefaults);
+            hydrateRuleEditor(payload, true);
+          });
+        });
+
+        if (ruleEditorCancel) {
+          ruleEditorCancel.addEventListener('click', (event) => {
+            event.preventDefault();
+            hydrateRuleEditor(createRuleDefaults, false);
+            closeRuleEditor();
+          });
+        }
+      }
+
     })();
   {% endjs %}
 
@@ -2121,13 +2461,6 @@
       height: 9px;
       border-radius: 999px;
       background: #c3cedc78;
-    }
-
-    .agents-layout-stack > hr.agents-control-journey-break {
-      width: auto;
-      margin: 48px -24px;
-      border: 0;
-      border-top: 1px solid #bbc7d5;
     }
 
     .agents-control-rules-create-card {
@@ -2195,6 +2528,23 @@
     .agents-control-journey-card__body > .tablepane,
     .agents-control-journey-card__panel > .tablepane {
       margin: 0 -12px -12px !important;
+      position: relative;
+      padding: 0 12px !important;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .agents-control-journey-card__body > .tablepane::before,
+    .agents-control-journey-card__panel > .tablepane::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      left: 0;
+      height: 41px;
+      background: var(--secondary-pane-bg);
+      pointer-events: none;
+      z-index: 0;
     }
 
     .agents-control-journey-card__empty {
@@ -2242,6 +2592,25 @@
 
     .agents-control-pending-section {
       margin-top: 8px;
+    }
+
+    .agents-control-manual-request-card {
+      margin-bottom: 24px;
+    }
+
+    .agents-control-manual-request-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .agents-control-manual-request-advanced {
+      margin-bottom: 12px;
+    }
+
+    .agents-control-manual-request-advanced__body {
+      margin-top: 12px;
     }
 
     .agents-control-inline-toggle {
@@ -2393,38 +2762,29 @@
 
     .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell,
     .agents-control-table thead > tr > th {
-      padding: 12px 0 !important;
+      padding: 12px !important;
       border-bottom: 1px solid #bbc7d5;
       background: var(--secondary-pane-bg) !important;
       background-color: var(--secondary-pane-bg) !important;
       background-image: none !important;
       box-shadow: none !important;
       color: #596673;
-      font-size: 12px;
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
       font-weight: 700;
       line-height: normal;
       letter-spacing: 0;
       text-align: left;
-      text-transform: none;
+      text-transform: uppercase;
       vertical-align: top;
       white-space: nowrap;
-    }
-
-    .agents-control-approval-card .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell,
-    .agents-control-approval-card .agents-control-table thead > tr > th,
-    .agents-control-rules-card .agents-control-table thead > tr > th {
-      border-bottom: 0;
-    }
-
-    .agents-control-pending-table thead > tr > th.agents-control-pending-table__cell:first-child,
-    .agents-control-table thead > tr > th:first-child {
-      padding-inline-start: var(--pane-padding, var(--pane-x-padding-default)) !important;
     }
 
     .agents-control-pending-table,
     .agents-control-table {
       margin: 0;
+      width: 100%;
+      position: relative;
+      z-index: 1;
     }
 
     .agents-control-pending-table thead,
@@ -2437,45 +2797,47 @@
       box-shadow: none !important;
     }
 
-    .agents-control-pending-table tbody td.agents-control-pending-table__body-cell:first-child,
-    .agents-control-table tbody td:first-child {
-      padding-left: 12px;
-    }
-
-    .agents-control-pending-table tbody td.agents-control-pending-table__body-cell:last-child,
-    .agents-control-table tbody td:last-child {
-      padding-right: 12px;
-    }
-
     .agents-control-pending-table tbody td.agents-control-pending-table__body-cell,
-    .agents-control-table tbody td {
-      padding-top: 24px;
-      padding-right: 16px;
-      padding-bottom: 24px;
-      padding-left: 0;
-      border-bottom: 1px solid #aab8ca;
+    .agents-control-table:not(.agents-control-table--activity-log) tbody > tr > td {
+      padding-top: 24px !important;
+      padding-right: 12px !important;
+      padding-bottom: 24px !important;
+      padding-left: 12px !important;
+      border-bottom: 1px solid var(--gray-200);
       background: transparent !important;
       background-color: transparent !important;
       background-image: none !important;
       box-shadow: none !important;
       color: #596673;
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
-      font-size: 12px;
       font-weight: 400;
       line-height: 1.45;
       text-align: left;
-      vertical-align: top;
+      vertical-align: middle;
+    }
+
+    .agents-control-table--activity-log thead > tr > th,
+    .agents-control-table--activity-log tbody > tr > td {
+      font-size: 12px;
+    }
+
+    .agents-control-table--activity-log tbody > tr > td {
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .agents-control-table--activity-log tbody > tr:last-child > td {
+      border-bottom: 0;
     }
 
     .agents-control-pending-table tbody tr:last-child td.agents-control-pending-table__body-cell,
-    .agents-control-table tbody tr:last-child td {
+    .agents-control-table:not(.agents-control-table--activity-log) tbody tr:last-child td {
       border-bottom: 0;
     }
 
     .agents-control-pending-table tbody tr.agents-control-pending-table__row:hover,
     .agents-control-pending-table tbody tr.agents-control-pending-table__row:hover td.agents-control-pending-table__body-cell,
-    .agents-control-table tbody tr:hover,
-    .agents-control-table tbody tr:hover td {
+    .agents-control-table:not(.agents-control-table--activity-log) tbody tr:hover,
+    .agents-control-table:not(.agents-control-table--activity-log) tbody tr:hover td {
       background: transparent !important;
       background-color: transparent !important;
       background-image: none !important;
@@ -2484,7 +2846,6 @@
 
     .agents-control-table .light {
       color: #596673;
-      font-size: 12px;
       line-height: 1.45;
     }
 
@@ -2496,31 +2857,24 @@
     }
 
     .agents-control-table .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 10px;
       border: 0;
-      border-radius: 22px;
       background: #596673;
       color: #ffffff;
-      font-size: 10px;
-      font-weight: 400;
-      letter-spacing: 0;
-      line-height: normal;
-      text-transform: uppercase;
-      white-space: nowrap;
     }
 
-    .agents-control-table .agents-control-target-link {
-      color: #596673;
-      text-decoration: none;
+    .agents-control-table .badge--good {
+      background: rgba(16, 142, 128, 0.12);
+      color: #108e80;
     }
 
-    .agents-control-table .agents-control-target-link:hover,
-    .agents-control-table .agents-control-target-link:focus {
-      color: #596673;
-      text-decoration: none;
+    .agents-control-table .badge--warn {
+      background: rgba(197, 138, 27, 0.16);
+      color: #c58a1b;
+    }
+
+    .agents-control-table .badge--bad {
+      background: rgba(194, 79, 66, 0.12);
+      color: #c24f42;
     }
 
     .agents-control-pending-table__cell-stack {
@@ -2538,10 +2892,15 @@
     }
 
     .agents-control-pending-table__id-value {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start !important;
+      width: 100%;
       color: #596673;
       font-size: 14px;
       font-weight: 400;
       line-height: 1.45;
+      text-align: left;
       white-space: nowrap;
     }
 
@@ -2555,7 +2914,6 @@
     .agents-control-pending-table__meta,
     .agents-control-pending-table__reason-copy {
       color: #596673;
-      font-size: 12px;
       font-weight: 400;
       line-height: 1.45;
     }
@@ -2565,26 +2923,27 @@
       white-space: nowrap;
     }
 
-    .agents-control-pending-table__target-link {
-      color: #596673;
-      text-decoration: none;
+    .agents-control-pending-table__requester-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .agents-control-pending-table__target-link:hover,
-    .agents-control-pending-table__target-link:focus {
-      color: #596673;
-      text-decoration: none;
+    .agents-control-pending-table__requester-icon {
+      display: inline-flex;
+      align-items: center;
+      color: #c24f42;
+      flex-shrink: 0;
     }
 
-    .agents-control-pending-table__canonical-link {
-      color: #596673;
-      text-decoration: underline;
-      text-underline-offset: 1px;
+    .agents-control-pending-table__requester-icon svg {
+      width: 14px;
+      height: 14px;
+      display: block;
     }
 
-    .agents-control-pending-table__canonical-link:hover,
-    .agents-control-pending-table__canonical-link:focus {
-      color: #596673;
+    .agents-control-pending-table__meta--requested-date {
+      margin-left: 20px;
     }
 
     .agents-control-pending-table .agents-control-review-mode,
@@ -2599,7 +2958,6 @@
 
     .agents-control-pending-table .agents-control-review-guard {
       margin: 0;
-      font-size: 12px;
       line-height: 1.45;
     }
 
@@ -3063,15 +3421,15 @@
     .agents-control-pending-table__decision-button--approve {
       min-width: 34px;
       padding: 7px 8px;
-      border: 1px solid #13854d;
-      background: #13854d;
+      border: 1px solid #00b609;
+      background: #00b609;
       color: #ffffff;
     }
 
     .agents-control-pending-table__decision-button--approve:hover,
     .agents-control-pending-table__decision-button--approve:focus {
-      border-color: #0f6f40;
-      background: #0f6f40;
+      border-color: #009608;
+      background: #009608;
       color: #ffffff;
     }
 
@@ -3084,6 +3442,46 @@
     .agents-control-pending-table__cell--id,
     .agents-control-pending-table__body-cell--id {
       width: 70px;
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+      text-align: left !important;
+      white-space: nowrap;
+    }
+
+    .agents-control-table thead > tr > th:first-child,
+    .agents-control-table tbody > tr > td:first-child {
+      width: 70px;
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+      text-align: left !important;
+      white-space: nowrap;
+    }
+
+    .agents-control-table tbody > tr > td:first-child {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .agents-control-table tbody > tr > td:first-child > * {
+      text-align: left;
+    }
+
+    .agents-control-rules-table thead > tr > th:first-child,
+    .agents-control-rules-table tbody > tr > td:first-child {
+      width: 28%;
+      min-width: 240px;
+      white-space: normal;
+      font-weight: 700;
+    }
+
+    .agents-control-table__id-value {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start !important;
+      width: 100%;
+      font-weight: 700;
+      text-align: left;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
 
     .agents-control-pending-table__col--action,

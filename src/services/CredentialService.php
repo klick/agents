@@ -89,7 +89,7 @@ class CredentialService extends Component
         $rows = (new Query())
             ->from(self::TABLE)
             ->orderBy([
-                'revokedAt' => SORT_ASC,
+                'lastUsedAt' => SORT_DESC,
                 'handle' => SORT_ASC,
             ])
             ->all();

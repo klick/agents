@@ -59,6 +59,11 @@
     border-top: 1px solid #d7dde3;
   }
 
+  .agents-layout-stack > hr.agents-section-break {
+    margin: 48px -24px;
+    border-top-color: #bbc7d5;
+  }
+
   .agents-grid {
     display: grid;
     gap: 12px;
@@ -70,6 +75,35 @@
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+  }
+
+  .agents-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border: 0;
+    border-radius: 22px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: normal;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .agents-inline-code {
+    display: inline-block;
+    background-color: var(--gray-100);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, Courier, monospace;
+    font-size: 0.9em !important;
+    line-height: 1.2;
+    padding-block: 0.0625em;
+    padding-inline: 0.25em;
+    white-space: nowrap;
   }
 
   .agents-metric-grid {

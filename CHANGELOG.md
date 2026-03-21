@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.27.0 - 2026-03-21
+
+### Added
+
+- Added the first `F19` workflow-starter slice with a public `Governed Content Refresh` guide plus a companion worker scaffold under `examples/workers/governed-content-refresh/`.
+- Added a manual approval-request form to `Approvals` so operators can submit governed `entry.updateDraft` requests directly from the control panel when write controls are enabled.
+- Added a shared short relative-date partial for operator-facing approval tables and aligned the new workflow docs into the public guides index.
+
+### Changed
+
+- Reworked `Approvals` around calmer operator wording, relative dates without noisy timestamps, a clearer `Pending` stage label, a red managed-worker icon treatment, and less technical blocked-draft follow-up copy.
+- Polished `Accounts` and `Target Sets` around quieter table cells, standard Craft user-link styling, clearer worker bootstrap helpers, and lighter registry/detail surfaces for day-to-day use.
+- Promoted the governed content refresh workflow as the first agency starter-kit path and linked it directly from the control-plane surfaces that now support it.
+
 ## 0.26.0 - 2026-03-20
 
 ### Added

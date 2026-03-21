@@ -1210,11 +1210,11 @@ class ControlPlaneService extends Component
                     $conflictLabelParts[] = sprintf('updated %s', $conflictUpdatedAt);
                 }
 
-                $errorMessage = 'Draft conflict: canonical entry already has an active saved draft.';
+                $errorMessage = 'This entry already has an open draft.';
                 if (!empty($conflictLabelParts)) {
                     $errorMessage .= ' Existing ' . implode(' · ', $conflictLabelParts) . '.';
                 }
-                $errorMessage .= ' Provide payload.draftId to target an exact saved draft.';
+                $errorMessage .= ' Use payload.draftId to update that draft instead of creating a new one.';
 
                 return [
                     'status' => self::EXECUTION_STATUS_BLOCKED,

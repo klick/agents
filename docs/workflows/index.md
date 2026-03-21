@@ -16,6 +16,7 @@ These are workflow examples, not hosted product modules:
 
 ## Available Guides
 
+- [Governed Content Refresh](/workflows/governed-content-refresh)
 - [Governed Entry Drafts](/workflows/governed-entry-drafts)
 - [Entry Translation Drafts](/workflows/entry-translation-drafts)
 
