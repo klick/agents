@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.27.2 - 2026-03-22
+
 ### Added
 
 - Added a first-run onboarding start flow at `agents/start` with guided `welcome`, `create`, and `ready` states for setting up the first managed account.

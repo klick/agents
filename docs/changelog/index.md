@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.27.2 (2026-03-22)
+
+- Added a first-run onboarding start flow at `agents/start` with guided `welcome`, `create`, and `ready` states for setting up the first managed account.
+- Added persisted onboarding state tracking plus dedicated migration/service support so the control panel can track onboarding progress, preview stages, dismissal, and completion.
+- Added onboarding regression coverage and expanded the onboarding docs/assets around the new start experience.
+
 ## 0.27.1 (2026-03-21)
 
 - Moved the manual governed draft-request tool out of `Approvals` and into `Status` as a setup/fallback utility, and removed the separate Settings toggle so it now follows governed-writing availability.
