@@ -256,6 +256,7 @@ expect_pattern "<th scope=\"col\"[^>]*>Name</th>" "$TARGET_SETS_TEMPLATE" "Targe
 expect_pattern "<th scope=\"col\"[^>]*>Bounds</th>" "$TARGET_SETS_TEMPLATE" "Target Sets CP template renders the Bounds column"
 expect_pattern "<th scope=\"col\"[^>]*>Used by</th>" "$TARGET_SETS_TEMPLATE" "Target Sets CP template renders the Used by column"
 expect_pattern "<th scope=\"col\"[^>]*>Actions</th>" "$TARGET_SETS_TEMPLATE" "Target Sets CP template renders the Actions column"
+expect_fixed "managed-account-ref" "$TARGET_SETS_TEMPLATE" "Target Sets CP template uses the shared managed-account reference in the Used by column"
 expect_fixed "agents-page-shell" "$TARGET_SETS_TEMPLATE" "Target Sets CP template uses the shared page shell wrapper"
 expect_fixed "{% include 'agents/_partials/cp-ui' %}" "$TARGET_SETS_TEMPLATE" "Target Sets CP template includes the shared CP UI wrapper styles"
 expect_fixed "agents-table-toolbar" "$CP_TEMPLATE" "Credentials CP template uses the shared table toolbar wrapper"

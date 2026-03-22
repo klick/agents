@@ -78,7 +78,9 @@
                     {% if assignedCredentials|length %}
                       <div class="agents-target-sets-registry__used-by-list">
                         {% for assignedCredential in assignedCredentials %}
-                          <span class="agents-target-sets-registry__used-by-name">{{ assignedCredential.displayName ?: assignedCredential.handle }}</span>
+                          <div class="agents-target-sets-registry__used-by-name">{{ include('agents/_partials/managed-account-ref', {
+                            label: assignedCredential.displayName ?: assignedCredential.handle,
+                          }, with_context = false) }}</div>
                         {% endfor %}
                       </div>
                     {% else %}
@@ -273,6 +275,7 @@
     background-image: none !important;
     box-shadow: none !important;
     color: #596673;
+    font-size: 12px;
     font-weight: 700;
     line-height: normal;
     letter-spacing: 0;
@@ -336,11 +339,11 @@
   }
 
   .agents-target-sets-registry__col--bounds {
-    width: 46%;
+    width: 34%;
   }
 
   .agents-target-sets-registry__col--used-by {
-    width: 10%;
+    width: 22%;
   }
 
   .agents-target-sets-registry__col--actions {

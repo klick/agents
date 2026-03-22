@@ -8,7 +8,7 @@ Managed accounts can be used by external runtimes such as agents, orchestrators,
 
 You set the boundary. External runtimes work inside it. Agents enforces the rules through scopes, approvals, and audit records.
 
-Current plugin version: **0.28.0**
+Current plugin version: **0.28.1**
 
 ## For Agencies Running Craft Sites For Clients
 

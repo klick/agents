@@ -364,7 +364,6 @@ class WorkflowService extends Component
                 'cadence' => (string)($workflow['cadence'] ?? ''),
                 'weekday' => (int)($workflow['weekday'] ?? 0),
                 'timeOfDay' => (string)($workflow['timeOfDay'] ?? ''),
-                'timezone' => (string)($workflow['timezone'] ?? ''),
             ],
             'config' => [
                 'sectionHandles' => array_values(array_map('strval', (array)($config['sectionHandles'] ?? []))),
@@ -744,10 +743,11 @@ class WorkflowService extends Component
             throw new InvalidArgumentException('Time of day must use HH:MM.');
         }
 
-        $timezone = trim((string)($payload['timezone'] ?? $existing['timezone'] ?? (string)($template['defaultTimezone'] ?? 'UTC')));
-        if ($timezone === '' || !in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
-            throw new InvalidArgumentException('Choose a valid timezone.');
-        }
+        $timezone = $this->resolveWorkflowTimezone(
+            $payload['timezone'] ?? null,
+            $existing['timezone'] ?? null,
+            $template
+        );
 
         $accountId = (int)($payload['accountId'] ?? $existing['accountId'] ?? 0);
         $credential = $this->validateCredentialForTemplate($accountId, $template);
@@ -907,7 +907,7 @@ class WorkflowService extends Component
         $lines = [
             '# ' . trim((string)($workflow['name'] ?? 'Managed Workflow')),
             '',
-            'Template: `' . trim((string)($template['displayName'] ?? ($workflow['templateHandle'] ?? 'workflow'))) . '`',
+            'Workflow type: `' . trim((string)($template['displayName'] ?? ($workflow['templateHandle'] ?? 'workflow'))) . '`',
             '',
             trim((string)($workflow['description'] ?? '')),
             '',
@@ -941,6 +941,7 @@ class WorkflowService extends Component
             '- download the matching account handoff from `Agents -> Accounts` when you need a token-filled `.env`',
             '- this first workflow slice is read-only and does not mutate Craft content',
             '- Agents stores workflow state and visibility; the worker still runs externally',
+            '- the cron example assumes the host already runs in the intended server/runtime timezone',
             '',
             '## External output storage',
             '',
@@ -1071,7 +1072,6 @@ BASH;
     {
         $weekday = (int)($row['weekday'] ?? 0);
         $timeOfDay = trim((string)($row['timeOfDay'] ?? ''));
-        $timezone = trim((string)($row['timezone'] ?? 'UTC'));
 
         $weekdayLabels = [
             1 => 'Mon',
@@ -1084,7 +1084,7 @@ BASH;
         ];
 
         if ($weekday > 0 && $timeOfDay !== '') {
-            return sprintf('%s %s · %s', $weekdayLabels[$weekday] ?? 'Day', $timeOfDay, $timezone);
+            return sprintf('%s %s', $weekdayLabels[$weekday] ?? 'Day', $timeOfDay);
         }
 
         return 'Manual';
@@ -1098,7 +1098,7 @@ BASH;
 
         $weekday = (int)($row['weekday'] ?? 0);
         $timeOfDay = trim((string)($row['timeOfDay'] ?? ''));
-        $timezone = trim((string)($row['timezone'] ?? 'UTC'));
+        $timezone = $this->resolveWorkflowTimezone($row['timezone'] ?? null, null, []);
         if ($weekday < 1 || $weekday > 7 || $timeOfDay === '') {
             return 'Manual';
         }
@@ -1120,6 +1120,25 @@ BASH;
         } catch (\Throwable) {
             return 'Scheduled';
         }
+    }
+
+    private function resolveWorkflowTimezone(mixed $payloadTimezone, mixed $existingTimezone, array $template): string
+    {
+        $candidates = [
+            trim((string)$payloadTimezone),
+            trim((string)$existingTimezone),
+            trim((string)Craft::$app->getTimeZone()),
+            trim((string)($template['defaultTimezone'] ?? '')),
+            'UTC',
+        ];
+
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '' && in_array($candidate, DateTimeZone::listIdentifiers(), true)) {
+                return $candidate;
+            }
+        }
+
+        return 'UTC';
     }
 
     private function buildConfigSummary(array $config): string

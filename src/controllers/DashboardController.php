@@ -725,7 +725,6 @@ class DashboardController extends Controller
             'eligibleWorkflowAccounts' => $eligibleWorkflowAccounts,
             'workflowAccountGuidance' => $this->buildWorkflowAccountGuidance($workflowAccountTemplate, $availableWorkflowAccounts),
             'workflowWeekdayOptions' => $this->buildWorkflowWeekdayOptions(),
-            'workflowTimezoneOptions' => $this->buildWorkflowTimezoneOptions(),
             'workflowLibraryUrl' => 'https://marcusscheller.com/docs/agents/workflows',
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
             'accountsUrl' => UrlHelper::cpUrl('agents/accounts'),
@@ -2941,7 +2940,6 @@ class DashboardController extends Controller
             'cadence' => $this->parseStringBodyParam('workflowCadence', 'weekly'),
             'weekday' => $this->parseNullableIntegerBodyParam('workflowWeekday'),
             'timeOfDay' => $this->parseWorkflowTimeBodyParam('workflowTimeOfDay', '08:00'),
-            'timezone' => $this->parseStringBodyParam('workflowTimezone', 'Europe/Berlin'),
             'accountId' => $this->parseNullableIntegerBodyParam('workflowAccountId'),
             'ownerUserId' => $this->parseNullableIntegerBodyParam('workflowOwnerUserId') ?? $this->resolveCurrentCpUserId(),
             'sectionHandles' => $this->parseStringListInput($this->request->getBodyParam('workflowSectionHandles', [])),
@@ -5606,15 +5604,6 @@ class DashboardController extends Controller
             ['label' => 'Saturday', 'value' => 6],
             ['label' => 'Sunday', 'value' => 7],
         ];
-    }
-
-    private function buildWorkflowTimezoneOptions(): array
-    {
-        $preferred = ['Europe/Berlin', 'UTC', 'Europe/London', 'America/New_York', 'America/Los_Angeles'];
-        return array_map(static fn(string $timezone): array => [
-            'label' => $timezone,
-            'value' => $timezone,
-        ], $preferred);
     }
 
     private function resolveCurrentCpUserEmail(): string

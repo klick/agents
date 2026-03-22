@@ -7,22 +7,20 @@
 {% set workflowCreateUrl = cpUrl('agents/workflows', { workflowCreate: 'create' }) ~ '#workflowCreateSection' %}
 {% set currentWorkflow = selectedWorkflow ?? null %}
 {% set currentTemplate = currentWorkflow ? (currentWorkflow.template ?? null) : (selectedCreateTemplate ?? workflowTemplates[0] ?? null) %}
+{% set currentTemplateRequiredScopes = currentTemplate.requiredScopes ?? [] %}
 {% set currentConfig = currentWorkflow ? (currentWorkflow.config ?? {}) : {} %}
 {% set currentSectionHandles = currentConfig.sectionHandles ?? [] %}
 {% set currentSiteIds = currentConfig.siteIds ?? [] %}
 {% set canCreateWorkflowFromEligibleAccount = workflowAccountGuidance.hasEligibleAccounts ?? true %}
 {% set workflowListFilterRaw = (craft.app.request.getQueryParam('listFilter', '')|lower) %}
-{% set workflowListFilter = workflowListFilterRaw in ['paused', 'attention'] ? workflowListFilterRaw : '' %}
+{% set workflowListFilter = workflowListFilterRaw == 'attention' ? 'attention' : '' %}
 {% set showWorkflowRiskColumn = workflowListFilter == 'attention' %}
 {% set workflowAllFilterUrl = cpUrl('agents/workflows') %}
-{% set workflowPausedFilterUrl = cpUrl('agents/workflows', { listFilter: 'paused' }) %}
 {% set workflowAttentionFilterUrl = cpUrl('agents/workflows', { listFilter: 'attention' }) %}
 {% set filteredWorkflows = [] %}
 {% for workflow in workflows %}
   {% set includeWorkflow = true %}
-  {% if workflowListFilter == 'paused' %}
-    {% set includeWorkflow = (workflow.status|default('')|lower) == 'paused' %}
-  {% elseif workflowListFilter == 'attention' %}
+  {% if workflowListFilter == 'attention' %}
     {% set includeWorkflow = workflow.needsAttention|default(false) %}
   {% endif %}
   {% if includeWorkflow %}
@@ -38,6 +36,8 @@
   6: 'Sat',
   7: 'Sun'
 } %}
+{% set workflowTypesCount = workflowTemplates|length %}
+{% set workflowTypesExpanded = workflows|length == 0 or showCreateWorkflow %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
@@ -47,12 +47,10 @@
       <div class="agents-page-header__copy">
         <h1>{{ currentWorkflow ? currentWorkflow.name : 'Workflows' }}</h1>
         {% if currentWorkflow %}
-          <p class="agents-page-intro">Template: <strong>{{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</strong> &middot; Schedule: {{ currentWorkflow.scheduleLabel }} &middot; Account: {{ include('agents/_partials/managed-account-ref', {
+          <p class="agents-page-intro">Workflow type: <strong>{{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</strong> &middot; Schedule: {{ currentWorkflow.scheduleLabel }} &middot; Account: {{ include('agents/_partials/managed-account-ref', {
             label: currentWorkflow.accountDisplayName,
             url: accountsUrl,
           }, with_context = false) }} &middot; Focus: {{ currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope') }}</p>
-        {% else %}
-          <p class="agents-page-intro">Create and manage recurring read-only workflow instances without turning Agents into a runtime host. Agents stores schedule intent, bindings, bundle export, and run visibility. External workers still execute the real work.</p>
         {% endif %}
       </div>
       <div class="agents-page-header__actions">
@@ -74,8 +72,6 @@
               <button class="btn" type="submit">Duplicate</button>
             </form>
           {% endif %}
-        {% elseif canManageWorkflows %}
-          <a class="btn submit" href="{{ workflowCreateUrl }}">+ Add</a>
         {% endif %}
       </div>
     </div>
@@ -90,7 +86,6 @@
               <div class="agents-filter-strip-wrap">
                 <nav class="agents-filter-strip" aria-label="Workflow filters">
                   <a class="agents-filter-strip__item{{ workflowListFilter == '' ? ' is-selected' : '' }}" href="{{ workflowAllFilterUrl }}">All</a>
-                  <a class="agents-filter-strip__item{{ workflowListFilter == 'paused' ? ' is-selected' : '' }}" href="{{ workflowPausedFilterUrl }}">Paused</a>
                   <a class="agents-filter-strip__item{{ workflowListFilter == 'attention' ? ' is-selected' : '' }}" href="{{ workflowAttentionFilterUrl }}">Need attention</a>
                 </nav>
               </div>
@@ -192,7 +187,7 @@
                   </tr>
                 {% else %}
                   <tr>
-                    <td colspan="{{ showWorkflowRiskColumn ? 8 : 7 }}" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--empty agents-standard-registry__body-cell--empty">No workflows yet. Start from a read-only template.</td>
+                    <td colspan="{{ showWorkflowRiskColumn ? 8 : 7 }}" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--empty agents-standard-registry__body-cell--empty">No workflows yet. Start from a read-only workflow type.</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -200,37 +195,103 @@
           </div>
         </section>
 
+        <p class="agents-page-intro agents-page-intro--after-table">Create and manage recurring read-only workflow instances without turning Agents into a runtime host. Agents stores schedule intent, bindings, bundle export, and run visibility. External workers still execute the real work.</p>
+      </div>
+
+        {% if workflowTypesCount %}
+          <hr class="agents-add-section-divider agents-section-break">
+        {% endif %}
+
+        {% if workflowTypesCount or (canManageWorkflows and showCreateWorkflow) %}
+        <div class="agents-page-shell">
+        {% endif %}
+
+        {% if workflowTypesCount %}
+          <details class="agents-workflow-types-panel"{% if workflowTypesExpanded %} open{% endif %} id="workflowTypesSection">
+            <summary class="agents-workflow-types-toggle">
+              <span class="agents-workflow-types-toggle__copy">
+                <span class="agents-workflow-types-toggle__title">Workflow Types</span>
+                <span class="agents-workflow-types-toggle__meta">{{ workflowTypesCount }} available</span>
+              </span>
+            </summary>
+
+            <div class="agents-workflow-types-panel__body">
+              <p class="agents-subtle agents-workflow-types-note">Workflow types stay curated for now so Agents can validate required access, generate the right handoff bundle, and keep worker expectations predictable.</p>
+
+              <div class="tableview tablepane agents-workflow-types-registry-wrap agents-standard-registry-wrap">
+                <table class="data fullwidth big agents-workflow-types-registry agents-standard-registry" data-name="Workflow Types">
+                  <caption class="visually-hidden">Workflow types</caption>
+                  <colgroup>
+                    <col class="agents-workflow-types-registry__col agents-workflow-types-registry__col--type">
+                    <col class="agents-workflow-types-registry__col agents-workflow-types-registry__col--purpose">
+                    <col class="agents-workflow-types-registry__col agents-workflow-types-registry__col--coverage">
+                    <col class="agents-workflow-types-registry__col agents-workflow-types-registry__col--actions">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th scope="col" class="agents-standard-registry__header-cell">Workflow Type</th>
+                      <th scope="col" class="agents-standard-registry__header-cell">Purpose</th>
+                      <th scope="col" class="agents-standard-registry__header-cell">Coverage</th>
+                      <th scope="col" class="agents-standard-registry__header-cell">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for template in workflowTemplates %}
+                      {% set templateCreateUrl = cpUrl('agents/workflows', {
+                        workflowCreate: 'create',
+                        workflowTemplate: template.handle,
+                      }) ~ '#workflowCreateSection' %}
+                      <tr>
+                        <th scope="row" class="agents-standard-registry__body-cell agents-workflow-types-registry__body-cell--type">
+                          <div class="agents-workflow-types-registry__title">{{ template.displayName }}</div>
+                        </th>
+                        <td class="agents-standard-registry__body-cell">{{ template.description }}</td>
+                        <td class="agents-standard-registry__body-cell">
+                          <div class="agents-workflow-types-registry__stack">
+                            <div>{{ template.focusLabel ?? 'Configured review scope' }}</div>
+                            <div class="agents-workflow-types-registry__meta">Read-only · {{ (template.requiredScopes ?? [])|length }} required scopes</div>
+                          </div>
+                        </td>
+                        <td class="agents-standard-registry__body-cell agents-workflow-types-registry__body-cell--actions">
+                          {% if canManageWorkflows %}
+                            <div class="buttons">
+                              <a class="btn small" href="{{ templateCreateUrl }}">Use this type</a>
+                            </div>
+                          {% else %}
+                            <span class="light">Manage permission required.</span>
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        {% endif %}
+
         {% if canManageWorkflows and showCreateWorkflow %}
           <section class="agents-workflows-create-shell border rounded p-3" id="workflowCreateSection">
             <div class="agents-create-header">
               <div>
                 <h2 class="h4">Create Workflow</h2>
-                <p class="agents-subtle agents-workflows-note">Start from a curated read-only workflow template. Agents stores the configured intent; the worker still runs externally.</p>
+                <p class="agents-subtle agents-workflows-note">Choose a supported read-only workflow type. Types stay curated so Agents can validate access, shape the handoff bundle, and keep worker expectations clear.</p>
               </div>
             </div>
 
-            <section class="agents-workflow-template-library">
-              {% for template in workflowTemplates %}
-                {% set templateCreateUrl = cpUrl('agents/workflows', {
-                  workflowCreate: 'create',
-                  workflowTemplate: template.handle,
-                }) ~ '#workflowCreateSection' %}
-                <a class="agents-workflow-template-card dashed{% if currentTemplate and template.handle == currentTemplate.handle %} is-selected{% endif %}" href="{{ templateCreateUrl }}">
-                  <div class="agents-workflow-template-card__eyebrow">Template</div>
-                  <div class="agents-workflow-template-card__title">{{ template.displayName }}</div>
-                </a>
-              {% endfor %}
-            </section>
-
-            <article class="agents-workflow-template-summary">
-              <div class="agents-workflow-template-summary__eyebrow">Selected template</div>
-              <div class="agents-workflow-template-summary__title">{{ currentTemplate.displayName ?? 'Workflow Template' }}</div>
-              <p class="agents-workflow-template-summary__copy">{{ currentTemplate.description ?? 'Recurring read-only review workflow.' }}</p>
-              <div class="agents-workflow-template-summary__meta">
+            <article class="agents-workflow-type-summary">
+              <div class="agents-workflow-type-summary__eyebrow">Workflow type</div>
+              <div class="agents-workflow-type-summary__title">{{ currentTemplate.displayName ?? 'Workflow Type' }}</div>
+              <p class="agents-workflow-type-summary__copy">{{ currentTemplate.description ?? 'Recurring read-only review workflow.' }}</p>
+              <div class="agents-workflow-type-summary__meta">
                 <span>{{ currentTemplate.mode == 'read-only' ? 'Read-only' : currentTemplate.mode|title }}</span>
                 <span>{{ currentTemplate.focusLabel ?? 'Configured review scope' }}</span>
-                <span>External workers do the execution</span>
+                <span>{{ currentTemplateRequiredScopes|length }} required scopes</span>
               </div>
+              {% if currentTemplateRequiredScopes|length %}
+                <p class="agents-workflow-type-summary__detail"><strong>Required access:</strong> {% for scope in currentTemplateRequiredScopes %}<code>{{ scope }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+              {% endif %}
+              <p class="agents-workflow-type-summary__action"><a href="#workflowTypesSection">Browse workflow types &rarr;</a></p>
             </article>
 
             <div class="agents-workflows-form-shell">
@@ -296,7 +357,7 @@
 
                 <div class="field">
                   <div class="heading"><label for="workflowAccountId">Managed account</label></div>
-                  <div class="instructions"><p>Choose a managed account with the read scopes this template needs.</p></div>
+                  <div class="instructions"><p>Choose a managed account with the read scopes this workflow type needs.</p></div>
                   <div class="select">
                     <select id="workflowAccountId" name="workflowAccountId" required{% if not canCreateWorkflowFromEligibleAccount %} disabled{% endif %}>
                       <option value="">{{ canCreateWorkflowFromEligibleAccount ? 'Select account' : 'No matching account yet' }}</option>
@@ -337,16 +398,6 @@
                       </div>
                     </div>
 
-                    <div class="field">
-                      <div class="heading"><label for="workflowTimezone">Timezone</label></div>
-                      <div class="select">
-                        <select id="workflowTimezone" name="workflowTimezone" required>
-                          {% for option in workflowTimezoneOptions %}
-                            <option value="{{ option.value }}"{% if option.value == 'Europe/Berlin' %} selected{% endif %}>{{ option.label }}</option>
-                          {% endfor %}
-                        </select>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
@@ -408,7 +459,9 @@
             </div>
           </section>
         {% endif %}
-      </div>
+        {% if workflowTypesCount or (canManageWorkflows and showCreateWorkflow) %}
+        </div>
+        {% endif %}
     {% else %}
       <div class="agents-page-shell">
         <section class="agents-workflows-summary">
@@ -478,7 +531,7 @@
 
                 <div class="field">
                   <div class="heading"><label for="workflowAccountId">Managed account</label></div>
-                  <div class="instructions"><p>Choose a managed account with the read scopes this template needs.</p></div>
+                  <div class="instructions"><p>Choose a managed account with the read scopes this workflow type needs.</p></div>
                   <div class="select">
                     <select id="workflowAccountId" name="workflowAccountId" required>
                       {% for account in availableWorkflowAccounts %}
@@ -516,16 +569,6 @@
                       </div>
                     </div>
 
-                    <div class="field">
-                      <div class="heading"><label for="workflowTimezone">Timezone</label></div>
-                      <div class="select">
-                        <select id="workflowTimezone" name="workflowTimezone" required>
-                          {% for option in workflowTimezoneOptions %}
-                            <option value="{{ option.value }}"{% if option.value == currentWorkflow.timezone %} selected{% endif %}>{{ option.label }}</option>
-                          {% endfor %}
-                        </select>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
@@ -591,7 +634,7 @@
             {% else %}
               <div class="agents-workflows-readonly">
                 <div><strong>Description:</strong> {{ currentWorkflow.description ?: 'No description yet.' }}</div>
-                <div><strong>Template:</strong> {{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</div>
+                <div><strong>Workflow type:</strong> {{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</div>
                 <div><strong>Managed account:</strong> {{ include('agents/_partials/managed-account-ref', {
                   label: currentWorkflow.accountDisplayName,
                   url: accountsUrl,
@@ -605,8 +648,8 @@
 
           <div class="agents-workflows-sidebar">
             <section class="border rounded p-3 agents-workflows-side-card">
-              <h2 class="h4">Template</h2>
-              <p class="agents-subtle">{{ currentTemplate.description ?? 'Workflow template.' }}</p>
+              <h2 class="h4">Workflow type</h2>
+              <p class="agents-subtle">{{ currentTemplate.description ?? 'Workflow type.' }}</p>
               <p><a href="{{ currentTemplate.docsUrl ?? workflowLibraryUrl }}" target="_blank" rel="noopener">Workflow library &rarr;</a> &middot; <a href="{{ firstWorkerGuideUrl }}" target="_blank" rel="noopener">First worker &rarr;</a></p>
             </section>
 
@@ -699,7 +742,7 @@
 
     .agents-workflows-registry__meta,
     .agents-workflows-note,
-    .agents-workflow-template-summary__meta {
+    .agents-workflow-type-summary__meta {
       color: #596673;
       font-size: 12px;
       line-height: 1.45;
@@ -884,74 +927,117 @@
       width: 110px;
     }
 
-    .agents-workflow-template-library {
+    .agents-workflow-types-panel {
+      display: grid;
+      gap: 0;
+      margin-top: 16px;
+    }
+
+    .agents-workflow-types-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      cursor: pointer;
+      list-style: none;
+      color: #25313b;
+      font-weight: 700;
+    }
+
+    .agents-workflow-types-toggle::-webkit-details-marker {
+      display: none;
+    }
+
+    .agents-workflow-types-toggle::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      margin-top: -4px;
+      border-right: 1.5px solid #596673;
+      border-bottom: 1.5px solid #596673;
+      transform: rotate(45deg);
+      transition: transform 120ms ease;
+      flex: 0 0 auto;
+    }
+
+    .agents-workflow-types-panel[open] .agents-workflow-types-toggle::after {
+      margin-top: 4px;
+      transform: rotate(225deg);
+    }
+
+    .agents-workflow-types-toggle__copy {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .agents-workflow-types-toggle__title {
+      color: #25313b;
+      font-size: 18px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .agents-workflow-types-toggle__meta {
+      color: #596673;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1.4;
+    }
+
+    .agents-workflow-types-panel__body {
       display: grid;
       gap: 12px;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      margin-bottom: 12px;
+      padding-top: 12px;
     }
 
-    .agents-workflow-template-card {
-      display: grid;
-      align-content: start;
-      gap: 10px;
-      min-height: 100%;
-      padding: 12px;
-      border: 1px dashed rgba(96, 125, 159, 0.5);
+    .agents-workflow-types-note {
+      margin: 0;
+    }
+
+    .agents-workflow-types-registry-wrap.tablepane {
+      position: relative;
+      margin: 0;
+      padding: 0 12px !important;
+      border: 1px solid #bbc7d5;
       border-radius: 3px;
-      background: transparent;
-      color: inherit;
-      text-decoration: none;
+      overflow: hidden;
+      background: #fff;
       box-shadow: none;
-      transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
     }
 
-    .agents-workflow-template-card:hover,
-    .agents-workflow-template-card:focus-visible {
-      border-color: rgba(96, 125, 159, 0.72);
-      background-color: hsla(212, 30%, 85%, 0.1);
-      box-shadow: none;
-      text-decoration: none;
+    .agents-workflow-types-registry__col--type {
+      width: 22%;
     }
 
-    .agents-workflow-template-card.is-selected {
-      border-color: rgba(89, 102, 115, 0.85);
-      background-color: hsla(212, 30%, 85%, 0.25);
+    .agents-workflow-types-registry__col--purpose {
+      width: 40%;
     }
 
-    .agents-workflow-template-card__eyebrow {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: #596673;
+    .agents-workflow-types-registry__col--coverage {
+      width: 20%;
     }
 
-    .agents-workflow-template-card__title {
+    .agents-workflow-types-registry__col--actions {
+      width: 18%;
+    }
+
+    .agents-workflow-types-registry__title {
       color: #25313b;
       font-size: 14px;
       font-weight: 600;
-      line-height: 1.4;
+      line-height: 1.45;
     }
 
-    .agents-workflow-template-summary__title {
-      color: #25313b;
-      font-size: 15px;
-      font-weight: 600;
-      line-height: 1.4;
+    .agents-workflow-types-registry__stack {
+      display: grid;
+      gap: 4px;
+      justify-items: start;
+      text-align: left;
     }
 
-    .agents-workflow-template-summary__copy {
-      margin: 0;
-      color: #596673;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .agents-workflow-template-summary__meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 12px;
+    .agents-workflow-types-registry__meta {
       color: #596673;
       font-size: 12px;
       line-height: 1.45;
@@ -993,7 +1079,7 @@
       gap: 6px;
     }
 
-    .agents-workflow-template-summary {
+    .agents-workflow-type-summary {
       border: 1px solid #bbc7d5;
       border-radius: 3px;
       background: #fff;
@@ -1003,7 +1089,7 @@
       margin-bottom: 16px;
     }
 
-    .agents-workflow-template-summary__eyebrow {
+    .agents-workflow-type-summary__eyebrow {
       color: #596673;
       font-size: 11px;
       font-weight: 600;
@@ -1012,27 +1098,35 @@
       text-transform: uppercase;
     }
 
-    .agents-workflow-template-summary__title {
+    .agents-workflow-type-summary__title {
       color: #25313b;
       font-size: 14px;
       font-weight: 600;
       line-height: 1.4;
     }
 
-    .agents-workflow-template-summary__copy {
+    .agents-workflow-type-summary__copy {
       margin: 0;
       color: #596673;
       font-size: 13px;
       line-height: 1.5;
     }
 
-    .agents-workflow-template-summary__meta {
+    .agents-workflow-type-summary__meta {
       display: flex;
       flex-wrap: wrap;
       gap: 8px 16px;
       color: #596673;
       font-size: 12px;
       line-height: 1.4;
+    }
+
+    .agents-workflow-type-summary__detail,
+    .agents-workflow-type-summary__action {
+      margin: 0;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .agents-create-header {

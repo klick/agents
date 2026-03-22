@@ -144,11 +144,11 @@ The visible page title is **Accounts**, and the route is `admin/agents/accounts`
 Current responsibilities:
 
 - registry of configured workflow instances
-- template-based workflow creation
+- workflow-type-based creation
 - workflow detail/edit surface
 - schedule intent and runtime binding visibility
 - managed account binding for the workflow
-- curated read-only workflow template library
+- curated read-only workflow-type library
 - visible workflow handoff downloads from the registry and detail surface
 - workflow handoff bundle with `README.md`, `.env.example`, worker scaffold, cron example, and output-storage guidance
 - optional recent-run visibility when an external integration records workflow-run rows
@@ -159,8 +159,8 @@ Important boundary:
 - the actual schedule runner, fetch/reasoning loop, and execution still happen in external workers
 - the current slice does not turn Agents into a job runner, cron controller, or generic orchestration host
 - recent-run views only show data if something external writes those run rows today
-- the first stable slice is read-only and template-based, not a generic builder
-- write-oriented workflow templates can land later, but they are intentionally out of scope for this first official surface
+- the first stable slice is read-only and workflow-type-based, not a generic builder
+- write-oriented workflow types can land later, but they are intentionally out of scope for this first official surface
 
 The visible page title is **Workflows**, and the route is `admin/agents/workflows`.
 
