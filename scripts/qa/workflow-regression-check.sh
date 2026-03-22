@@ -24,6 +24,16 @@ expect_fixed() {
   fail "$description (missing: $needle in $file)"
 }
 
+expect_absent() {
+  local needle="$1"
+  local file="$2"
+  local description="$3"
+  if grep -Fq -- "$needle" "$file"; then
+    fail "$description (unexpected: $needle in $file)"
+  fi
+  pass "$description"
+}
+
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
 DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
 WORKFLOW_SERVICE="$PLUGIN_ROOT/src/services/WorkflowService.php"
@@ -48,6 +58,8 @@ expect_fixed "buildWorkflowAttentionState" "$WORKFLOW_SERVICE" "Workflow service
 expect_fixed "attentionSummary" "$WORKFLOW_SERVICE" "Workflow service exposes workflow attention summary text"
 expect_fixed "attentionMeta" "$WORKFLOW_SERVICE" "Workflow service exposes workflow attention detail text"
 expect_fixed "buildBootstrapBundleFiles" "$WORKFLOW_SERVICE" "Workflow service exposes bootstrap bundle generation"
+expect_fixed "buildBundleReadme(array \$workflow, array \$template, string \$workflowSlug)" "$WORKFLOW_SERVICE" "Workflow service passes workflow slug explicitly into bundle README generation"
+expect_fixed "return <<<'BASH'" "$WORKFLOW_SERVICE" "Workflow service keeps bundle run script shell variables literal via nowdoc"
 expect_fixed "buildOutputContract" "$WORKFLOW_SERVICE" "Workflow service includes explicit workflow output-contract guidance"
 expect_fixed "output-contract.md" "$WORKFLOW_SERVICE" "Workflow service bundles an output-contract file"
 expect_fixed "content-quality-review" "$WORKFLOW_SERVICE" "Workflow service includes the content quality review template"
@@ -84,6 +96,8 @@ expect_fixed "Worker / Agent Handoff" "$WORKFLOW_TEMPLATE" "Workflow template la
 expect_fixed "Recent runs" "$WORKFLOW_TEMPLATE" "Workflow template exposes recent run visibility"
 expect_fixed "External execution" "$WORKFLOW_TEMPLATE" "Workflow template explains the external execution boundary"
 expect_fixed "agents-workflows-registry" "$WORKFLOW_TEMPLATE" "Workflow template renders a registry table"
+expect_fixed "agents-workflows-registry__col--icon" "$WORKFLOW_TEMPLATE" "Workflow template renders the leading workflow icon column"
+expect_fixed "agents-workflows-registry-icon" "$WORKFLOW_TEMPLATE" "Workflow template renders the leading workflow icon in registry rows"
 expect_fixed "agents-standard-registry-wrap" "$WORKFLOW_TEMPLATE" "Workflow template uses the shared standard registry wrapper"
 expect_fixed "agents-standard-registry__header-cell" "$WORKFLOW_TEMPLATE" "Workflow template uses shared registry header cells"
 expect_fixed "agents-standard-registry__body-cell--empty" "$WORKFLOW_TEMPLATE" "Workflow template uses shared empty-row registry styling"
@@ -107,8 +121,11 @@ expect_fixed "--agents-table-body-padding-block: 24px;" "$CP_UI_PARTIAL" "Shared
 expect_fixed "--agents-table-attention-color:" "$CP_UI_PARTIAL" "Shared CP UI defines reusable attention color tokens"
 expect_fixed "background: var(--secondary-pane-bg);" "$CP_UI_PARTIAL" "Shared CP UI uses the restored strip background color"
 expect_fixed "agents-managed-account-ref" "$CP_UI_PARTIAL" "Shared CP UI styles the reusable managed-account reference"
+expect_fixed "color: #596673;" "$CP_UI_PARTIAL" "Shared CP UI keeps the managed-account reference label muted"
+expect_fixed "font-weight: 700;" "$CP_UI_PARTIAL" "Shared CP UI keeps the managed-account reference label bold"
 expect_fixed "managed-account-ref" "$WORKFLOW_TEMPLATE" "Workflow template uses the shared managed-account reference partial"
 expect_fixed "managed-account-ref" "$MANAGED_ACCOUNT_PARTIAL" "Managed-account reference partial exists"
+expect_absent "<a href=" "$MANAGED_ACCOUNT_PARTIAL" "Managed-account reference partial no longer links to the account surface"
 
 expect_fixed "**Workflows**" "$CP_DOCS" "CP docs include the Workflows surface"
 expect_fixed "admin/agents/workflows" "$CP_DOCS" "CP docs include the workflows route"

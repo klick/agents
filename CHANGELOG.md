@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.28.1 - 2026-03-22
+
+### Changed
+
+- Polished the `Accounts` and `Workflows` registries around calmer shared table treatment, leading type icons, cleaner account references, and removal of the legacy Accounts lifecycle panel.
+- Tightened the account-template presentation so read-only installs no longer show redundant write-only access columns when governed writing is off.
+- Fixed workflow handoff bundle generation so the exported README and worker scripts no longer fail on undefined interpolated variables during download.
+
 ## 0.28.0 - 2026-03-22
 
 ### Added

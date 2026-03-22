@@ -1,5 +1,4 @@
 {% set label = label ?? 'Managed account' %}
-{% set url = url ?? '' %}
 {% set className = className ?? '' %}
 
 <span class="agents-managed-account-ref{% if className %} {{ className }}{% endif %}">
@@ -11,9 +10,5 @@
       <title>Bot</title>
     </svg>
   </span>
-  {% if url %}
-    <a href="{{ url }}" class="agents-managed-account-ref__label agents-managed-account-ref__label--link">{{ label }}</a>
-  {% else %}
-    <span class="agents-managed-account-ref__label">{{ label }}</span>
-  {% endif %}
+  <span class="agents-managed-account-ref__label">{{ label }}</span>
 </span>

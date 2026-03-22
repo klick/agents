@@ -354,7 +354,7 @@ class WorkflowService extends Component
         }
         $bundleFiles = [];
 
-        $bundleFiles['README.md'] = $this->buildBundleReadme($workflow, $template);
+        $bundleFiles['README.md'] = $this->buildBundleReadme($workflow, $template, $workflowSlug);
         $bundleFiles['.env.example'] = $this->buildBundleEnvExample($workflow);
         $bundleFiles['config.example.json'] = Json::encode([
             'workflowId' => (int)($workflow['id'] ?? 0),
@@ -901,7 +901,7 @@ class WorkflowService extends Component
         ], ['id' => $workflowId])->execute() > 0;
     }
 
-    private function buildBundleReadme(array $workflow, array $template): string
+    private function buildBundleReadme(array $workflow, array $template, string $workflowSlug): string
     {
         $config = (array)($workflow['config'] ?? []);
         $lines = [
@@ -1050,7 +1050,7 @@ JS,
 
     private function buildBundleRunScript(string $workflowSlug): string
     {
-        return <<<BASH
+        return <<<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail
 

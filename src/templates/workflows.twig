@@ -103,6 +103,7 @@
             <table class="data fullwidth big agents-workflows-registry agents-standard-registry" data-name="Workflows">
               <caption class="visually-hidden">Workflow registry</caption>
               <colgroup>
+                <col class="agents-workflows-registry__col agents-workflows-registry__col--icon">
                 <col class="agents-workflows-registry__col agents-workflows-registry__col--workflow">
                 {% if showWorkflowRiskColumn %}
                   <col class="agents-workflows-registry__col agents-workflows-registry__col--risk">
@@ -115,6 +116,7 @@
               </colgroup>
               <thead>
                 <tr>
+                  <th scope="col" class="agents-standard-registry__header-cell agents-workflows-registry__header-cell--icon"><span class="visually-hidden">Type</span></th>
                   <th scope="col" class="agents-standard-registry__header-cell">Workflow</th>
                   {% if showWorkflowRiskColumn %}
                     <th scope="col" class="agents-standard-registry__header-cell agents-table-attention-heading">Risk</th>
@@ -132,6 +134,20 @@
                   {% set workflowWeekdayLabel = workflowWeekdayLabels[workflow.weekday|default(0)] ?? 'Day' %}
                   {% set workflowScheduleTableLabel = workflow.timeOfDay ? (workflowWeekdayLabel ~ ' ' ~ workflow.timeOfDay) : 'Manual' %}
                   <tr class="agents-workflows-registry__row{% if workflow.needsAttention %} agents-workflows-registry__row--attention{% endif %}">
+                    <td class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--icon" aria-hidden="true">
+                      <span class="agents-workflows-registry-icon">
+                        <svg focusable="false" preserveAspectRatio="xMidYMid meet" fill="currentColor" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                          <switch>
+                            <foreignObject width="1" height="1" x="0" y="0" requiredExtensions="http://ns.adobe.com/AdobeIllustrator/10.0/"></foreignObject>
+                            <g>
+                              <path d="M16,27c-3.6,0-7.1-1.8-9.2-5H12v-2H4v8h2v-3.7c2.5,3,6.1,4.7,10,4.7V27z"></path>
+                              <path d="M31,23v-2h-2.1c-0.1-0.6-0.4-1.2-0.7-1.8l1.5-1.5l-1.4-1.4l-1.5,1.5c-0.5-0.3-1.1-0.6-1.8-0.7V15h-2v2.1 c-0.6,0.1-1.2,0.4-1.8,0.7l-1.5-1.5l-1.4,1.4l1.5,1.5c-0.3,0.5-0.6,1.1-0.7,1.8H17v2h2.1c0.1,0.6,0.4,1.2,0.7,1.8l-1.5,1.5 l1.4,1.4l1.5-1.5c0.5,0.3,1.1,0.6,1.8,0.7V29h2v-2.1c0.6-0.1,1.2-0.4,1.8-0.7l1.5,1.5l1.4-1.4l-1.5-1.5c0.3-0.5,0.6-1.1,0.7-1.8 H31z M24,25c-1.7,0-3-1.3-3-3s1.3-3,3-3s3,1.3,3,3S25.7,25,24,25z"></path>
+                              <path d="M20,10h5.2C21.9,4.9,15.1,3.5,10,6.8c-3.1,2-5,5.5-5,9.2H3C3,8.8,8.8,3,16,3c3.9,0,7.5,1.7,10,4.7V4h2v8h-8V10z"></path>
+                            </g>
+                          </switch>
+                        </svg>
+                      </span>
+                    </td>
                     <th scope="row" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--workflow">
                       <div class="agents-workflows-registry__title">{{ workflow.name }}</div>
                     </th>
@@ -176,7 +192,7 @@
                   </tr>
                 {% else %}
                   <tr>
-                    <td colspan="{{ showWorkflowRiskColumn ? 7 : 6 }}" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--empty agents-standard-registry__body-cell--empty">No workflows yet. Start from a read-only template.</td>
+                    <td colspan="{{ showWorkflowRiskColumn ? 8 : 7 }}" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--empty agents-standard-registry__body-cell--empty">No workflows yet. Start from a read-only template.</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -701,8 +717,12 @@
       text-align: left;
     }
 
+    .agents-workflows-registry__col--icon {
+      width: 4%;
+    }
+
     .agents-workflows-registry__col--workflow {
-      width: 17%;
+      width: 15%;
     }
 
     .agents-workflows-registry__col--status {
@@ -733,10 +753,39 @@
       width: 10%;
     }
 
+    .agents-workflows-registry__header-cell--icon,
+    .agents-workflows-registry__body-cell--icon {
+      text-align: center;
+    }
+
+    .agents-workflows-registry__header-cell--icon {
+      padding-left: 8px !important;
+      padding-right: 8px !important;
+    }
+
+    .agents-workflows-registry__body-cell--icon {
+      padding-left: 8px !important;
+      padding-right: 8px !important;
+    }
+
     .agents-workflows-registry__body-cell--empty {
       color: #596673;
       text-align: center;
       padding: 20px 12px;
+    }
+
+    .agents-workflows-registry-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #596673;
+      line-height: 0;
+    }
+
+    .agents-workflows-registry-icon svg {
+      width: 24px;
+      height: 24px;
+      display: block;
     }
 
     .agents-status-chip {

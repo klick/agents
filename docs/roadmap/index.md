@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-22
-Current release: `v0.28.0`
+Current release: `v0.28.1`
 
 ## Direction
 
@@ -269,6 +269,16 @@ Release outcome:
 Release outcome:
 
 - Agencies now have the first repeatable starter-kit workflow and companion worker path for bounded governed draft refresh work, alongside calmer operator-facing CP surfaces.
+
+## Released (`v0.28.1`) Workflow and Account Registry Polish
+
+- Polished the `Accounts` and `Workflows` registries around shared table treatment, leading type icons, and calmer managed-account references.
+- Removed the legacy Accounts lifecycle panel so the toolbar is again the only filter surface for the registry.
+- Fixed workflow handoff bundle export so the generated README and worker scripts download cleanly without PHP variable interpolation errors.
+
+Release outcome:
+
+- Operators can review and hand off managed accounts and workflow instances with less duplicated chrome and fewer broken handoff edge cases.
 
 ## Released (`v0.28.0`) Operator-Managed Workflow Instances
 

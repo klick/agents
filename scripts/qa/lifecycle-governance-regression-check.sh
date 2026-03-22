@@ -22,6 +22,15 @@ expect_fixed() {
   grep -qF "$needle" "$file" || fail "$label"
 }
 
+expect_absent() {
+  local needle="$1"
+  local file="$2"
+  local label="$3"
+  if grep -qF "$needle" "$file"; then
+    fail "$label"
+  fi
+}
+
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
 API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
 CLI_CONTROLLER="$PLUGIN_ROOT/src/console/controllers/AgentsController.php"
@@ -52,7 +61,9 @@ expect_fixed "\$plugin->getLifecycleGovernanceService()->getSnapshot()" "$DASHBO
 expect_fixed "'lifecycleSummary' => \$lifecycleSummary" "$DASHBOARD_CONTROLLER" "Dashboard lifecycle summary payload missing"
 expect_fixed "'lifecycleByCredentialId' => \$lifecycleByCredentialId" "$DASHBOARD_CONTROLLER" "Dashboard per-agent lifecycle payload missing"
 
-expect_fixed "Lifecycle Governance" "$CREDENTIALS_TEMPLATE" "Credentials CP lifecycle summary section missing"
+expect_fixed 'aria-label="Accounts filters"' "$CREDENTIALS_TEMPLATE" "Credentials CP accounts filter toolbar missing"
+expect_fixed "Need attention" "$CREDENTIALS_TEMPLATE" "Credentials CP attention filter missing"
+expect_absent "agents-lifecycle-panel" "$CREDENTIALS_TEMPLATE" "Credentials CP should not render the legacy lifecycle summary panel"
 
 expect_fixed "GET /agents/v1/lifecycle" "$VITEPRESS_LIFECYCLE_DOC" "Lifecycle docs endpoint missing"
 expect_fixed "lifecycle:read" "$VITEPRESS_LIFECYCLE_DOC" "Lifecycle docs scope missing"
