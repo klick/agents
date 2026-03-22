@@ -16,6 +16,7 @@
 {% set webhookSecretSettingLocked = webhookSecretSettingLocked ?? false %}
 {% set reliabilityConsumerLagWarnSecondsLocked = reliabilityConsumerLagWarnSecondsLocked ?? false %}
 {% set reliabilityConsumerLagCriticalSecondsLocked = reliabilityConsumerLagCriticalSecondsLocked ?? false %}
+{% set governedWritingSettingsEnabled = controlCpEnabled ?? false %}
 {% set notificationRecipientsTip = 'This can begin with an environment variable.'|t('app') ~ ' ' ~ tag('a', {
   href: 'https://craftcms.com/docs/5.x/configure.html#control-panel-settings',
   class: 'go',
@@ -82,11 +83,62 @@
     </div>
   </section>
 
+  {% if governedWritingSettingsEnabled %}
+    <section class="agents-settings-focus-panel" id="settingsFocusApprovals" data-agents-settings-focus-panel hidden>
+      <div class="agents-settings-focus-grid">
+        <section class="border rounded p-3" id="governedWritingNotificationsSection">
+          <h2 class="h4">Governed Writing</h2>
+          <p class="agents-subtle">These settings only apply when experimental governed writing is enabled. Use them to control approval-queue and governed execution notifications.</p>
+
+          {{ forms.lightswitchField({
+            first: true,
+            label: 'Approval requested',
+            instructions: notificationApprovalRequestedSettingLocked
+              ? 'Controlled by config/agents.php (`notificationApprovalRequested`).'
+              : 'Send an email when a new approval request is created.',
+            name: 'notificationApprovalRequested',
+            on: settings.notificationApprovalRequested ?? true,
+            onLabel: false,
+            offLabel: false,
+            disabled: notificationApprovalRequestedSettingLocked,
+          }) }}
+
+          {{ forms.lightswitchField({
+            label: 'Approval decided',
+            instructions: notificationApprovalDecidedSettingLocked
+              ? 'Controlled by config/agents.php (`notificationApprovalDecided`).'
+              : 'Send an email when an approval request is finally approved or rejected.',
+            name: 'notificationApprovalDecided',
+            on: settings.notificationApprovalDecided ?? true,
+            onLabel: false,
+            offLabel: false,
+            disabled: notificationApprovalDecidedSettingLocked,
+          }) }}
+
+          {{ forms.lightswitchField({
+            label: 'Execution blocked or failed',
+            instructions: notificationExecutionFailedSettingLocked
+              ? 'Controlled by config/agents.php (`notificationExecutionFailed`).'
+              : 'Send an email when governed execution ends blocked or failed.',
+            name: 'notificationExecutionFailed',
+            on: settings.notificationExecutionFailed ?? true,
+            onLabel: false,
+            offLabel: false,
+            disabled: notificationExecutionFailedSettingLocked,
+          }) }}
+        </section>
+      </div>
+    </section>
+  {% endif %}
+
   <section class="agents-settings-focus-panel" id="settingsFocusDelivery" data-agents-settings-focus-panel hidden>
     <div class="agents-settings-focus-grid">
       <section class="border rounded p-3" id="notificationsSection">
         <h2 class="h4">Operator Notifications</h2>
-        <p class="agents-subtle">Email-first notifications for approvals, execution issues, webhook delivery failures, and scheduled status changes. Run php craft agents/notifications-check from cron to evaluate system status notifications.</p>
+        <p class="agents-subtle">Email-first notifications for webhook delivery failures and scheduled status changes. Run php craft agents/notifications-check from cron to evaluate system status notifications.</p>
+        {% if governedWritingSettingsEnabled %}
+          <p class="agents-subtle">Approval and governed-execution notification controls are configured in <strong>Approvals</strong>.</p>
+        {% endif %}
 
         {{ forms.lightswitchField({
           first: true,
@@ -113,42 +165,6 @@
           tip: notificationRecipientsTip,
           placeholder: '$PLUGIN_AGENTS_NOTIFICATION_RECIPIENTS',
           disabled: notificationRecipientsSettingLocked,
-        }) }}
-
-        {{ forms.lightswitchField({
-          label: 'Approval requested',
-          instructions: notificationApprovalRequestedSettingLocked
-            ? 'Controlled by config/agents.php (`notificationApprovalRequested`).'
-            : 'Send an email when a new approval request is created.',
-          name: 'notificationApprovalRequested',
-          on: settings.notificationApprovalRequested ?? true,
-          onLabel: false,
-          offLabel: false,
-          disabled: notificationApprovalRequestedSettingLocked,
-        }) }}
-
-        {{ forms.lightswitchField({
-          label: 'Approval decided',
-          instructions: notificationApprovalDecidedSettingLocked
-            ? 'Controlled by config/agents.php (`notificationApprovalDecided`).'
-            : 'Send an email when an approval request is finally approved or rejected.',
-          name: 'notificationApprovalDecided',
-          on: settings.notificationApprovalDecided ?? true,
-          onLabel: false,
-          offLabel: false,
-          disabled: notificationApprovalDecidedSettingLocked,
-        }) }}
-
-        {{ forms.lightswitchField({
-          label: 'Execution blocked or failed',
-          instructions: notificationExecutionFailedSettingLocked
-            ? 'Controlled by config/agents.php (`notificationExecutionFailed`).'
-            : 'Send an email when governed execution ends blocked or failed.',
-          name: 'notificationExecutionFailed',
-          on: settings.notificationExecutionFailed ?? true,
-          onLabel: false,
-          offLabel: false,
-          disabled: notificationExecutionFailedSettingLocked,
         }) }}
 
         {{ forms.lightswitchField({

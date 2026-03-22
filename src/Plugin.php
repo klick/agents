@@ -38,6 +38,7 @@ use Klick\Agents\services\TargetSetService;
 use Klick\Agents\services\WebhookService;
 use Klick\Agents\services\WebhookProbeService;
 use Klick\Agents\services\WebhookTestSinkService;
+use Klick\Agents\services\WorkflowService;
 
 class Plugin extends BasePlugin
 {
@@ -48,6 +49,8 @@ class Plugin extends BasePlugin
     public const PERMISSION_CREDENTIALS_ROTATE = 'agents-rotateCredentials';
     public const PERMISSION_CREDENTIALS_REVOKE = 'agents-revokeCredentials';
     public const PERMISSION_CREDENTIALS_DELETE = 'agents-deleteCredentials';
+    public const PERMISSION_WORKFLOWS_VIEW = 'agents-viewWorkflows';
+    public const PERMISSION_WORKFLOWS_MANAGE = 'agents-manageWorkflows';
     public const PERMISSION_CONTROL_VIEW = 'agents-viewControlPlane';
     public const PERMISSION_CONTROL_POLICIES_MANAGE = 'agents-manageControlPolicies';
     public const PERMISSION_CONTROL_APPROVALS_MANAGE = 'agents-manageControlApprovals';
@@ -55,7 +58,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.27.2';
+    public string $schemaVersion = '0.28.0';
 
     public static ?self $plugin = null;
 
@@ -70,6 +73,7 @@ class Plugin extends BasePlugin
             'webhookService' => WebhookService::class,
             'webhookProbeService' => WebhookProbeService::class,
             'credentialService' => CredentialService::class,
+            'workflowService' => WorkflowService::class,
             'targetSetService' => TargetSetService::class,
             'controlPlaneService' => ControlPlaneService::class,
             'consumerLagService' => ConsumerLagService::class,
@@ -118,6 +122,10 @@ class Plugin extends BasePlugin
                 'label' => 'Accounts',
                 'url' => 'agents/accounts',
             ],
+            'workflows' => [
+                'label' => 'Workflows',
+                'url' => 'agents/workflows',
+            ],
         ];
         if ($this->isControlCpEnabled()) {
             $subnav['targetSets'] = [
@@ -151,6 +159,8 @@ class Plugin extends BasePlugin
                 'agents/status' => 'agents/dashboard/dashboard',
                 'agents/settings' => 'agents/dashboard/settings',
                 'agents/accounts' => 'agents/dashboard/credentials',
+                'agents/workflows' => 'agents/dashboard/workflows',
+                'agents/workflows/<workflowId:\\d+>' => 'agents/dashboard/workflows',
             ];
             if ($this->isControlCpEnabled()) {
                 $rules['agents/target-sets'] = 'agents/dashboard/target-sets';
@@ -309,6 +319,13 @@ JS, View::POS_END);
     {
         /** @var CredentialService $service */
         $service = $this->get('credentialService');
+        return $service;
+    }
+
+    public function getWorkflowService(): WorkflowService
+    {
+        /** @var WorkflowService $service */
+        $service = $this->get('workflowService');
         return $service;
     }
 
@@ -630,6 +647,17 @@ JS, View::POS_END);
                         ],
                         self::PERMISSION_CREDENTIALS_DELETE => [
                             'label' => 'Delete managed accounts',
+                        ],
+                    ],
+                ];
+                $event->permissions[] = [
+                    'heading' => 'Agents Workflows',
+                    'permissions' => [
+                        self::PERMISSION_WORKFLOWS_VIEW => [
+                            'label' => 'View workflows tab',
+                        ],
+                        self::PERMISSION_WORKFLOWS_MANAGE => [
+                            'label' => 'Create and edit workflows',
                         ],
                     ],
                 ];

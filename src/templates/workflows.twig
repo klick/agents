@@ -1,0 +1,1142 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = selectedWorkflow ? (selectedWorkflow.name ?: 'Workflow') : 'Workflows' %}
+{% set selectedSubnavItem = 'workflows' %}
+{% set workflowsIndexUrl = cpUrl('agents/workflows') %}
+{% set workflowCreateUrl = cpUrl('agents/workflows', { workflowCreate: 'create' }) ~ '#workflowCreateSection' %}
+{% set currentWorkflow = selectedWorkflow ?? null %}
+{% set currentTemplate = currentWorkflow ? (currentWorkflow.template ?? null) : (selectedCreateTemplate ?? workflowTemplates[0] ?? null) %}
+{% set currentConfig = currentWorkflow ? (currentWorkflow.config ?? {}) : {} %}
+{% set currentSectionHandles = currentConfig.sectionHandles ?? [] %}
+{% set currentSiteIds = currentConfig.siteIds ?? [] %}
+{% set canCreateWorkflowFromEligibleAccount = workflowAccountGuidance.hasEligibleAccounts ?? true %}
+{% set workflowListFilterRaw = (craft.app.request.getQueryParam('listFilter', '')|lower) %}
+{% set workflowListFilter = workflowListFilterRaw in ['paused', 'attention'] ? workflowListFilterRaw : '' %}
+{% set showWorkflowRiskColumn = workflowListFilter == 'attention' %}
+{% set workflowAllFilterUrl = cpUrl('agents/workflows') %}
+{% set workflowPausedFilterUrl = cpUrl('agents/workflows', { listFilter: 'paused' }) %}
+{% set workflowAttentionFilterUrl = cpUrl('agents/workflows', { listFilter: 'attention' }) %}
+{% set filteredWorkflows = [] %}
+{% for workflow in workflows %}
+  {% set includeWorkflow = true %}
+  {% if workflowListFilter == 'paused' %}
+    {% set includeWorkflow = (workflow.status|default('')|lower) == 'paused' %}
+  {% elseif workflowListFilter == 'attention' %}
+    {% set includeWorkflow = workflow.needsAttention|default(false) %}
+  {% endif %}
+  {% if includeWorkflow %}
+    {% set filteredWorkflows = filteredWorkflows|merge([workflow]) %}
+  {% endif %}
+{% endfor %}
+{% set workflowWeekdayLabels = {
+  1: 'Mon',
+  2: 'Tue',
+  3: 'Wed',
+  4: 'Thu',
+  5: 'Fri',
+  6: 'Sat',
+  7: 'Sun'
+} %}
+
+{% block content %}
+  {% include 'agents/_partials/cp-ui' %}
+
+  <div class="agents-page-shell">
+    <div class="agents-page-header">
+      <div class="agents-page-header__copy">
+        <h1>{{ currentWorkflow ? currentWorkflow.name : 'Workflows' }}</h1>
+        {% if currentWorkflow %}
+          <p class="agents-page-intro">Template: <strong>{{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</strong> &middot; Schedule: {{ currentWorkflow.scheduleLabel }} &middot; Account: {{ include('agents/_partials/managed-account-ref', {
+            label: currentWorkflow.accountDisplayName,
+            url: accountsUrl,
+          }, with_context = false) }} &middot; Focus: {{ currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope') }}</p>
+        {% else %}
+          <p class="agents-page-intro">Create and manage recurring read-only workflow instances without turning Agents into a runtime host. Agents stores schedule intent, bindings, bundle export, and run visibility. External workers still execute the real work.</p>
+        {% endif %}
+      </div>
+      <div class="agents-page-header__actions">
+        {% if currentWorkflow %}
+          <a class="btn" href="{{ workflowsIndexUrl }}">Overview</a>
+          <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('agents/dashboard/download-workflow-bundle') }}
+            {{ redirectInput('agents/workflows/' ~ currentWorkflow.id) }}
+            <input type="hidden" name="workflowId" value="{{ currentWorkflow.id }}">
+            <button class="btn" type="submit">Handoff</button>
+          </form>
+          {% if canManageWorkflows %}
+            <form method="post" accept-charset="UTF-8">
+              {{ csrfInput() }}
+              {{ actionInput('agents/dashboard/duplicate-workflow') }}
+              {{ redirectInput('agents/workflows/' ~ currentWorkflow.id) }}
+              <input type="hidden" name="workflowId" value="{{ currentWorkflow.id }}">
+              <button class="btn" type="submit">Duplicate</button>
+            </form>
+          {% endif %}
+        {% elseif canManageWorkflows %}
+          <a class="btn submit" href="{{ workflowCreateUrl }}">+ Add</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="agents-layout-stack">
+    {% if not currentWorkflow %}
+      <div class="agents-page-shell">
+        <section class="agents-workflows-summary" aria-label="Workflow Filters">
+          <section class="agents-table-toolbar" aria-label="Workflow view options">
+            <div class="agents-table-toolbar__filters">
+              <div class="agents-filter-strip-wrap">
+                <nav class="agents-filter-strip" aria-label="Workflow filters">
+                  <a class="agents-filter-strip__item{{ workflowListFilter == '' ? ' is-selected' : '' }}" href="{{ workflowAllFilterUrl }}">All</a>
+                  <a class="agents-filter-strip__item{{ workflowListFilter == 'paused' ? ' is-selected' : '' }}" href="{{ workflowPausedFilterUrl }}">Paused</a>
+                  <a class="agents-filter-strip__item{{ workflowListFilter == 'attention' ? ' is-selected' : '' }}" href="{{ workflowAttentionFilterUrl }}">Need attention</a>
+                </nav>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="agents-workflows-registry-shell agents-standard-registry-shell">
+          <div class="tableview tablepane agents-workflows-registry-wrap agents-standard-registry-wrap">
+            <table class="data fullwidth big agents-workflows-registry agents-standard-registry" data-name="Workflows">
+              <caption class="visually-hidden">Workflow registry</caption>
+              <colgroup>
+                <col class="agents-workflows-registry__col agents-workflows-registry__col--workflow">
+                {% if showWorkflowRiskColumn %}
+                  <col class="agents-workflows-registry__col agents-workflows-registry__col--risk">
+                {% endif %}
+                <col class="agents-workflows-registry__col agents-workflows-registry__col--schedule">
+                <col class="agents-workflows-registry__col agents-workflows-registry__col--account">
+                <col class="agents-workflows-registry__col agents-workflows-registry__col--focus">
+                <col class="agents-workflows-registry__col agents-workflows-registry__col--run">
+                <col class="agents-workflows-registry__col agents-workflows-registry__col--actions">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" class="agents-standard-registry__header-cell">Workflow</th>
+                  {% if showWorkflowRiskColumn %}
+                    <th scope="col" class="agents-standard-registry__header-cell agents-table-attention-heading">Risk</th>
+                  {% endif %}
+                  <th scope="col" class="agents-standard-registry__header-cell">Schedule</th>
+                  <th scope="col" class="agents-standard-registry__header-cell">Managed Account</th>
+                  <th scope="col" class="agents-standard-registry__header-cell">Focus</th>
+                  <th scope="col" class="agents-standard-registry__header-cell">Latest Run</th>
+                  <th scope="col" class="agents-standard-registry__header-cell">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for workflow in filteredWorkflows %}
+                  {% set latestRun = workflow.latestRun ?? null %}
+                  {% set workflowWeekdayLabel = workflowWeekdayLabels[workflow.weekday|default(0)] ?? 'Day' %}
+                  {% set workflowScheduleTableLabel = workflow.timeOfDay ? (workflowWeekdayLabel ~ ' ' ~ workflow.timeOfDay) : 'Manual' %}
+                  <tr class="agents-workflows-registry__row{% if workflow.needsAttention %} agents-workflows-registry__row--attention{% endif %}">
+                    <th scope="row" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--workflow">
+                      <div class="agents-workflows-registry__title">{{ workflow.name }}</div>
+                    </th>
+                    {% if showWorkflowRiskColumn %}
+                      <td class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--risk">
+                        <div class="agents-workflows-registry__stack">
+                          <div class="agents-workflows-registry-risk-text agents-table-attention-text">{{ workflow.attentionSummary ?: 'Needs review' }}</div>
+                          {% if workflow.attentionMeta %}
+                            <div class="agents-workflows-registry__meta agents-table-attention-meta">{{ workflow.attentionMeta }}</div>
+                          {% endif %}
+                        </div>
+                      </td>
+                    {% endif %}
+                    <td class="agents-workflows-registry__body-cell">{{ workflowScheduleTableLabel }}</td>
+                    <td class="agents-workflows-registry__body-cell">{{ include('agents/_partials/managed-account-ref', {
+                      label: workflow.accountDisplayName,
+                      url: accountsUrl,
+                    }, with_context = false) }}</td>
+                    <td class="agents-workflows-registry__body-cell">{{ workflow.configSummary ?: (workflow.template.focusLabel ?? 'Configured review scope') }}</td>
+                    <td class="agents-workflows-registry__body-cell">
+                      {% if latestRun %}
+                        <div class="agents-workflows-registry__stack">
+                          <div>{{ latestRun.status|title }}</div>
+                          <div class="agents-workflows-registry__meta">{{ include('agents/_partials/relative-short-date', { value: latestRun.completedAt ?: latestRun.startedAt ?: latestRun.scheduledFor }, with_context = false) }}</div>
+                        </div>
+                      {% else %}
+                        <span class="light">No runs yet</span>
+                      {% endif %}
+                    </td>
+                    <td class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--actions">
+                      <div class="buttons">
+                        <a class="btn small" href="{{ cpUrl('agents/workflows/' ~ workflow.id) }}">Open</a>
+                        <form method="post" accept-charset="UTF-8">
+                          {{ csrfInput() }}
+                          {{ actionInput('agents/dashboard/download-workflow-bundle') }}
+                          {{ redirectInput('agents/workflows') }}
+                          <input type="hidden" name="workflowId" value="{{ workflow.id }}">
+                          <button class="btn small" type="submit">Handoff</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td colspan="{{ showWorkflowRiskColumn ? 7 : 6 }}" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--empty agents-standard-registry__body-cell--empty">No workflows yet. Start from a read-only template.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {% if canManageWorkflows and showCreateWorkflow %}
+          <section class="agents-workflows-create-shell border rounded p-3" id="workflowCreateSection">
+            <div class="agents-create-header">
+              <div>
+                <h2 class="h4">Create Workflow</h2>
+                <p class="agents-subtle agents-workflows-note">Start from a curated read-only workflow template. Agents stores the configured intent; the worker still runs externally.</p>
+              </div>
+            </div>
+
+            <section class="agents-workflow-template-library">
+              {% for template in workflowTemplates %}
+                {% set templateCreateUrl = cpUrl('agents/workflows', {
+                  workflowCreate: 'create',
+                  workflowTemplate: template.handle,
+                }) ~ '#workflowCreateSection' %}
+                <a class="agents-workflow-template-card dashed{% if currentTemplate and template.handle == currentTemplate.handle %} is-selected{% endif %}" href="{{ templateCreateUrl }}">
+                  <div class="agents-workflow-template-card__eyebrow">Template</div>
+                  <div class="agents-workflow-template-card__title">{{ template.displayName }}</div>
+                </a>
+              {% endfor %}
+            </section>
+
+            <article class="agents-workflow-template-summary">
+              <div class="agents-workflow-template-summary__eyebrow">Selected template</div>
+              <div class="agents-workflow-template-summary__title">{{ currentTemplate.displayName ?? 'Workflow Template' }}</div>
+              <p class="agents-workflow-template-summary__copy">{{ currentTemplate.description ?? 'Recurring read-only review workflow.' }}</p>
+              <div class="agents-workflow-template-summary__meta">
+                <span>{{ currentTemplate.mode == 'read-only' ? 'Read-only' : currentTemplate.mode|title }}</span>
+                <span>{{ currentTemplate.focusLabel ?? 'Configured review scope' }}</span>
+                <span>External workers do the execution</span>
+              </div>
+            </article>
+
+            <div class="agents-workflows-form-shell">
+              <form method="post" accept-charset="UTF-8">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/create-workflow') }}
+                {{ redirectInput('agents/workflows') }}
+                <input type="hidden" name="workflowTemplateHandle" value="{{ currentTemplate.handle ?? '' }}">
+                <input type="hidden" name="workflowStatus" value="active">
+                <input type="hidden" name="workflowCadence" value="weekly">
+
+                {% if not canCreateWorkflowFromEligibleAccount %}
+                  <div class="agents-workflow-account-guidance">
+                    <div class="agents-workflow-account-guidance__title">No matching account yet</div>
+                    <p class="agents-workflow-account-guidance__copy">
+                      {% if workflowAccountGuidance.hasAnyAccounts %}
+                        None of the current managed accounts has the read scopes {{ workflowAccountGuidance.templateDisplayName }} needs.
+                      {% else %}
+                        Create a managed account first, then come back to configure this workflow.
+                      {% endif %}
+                    </p>
+                    {% if workflowAccountGuidance.requiredScopes|length %}
+                      <div class="agents-workflow-account-guidance__meta">
+                        Required scopes:
+                        {% for scope in workflowAccountGuidance.requiredScopes %}
+                          <code>{{ scope }}</code>{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    {% if workflowAccountGuidance.ineligibleAccounts|length %}
+                      <div class="agents-workflow-account-guidance__list">
+                        {% for account in workflowAccountGuidance.ineligibleAccounts %}
+                          <div class="agents-workflow-account-guidance__item">
+                            {{ include('agents/_partials/managed-account-ref', {
+                              label: account.displayName,
+                              url: accountsUrl,
+                            }, with_context = false) }}{% if account.handle %} ({{ account.handle }}){% endif %}: missing {{ account.missingScopes|join(', ') ?: 'required scopes' }}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    <p class="agents-workflow-account-guidance__action"><a href="{{ matchingAccountCreateUrl ?? accountsUrl }}">Create matching account in Accounts &rarr;</a></p>
+                  </div>
+                {% endif %}
+
+                {{ forms.textField({
+                  label: 'Workflow name',
+                  id: 'workflowName',
+                  name: 'workflowName',
+                  required: true,
+                  value: currentTemplate.displayName ?? 'Workflow',
+                  instructions: 'Operator-facing name shown in the workflow registry.',
+                }) }}
+
+                {{ forms.textField({
+                  label: 'Short description',
+                  id: 'workflowDescription',
+                  name: 'workflowDescription',
+                  maxlength: 255,
+                  value: currentTemplate.description ?? '',
+                  instructions: 'Short purpose statement for operators and reviewers.',
+                }) }}
+
+                <div class="field">
+                  <div class="heading"><label for="workflowAccountId">Managed account</label></div>
+                  <div class="instructions"><p>Choose a managed account with the read scopes this template needs.</p></div>
+                  <div class="select">
+                    <select id="workflowAccountId" name="workflowAccountId" required{% if not canCreateWorkflowFromEligibleAccount %} disabled{% endif %}>
+                      <option value="">{{ canCreateWorkflowFromEligibleAccount ? 'Select account' : 'No matching account yet' }}</option>
+                      {% for account in eligibleWorkflowAccounts %}
+                        <option value="{{ account.id }}">
+                          {{ account.displayName }}{% if account.handle %} ({{ account.handle }}){% endif %}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+
+                <div class="agents-workflows-schedule-panel">
+                  <div class="agents-workflows-schedule-panel__title">Schedule</div>
+                  <div class="agents-workflows-schedule-grid">
+                    <div class="field">
+                      <div class="heading"><label for="workflowWeekday">Day</label></div>
+                      <div class="select">
+                        <select id="workflowWeekday" name="workflowWeekday" required>
+                          {% for option in workflowWeekdayOptions %}
+                            <option value="{{ option.value }}"{% if option.value == 4 %} selected{% endif %}>{{ option.label }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="field agents-workflows-time-field">
+                      <div class="heading"><label for="workflowTimeOfDay">Time</label></div>
+                      <div class="input ltr">
+                        <input
+                          class="text agents-workflows-time-input"
+                          type="time"
+                          id="workflowTimeOfDay"
+                          name="workflowTimeOfDay"
+                          value="08:00"
+                          step="900"
+                          required>
+                      </div>
+                    </div>
+
+                    <div class="field">
+                      <div class="heading"><label for="workflowTimezone">Timezone</label></div>
+                      <div class="select">
+                        <select id="workflowTimezone" name="workflowTimezone" required>
+                          {% for option in workflowTimezoneOptions %}
+                            <option value="{{ option.value }}"{% if option.value == 'Europe/Berlin' %} selected{% endif %}>{{ option.label }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="agents-workflows-form-grid">
+                  <div class="field">
+                    <div class="heading"><label>Sections</label></div>
+                    <div class="instructions"><p>Pick the sections the external worker should review on each run.</p></div>
+                    <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
+                      {% for section in availableSections %}
+                        <label class="agents-workflow-checkbox">
+                          <input type="checkbox" name="workflowSectionHandles[]" value="{{ section.handle }}">
+                          <span class="agents-workflow-checkbox__copy">
+                            <span class="agents-workflow-checkbox__title">{{ section.name ?: section.handle }}</span>
+                            <span class="agents-workflow-checkbox__meta">{{ section.handle }}</span>
+                          </span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <div class="heading"><label>Sites</label></div>
+                    <div class="instructions"><p>Choose the sites/locales the worker should operate against.</p></div>
+                    <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
+                      {% for site in availableSites %}
+                        <label class="agents-workflow-checkbox">
+                          <input type="checkbox" name="workflowSiteIds[]" value="{{ site.id }}">
+                          <span class="agents-workflow-checkbox__copy">
+                            <span class="agents-workflow-checkbox__title">{{ site.name ?: ('Site #' ~ site.id) }}</span>
+                            <span class="agents-workflow-checkbox__meta">{{ site.handle ?: ('#' ~ site.id) }}</span>
+                          </span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
+
+                {{ forms.textareaField({
+                  label: 'Prompt / policy context',
+                  id: 'workflowPromptContext',
+                  name: 'workflowPromptContext',
+                  rows: 4,
+                  instructions: 'Optional review policy, rubric, or context the worker/agent should keep in mind.',
+                }) }}
+
+                {{ forms.textareaField({
+                  label: 'Operator notes',
+                  id: 'workflowOperatorNotes',
+                  name: 'workflowOperatorNotes',
+                  rows: 3,
+                  instructions: 'Internal reminder shown only in Craft.',
+                }) }}
+
+                <div class="agents-form-actions">
+                  <button class="btn submit" type="submit"{% if not canCreateWorkflowFromEligibleAccount %} disabled{% endif %}>{{ canCreateWorkflowFromEligibleAccount ? 'Create Workflow' : 'Create matching account first' }}</button>
+                  <a class="btn" href="{{ workflowsIndexUrl }}">Cancel</a>
+                </div>
+              </form>
+            </div>
+          </section>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="agents-page-shell">
+        <section class="agents-workflows-summary">
+              <div class="agents-metric-strip-wrap">
+                <div class="agents-metric-strip">
+              <div class="agents-metric-strip-card">
+                <div class="agents-metric-strip-card__top">
+                  <div class="agents-metric-strip-card__label">Status</div>
+                  <div class="agents-metric-strip-card__value">{{ currentWorkflow.status|title }}</div>
+                </div>
+              </div>
+              <div class="agents-metric-strip-card">
+                <div class="agents-metric-strip-card__top">
+                  <div class="agents-metric-strip-card__label">Schedule</div>
+                  <div class="agents-metric-strip-card__value">{{ currentWorkflow.scheduleLabel }}</div>
+                </div>
+              </div>
+              <div class="agents-metric-strip-card">
+                <div class="agents-metric-strip-card__top">
+                  <div class="agents-metric-strip-card__label">Next due</div>
+                  <div class="agents-metric-strip-card__value">{{ currentWorkflow.nextDueLabel }}</div>
+                </div>
+              </div>
+              <div class="agents-metric-strip-card">
+                <div class="agents-metric-strip-card__top">
+                  <div class="agents-metric-strip-card__label">Latest run</div>
+                  <div class="agents-metric-strip-card__value">{{ currentWorkflow.latestRun ? currentWorkflow.latestRun.status|title : 'No runs yet' }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="agents-workflows-detail-grid">
+          <section class="agents-workflows-edit-shell border rounded p-3">
+            <div class="agents-create-header">
+              <div>
+                <h2 class="h4">Workflow configuration</h2>
+                <p class="agents-subtle agents-workflows-note">Edit workflow intent, read-only coverage, and schedule. Execution still happens outside Craft.</p>
+              </div>
+            </div>
+
+            {% if canManageWorkflows %}
+              <form method="post" accept-charset="UTF-8">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/update-workflow') }}
+                {{ redirectInput('agents/workflows/' ~ currentWorkflow.id) }}
+                <input type="hidden" name="workflowId" value="{{ currentWorkflow.id }}">
+                <input type="hidden" name="workflowTemplateHandle" value="{{ currentWorkflow.templateHandle }}">
+                <input type="hidden" name="workflowCadence" value="weekly">
+
+                {{ forms.textField({
+                  label: 'Workflow name',
+                  id: 'workflowName',
+                  name: 'workflowName',
+                  required: true,
+                  value: currentWorkflow.name,
+                }) }}
+
+                {{ forms.textField({
+                  label: 'Short description',
+                  id: 'workflowDescription',
+                  name: 'workflowDescription',
+                  maxlength: 255,
+                  value: currentWorkflow.description,
+                }) }}
+
+                <div class="field">
+                  <div class="heading"><label for="workflowAccountId">Managed account</label></div>
+                  <div class="instructions"><p>Choose a managed account with the read scopes this template needs.</p></div>
+                  <div class="select">
+                    <select id="workflowAccountId" name="workflowAccountId" required>
+                      {% for account in availableWorkflowAccounts %}
+                        <option value="{{ account.id }}"{% if account.id == currentWorkflow.accountId %} selected{% endif %}>{{ account.displayName }}{% if account.handle %} ({{ account.handle }}){% endif %}{% if account.missingScopes is not empty %} — missing: {{ account.missingScopes|join(', ') }}{% endif %}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+
+                <div class="agents-workflows-schedule-panel">
+                  <div class="agents-workflows-schedule-panel__title">Schedule</div>
+                  <div class="agents-workflows-schedule-grid">
+                    <div class="field">
+                      <div class="heading"><label for="workflowWeekday">Day</label></div>
+                      <div class="select">
+                        <select id="workflowWeekday" name="workflowWeekday" required>
+                          {% for option in workflowWeekdayOptions %}
+                            <option value="{{ option.value }}"{% if option.value == currentWorkflow.weekday %} selected{% endif %}>{{ option.label }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="field agents-workflows-time-field">
+                      <div class="heading"><label for="workflowTimeOfDay">Time</label></div>
+                      <div class="input ltr">
+                        <input
+                          class="text agents-workflows-time-input"
+                          type="time"
+                          id="workflowTimeOfDay"
+                          name="workflowTimeOfDay"
+                          value="{{ currentWorkflow.timeOfDay }}"
+                          step="900"
+                          required>
+                      </div>
+                    </div>
+
+                    <div class="field">
+                      <div class="heading"><label for="workflowTimezone">Timezone</label></div>
+                      <div class="select">
+                        <select id="workflowTimezone" name="workflowTimezone" required>
+                          {% for option in workflowTimezoneOptions %}
+                            <option value="{{ option.value }}"{% if option.value == currentWorkflow.timezone %} selected{% endif %}>{{ option.label }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="agents-workflows-form-grid">
+                  <div class="field">
+                    <div class="heading"><label>Sections</label></div>
+                    <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
+                      {% for section in availableSections %}
+                        <label class="agents-workflow-checkbox">
+                          <input type="checkbox" name="workflowSectionHandles[]" value="{{ section.handle }}"{% if section.handle in currentSectionHandles %} checked{% endif %}>
+                          <span class="agents-workflow-checkbox__copy">
+                            <span class="agents-workflow-checkbox__title">{{ section.name ?: section.handle }}</span>
+                            <span class="agents-workflow-checkbox__meta">{{ section.handle }}</span>
+                          </span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <div class="heading"><label>Sites</label></div>
+                    <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
+                      {% for site in availableSites %}
+                        <label class="agents-workflow-checkbox">
+                          <input type="checkbox" name="workflowSiteIds[]" value="{{ site.id }}"{% if site.id in currentSiteIds %} checked{% endif %}>
+                          <span class="agents-workflow-checkbox__copy">
+                            <span class="agents-workflow-checkbox__title">{{ site.name ?: ('Site #' ~ site.id) }}</span>
+                            <span class="agents-workflow-checkbox__meta">{{ site.handle ?: ('#' ~ site.id) }}</span>
+                          </span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
+
+                {{ forms.textareaField({
+                  label: 'Prompt / policy context',
+                  id: 'workflowPromptContext',
+                  name: 'workflowPromptContext',
+                  rows: 4,
+                  value: currentConfig.promptContext ?? '',
+                }) }}
+
+                {{ forms.textareaField({
+                  label: 'Operator notes',
+                  id: 'workflowOperatorNotes',
+                  name: 'workflowOperatorNotes',
+                  rows: 3,
+                  value: currentConfig.operatorNotes ?? '',
+                }) }}
+
+                <div class="agents-form-actions">
+                  <button class="btn submit" type="submit">Save Workflow</button>
+                  <a class="btn" href="{{ workflowsIndexUrl }}">Back</a>
+                </div>
+              </form>
+              <form method="post" accept-charset="UTF-8" onsubmit="return confirm('Delete this workflow?');" class="agents-workflows-delete-form">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/delete-workflow') }}
+                <input type="hidden" name="workflowId" value="{{ currentWorkflow.id }}">
+                <button class="btn" type="submit">Delete</button>
+              </form>
+            {% else %}
+              <div class="agents-workflows-readonly">
+                <div><strong>Description:</strong> {{ currentWorkflow.description ?: 'No description yet.' }}</div>
+                <div><strong>Template:</strong> {{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</div>
+                <div><strong>Managed account:</strong> {{ include('agents/_partials/managed-account-ref', {
+                  label: currentWorkflow.accountDisplayName,
+                  url: accountsUrl,
+                }, with_context = false) }}</div>
+                <div><strong>Focus:</strong> {{ currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope') }}</div>
+                <div><strong>Sections:</strong> {{ currentSectionHandles|length ? currentSectionHandles|join(', ') : 'None' }}</div>
+                <div><strong>Sites:</strong> {{ currentSiteIds|length ? currentSiteIds|join(', ') : 'None' }}</div>
+              </div>
+            {% endif %}
+          </section>
+
+          <div class="agents-workflows-sidebar">
+            <section class="border rounded p-3 agents-workflows-side-card">
+              <h2 class="h4">Template</h2>
+              <p class="agents-subtle">{{ currentTemplate.description ?? 'Workflow template.' }}</p>
+              <p><a href="{{ currentTemplate.docsUrl ?? workflowLibraryUrl }}" target="_blank" rel="noopener">Workflow library &rarr;</a> &middot; <a href="{{ firstWorkerGuideUrl }}" target="_blank" rel="noopener">First worker &rarr;</a></p>
+            </section>
+
+            <section class="border rounded p-3 agents-workflows-side-card">
+              <h2 class="h4">External execution</h2>
+              <div class="agents-workflows-side-stack">
+                <div><strong>Mode:</strong> Poll-first external worker</div>
+                <div><strong>Workflow mode:</strong> {{ currentTemplate.mode == 'read-only' ? 'Read-only review' : currentTemplate.mode|title }}</div>
+                <div><strong>Last worker:</strong> {{ currentWorkflow.lastWorkerId ?: 'None yet' }}</div>
+                <div><strong>Last claim:</strong> {{ currentWorkflow.lastClaimedAt ? include('agents/_partials/relative-short-date', { value: currentWorkflow.lastClaimedAt }, with_context = false) : 'Never' }}</div>
+                <div><strong>Last heartbeat:</strong> {{ currentWorkflow.lastHeartbeatAt ? include('agents/_partials/relative-short-date', { value: currentWorkflow.lastHeartbeatAt }, with_context = false) : 'Never' }}</div>
+              </div>
+            </section>
+
+            <section class="border rounded p-3 agents-workflows-side-card">
+              <h2 class="h4">Recent runs</h2>
+              {% if selectedWorkflowRuns|length %}
+                <div class="tableview tablepane agents-workflows-runs-wrap">
+                  <table class="data fullwidth">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Summary</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for run in selectedWorkflowRuns %}
+                        <tr>
+                          <td>#{{ run.id }}</td>
+                          <td>{{ run.status|title }}</td>
+                          <td>{{ include('agents/_partials/relative-short-date', { value: run.completedAt ?: run.startedAt ?: run.scheduledFor }, with_context = false) }}</td>
+                          <td>{{ run.summary ?: 'No summary yet.' }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <p class="agents-subtle">No runs yet. This workflow stores run history after an external worker starts claiming and reporting runs.</p>
+              {% endif %}
+            </section>
+
+            <section class="border rounded p-3 agents-workflows-side-card">
+              <h2 class="h4">Worker / Agent Handoff</h2>
+              <p class="agents-subtle">Download a handoff bundle with `README.md`, `.env.example`, `worker.mjs`, `run-worker.sh`, a cron example, and explicit output-storage guidance. Live tokens stay on the account surface.</p>
+              <form method="post" accept-charset="UTF-8">
+                {{ csrfInput() }}
+                {{ actionInput('agents/dashboard/download-workflow-bundle') }}
+                <input type="hidden" name="workflowId" value="{{ currentWorkflow.id }}">
+                <button class="btn" type="submit">Download handoff</button>
+              </form>
+            </section>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <style>
+    .agents-workflows-summary {
+      width: 100%;
+    }
+
+    .agents-workflows-detail-grid {
+      width: 100%;
+    }
+
+    .agents-workflows-runs-wrap.tablepane {
+      margin: 0;
+      padding: 0 !important;
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: none;
+    }
+
+    .agents-workflows-registry__row--attention {
+      background: #fcf6f4;
+    }
+
+    .agents-workflows-registry__title {
+      font-weight: 600;
+      color: #25313b;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .agents-workflows-registry__meta,
+    .agents-workflows-note,
+    .agents-workflow-template-summary__meta {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-workflows-registry tbody > tr > th.agents-workflows-registry__body-cell,
+    .agents-workflows-registry tbody > tr > td.agents-workflows-registry__body-cell {
+      text-align: left !important;
+    }
+
+    .agents-workflows-registry__stack {
+      display: grid;
+      gap: 4px;
+      justify-items: start;
+      text-align: left;
+    }
+
+    .agents-workflows-registry__col--workflow {
+      width: 17%;
+    }
+
+    .agents-workflows-registry__col--status {
+      width: 9%;
+    }
+
+    .agents-workflows-registry__col--risk {
+      width: 12%;
+    }
+
+    .agents-workflows-registry__col--schedule {
+      width: 10%;
+    }
+
+    .agents-workflows-registry__col--account {
+      width: 15%;
+    }
+
+    .agents-workflows-registry__col--focus {
+      width: 18%;
+    }
+
+    .agents-workflows-registry__col--run {
+      width: 9%;
+    }
+
+    .agents-workflows-registry__col--actions {
+      width: 10%;
+    }
+
+    .agents-workflows-registry__body-cell--empty {
+      color: #596673;
+      text-align: center;
+      padding: 20px 12px;
+    }
+
+    .agents-status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 20px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.4;
+      text-transform: uppercase;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .agents-status-chip--good {
+      background: #e8f7ee;
+      border-color: #9fd8b5;
+      color: #1c6e3b;
+    }
+
+    .agents-status-chip--muted {
+      background: #eef3f7;
+      border-color: #c8d0da;
+      color: #596673;
+    }
+
+    .agents-status-chip--bad {
+      background: #fff5f5;
+      border-color: #efb5b5;
+      color: #b42318;
+    }
+
+    .agents-workflows-create-shell,
+    .agents-workflows-edit-shell {
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #f1f5f9;
+      padding: 12px;
+      box-shadow: none;
+    }
+
+    .agents-workflows-create-shell {
+      margin-top: 12px;
+    }
+
+    .agents-workflows-form-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .agents-workflows-form-grid > .field {
+      margin: 12px 0 0;
+    }
+
+    .agents-workflows-schedule-panel {
+      margin: 0 0 24px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      min-width: 0;
+    }
+
+    .agents-workflows-schedule-panel__title {
+      margin: 0 0 10px;
+      color: #25313b;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .agents-workflows-schedule-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, max-content));
+      justify-content: start;
+      align-items: start;
+    }
+
+    .agents-workflows-schedule-grid > .field {
+      margin: 0;
+      min-width: 0;
+    }
+
+    .agents-workflows-time-field .input {
+      min-width: 110px;
+    }
+
+    .agents-workflows-time-input {
+      width: 110px;
+    }
+
+    .agents-workflow-template-library {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-bottom: 12px;
+    }
+
+    .agents-workflow-template-card {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-height: 100%;
+      padding: 12px;
+      border: 1px dashed rgba(96, 125, 159, 0.5);
+      border-radius: 3px;
+      background: transparent;
+      color: inherit;
+      text-decoration: none;
+      box-shadow: none;
+      transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .agents-workflow-template-card:hover,
+    .agents-workflow-template-card:focus-visible {
+      border-color: rgba(96, 125, 159, 0.72);
+      background-color: hsla(212, 30%, 85%, 0.1);
+      box-shadow: none;
+      text-decoration: none;
+    }
+
+    .agents-workflow-template-card.is-selected {
+      border-color: rgba(89, 102, 115, 0.85);
+      background-color: hsla(212, 30%, 85%, 0.25);
+    }
+
+    .agents-workflow-template-card__eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #596673;
+    }
+
+    .agents-workflow-template-card__title {
+      color: #25313b;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .agents-workflow-template-summary__title {
+      color: #25313b;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .agents-workflow-template-summary__copy {
+      margin: 0;
+      color: #596673;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .agents-workflow-template-summary__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-workflow-account-guidance {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid #d7dde3;
+      border-radius: 3px;
+      background: #fff;
+      color: #596673;
+    }
+
+    .agents-workflow-account-guidance__title {
+      color: #25313b;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .agents-workflow-account-guidance__copy,
+    .agents-workflow-account-guidance__action {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .agents-workflow-account-guidance__meta,
+    .agents-workflow-account-guidance__item {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .agents-workflow-account-guidance__list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .agents-workflow-template-summary {
+      border: 1px solid #bbc7d5;
+      border-radius: 3px;
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .agents-workflow-template-summary__eyebrow {
+      color: #596673;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .agents-workflow-template-summary__title {
+      color: #25313b;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .agents-workflow-template-summary__copy {
+      margin: 0;
+      color: #596673;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .agents-workflow-template-summary__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .agents-create-header {
+      margin-bottom: 12px;
+    }
+
+    .agents-workflows-summary .agents-metric-strip-wrap {
+      justify-content: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .agents-workflows-summary .agents-metric-strip {
+      justify-content: flex-start;
+    }
+
+    .agents-workflows-summary .agents-metric-strip-card {
+      text-align: left;
+    }
+
+    .agents-workflows-summary .agents-metric-strip-card__top {
+      display: grid;
+      justify-items: start;
+      text-align: left;
+    }
+
+    .agents-workflows-summary .agents-metric-strip-card__label {
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .agents-workflow-checkbox {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .agents-workflow-checkbox__copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .agents-workflow-checkbox__title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #25313b;
+      line-height: 1.4;
+    }
+
+    .agents-workflow-checkbox__meta {
+      font-size: 12px;
+      color: #596673;
+      line-height: 1.4;
+    }
+
+    .agents-workflows-detail-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
+    }
+
+    .agents-workflows-sidebar {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .agents-workflows-side-card {
+      background: #fff;
+    }
+
+    .agents-workflows-side-stack {
+      display: grid;
+      gap: 8px;
+      color: #596673;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .agents-workflows-readonly {
+      display: grid;
+      gap: 8px;
+      color: #596673;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .agents-workflows-edit-shell .agents-form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .agents-workflows-delete-form {
+      margin-top: 8px;
+    }
+
+    .agents-page-header__actions form {
+      margin: 0;
+    }
+
+    .agents-workflows-registry__body-cell--actions .buttons {
+      justify-content: flex-start;
+    }
+
+    @media (max-width: 1100px) {
+      .agents-workflows-form-grid,
+      .agents-workflows-detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-workflows-schedule-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .agents-workflows-schedule-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .agents-workflows-registry {
+        table-layout: auto;
+      }
+
+      .agents-workflows-registry__col {
+        width: auto !important;
+      }
+
+      .agents-workflows-registry thead {
+        display: none;
+      }
+
+      .agents-workflows-registry tbody tr {
+        display: grid;
+        gap: 6px;
+        padding: 14px 12px;
+      }
+
+      .agents-workflows-registry tbody th,
+      .agents-workflows-registry tbody td {
+        display: block;
+        border: 0;
+        padding: 0;
+      }
+    }
+  </style>
+{% endblock %}

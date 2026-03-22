@@ -1,4 +1,4 @@
-# Accounts, Target Sets, Approvals, Status & Settings
+# Accounts, Workflows, Target Sets, Approvals, Status & Settings
 
 The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure runtime behavior, and, when experimental writes are enabled, review governed approval and rule flows.
 
@@ -15,6 +15,9 @@ The Agents CP subnav currently exposes:
 - **Accounts**
   - URL: `admin/agents/accounts`
   - managed machine-account lifecycle and access controls
+- **Workflows**
+  - URL: `admin/agents/workflows`
+  - operator-managed read-only workflow instances with external execution and bundle export
 - **Target Sets**
   - URL: `admin/agents/target-sets`
   - shown only when governed-write CP is enabled
@@ -126,12 +129,40 @@ Current responsibilities:
 - usage metadata and optional live activity indicator
 - assignment of existing `Target Sets` to write-capable accounts
 - bounded `entry.updateDraft` helper snippets for assigned target sets in account details
-- worker-oriented `.env` bootstrap helpers for teams using a worker or script runtime
+- visible worker / agent handoff downloads from the registry and detail surfaces
+- account handoff bundle with `.env`, `account.json`, smoke test, and external output-storage guidance
 - dedicated account-template section below the create form
 - suggested account profiles for common core-Craft integration shapes
 - Commerce-only scopes appear only when Craft Commerce is installed
 
 The visible page title is **Accounts**, and the route is `admin/agents/accounts`.
+
+## Workflows
+
+`Workflows` is a first-class CP surface for recurring read-only workflow instances.
+
+Current responsibilities:
+
+- registry of configured workflow instances
+- template-based workflow creation
+- workflow detail/edit surface
+- schedule intent and runtime binding visibility
+- managed account binding for the workflow
+- curated read-only workflow template library
+- visible workflow handoff downloads from the registry and detail surface
+- workflow handoff bundle with `README.md`, `.env.example`, worker scaffold, cron example, and output-storage guidance
+- optional recent-run visibility when an external integration records workflow-run rows
+
+Important boundary:
+
+- Agents stores workflow intent, account binding, and handoff export
+- the actual schedule runner, fetch/reasoning loop, and execution still happen in external workers
+- the current slice does not turn Agents into a job runner, cron controller, or generic orchestration host
+- recent-run views only show data if something external writes those run rows today
+- the first stable slice is read-only and template-based, not a generic builder
+- write-oriented workflow templates can land later, but they are intentionally out of scope for this first official surface
+
+The visible page title is **Workflows**, and the route is `admin/agents/workflows`.
 
 ## Target Sets
 
@@ -187,6 +218,9 @@ The current permission model is split into two groups:
   - rotate managed account tokens
   - revoke managed account tokens
   - delete managed accounts
+- **Agents Workflows**
+  - view workflows tab
+  - create and edit workflows
 - **Agents Approvals**
   - shown only when Approvals is enabled
   - view approvals tab
@@ -197,6 +231,7 @@ The current permission model is split into two groups:
 In addition:
 
 - `Settings` actions require admin access
+- `Workflows` requires the corresponding workflow permissions
 - `Approvals` requires the corresponding approvals permissions
 - `Accounts` actions require the corresponding Agents Access permissions
 - `Target Sets` inherits the same Accounts visibility/manage permissions
@@ -207,6 +242,7 @@ Primary current routes:
 
 - `admin/agents`
 - `admin/agents/accounts`
+- `admin/agents/workflows`
 - `admin/agents/target-sets`
 - `admin/agents/approvals`
 - `admin/agents/status`

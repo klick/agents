@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.28.0 - 2026-03-22
+
+### Added
+
+- Added the first operator-managed `Workflows` control-panel surface with a registry, create/edit flow, workflow detail view, managed-account matching guidance, handoff bundle export, and workflow-specific permissions.
+- Added workflow storage and service support, including dedicated workflow and workflow-run migrations plus regression coverage for the new workflow slice.
+- Added a shared managed-account reference partial so workflow and approval surfaces can render account references with one consistent managed-worker visual treatment.
+
+### Changed
+
+- Reworked workflow, status, settings, and approval surfaces around calmer operator wording, clearer workflow expectations, and stronger governed-writing gating where writing-only controls belong.
+- Clarified the product and docs boundary for workflows so the current release explicitly presents Agents as the configuration, visibility, and handoff layer while actual work stays in external workers.
+
 ## 0.27.2 - 2026-03-22
 
 ### Added

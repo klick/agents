@@ -12,6 +12,7 @@ use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use craft\web\View;
+use RuntimeException;
 use Throwable;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -100,6 +101,8 @@ class DashboardController extends Controller
         $securityPosture = $plugin->getSecurityPolicyService()->getCpPosture();
         $defaultScopes = (array)($securityPosture['authentication']['tokenScopes'] ?? []);
         $canViewCredentials = $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+        $canViewWorkflows = $this->canWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_VIEW);
+        $canManageWorkflows = $this->canWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
         $canViewControl = $controlCpEnabled && $this->canControlPermission(Plugin::PERMISSION_CONTROL_VIEW);
 
         $readinessHealth = $readinessService->getHealthSummary();
@@ -119,6 +122,22 @@ class DashboardController extends Controller
                 $targetSets = $plugin->getTargetSetService()->getTargetSets();
             } catch (Throwable $e) {
                 Craft::warning('Unable to load target sets for Status CP: ' . $e->getMessage(), __METHOD__);
+            }
+        }
+        $workflowSummary = [
+            'total' => 0,
+            'active' => 0,
+            'paused' => 0,
+            'attention' => 0,
+        ];
+        $workflows = [];
+        if ($canViewWorkflows) {
+            try {
+                $workflowService = $plugin->getWorkflowService();
+                $workflowSummary = $workflowService->getWorkflowStatusSummary();
+                $workflows = $workflowService->getWorkflows();
+            } catch (Throwable $e) {
+                Craft::warning('Unable to load workflows for Status CP: ' . $e->getMessage(), __METHOD__);
             }
         }
         $controlSnapshot = [
@@ -258,8 +277,12 @@ class DashboardController extends Controller
             'writesExperimentalEnabled' => (bool)$writesState['enabled'],
             'controlCpEnabled' => $controlCpEnabled,
             'statusCanViewCredentials' => $canViewCredentials,
+            'statusCanViewWorkflows' => $canViewWorkflows,
+            'statusCanManageWorkflows' => $canManageWorkflows,
             'statusCanViewControl' => $canViewControl,
             'managedCredentials' => $managedCredentials,
+            'dashboardWorkflows' => $workflows,
+            'dashboardWorkflowSummary' => $workflowSummary,
             'targetSets' => $targetSets,
             'controlSnapshot' => $controlSnapshot,
             'securityWarningCounts' => (array)($securityPosture['warningCounts'] ?? []),
@@ -655,6 +678,214 @@ class DashboardController extends Controller
         return $elements;
     }
 
+    public function actionWorkflows(int $workflowId = 0): Response
+    {
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_VIEW);
+
+        $plugin = Plugin::getInstance();
+        $workflowService = $plugin->getWorkflowService();
+        $workflowTemplates = $workflowService->getWorkflowTemplates();
+        $selectedWorkflow = null;
+        if ($workflowId > 0) {
+            $selectedWorkflow = $workflowService->getWorkflowById($workflowId);
+            if ($selectedWorkflow === null) {
+                throw new NotFoundHttpException('Workflow not found.');
+            }
+        }
+
+        $showCreateWorkflow = $workflowId <= 0
+            && $this->canWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE)
+            && strtolower(trim((string)$this->request->getQueryParam('workflowCreate', ''))) === 'create';
+        $selectedCreateTemplate = $selectedWorkflow['template'] ?? null;
+        if ($selectedCreateTemplate === null) {
+            $selectedTemplateHandle = strtolower(trim((string)$this->request->getQueryParam('workflowTemplate', '')));
+            $selectedCreateTemplate = $workflowService->getWorkflowTemplateByHandle($selectedTemplateHandle)
+                ?? ($workflowTemplates[0] ?? null);
+        }
+        $workflowAccountTemplate = $selectedWorkflow['template'] ?? $selectedCreateTemplate;
+        $availableWorkflowAccounts = $this->buildAvailableWorkflowAccounts($workflowAccountTemplate);
+        $eligibleWorkflowAccounts = array_values(array_filter(
+            $availableWorkflowAccounts,
+            static fn(array $account): bool => (bool)($account['eligible'] ?? false)
+        ));
+
+        return $this->renderCpTemplate('agents/workflows', [
+            'workflowTemplates' => $workflowTemplates,
+            'workflows' => $workflowService->getWorkflows(),
+            'workflowSummary' => $workflowService->getWorkflowStatusSummary(),
+            'selectedWorkflow' => $selectedWorkflow,
+            'selectedWorkflowRuns' => $selectedWorkflow !== null
+                ? $workflowService->getWorkflowRuns((int)($selectedWorkflow['id'] ?? 0), 8)
+                : [],
+            'showCreateWorkflow' => $showCreateWorkflow,
+            'selectedCreateTemplate' => $selectedCreateTemplate,
+            'availableSections' => $this->buildAvailableSectionsForCp(),
+            'availableSites' => $this->buildAvailableSitesForCp(),
+            'availableWorkflowAccounts' => $availableWorkflowAccounts,
+            'eligibleWorkflowAccounts' => $eligibleWorkflowAccounts,
+            'workflowAccountGuidance' => $this->buildWorkflowAccountGuidance($workflowAccountTemplate, $availableWorkflowAccounts),
+            'workflowWeekdayOptions' => $this->buildWorkflowWeekdayOptions(),
+            'workflowTimezoneOptions' => $this->buildWorkflowTimezoneOptions(),
+            'workflowLibraryUrl' => 'https://marcusscheller.com/docs/agents/workflows',
+            'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
+            'accountsUrl' => UrlHelper::cpUrl('agents/accounts'),
+            'matchingAccountCreateUrl' => $this->buildWorkflowMatchingAccountCreateUrl($workflowAccountTemplate),
+            'canManageWorkflows' => $this->canWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE),
+        ]);
+    }
+
+    public function actionCreateWorkflow(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
+
+        try {
+            $workflow = Plugin::getInstance()->getWorkflowService()->createWorkflow($this->buildWorkflowPayloadFromRequest());
+            $this->setSuccessFlash('Workflow created.');
+            return $this->redirect('agents/workflows/' . (int)($workflow['id'] ?? 0));
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to create workflow: ' . $e->getMessage());
+        }
+
+        $selectedTemplateHandle = strtolower(trim((string)$this->request->getBodyParam('workflowTemplateHandle', '')));
+        $fallbackUrl = UrlHelper::cpUrl('agents/workflows', array_filter([
+            'workflowCreate' => 'create',
+            'workflowTemplate' => $selectedTemplateHandle !== '' ? $selectedTemplateHandle : null,
+        ])) . '#workflowCreateSection';
+        return $this->redirectToPostedUrl(null, $fallbackUrl);
+    }
+
+    public function actionUpdateWorkflow(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
+
+        $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
+        if ($workflowId === null || $workflowId <= 0) {
+            $this->setFailFlash('Missing workflow ID.');
+            return $this->redirectToPostedUrl(null, 'agents/workflows');
+        }
+
+        try {
+            $workflow = Plugin::getInstance()->getWorkflowService()->updateWorkflow($workflowId, $this->buildWorkflowPayloadFromRequest());
+            if (!is_array($workflow)) {
+                $this->setFailFlash('Workflow not found.');
+                return $this->redirectToPostedUrl(null, 'agents/workflows');
+            }
+
+            $this->setSuccessFlash('Workflow saved.');
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to save workflow: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/workflows/' . $workflowId);
+    }
+
+    public function actionPauseWorkflow(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
+
+        $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
+        if ($workflowId !== null && Plugin::getInstance()->getWorkflowService()->pauseWorkflow($workflowId)) {
+            $this->setSuccessFlash('Workflow paused.');
+        } else {
+            $this->setFailFlash('Unable to pause workflow.');
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/workflows');
+    }
+
+    public function actionResumeWorkflow(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
+
+        $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
+        if ($workflowId !== null && Plugin::getInstance()->getWorkflowService()->resumeWorkflow($workflowId)) {
+            $this->setSuccessFlash('Workflow resumed.');
+        } else {
+            $this->setFailFlash('Unable to resume workflow.');
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/workflows');
+    }
+
+    public function actionDuplicateWorkflow(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
+
+        $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
+        if ($workflowId === null || $workflowId <= 0) {
+            $this->setFailFlash('Missing workflow ID.');
+            return $this->redirectToPostedUrl(null, 'agents/workflows');
+        }
+
+        try {
+            $workflow = Plugin::getInstance()->getWorkflowService()->duplicateWorkflow($workflowId);
+            if (!is_array($workflow)) {
+                $this->setFailFlash('Unable to duplicate workflow.');
+                return $this->redirectToPostedUrl(null, 'agents/workflows');
+            }
+
+            $this->setSuccessFlash('Workflow duplicated.');
+            return $this->redirect('agents/workflows/' . (int)($workflow['id'] ?? 0));
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to duplicate workflow: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/workflows');
+    }
+
+    public function actionDeleteWorkflow(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
+
+        $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
+        if ($workflowId !== null && Plugin::getInstance()->getWorkflowService()->deleteWorkflow($workflowId)) {
+            $this->setSuccessFlash('Workflow deleted.');
+        } else {
+            $this->setFailFlash('Unable to delete workflow.');
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/workflows');
+    }
+
+    public function actionDownloadWorkflowBundle(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_VIEW);
+
+        $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
+        if ($workflowId === null || $workflowId <= 0) {
+            $this->setFailFlash('Missing workflow ID.');
+            return $this->redirectToPostedUrl(null, 'agents/workflows');
+        }
+
+        $workflow = Plugin::getInstance()->getWorkflowService()->getWorkflowById($workflowId);
+        if (!is_array($workflow)) {
+            $this->setFailFlash('Workflow not found.');
+            return $this->redirectToPostedUrl(null, 'agents/workflows');
+        }
+
+        try {
+            $files = Plugin::getInstance()->getWorkflowService()->buildBootstrapBundleFiles($workflow);
+            return $this->sendBundleArchive(
+                $files,
+                sprintf(
+                    '%s-handoff.zip',
+                    StringHelper::toKebabCase((string)($workflow['name'] ?? 'workflow')) ?: 'workflow'
+                )
+            );
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to download workflow bundle: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/workflows/' . $workflowId);
+    }
+
     public function actionCredentialUsagePulse(): Response
     {
         $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
@@ -747,6 +978,7 @@ class DashboardController extends Controller
         $enabledState = $plugin->getAgentsEnabledState();
         $writesState = $plugin->getWritesExperimentalState();
         $settingsOverrides = $this->getSettingsOverrides();
+        $governedWritingSettingsEnabled = $plugin->isControlCpEnabled();
         $writesConfigLocked = (bool)($settingsOverrides['enableWritesExperimental'] ?? false);
         $writesEnvLocked = (bool)($writesState['locked'] ?? false);
         $writesLocked = $writesConfigLocked || $writesEnvLocked;
@@ -779,13 +1011,13 @@ class DashboardController extends Controller
         $settingsData['notificationRecipients'] = $notificationRecipientsLocked
             ? (string)$settings->notificationRecipients
             : $this->parseStringBodyParam('notificationRecipients', (string)$settings->notificationRecipients);
-        $settingsData['notificationApprovalRequested'] = $notificationApprovalRequestedLocked
+        $settingsData['notificationApprovalRequested'] = (!$governedWritingSettingsEnabled || $notificationApprovalRequestedLocked)
             ? (bool)$settings->notificationApprovalRequested
             : $this->parseBooleanBodyParam('notificationApprovalRequested', (bool)$settings->notificationApprovalRequested);
-        $settingsData['notificationApprovalDecided'] = $notificationApprovalDecidedLocked
+        $settingsData['notificationApprovalDecided'] = (!$governedWritingSettingsEnabled || $notificationApprovalDecidedLocked)
             ? (bool)$settings->notificationApprovalDecided
             : $this->parseBooleanBodyParam('notificationApprovalDecided', (bool)$settings->notificationApprovalDecided);
-        $settingsData['notificationExecutionFailed'] = $notificationExecutionFailedLocked
+        $settingsData['notificationExecutionFailed'] = (!$governedWritingSettingsEnabled || $notificationExecutionFailedLocked)
             ? (bool)$settings->notificationExecutionFailed
             : $this->parseBooleanBodyParam('notificationExecutionFailed', (bool)$settings->notificationExecutionFailed);
         $settingsData['notificationWebhookDlqFailed'] = $notificationWebhookDlqFailedLocked
@@ -1741,6 +1973,47 @@ class DashboardController extends Controller
         return $this->redirectToPostedUrl(null, 'agents/accounts');
     }
 
+    public function actionDownloadCredentialHandoff(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireCredentialPermission(Plugin::PERMISSION_CREDENTIALS_VIEW);
+
+        $credentialId = (int)$this->request->getBodyParam('credentialId', 0);
+        if ($credentialId <= 0) {
+            $this->setFailFlash('Missing account ID.');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
+        }
+
+        $credential = Plugin::getInstance()->getCredentialService()->getManagedCredentialByIdForCp(
+            $credentialId,
+            $this->getDefaultScopes()
+        );
+        if (!is_array($credential)) {
+            $this->setFailFlash('Account not found.');
+            return $this->redirectToPostedUrl(null, 'agents/accounts');
+        }
+
+        try {
+            $revealedToken = trim((string)$this->request->getBodyParam('revealedToken', ''));
+            $files = Plugin::getInstance()->getCredentialService()->buildHandoffBundleFiles(
+                $credential,
+                $revealedToken !== '' ? $revealedToken : null
+            );
+
+            return $this->sendBundleArchive(
+                $files,
+                sprintf(
+                    '%s-handoff.zip',
+                    StringHelper::toKebabCase((string)($credential['handle'] ?? $credential['displayName'] ?? 'account')) ?: 'account'
+                )
+            );
+        } catch (Throwable $e) {
+            $this->setFailFlash('Unable to download account handoff: ' . $e->getMessage());
+        }
+
+        return $this->redirectToPostedUrl(null, 'agents/accounts');
+    }
+
     public function actionUpsertControlPolicy(): Response
     {
         $this->requireControlCpEnabled();
@@ -2445,6 +2718,31 @@ class DashboardController extends Controller
         return $ids;
     }
 
+    private function parseStringListInput(mixed $rawInput): array
+    {
+        $tokens = [];
+        if (is_array($rawInput)) {
+            foreach ($rawInput as $value) {
+                if (!is_string($value) && !is_numeric($value)) {
+                    continue;
+                }
+                $tokens[] = (string)$value;
+            }
+        } elseif (is_string($rawInput) || is_numeric($rawInput)) {
+            $tokens[] = (string)$rawInput;
+        }
+
+        $values = [];
+        foreach ($tokens as $token) {
+            $normalized = strtolower(trim((string)$token));
+            if ($normalized !== '' && !in_array($normalized, $values, true)) {
+                $values[] = $normalized;
+            }
+        }
+
+        return $values;
+    }
+
     private function parseSingleIntegerIdBodyParam(string $name): ?int
     {
         $ids = $this->parseIntegerIdsInput($this->request->getBodyParam($name));
@@ -2632,6 +2930,44 @@ class DashboardController extends Controller
 
         $value = str_replace(["\r\n", "\r"], "\n", (string)$raw);
         return trim($value);
+    }
+
+    private function buildWorkflowPayloadFromRequest(): array
+    {
+        $payload = [
+            'templateHandle' => $this->parseStringBodyParam('workflowTemplateHandle'),
+            'name' => $this->parseStringBodyParam('workflowName'),
+            'description' => $this->parseStringBodyParam('workflowDescription'),
+            'cadence' => $this->parseStringBodyParam('workflowCadence', 'weekly'),
+            'weekday' => $this->parseNullableIntegerBodyParam('workflowWeekday'),
+            'timeOfDay' => $this->parseWorkflowTimeBodyParam('workflowTimeOfDay', '08:00'),
+            'timezone' => $this->parseStringBodyParam('workflowTimezone', 'Europe/Berlin'),
+            'accountId' => $this->parseNullableIntegerBodyParam('workflowAccountId'),
+            'ownerUserId' => $this->parseNullableIntegerBodyParam('workflowOwnerUserId') ?? $this->resolveCurrentCpUserId(),
+            'sectionHandles' => $this->parseStringListInput($this->request->getBodyParam('workflowSectionHandles', [])),
+            'siteIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowSiteIds', [])),
+            'promptContext' => $this->parseStringBodyParam('workflowPromptContext'),
+            'operatorNotes' => $this->parseStringBodyParam('workflowOperatorNotes'),
+        ];
+
+        $rawStatus = $this->request->getBodyParam('workflowStatus', null);
+        if ($rawStatus !== null && trim((string)$rawStatus) !== '') {
+            $payload['status'] = $this->parseStringBodyParam('workflowStatus', 'active');
+        }
+
+        return $payload;
+    }
+
+    private function parseWorkflowTimeBodyParam(string $name, string $default = ''): string
+    {
+        $raw = $this->request->getBodyParam($name, null);
+        if (is_array($raw)) {
+            $time = trim((string)($raw['time'] ?? ''));
+            return $time !== '' ? $time : $default;
+        }
+
+        $normalized = trim((string)$raw);
+        return $normalized !== '' ? $normalized : $default;
     }
 
     private function parseJsonBodyParam(string $raw): array
@@ -4868,6 +5204,39 @@ class DashboardController extends Controller
         return 'accounts-' . $normalizedHandle . '-worker.env';
     }
 
+    private function sendBundleArchive(array $files, string $downloadName): Response
+    {
+        if (!class_exists(\ZipArchive::class)) {
+            throw new RuntimeException('ZipArchive is unavailable in this PHP runtime.');
+        }
+
+        $tmpBase = tempnam(sys_get_temp_dir(), 'agents-bundle-');
+        if ($tmpBase === false) {
+            throw new RuntimeException('Unable to allocate a temporary file.');
+        }
+        @unlink($tmpBase);
+        $zipPath = $tmpBase . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException('Unable to create handoff archive.');
+        }
+        foreach ($files as $filename => $contents) {
+            $zip->addFromString((string)$filename, (string)$contents);
+        }
+        $zip->close();
+
+        $archive = (string)file_get_contents($zipPath);
+        @unlink($zipPath);
+        if ($archive === '') {
+            throw new RuntimeException('Handoff archive is empty.');
+        }
+
+        return Craft::$app->getResponse()->sendContentAsFile($archive, $downloadName, [
+            'mimeType' => 'application/zip',
+        ]);
+    }
+
     private function storeRevealedCredential(array $credential): void
     {
         Craft::$app->getSession()->set(self::SESSION_REVEALED_CREDENTIAL, $credential);
@@ -4948,6 +5317,34 @@ class DashboardController extends Controller
         return $userComponent->checkPermission($permission);
     }
 
+    private function requireWorkflowPermission(string $permission): void
+    {
+        if ($this->canWorkflowPermission($permission)) {
+            return;
+        }
+
+        $this->requirePermission($permission);
+    }
+
+    private function canWorkflowPermission(string $permission): bool
+    {
+        $userComponent = Craft::$app->getUser();
+        $identity = $userComponent->getIdentity();
+        if ($identity === null) {
+            return false;
+        }
+
+        if ((bool)$identity->admin) {
+            return true;
+        }
+
+        if (!$userComponent->checkPermission(Plugin::PERMISSION_WORKFLOWS_VIEW)) {
+            return false;
+        }
+
+        return $userComponent->checkPermission($permission);
+    }
+
     private function resolveCpHomeUrl(): string
     {
         $previewStage = Plugin::getInstance()->getOnboardingStateService()->normalizePreviewStage(
@@ -4979,7 +5376,12 @@ class DashboardController extends Controller
 
     private function buildOnboardingCredentialHandle(string $displayName): string
     {
-        $source = trim($displayName);
+        return $this->buildManagedCredentialHandleSuggestion($displayName);
+    }
+
+    private function buildManagedCredentialHandleSuggestion(string $source): string
+    {
+        $source = trim($source);
         if ($source === '') {
             $source = 'managed-account';
         }
@@ -5024,6 +5426,195 @@ class DashboardController extends Controller
                 'handle' => (string)($site->handle ?? ''),
             ];
         }, Craft::$app->getSites()->getAllSites());
+    }
+
+    private function buildAvailableSectionsForCp(): array
+    {
+        return array_map(static function($section): array {
+            return [
+                'id' => (int)($section->id ?? 0),
+                'name' => (string)($section->name ?? ''),
+                'handle' => strtolower(trim((string)($section->handle ?? ''))),
+            ];
+        }, Craft::$app->getEntries()->getAllSections());
+    }
+
+    private function buildAvailableWorkflowAccounts(?array $template = null): array
+    {
+        $requiredScopes = array_map(
+            static fn($scope): string => strtolower(trim((string)$scope)),
+            (array)($template['requiredScopes'] ?? [])
+        );
+        $requiresTargetSet = (bool)($template['supportsTargetSet'] ?? false);
+
+        $accounts = [];
+        foreach (Plugin::getInstance()->getCredentialService()->getManagedCredentials($this->getDefaultScopes()) as $credential) {
+            if (!is_array($credential)) {
+                continue;
+            }
+
+            $credentialId = (int)($credential['id'] ?? 0);
+            if ($credentialId <= 0) {
+                continue;
+            }
+
+            $scopes = array_map(static fn($scope): string => strtolower(trim((string)$scope)), (array)($credential['scopes'] ?? []));
+            $missingScopes = [];
+            foreach ($requiredScopes as $requiredScope) {
+                if (!$this->workflowAccountSatisfiesRequiredScope($requiredScope, $scopes)) {
+                    $missingScopes[] = $requiredScope;
+                }
+            }
+
+            $targetSets = $requiresTargetSet
+                ? Plugin::getInstance()->getTargetSetService()->getTargetSetsForCredentialId($credentialId)
+                : [];
+            $accounts[] = [
+                'id' => $credentialId,
+                'displayName' => (string)($credential['displayName'] ?? $credential['handle'] ?? ('Account #' . $credentialId)),
+                'handle' => (string)($credential['handle'] ?? ''),
+                'description' => (string)($credential['description'] ?? ''),
+                'eligible' => empty($missingScopes) && (!$requiresTargetSet || !empty($targetSets)),
+                'missingScopes' => $missingScopes,
+                'hasTargetSets' => !empty($targetSets),
+                'targetSetIds' => array_values(array_map(
+                    static fn(array $targetSet): int => (int)($targetSet['id'] ?? 0),
+                    array_filter($targetSets, static fn($targetSet): bool => is_array($targetSet))
+                )),
+            ];
+        }
+
+        usort($accounts, static function(array $a, array $b): int {
+            $eligibilityCompare = ((int)!($a['eligible'] ?? false)) <=> ((int)!($b['eligible'] ?? false));
+            if ($eligibilityCompare !== 0) {
+                return $eligibilityCompare;
+            }
+
+            return strcasecmp((string)($a['displayName'] ?? ''), (string)($b['displayName'] ?? ''));
+        });
+
+        return $accounts;
+    }
+
+    private function buildWorkflowAccountGuidance(?array $template, array $accounts): array
+    {
+        $requiredScopes = array_values(array_filter(array_map(
+            static fn($scope): string => trim((string)$scope),
+            (array)($template['requiredScopes'] ?? [])
+        )));
+        $eligibleCount = 0;
+        $ineligibleAccounts = [];
+
+        foreach ($accounts as $account) {
+            if ((bool)($account['eligible'] ?? false)) {
+                $eligibleCount++;
+                continue;
+            }
+
+            $ineligibleAccounts[] = [
+                'displayName' => (string)($account['displayName'] ?? $account['handle'] ?? 'Managed account'),
+                'handle' => (string)($account['handle'] ?? ''),
+                'missingScopes' => array_values(array_filter(array_map(
+                    static fn($scope): string => trim((string)$scope),
+                    (array)($account['missingScopes'] ?? [])
+                ))),
+            ];
+        }
+
+        return [
+            'templateDisplayName' => (string)($template['displayName'] ?? 'This workflow'),
+            'requiredScopes' => $requiredScopes,
+            'hasAnyAccounts' => !empty($accounts),
+            'eligibleCount' => $eligibleCount,
+            'hasEligibleAccounts' => $eligibleCount > 0,
+            'ineligibleAccounts' => $ineligibleAccounts,
+        ];
+    }
+
+    private function buildWorkflowMatchingAccountCreateUrl(?array $template): string
+    {
+        $displayName = trim((string)($template['displayName'] ?? ''));
+        $description = trim((string)($template['description'] ?? ''));
+        $handleSource = trim((string)($template['handle'] ?? ''));
+        if ($handleSource === '') {
+            $handleSource = $displayName;
+        }
+
+        $params = [
+            'accountCreate' => 'create',
+        ];
+
+        if ($displayName !== '') {
+            $params['accountPrefillDisplayName'] = $displayName;
+        }
+
+        if ($description !== '') {
+            $params['accountPrefillDescription'] = $description;
+        }
+
+        $suggestedHandle = $this->buildManagedCredentialHandleSuggestion($handleSource);
+        if ($suggestedHandle !== '') {
+            $params['accountPrefillHandle'] = $suggestedHandle;
+        }
+
+        $prefillScopes = $this->buildWorkflowAccountPrefillScopes($template);
+        if ($prefillScopes !== []) {
+            $params['accountPrefillScopes'] = implode(',', $prefillScopes);
+        }
+
+        return UrlHelper::cpUrl('agents/accounts', $params) . '#createAgentFormHome';
+    }
+
+    private function buildWorkflowAccountPrefillScopes(?array $template): array
+    {
+        $scopes = [];
+        foreach (['requiredScopes', 'recommendedOptionalScopes'] as $scopeKey) {
+            foreach ((array)($template[$scopeKey] ?? []) as $scope) {
+                $normalizedScope = strtolower(trim((string)$scope));
+                if ($normalizedScope === '' || in_array($normalizedScope, $scopes, true)) {
+                    continue;
+                }
+
+                $scopes[] = $normalizedScope;
+            }
+        }
+
+        return $scopes;
+    }
+
+    private function workflowAccountSatisfiesRequiredScope(string $requiredScope, array $scopes): bool
+    {
+        if (in_array($requiredScope, $scopes, true)) {
+            return true;
+        }
+
+        if ($requiredScope === 'entries:write:draft' && in_array('entries:write', $scopes, true)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function buildWorkflowWeekdayOptions(): array
+    {
+        return [
+            ['label' => 'Monday', 'value' => 1],
+            ['label' => 'Tuesday', 'value' => 2],
+            ['label' => 'Wednesday', 'value' => 3],
+            ['label' => 'Thursday', 'value' => 4],
+            ['label' => 'Friday', 'value' => 5],
+            ['label' => 'Saturday', 'value' => 6],
+            ['label' => 'Sunday', 'value' => 7],
+        ];
+    }
+
+    private function buildWorkflowTimezoneOptions(): array
+    {
+        $preferred = ['Europe/Berlin', 'UTC', 'Europe/London', 'America/New_York', 'America/Los_Angeles'];
+        return array_map(static fn(string $timezone): array => [
+            'label' => $timezone,
+            'value' => $timezone,
+        ], $preferred);
     }
 
     private function resolveCurrentCpUserEmail(): string

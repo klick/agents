@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.28.0 (2026-03-22)
+
+- Added the first operator-managed `Workflows` CP surface with registry/detail views, template-based workflow creation, managed-account matching guidance, and handoff bundle export.
+- Added workflow storage/service support, dedicated migrations, and workflow regression coverage for the new read-only workflow slice.
+- Clarified across the docs and CP that Agents stores workflow intent and visibility, while the actual work still runs in external workers.
+
 ## 0.27.2 (2026-03-22)
 
 - Added a first-run onboarding start flow at `agents/start` with guided `welcome`, `create`, and `ready` states for setting up the first managed account.

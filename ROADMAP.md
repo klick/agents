@@ -1,7 +1,7 @@
 # Agents Plugin Roadmap
 
 Date: 2026-03-22
-Current release: `v0.27.2`
+Current release: `v0.28.0`
 
 ## Direction
 
@@ -261,24 +261,35 @@ Release outcome:
 
 - Agencies now have the first repeatable starter-kit workflow and companion worker path for bounded governed draft refresh work, alongside calmer operator-facing CP surfaces.
 
-## Planned (`v0.28.x`) Operator-Managed Workflow Instances
+## Released (`v0.28.0`) Operator-Managed Workflow Instances
 
-- Implement operator-managed workflow instances as the next layer after starter kits and first-run onboarding.
-- Add a dedicated `Workflows` CP surface where operators can create, configure, pause, resume, and inspect workflow instances.
-- Keep workflow creation template-based rather than introducing a generic builder.
-- Keep execution in external workers:
-  - Agents stores workflow config, schedule intent, account binding, run history, and governance state
-  - workers discover workflow instances through a workflow API contract and report lifecycle events back
-- Start poll-first rather than webhook-first:
-  - workers should be able to claim or discover runnable workflow instances on a schedule
-  - webhooks may later become an optional wake-up optimization, not the primary execution model
-- Promote the existing `Governed Content Refresh` starter kit into the first managed workflow template.
-- Reuse the existing governed draft approval path instead of introducing a second write workflow.
-- Defer newsletter/campaign-oriented managed workflows until a campaign adapter exists.
+- Delivered a dedicated `Workflows` CP surface where operators can create, configure, inspect, duplicate, and hand off workflow instances.
+- Kept workflow creation template-based and read-only-first rather than introducing a generic builder.
+- Kept execution in external workers:
+  - Agents stores workflow config, schedule intent, managed-account binding, and handoff visibility
+  - the actual schedule runner, fetch/reasoning loop, raw outputs, and execution stay outside Agents
+- Promoted the workflow starter-kit direction into the first managed workflow templates and visible operator handoff path.
+- Reused the existing governed draft approval path instead of introducing a second write-workflow execution lane.
+- Added matching-account handoff guidance, recent-run placeholders, and calmer workflow/status wording so operators can inspect the surface without mistaking Agents for a hosted job runner.
 
 Release outcome:
 
-- Agencies can turn a reusable starter workflow into a managed, repeatable operating surface inside Craft without turning Agents into a generic orchestration platform.
+- Agencies can turn a reusable starter workflow into a managed, repeatable operating surface inside Craft without turning Agents into a generic orchestration platform or pretending Agents is the runtime itself.
+
+## Planned (`v0.28.x`) Bounded Read Workflow Boundaries
+
+- Add a follow-on bounded read-boundary slice for read-only workflow instances, but do not overload the current write-only `Target Sets` model:
+  - start with optional workflow-scoped `Read Sets` or equivalent resource-boundary bindings for focused entry/product review workflows
+  - support operators saying "this workflow reads only these entries/products/sites/sections" without turning broad audit workflows into a high-friction setup path
+  - keep write `Target Sets` strict and separate until a single generalized boundary model proves simpler instead of more confusing
+- Add the first explicit external run-reporting contract so recent-run visibility does not rely on ad hoc row writes.
+- Defer account-wide or API-wide read filtering until bounded workflow bindings prove useful enough to justify a broader contract change.
+- Dependency graph for the bounded read-boundary slice:
+  - `T1 depends_on: []` Define the boundary model and naming for read-only workflow scoping, including whether the first version is `Read Sets` or a broader `Resource Sets` concept.
+  - `T2 depends_on: [T1]` Add template and workflow-instance support for optional read-boundary bindings, eligibility checks, and operator-visible summaries.
+  - `T3 depends_on: [T1, T2]` Apply the first bounded-read selectors to entries/products/sites/sections and carry them through worker bundle/export surfaces.
+  - `T4 depends_on: [T2, T3]` Add docs, starter-worker examples, and regression coverage so bounded-read workflows are explicit, testable, and non-breaking.
+  - `T5 depends_on: [T2, T3]` Define and implement the first worker-to-Agents run-reporting contract so `Latest Run` and `Recent runs` are backed by an intentional integration path.
 
 ## Planned (`v0.29.x`) Agency Operator Copilot Foundation
 

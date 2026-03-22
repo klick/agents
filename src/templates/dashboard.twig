@@ -756,6 +756,8 @@
       {% set settingsUrl = cpUrl('agents/settings') %}
       {% set accountsUrl = cpUrl('agents/accounts') %}
       {% set accountsCardsUrl = cpUrl('agents/accounts', { accountView: 'cards', focusFirstVisible: 1 }) %}
+      {% set workflowsUrl = cpUrl('agents/workflows') %}
+      {% set workflowCreateUrl = cpUrl('agents/workflows', { workflowCreate: 'create' }) %}
       {% set pausedAccountsUrl = cpUrl('agents/accounts', { listFilter: 'paused', focusFirstVisible: 1 }) %}
       {% set attentionAccountsUrl = cpUrl('agents/accounts', { listFilter: 'attention', focusFirstVisible: 1 }) %}
       {% set approvalsUrl = cpUrl('agents/approvals') %}
@@ -1246,9 +1248,6 @@
         {% endif %}
       {% endif %}
       {% set readinessDisplayHeadlineLabel = readinessDisplayStateLabel %}
-      {% if readinessDisplayStateKey == 'ready' and readinessHasObservationGap %}
-        {% set readinessDisplayHeadlineLabel = 'Ready to Connect' %}
-      {% endif %}
       {% set statusScreenPrimaryActionLabel = '' %}
       {% set statusScreenPrimaryActionUrl = '' %}
       {% set statusScreenSecondaryActionLabel = '' %}
@@ -1263,7 +1262,7 @@
       {% if statusScreenPreview == 'setup' %}
         {% set readinessDisplayStateKey = 'ready' %}
         {% set readinessDisplayStateLabel = 'Ready' %}
-        {% set readinessDisplayHeadlineLabel = 'Ready to Connect' %}
+        {% set readinessDisplayHeadlineLabel = 'Ready' %}
         {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
         {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an external runtime to start building live-readiness evidence.' %}
         {% set readinessDisplayStateTone = 'good' %}
@@ -1510,9 +1509,6 @@
       {% elseif statusScreenPreview == 'setup' or dashboardAccountTotal == 0 %}
         {% set verdictPrimaryActionLabel = 'Create managed account' %}
         {% set verdictPrimaryActionUrl = accountsUrl ~ '#addAgentSection' %}
-      {% elseif showWriteDashboardCards and (dashboardPendingApprovals > 0 or dashboardBlockedExecutions > 0) %}
-        {% set verdictPrimaryActionLabel = 'Open Approvals' %}
-        {% set verdictPrimaryActionUrl = cpUrl('agents/approvals') %}
       {% elseif securityWebhookMisconfigured or telemetryDlqFailed > 0 %}
         {% set verdictPrimaryActionLabel = 'Open webhook settings' %}
         {% set verdictPrimaryActionUrl = settingsUrl ~ '#webhookSection' %}
@@ -1600,9 +1596,9 @@
       {% endif %}
       {% if verdictAttentionItems|length == 0 %}
         {% set verdictAttentionItems = verdictAttentionItems|merge([{
-          title: readinessDisplayHeadlineLabel == 'Ready to Connect' ? 'Next step' : 'Status',
+          title: (statusScreenPreview == 'setup' or dashboardAccountTotal == 0) ? 'Next step' : 'Status',
           tone: readinessDisplayStateTone,
-          copy: readinessDisplayHeadlineLabel == 'Ready to Connect'
+          copy: (statusScreenPreview == 'setup' or dashboardAccountTotal == 0)
             ? 'Create a managed account, connect a worker, and let live traffic build confidence from real use.'
             : 'Nothing needs attention right now. Use the cards to jump into the current operator surfaces.'
         }]) %}
@@ -1701,6 +1697,128 @@
             { text: 'No account issues need review right now.' }
           ]) %}
         {% endif %}
+      {% endif %}
+
+      {% set dashboardWorkflowsList = dashboardWorkflows ?? [] %}
+      {% set dashboardWorkflowTotal = dashboardWorkflowSummary.total|default(dashboardWorkflowsList|length) %}
+      {% set dashboardWorkflowActive = dashboardWorkflowSummary.active|default(0) %}
+      {% set dashboardWorkflowAttention = dashboardWorkflowSummary.attention|default(0) %}
+      {% set dashboardWorkflowDraft = 0 %}
+      {% set dashboardWorkflowFirstAttention = null %}
+      {% set dashboardWorkflowNextDue = null %}
+      {% set dashboardWorkflowLatestRun = null %}
+      {% set dashboardWorkflowLatestRunTimestamp = 0 %}
+      {% for workflow in dashboardWorkflowsList %}
+        {% set workflowStatus = (workflow.status ?? '')|lower|trim %}
+        {% if workflowStatus == 'draft' %}
+          {% set dashboardWorkflowDraft = dashboardWorkflowDraft + 1 %}
+        {% endif %}
+        {% if dashboardWorkflowFirstAttention is null and (workflow.needsAttention ?? false) %}
+          {% set dashboardWorkflowFirstAttention = workflow %}
+        {% endif %}
+        {% if dashboardWorkflowNextDue is null and workflowStatus == 'active' and (workflow.nextDueLabel ?? '') not in ['', 'n/a', 'Paused', 'Manual'] %}
+          {% set dashboardWorkflowNextDue = workflow %}
+        {% endif %}
+        {% set workflowLatestRunAt = workflow.latestRun
+          ? (workflow.latestRun.completedAt ?: workflow.latestRun.startedAt ?: workflow.latestRun.scheduledFor ?: workflow.latestRun.dateUpdated ?: workflow.latestRun.dateCreated)
+          : null %}
+        {% set workflowLatestRunTimestamp = workflowLatestRunAt ? workflowLatestRunAt|date('U') : 0 %}
+        {% if workflowLatestRunTimestamp > dashboardWorkflowLatestRunTimestamp %}
+          {% set dashboardWorkflowLatestRun = workflow %}
+          {% set dashboardWorkflowLatestRunTimestamp = workflowLatestRunTimestamp %}
+        {% endif %}
+      {% endfor %}
+      {% set dashboardWorkflowLatestRunAt = dashboardWorkflowLatestRun and dashboardWorkflowLatestRun.latestRun
+        ? (dashboardWorkflowLatestRun.latestRun.completedAt ?: dashboardWorkflowLatestRun.latestRun.startedAt ?: dashboardWorkflowLatestRun.latestRun.scheduledFor ?: dashboardWorkflowLatestRun.latestRun.dateUpdated ?: dashboardWorkflowLatestRun.latestRun.dateCreated)
+        : null %}
+      {% set dashboardWorkflowLatestRunDateLabel = dashboardWorkflowLatestRunAt
+        ? include('agents/_partials/relative-short-date', {
+          value: dashboardWorkflowLatestRunAt,
+          fallback: 'n/a'
+        }, with_context = false)|trim
+        : '' %}
+      {% set workflowsCardBadgeTone = 'muted' %}
+      {% set workflowsCardBadgeLabel = 'Unavailable' %}
+      {% set workflowsCardLines = [] %}
+      {% set workflowsCardActionLabel = 'Open Settings' %}
+      {% set workflowsCardActionUrl = settingsUrl %}
+      {% if not statusCanViewWorkflows %}
+        {% set workflowsCardLines = [{ text: 'Workflow visibility depends on workflow permissions for the current CP user.' }] %}
+      {% elseif statusScreenPreview == 'setup' or dashboardWorkflowTotal == 0 %}
+        {% set workflowsCardBadgeLabel = 'Not configured' %}
+        {% set workflowsCardLines = [
+          { text: 'No workflow handoffs are configured yet.' },
+          { text: 'Add one workflow to document cadence, worker account, and review scope.' }
+        ] %}
+        {% set workflowsCardActionLabel = statusCanManageWorkflows ? 'Create Workflow' : 'Open Workflows' %}
+        {% set workflowsCardActionUrl = statusCanManageWorkflows ? workflowCreateUrl : workflowsUrl %}
+      {% elseif dashboardWorkflowAttention > 0 %}
+        {% set workflowsCardBadgeTone = 'warn' %}
+        {% set workflowsCardBadgeLabel = 'Needs attention' %}
+        {% set workflowsCardLines = workflowsCardLines|merge([{
+          text: dashboardWorkflowAttention ~ ' workflow' ~ (dashboardWorkflowAttention == 1 ? '' : 's') ~ ' ' ~ (dashboardWorkflowAttention == 1 ? 'needs' : 'need') ~ ' review.',
+          url: workflowsUrl
+        }]) %}
+        {% if dashboardWorkflowFirstAttention %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{
+            text: dashboardWorkflowFirstAttention.name ~ ': ' ~ (dashboardWorkflowFirstAttention.attentionSummary ?: 'Needs review'),
+            url: cpUrl('agents/workflows/' ~ dashboardWorkflowFirstAttention.id)
+          }]) %}
+        {% endif %}
+        {% if dashboardWorkflowLatestRun %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{
+            text: 'Last reported run: ' ~ dashboardWorkflowLatestRun.name ~ ' · ' ~ (dashboardWorkflowLatestRun.latestRun.status|title) ~ (dashboardWorkflowLatestRunDateLabel ? ' · ' ~ dashboardWorkflowLatestRunDateLabel : ''),
+            url: cpUrl('agents/workflows/' ~ dashboardWorkflowLatestRun.id)
+          }]) %}
+        {% else %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{
+            text: dashboardWorkflowActive > 0
+              ? dashboardWorkflowActive ~ ' active workflow' ~ (dashboardWorkflowActive == 1 ? '' : 's') ~ ' still scheduled externally.'
+              : 'No workflow runs have been reported yet.'
+          }]) %}
+        {% endif %}
+        {% set workflowsCardActionLabel = 'Open Workflows' %}
+        {% set workflowsCardActionUrl = workflowsUrl %}
+      {% elseif dashboardWorkflowActive == 0 %}
+        {% set workflowsCardBadgeLabel = 'Configured' %}
+        {% set workflowsCardLines = [{ text: dashboardWorkflowTotal ~ ' workflow' ~ (dashboardWorkflowTotal == 1 ? '' : 's') ~ ' configured.', url: workflowsUrl }] %}
+        {% set workflowsCardLines = workflowsCardLines|merge([{
+          text: dashboardWorkflowDraft > 0
+            ? dashboardWorkflowDraft ~ ' workflow' ~ (dashboardWorkflowDraft == 1 ? '' : 's') ~ ' still in draft.'
+            : 'No active schedules are currently configured.'
+        }]) %}
+        {% if dashboardWorkflowLatestRun %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{
+            text: 'Last reported run: ' ~ dashboardWorkflowLatestRun.name ~ ' · ' ~ (dashboardWorkflowLatestRun.latestRun.status|title) ~ (dashboardWorkflowLatestRunDateLabel ? ' · ' ~ dashboardWorkflowLatestRunDateLabel : ''),
+            url: cpUrl('agents/workflows/' ~ dashboardWorkflowLatestRun.id)
+          }]) %}
+        {% else %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'Runs still have to be reported by the external worker.' }]) %}
+        {% endif %}
+        {% set workflowsCardActionLabel = 'Open Workflows' %}
+        {% set workflowsCardActionUrl = workflowsUrl %}
+      {% else %}
+        {% set workflowsCardBadgeTone = 'good' %}
+        {% set workflowsCardBadgeLabel = 'Ready' %}
+        {% set workflowsCardLines = [{ text: dashboardWorkflowTotal ~ ' workflow' ~ (dashboardWorkflowTotal == 1 ? '' : 's') ~ ' configured, ' ~ dashboardWorkflowActive ~ ' active.', url: workflowsUrl }] %}
+        {% if dashboardWorkflowNextDue %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{
+            text: 'Next due: ' ~ dashboardWorkflowNextDue.name ~ ' · ' ~ dashboardWorkflowNextDue.nextDueLabel,
+            url: cpUrl('agents/workflows/' ~ dashboardWorkflowNextDue.id)
+          }]) %}
+        {% else %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'External workers control the actual schedule and execution.' }]) %}
+        {% endif %}
+        {% if dashboardWorkflowLatestRun %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{
+            text: 'Last reported run: ' ~ dashboardWorkflowLatestRun.name ~ ' · ' ~ (dashboardWorkflowLatestRun.latestRun.status|title) ~ (dashboardWorkflowLatestRunDateLabel ? ' · ' ~ dashboardWorkflowLatestRunDateLabel : ''),
+            url: cpUrl('agents/workflows/' ~ dashboardWorkflowLatestRun.id)
+          }]) %}
+        {% else %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'No workflow runs have been reported yet.' }]) %}
+        {% endif %}
+        {% set workflowsCardActionLabel = 'Open Workflows' %}
+        {% set workflowsCardActionUrl = workflowsUrl %}
       {% endif %}
 
       {% set reviewCardBadgeTone = 'muted' %}
@@ -2069,6 +2187,31 @@
             </div>
             <div class="agents-status-dashboard-card__footer">
               <a href="{{ accountsCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ accountsCardActionLabel }} &rarr;</a>
+            </div>
+          </article>
+
+          <article class="agents-status-dashboard-card border rounded p-0">
+            <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
+              <div class="agents-status-dashboard-card__header-copy">
+                <h2 class="agents-status-dashboard-card__title">Workflows</h2>
+              </div>
+              <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ workflowsCardBadgeTone }}">{{ workflowsCardBadgeLabel }}</span>
+            </div>
+            <div class="agents-status-dashboard-card__body">
+              <ul class="agents-status-dashboard-card__list">
+                {% for line in workflowsCardLines %}
+                  <li>
+                    {% if (line.url ?? '') != '' %}
+                      <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
+                    {% else %}
+                      {{ line.text }}
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="agents-status-dashboard-card__footer">
+              <a href="{{ workflowsCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ workflowsCardActionLabel }} &rarr;</a>
             </div>
           </article>
 

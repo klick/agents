@@ -4,7 +4,7 @@ Governed machine access for Craft CMS and Craft Commerce.
 
 ![Agents banner](docs/public/marketing/plugin-banner.png)
 
-Current plugin version: **0.27.2**
+Current plugin version: **0.28.0**
 
 Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It is the governed machine-access layer for Craft CMS and Craft Commerce, combining scoped APIs, managed credentials, diagnostics, and optional approval controls so production behavior stays predictable, observable, and auditable.
 
@@ -22,6 +22,8 @@ Near-term product work is focused on two outcomes:
 - reusable workflow kits that teams can adapt across multiple sites
 
 That means making it easier to automate approved content or commerce lanes safely, and easier to turn successful automation patterns into repeatable delivery work instead of one-off implementation effort.
+
+Current workflow support is intentionally operator-first, not runtime-hosting. Agents stores workflow configuration, schedule intent, managed-account bindings, handoff bundles, and visible status hints, but the actual scheduling, fetching, reasoning, and execution still stay in an external worker you run yourself.
 
 ## Documentation
 
@@ -42,7 +44,7 @@ That means making it easier to automate approved content or commerce lanes safel
 ## Installation
 
 ```bash
-composer require klick/agents:^0.27.2
+composer require klick/agents:^0.28.0
 php craft plugin/install agents
 ```
 

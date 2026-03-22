@@ -14,6 +14,12 @@ These are workflow examples, not hosted product modules:
 - they do not promise autonomous publishing or turnkey domain-specific apps
 - they keep humans in control where review quality matters
 
+Managed workflows in Agents follow the same boundary:
+
+- Agents can store workflow intent, managed-account bindings, handoff artifacts, and operator-facing visibility
+- the actual schedule runner, fetch/reasoning loop, and execution still stay outside Agents for now
+- current workflow surfaces are there to make external worker handoff clearer, not to replace the worker
+
 Depending on the workflow, the external runtime may be:
 
 - one agent or orchestrator that fetches data directly

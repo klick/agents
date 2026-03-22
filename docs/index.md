@@ -8,7 +8,7 @@ Managed accounts can be used by external runtimes such as agents, orchestrators,
 
 You set the boundary. External runtimes work inside it. Agents enforces the rules through scopes, approvals, and audit records.
 
-Current plugin version: **0.27.2**
+Current plugin version: **0.28.0**
 
 ## For Agencies Running Craft Sites For Clients
 
@@ -42,6 +42,8 @@ Teams also need more than raw API access. They need reusable patterns they can c
 - bootstrap artifacts
 
 That is the role of workflow starter kits: turning governed machine access into repeatable delivery patterns instead of one-off integration work.
+
+Current managed workflows in Agents are configuration and handoff surfaces, not hosted jobs. Agents can store workflow intent and show operator-facing visibility, but the actual schedule runner, fetch/reasoning loop, and execution still live in an external runtime you operate.
 
 ## What Agents Provides
 

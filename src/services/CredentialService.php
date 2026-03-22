@@ -5,7 +5,9 @@ namespace Klick\Agents\services;
 use Craft;
 use craft\base\Component;
 use craft\elements\User;
+use craft\helpers\Json;
 use craft\helpers\StringHelper;
+use craft\helpers\UrlHelper;
 use Klick\Agents\Plugin;
 use yii\db\Query;
 
@@ -162,6 +164,36 @@ class CredentialService extends Component
     public function getManagedCredentialByIdForCp(int $id, array $defaultScopes): ?array
     {
         return $this->getManagedCredentialById($id, $defaultScopes);
+    }
+
+    public function buildHandoffBundleFiles(array $credential, ?string $revealedToken = null): array
+    {
+        $handle = trim((string)($credential['handle'] ?? ''));
+        $displayName = trim((string)($credential['displayName'] ?? $handle ?: 'Managed Account'));
+        $outputRoot = '/absolute/path/to/agents/' . (StringHelper::toKebabCase($handle ?: $displayName) ?: 'managed-account');
+
+        return [
+            'README.md' => $this->buildHandoffReadme($credential, $revealedToken, $outputRoot),
+            '.env' => $this->buildHandoffEnvFile($credential, $revealedToken, $outputRoot),
+            'account.json' => Json::encode([
+                'id' => (int)($credential['id'] ?? 0),
+                'handle' => $handle,
+                'displayName' => $displayName,
+                'mode' => (string)($credential['mode'] ?? 'active'),
+                'owner' => (string)($credential['ownerLabel'] ?? $credential['owner'] ?? ''),
+                'scopes' => array_values(array_map('strval', (array)($credential['scopes'] ?? []))),
+                'webhookSubscriptions' => (array)($credential['webhookSubscriptions'] ?? []),
+                'targetSets' => array_values(array_map(static function(array $targetSet): array {
+                    return [
+                        'id' => (int)($targetSet['id'] ?? 0),
+                        'handle' => (string)($targetSet['handle'] ?? ''),
+                        'name' => (string)($targetSet['name'] ?? ''),
+                    ];
+                }, array_values((array)($credential['targetSets'] ?? [])))),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n",
+            'smoke-test.sh' => $this->buildHandoffSmokeTestScript(),
+            'storage-layout.example.md' => $this->buildHandoffStorageGuide($outputRoot),
+        ];
     }
 
     public function getManagedWebhookSubscriptions(): array
@@ -759,6 +791,158 @@ class CredentialService extends Component
         }
 
         return null;
+    }
+
+    private function buildHandoffReadme(array $credential, ?string $revealedToken, string $outputRoot): string
+    {
+        $handle = trim((string)($credential['handle'] ?? ''));
+        $displayName = trim((string)($credential['displayName'] ?? $handle ?: 'Managed Account'));
+        $mode = trim((string)($credential['mode'] ?? 'active'));
+        $owner = trim((string)($credential['ownerLabel'] ?? $credential['owner'] ?? 'unassigned'));
+        $scopeList = array_values(array_map('strval', (array)($credential['scopes'] ?? [])));
+        $targetSetNames = array_values(array_filter(array_map(static function(array $targetSet): string {
+            return trim((string)($targetSet['name'] ?? $targetSet['handle'] ?? ''));
+        }, array_values((array)($credential['targetSets'] ?? [])))));
+        $hasLiveToken = trim((string)$revealedToken) !== '';
+
+        $lines = [
+            '# ' . $displayName,
+            '',
+            'Managed account handoff bundle for external agents, workers, scripts, and orchestrators.',
+            '',
+            '## Account',
+            '',
+            '- Handle: `' . ($handle !== '' ? $handle : 'unknown') . '`',
+            '- Mode: `' . ($mode !== '' ? $mode : 'active') . '`',
+            '- Owner: `' . ($owner !== '' ? $owner : 'unassigned') . '`',
+            '- Target sets: `' . (!empty($targetSetNames) ? implode(', ', $targetSetNames) : 'none') . '`',
+            '- Scopes: `' . (!empty($scopeList) ? implode(', ', $scopeList) : 'none') . '`',
+            '',
+            '## What this bundle includes',
+            '',
+            '- `.env` for the runtime connection',
+            '- `account.json` with the machine-readable account profile',
+            '- `smoke-test.sh` for a quick `/auth/whoami` check',
+            '- `storage-layout.example.md` with a suggested external output directory structure',
+            '',
+            '## Token handling',
+            '',
+        ];
+
+        if ($hasLiveToken) {
+            $lines[] = '- This bundle includes the currently revealed one-time token in `.env`. Treat it like a secret.';
+            $lines[] = '- Move it into secure storage immediately after handoff if the worker will run unattended.';
+        } else {
+            $lines[] = '- This bundle does not include a live token.';
+            $lines[] = '- Rotate or create the account in `Agents -> Accounts` to reveal a one-time token-filled `.env` when you need a live bootstrap artifact.';
+        }
+
+        $lines = array_merge($lines, [
+            '',
+            '## Output storage',
+            '',
+            '- Agents does not currently store fetched raw data, reasoning artifacts, or reports for this account.',
+            '- Save those outputs outside the Craft webroot and outside the plugin directory.',
+            '- Suggested root: `' . $outputRoot . '`',
+            '- At minimum persist:',
+            '  - `state/state.json` for cursors or last-successful checkpoints',
+            '  - `reports/latest.md` for the latest human-readable summary',
+            '  - `raw/` snapshots only when audit/debugging matters',
+            '',
+            '## Docs',
+            '',
+            '- First worker: https://marcusscheller.com/docs/agents/get-started/first-worker',
+            '- Scope guide: https://marcusscheller.com/docs/agents/api/scope-guide',
+            '',
+        ]);
+
+        return implode("\n", $lines) . "\n";
+    }
+
+    private function buildHandoffEnvFile(array $credential, ?string $revealedToken, string $outputRoot): string
+    {
+        $token = trim((string)$revealedToken);
+        $tokenValue = $token !== '' ? $token : 'replace-with-revealed-token-from-accounts';
+        $handle = trim((string)($credential['handle'] ?? 'managed-account'));
+
+        $lines = [];
+        if ($token === '') {
+            $lines[] = '# Rotate or create this account in Agents -> Accounts to reveal a one-time live token.';
+        } else {
+            $lines[] = '# This bundle includes a currently revealed live token. Treat this file like a secret.';
+        }
+
+        $lines = array_merge($lines, [
+            'SITE_URL=' . UrlHelper::siteUrl(''),
+            'BASE_URL=' . UrlHelper::siteUrl('agents/v1'),
+            'AGENTS_TOKEN=' . $tokenValue,
+            'ACCOUNT_HANDLE=' . $handle,
+            'REQUEST_TIMEOUT_MS=15000',
+            'PRINT_JSON=1',
+            'OUTPUT_ROOT=' . $outputRoot,
+            'STATE_PATH=${OUTPUT_ROOT}/state/state.json',
+            'REPORT_PATH=${OUTPUT_ROOT}/reports/latest.md',
+            'RAW_ARCHIVE_DIR=${OUTPUT_ROOT}/raw',
+        ]);
+
+        return implode("\n", $lines) . "\n";
+    }
+
+    private function buildHandoffSmokeTestScript(): string
+    {
+        return <<<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if [[ -f ".env" ]]; then
+  set -a
+  source ".env"
+  set +a
+fi
+
+if [[ -z "${BASE_URL:-}" || -z "${AGENTS_TOKEN:-}" ]]; then
+  echo "Set BASE_URL and AGENTS_TOKEN in .env before running the smoke test." >&2
+  exit 1
+fi
+
+curl -sS \
+  -H "Authorization: Bearer ${AGENTS_TOKEN}" \
+  -H "Accept: application/json" \
+  "${BASE_URL%/}/auth/whoami"
+BASH;
+    }
+
+    private function buildHandoffStorageGuide(string $outputRoot): string
+    {
+        return <<<MD
+# External Output Storage
+
+Agents does not currently store fetched raw payloads, reasoning artifacts, or reports for managed accounts.
+
+Save those outputs outside the Craft webroot and outside the plugin directory.
+
+Suggested structure:
+
+```text
+{$outputRoot}/
+  state/
+    state.json
+  raw/
+    2026-03-22-input.json
+  reports/
+    latest.md
+    2026-03-22-summary.md
+```
+
+Recommended minimum:
+
+- `state/state.json` for cursors, checkpoints, and last-successful timestamps
+- `reports/latest.md` for the latest human-readable result
+- `raw/` snapshots only when audit/debugging matters
+MD;
     }
 
     private function credentialsTableExists(): bool
