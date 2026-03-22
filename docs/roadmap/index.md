@@ -310,7 +310,29 @@ Release outcome:
   - `T4 depends_on: [T2, T3]` Add docs, starter-worker examples, and regression coverage so bounded-read workflows are explicit, testable, and non-breaking.
   - `T5 depends_on: [T2, T3]` Define and implement the first worker-to-Agents run-reporting contract so `Latest Run` and `Recent runs` are backed by an intentional integration path.
 
-## Planned (`v0.29.x`) Agency Operator Copilot Foundation
+## Planned (`v0.29.x`) Workflow Runtime API and Agent Bootstrap Discovery
+
+- Add a machine-facing workflow discovery contract so an external agent can enumerate:
+  - workflow types
+  - configured workflow instances
+  - read-boundary summaries
+  - latest run state where available
+- Add machine-readable workflow and account handoff manifests so operators can point an external agent at Agents without requiring CP HTML scraping.
+- Keep workflow handoffs non-secret by default and introduce a separate explicit one-time bootstrap retrieval path for account secrets instead of a permanent token-read endpoint.
+- Keep the route shape aligned with the plugin’s existing `list` / `show` API style instead of inventing a second API convention for workflows alone.
+- Leave curated account/workflow creation from templates as a later follow-on once discovery, handoff parity, and bootstrap-secret safety have proven stable.
+- Sequencing note:
+  - `v0.28.x` should first stabilize bounded read workflow scope and run reporting
+  - `v0.29.x` should then reuse that same workflow/run shape for discovery and bootstrap instead of defining a second parallel contract
+- Dependency graph for the workflow discovery/bootstrap slice:
+  - `T1 depends_on: []` Define the machine-facing discovery and bootstrap contract, including response shapes, scope model, and the split between non-secret manifests and one-time secret retrieval.
+  - `T2 depends_on: [T1]` Add workflow-type and workflow-instance discovery endpoints plus explicit auth scopes for those surfaces.
+  - `T3 depends_on: [T1]` Add machine-readable workflow/account handoff manifests that mirror the CP bundle outputs and include output-storage guidance.
+  - `T4 depends_on: [T1]` Add short-lived, audited bootstrap-secret retrieval for account handoff without creating a permanently readable token endpoint.
+  - `T5 depends_on: [T2, T3, T4]` Integrate the discovery/bootstrap model with workflow runtime reporting and shared bundle generation so CP and API handoffs stay in sync.
+  - `T6 depends_on: [T2, T3, T4, T5]` Add docs, QA, and future-ready hooks for later curated create-from-template endpoints.
+
+## Planned (`v0.30.x`) Agency Operator Copilot Foundation
 
 - Implement a provider-backed orchestration foundation for optional in-product LLM support.
 - Start with env-only site-level provider configuration as the convenient in-product path.

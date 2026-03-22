@@ -36,6 +36,8 @@ class ApiController extends Controller
         'changes:read',
         'sections:read',
         'users:read',
+        'workflows:read',
+        'workflows:report',
         'syncstate:read',
         'consumers:read',
         'templates:read',
@@ -1341,6 +1343,9 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
             ['method' => 'GET', 'path' => '/users', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
             ['method' => 'GET', 'path' => '/users/show', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
+            ['method' => 'GET', 'path' => '/workflows', 'requiredScopes' => ['workflows:read']],
+            ['method' => 'GET', 'path' => '/workflows/show', 'requiredScopes' => ['workflows:read']],
+            ['method' => 'POST', 'path' => '/workflows/run-report', 'requiredScopes' => ['workflows:report']],
             ['method' => 'GET', 'path' => '/sync-state/lag', 'requiredScopes' => ['syncstate:read'], 'optionalScopes' => ['consumers:read']],
             ['method' => 'POST', 'path' => '/sync-state/checkpoint', 'requiredScopes' => ['syncstate:write'], 'optionalScopes' => ['consumers:write']],
             ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read'], 'optionalScopes' => ['syncstate:read'], 'deprecated' => true, 'replacedBy' => '/sync-state/lag'],
@@ -1929,6 +1934,69 @@ class ApiController extends Controller
                 'x-required-scopes' => ['users:read'],
                 'x-optional-scopes' => ['users:read_sensitive'],
             ]],
+            '/workflows' => ['get' => [
+                'summary' => 'List workflow instances bound to the authenticated managed account',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'dueOnly', 'schema' => ['type' => 'boolean', 'default' => true]],
+                    ['in' => 'query', 'name' => 'limit', 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 20]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '403' => ['description' => 'Managed account required'],
+                ]),
+                'x-required-scopes' => ['workflows:read'],
+            ]],
+            '/workflows/show' => ['get' => [
+                'summary' => 'Read one workflow instance bound to the authenticated managed account',
+                'parameters' => [
+                    ['in' => 'query', 'name' => 'id', 'required' => true, 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '403' => ['description' => 'Managed account required'],
+                    '404' => ['description' => 'Workflow not found'],
+                ]),
+                'x-required-scopes' => ['workflows:read'],
+            ]],
+            '/workflows/run-report' => ['post' => [
+                'summary' => 'Record workflow run lifecycle state for a managed workflow instance',
+                'requestBody' => [
+                    'required' => true,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'workflowId' => ['type' => 'integer', 'minimum' => 1],
+                                    'runId' => ['type' => 'integer', 'minimum' => 1],
+                                    'status' => ['type' => 'string', 'enum' => ['started', 'succeeded', 'failed', 'blocked', 'approval_requested']],
+                                    'workerId' => ['type' => 'string'],
+                                    'scheduledFor' => ['type' => 'string', 'format' => 'date-time'],
+                                    'claimedAt' => ['type' => 'string', 'format' => 'date-time'],
+                                    'startedAt' => ['type' => 'string', 'format' => 'date-time'],
+                                    'completedAt' => ['type' => 'string', 'format' => 'date-time'],
+                                    'heartbeatAt' => ['type' => 'string', 'format' => 'date-time'],
+                                    'summary' => ['type' => 'string'],
+                                    'logExcerpt' => ['type' => 'string'],
+                                    'approvalIds' => ['type' => 'array', 'items' => ['type' => 'integer']],
+                                    'outcomeRefs' => ['type' => 'array', 'items' => ['type' => 'string']],
+                                    'metadata' => ['type' => 'object'],
+                                ],
+                                'required' => ['workflowId', 'status'],
+                            ],
+                        ],
+                    ],
+                ],
+                'responses' => $this->openApiGuardedResponses([
+                    '200' => ['description' => 'OK'],
+                    '400' => ['description' => 'Invalid request'],
+                    '403' => ['description' => 'Managed account required'],
+                    '404' => ['description' => 'Workflow run not found'],
+                ]),
+                'x-required-scopes' => ['workflows:report'],
+            ]],
             '/sync-state/lag' => ['get' => [
                 'summary' => 'List sync-state lag by integration/resource',
                 'parameters' => [
@@ -2433,6 +2501,134 @@ class ApiController extends Controller
 
         return $this->jsonResponse([
             'data' => $checkpoint,
+        ]);
+    }
+
+    public function actionWorkflows(): Response
+    {
+        if (($guard = $this->guardRequest('workflows:read')) !== null) {
+            return $guard;
+        }
+
+        $managedCredentialId = $this->requireManagedWorkflowCredentialId();
+        if ($managedCredentialId <= 0) {
+            return $this->errorResponse(
+                403,
+                self::ERROR_FORBIDDEN,
+                'Workflow runtime endpoints require a managed account token.'
+            );
+        }
+
+        $request = Craft::$app->getRequest();
+        $errors = [];
+        $limitError = $this->validateIntegerQueryParam('limit', 1, 100);
+        if ($limitError !== null) {
+            $errors[] = $limitError;
+        }
+        $dueOnlyError = $this->validateBooleanQueryParam('dueOnly');
+        if ($dueOnlyError !== null) {
+            $errors[] = $dueOnlyError;
+        }
+        if (!empty($errors)) {
+            return $this->invalidQueryResponse($errors);
+        }
+
+        $dueOnly = $this->parseBooleanQueryParam('dueOnly', true);
+        $limit = (int)$request->getQueryParam('limit', 20);
+        $workflows = Plugin::getInstance()->getWorkflowService()->getRuntimeWorkflowsForCredential(
+            $managedCredentialId,
+            $dueOnly,
+            $limit
+        );
+
+        return $this->jsonResponse([
+            'data' => $workflows,
+            'meta' => [
+                'count' => count($workflows),
+                'dueOnly' => $dueOnly,
+                'managedCredentialId' => $managedCredentialId,
+            ],
+        ]);
+    }
+
+    public function actionWorkflowShow(): Response
+    {
+        if (($guard = $this->guardRequest('workflows:read')) !== null) {
+            return $guard;
+        }
+
+        $managedCredentialId = $this->requireManagedWorkflowCredentialId();
+        if ($managedCredentialId <= 0) {
+            return $this->errorResponse(
+                403,
+                self::ERROR_FORBIDDEN,
+                'Workflow runtime endpoints require a managed account token.'
+            );
+        }
+
+        $request = Craft::$app->getRequest();
+        $workflowIdError = $this->validateIntegerQueryParam('id', 1, null);
+        if ($workflowIdError !== null) {
+            return $this->invalidQueryResponse([$workflowIdError]);
+        }
+
+        $workflow = Plugin::getInstance()->getWorkflowService()->getRuntimeWorkflowById(
+            (int)$request->getQueryParam('id', 0),
+            $managedCredentialId
+        );
+        if (!is_array($workflow)) {
+            return $this->errorResponse(404, self::ERROR_NOT_FOUND, 'Workflow not found.');
+        }
+
+        return $this->jsonResponse([
+            'data' => $workflow,
+        ]);
+    }
+
+    public function actionWorkflowRunReport(): Response
+    {
+        if (($guard = $this->guardRequest('workflows:report', ['POST'])) !== null) {
+            return $guard;
+        }
+
+        $managedCredentialId = $this->requireManagedWorkflowCredentialId();
+        if ($managedCredentialId <= 0) {
+            return $this->errorResponse(
+                403,
+                self::ERROR_FORBIDDEN,
+                'Workflow runtime endpoints require a managed account token.'
+            );
+        }
+
+        $request = Craft::$app->getRequest();
+        try {
+            $run = Plugin::getInstance()->getWorkflowService()->reportWorkflowRun($managedCredentialId, [
+                'workflowId' => $request->getBodyParam('workflowId', 0),
+                'runId' => $request->getBodyParam('runId', 0),
+                'status' => $request->getBodyParam('status', ''),
+                'workerId' => $request->getBodyParam('workerId', ''),
+                'scheduledFor' => $request->getBodyParam('scheduledFor', ''),
+                'claimedAt' => $request->getBodyParam('claimedAt', ''),
+                'startedAt' => $request->getBodyParam('startedAt', ''),
+                'completedAt' => $request->getBodyParam('completedAt', ''),
+                'heartbeatAt' => $request->getBodyParam('heartbeatAt', ''),
+                'summary' => $request->getBodyParam('summary', ''),
+                'logExcerpt' => $request->getBodyParam('logExcerpt', ''),
+                'approvalIds' => $request->getBodyParam('approvalIds', []),
+                'outcomeRefs' => $request->getBodyParam('outcomeRefs', []),
+                'metadata' => $request->getBodyParam('metadata', []),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse(400, self::ERROR_INVALID_REQUEST, $e->getMessage());
+        } catch (\RuntimeException $e) {
+            return $this->misconfiguredResponse($e->getMessage());
+        } catch (\Throwable $e) {
+            Craft::error('Unable to record workflow run report: ' . $e->getMessage(), __METHOD__);
+            return $this->errorResponse(500, self::ERROR_INTERNAL, 'Failed to record workflow run report.');
+        }
+
+        return $this->jsonResponse([
+            'data' => $run,
         ]);
     }
 
@@ -3366,6 +3562,13 @@ class ApiController extends Controller
         return false;
     }
 
+    private function requireManagedWorkflowCredentialId(): int
+    {
+        return isset($this->authContext['managedCredentialId'])
+            ? (int)$this->authContext['managedCredentialId']
+            : 0;
+    }
+
     private function getGrantedScopes(): array
     {
         $scopes = $this->authContext['scopes'] ?? $this->getSecurityConfig()['tokenScopes'];
@@ -3453,6 +3656,8 @@ class ApiController extends Controller
             'sections:read' => 'Read section list endpoint.',
             'users:read' => 'Read user list and lookup endpoints.',
             'users:read_sensitive' => 'Unredacted user email/profile detail fields.',
+            'workflows:read' => 'Read managed workflow discovery/detail endpoints for the bound account.',
+            'workflows:report' => 'Record managed workflow run lifecycle state and summaries.',
             'syncstate:read' => 'Read per-integration sync-state lag/checkpoint status.',
             'syncstate:write' => 'Record per-integration sync-state checkpoints for lag tracking.',
             'consumers:read' => 'Deprecated alias for `syncstate:read`.',
@@ -4940,6 +5145,69 @@ class ApiController extends Controller
                             'principal' => ['type' => 'object'],
                             'authorization' => ['type' => 'object'],
                             'runtimeProfile' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'workflows.list' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/workflows',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'dueOnly' => ['type' => 'boolean'],
+                            'limit' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                            'meta' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'workflows.show' => [
+                    'method' => 'GET',
+                    'path' => '/agents/v1/workflows/show',
+                    'query' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
+                        ],
+                    ],
+                ],
+                'workflows.runreport' => [
+                    'method' => 'POST',
+                    'path' => '/agents/v1/workflows/run-report',
+                    'body' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'workflowId' => ['type' => 'integer'],
+                            'runId' => ['type' => 'integer'],
+                            'status' => ['type' => 'string'],
+                            'workerId' => ['type' => 'string'],
+                            'scheduledFor' => ['type' => 'string', 'format' => 'date-time'],
+                            'claimedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'startedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'completedAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'heartbeatAt' => ['type' => 'string', 'format' => 'date-time'],
+                            'summary' => ['type' => 'string'],
+                            'logExcerpt' => ['type' => 'string'],
+                            'approvalIds' => ['type' => 'array', 'items' => ['type' => 'integer']],
+                            'outcomeRefs' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'metadata' => ['type' => 'object'],
+                        ],
+                    ],
+                    'response' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => ['type' => 'object'],
                         ],
                     ],
                 ],

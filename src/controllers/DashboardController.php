@@ -594,6 +594,12 @@ class DashboardController extends Controller
         $targetSets = $plugin->isControlCpEnabled()
             ? $plugin->getTargetSetService()->getTargetSets()
             : [];
+        $workflowScopeCoverageByCredentialId = [];
+        try {
+            $workflowScopeCoverageByCredentialId = $plugin->getWorkflowService()->getAccountScopeCoverageByCredentialId();
+        } catch (Throwable $e) {
+            Craft::warning('Unable to load workflow/account scope coverage for CP: ' . $e->getMessage(), __METHOD__);
+        }
 
         return $this->renderCpTemplate('agents/credentials', [
             'agentsEnabled' => (bool)$enabledState['enabled'],
@@ -610,6 +616,7 @@ class DashboardController extends Controller
             'lifecycleByCredentialId' => $lifecycleByCredentialId,
             'credentialExpirySummary' => $credentialExpirySummary,
             'targetSets' => $targetSets,
+            'workflowScopeCoverageByCredentialId' => $workflowScopeCoverageByCredentialId,
             'defaultScopes' => $defaultScopes,
             'externalResourceProviders' => $externalResourceProviders,
             'revealedCredential' => $this->pullRevealedCredential(),
@@ -678,6 +685,39 @@ class DashboardController extends Controller
         return $elements;
     }
 
+    private function loadWorkflowEntryElements(array $entryIds): array
+    {
+        return $this->loadTargetSetEntryElements($entryIds);
+    }
+
+    private function loadWorkflowProductElements(array $productIds): array
+    {
+        $productClass = $this->resolveWorkflowProductElementType();
+        if ($productClass === null) {
+            return [];
+        }
+
+        $elements = [];
+        foreach (array_values(array_unique(array_map('intval', $productIds))) as $productId) {
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $product = Craft::$app->getElements()->getElementById($productId, $productClass, null, ['status' => null]);
+            if ($product !== null) {
+                $elements[] = $product;
+            }
+        }
+
+        return $elements;
+    }
+
+    private function resolveWorkflowProductElementType(): ?string
+    {
+        $productClass = 'craft\\commerce\\elements\\Product';
+        return class_exists($productClass) ? $productClass : null;
+    }
+
     public function actionWorkflows(int $workflowId = 0): Response
     {
         $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_VIEW);
@@ -714,6 +754,12 @@ class DashboardController extends Controller
             'workflows' => $workflowService->getWorkflows(),
             'workflowSummary' => $workflowService->getWorkflowStatusSummary(),
             'selectedWorkflow' => $selectedWorkflow,
+            'selectedWorkflowEntryElements' => $selectedWorkflow !== null
+                ? $this->loadWorkflowEntryElements((array)($selectedWorkflow['config']['entryIds'] ?? []))
+                : [],
+            'selectedWorkflowProductElements' => $selectedWorkflow !== null
+                ? $this->loadWorkflowProductElements((array)($selectedWorkflow['config']['productIds'] ?? []))
+                : [],
             'selectedWorkflowRuns' => $selectedWorkflow !== null
                 ? $workflowService->getWorkflowRuns((int)($selectedWorkflow['id'] ?? 0), 8)
                 : [],
@@ -729,6 +775,7 @@ class DashboardController extends Controller
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
             'accountsUrl' => UrlHelper::cpUrl('agents/accounts'),
             'matchingAccountCreateUrl' => $this->buildWorkflowMatchingAccountCreateUrl($workflowAccountTemplate),
+            'workflowProductElementType' => $this->resolveWorkflowProductElementType(),
             'canManageWorkflows' => $this->canWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE),
         ]);
     }
@@ -2942,6 +2989,8 @@ class DashboardController extends Controller
             'timeOfDay' => $this->parseWorkflowTimeBodyParam('workflowTimeOfDay', '08:00'),
             'accountId' => $this->parseNullableIntegerBodyParam('workflowAccountId'),
             'ownerUserId' => $this->parseNullableIntegerBodyParam('workflowOwnerUserId') ?? $this->resolveCurrentCpUserId(),
+            'entryIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowEntryIds', [])),
+            'productIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowProductIds', [])),
             'sectionHandles' => $this->parseStringListInput($this->request->getBodyParam('workflowSectionHandles', [])),
             'siteIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowSiteIds', [])),
             'promptContext' => $this->parseStringBodyParam('workflowPromptContext'),

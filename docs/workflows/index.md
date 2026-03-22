@@ -18,7 +18,8 @@ Managed workflows in Agents follow the same boundary:
 
 - Agents can store workflow intent, managed-account bindings, handoff artifacts, and operator-facing visibility
 - the actual schedule runner, fetch/reasoning loop, and execution still stay outside Agents for now
-- current workflow surfaces are there to make external worker handoff clearer, not to replace the worker
+- runtime polling and lifecycle reporting now flow through the workflow API contract instead of ad hoc run rows
+- current workflow surfaces are there to make external runtime handoff clearer, not to replace the runtime
 
 Depending on the workflow, the external runtime may be:
 

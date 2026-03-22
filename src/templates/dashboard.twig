@@ -1708,6 +1708,7 @@
       {% set dashboardWorkflowNextDue = null %}
       {% set dashboardWorkflowLatestRun = null %}
       {% set dashboardWorkflowLatestRunTimestamp = 0 %}
+      {% set dashboardWorkflowBroad = 0 %}
       {% for workflow in dashboardWorkflowsList %}
         {% set workflowStatus = (workflow.status ?? '')|lower|trim %}
         {% if workflowStatus == 'draft' %}
@@ -1715,6 +1716,9 @@
         {% endif %}
         {% if dashboardWorkflowFirstAttention is null and (workflow.needsAttention ?? false) %}
           {% set dashboardWorkflowFirstAttention = workflow %}
+        {% endif %}
+        {% if workflow.accountScopeCoverage.isBroader ?? false %}
+          {% set dashboardWorkflowBroad = dashboardWorkflowBroad + 1 %}
         {% endif %}
         {% if dashboardWorkflowNextDue is null and workflowStatus == 'active' and (workflow.nextDueLabel ?? '') not in ['', 'n/a', 'Paused', 'Manual'] %}
           {% set dashboardWorkflowNextDue = workflow %}
@@ -1765,6 +1769,12 @@
             url: cpUrl('agents/workflows/' ~ dashboardWorkflowFirstAttention.id)
           }]) %}
         {% endif %}
+        {% if dashboardWorkflowBroad > 0 %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{
+            text: dashboardWorkflowBroad ~ ' workflow' ~ (dashboardWorkflowBroad == 1 ? '' : 's') ~ ' use a broader account than they need.',
+            url: workflowsUrl
+          }]) %}
+        {% endif %}
         {% if dashboardWorkflowLatestRun %}
           {% set workflowsCardLines = workflowsCardLines|merge([{
             text: 'Last reported run: ' ~ dashboardWorkflowLatestRun.name ~ ' · ' ~ (dashboardWorkflowLatestRun.latestRun.status|title) ~ (dashboardWorkflowLatestRunDateLabel ? ' · ' ~ dashboardWorkflowLatestRunDateLabel : ''),
@@ -1793,7 +1803,7 @@
             url: cpUrl('agents/workflows/' ~ dashboardWorkflowLatestRun.id)
           }]) %}
         {% else %}
-          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'Runs still have to be reported by the external worker.' }]) %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'Runs still have to be reported through the workflow API.' }]) %}
         {% endif %}
         {% set workflowsCardActionLabel = 'Open Workflows' %}
         {% set workflowsCardActionUrl = workflowsUrl %}

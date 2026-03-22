@@ -4,6 +4,7 @@ namespace Klick\Agents\services;
 
 use Craft;
 use craft\base\Component;
+use craft\elements\Entry;
 use craft\elements\User;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
@@ -28,6 +29,13 @@ class WorkflowService extends Component
     private const STATUS_PAUSED = 'paused';
     private const STATUS_DRAFT = 'draft';
     private const STATUS_ERROR = 'error';
+    private const RUNTIME_BASELINE_SCOPES = [
+        'auth:read',
+        'health:read',
+        'readiness:read',
+        'capabilities:read',
+        'openapi:read',
+    ];
 
     public function getWorkflowTemplates(): array
     {
@@ -37,6 +45,8 @@ class WorkflowService extends Component
                 'displayName' => 'Content Quality Review',
                 'description' => 'Review entries, assets, and taxonomy on a recurring schedule and surface content-quality issues for operators.',
                 'requiredScopes' => [
+                    'workflows:read',
+                    'workflows:report',
                     'entries:read',
                     'entries:read_all_statuses',
                     'assets:read',
@@ -63,6 +73,8 @@ class WorkflowService extends Component
                 'displayName' => 'Legal & Consent Review',
                 'description' => 'Review legal texts, consent-related content, and disclosure surfaces without changing site content.',
                 'requiredScopes' => [
+                    'workflows:read',
+                    'workflows:report',
                     'entries:read',
                     'global-sets:read',
                     'assets:read',
@@ -86,6 +98,8 @@ class WorkflowService extends Component
                 'displayName' => 'Change Monitor',
                 'description' => 'Track content and asset changes on a recurring schedule and summarize what changed for operators.',
                 'requiredScopes' => [
+                    'workflows:read',
+                    'workflows:report',
                     'changes:read',
                     'entries:read',
                     'assets:read',
@@ -109,6 +123,8 @@ class WorkflowService extends Component
                 'displayName' => 'Launch Readiness Review',
                 'description' => 'Run a recurring readiness review across content, assets, and structure before launches or major updates.',
                 'requiredScopes' => [
+                    'workflows:read',
+                    'workflows:report',
                     'entries:read',
                     'entries:read_all_statuses',
                     'assets:read',
@@ -137,6 +153,8 @@ class WorkflowService extends Component
                 'displayName' => 'Catalog Quality Review',
                 'description' => 'Review catalog data, merchandising content, and commerce-facing metadata on a recurring schedule.',
                 'requiredScopes' => [
+                    'workflows:read',
+                    'workflows:report',
                     'products:read',
                     'variants:read',
                     'orders:read',
@@ -219,6 +237,157 @@ class WorkflowService extends Component
             ->all();
 
         return array_map(fn(array $row): array => $this->hydrateRun($row), $rows);
+    }
+
+    public function getRuntimeWorkflowsForCredential(int $credentialId, bool $dueOnly = true, int $limit = 20): array
+    {
+        if ($credentialId <= 0 || !$this->workflowsTableExists()) {
+            return [];
+        }
+
+        $workflows = [];
+        foreach ($this->getWorkflows() as $workflow) {
+            if ((int)($workflow['accountId'] ?? 0) !== $credentialId) {
+                continue;
+            }
+
+            if (strtolower(trim((string)($workflow['status'] ?? ''))) !== self::STATUS_ACTIVE) {
+                continue;
+            }
+
+            $runtimePayload = $this->buildRuntimeWorkflowPayload($workflow);
+            if ($dueOnly && !(bool)($runtimePayload['schedule']['isDue'] ?? false)) {
+                continue;
+            }
+
+            $workflows[] = $runtimePayload;
+            if (count($workflows) >= max(1, $limit)) {
+                break;
+            }
+        }
+
+        return $workflows;
+    }
+
+    public function getRuntimeWorkflowById(int $workflowId, int $credentialId): ?array
+    {
+        $workflow = $this->getWorkflowById($workflowId);
+        if (!is_array($workflow)) {
+            return null;
+        }
+
+        if ((int)($workflow['accountId'] ?? 0) !== $credentialId) {
+            return null;
+        }
+
+        if (strtolower(trim((string)($workflow['status'] ?? ''))) !== self::STATUS_ACTIVE) {
+            return null;
+        }
+
+        return $this->buildRuntimeWorkflowPayload($workflow);
+    }
+
+    public function reportWorkflowRun(int $credentialId, array $payload): array
+    {
+        if ($credentialId <= 0 || !$this->workflowRunsTableExists()) {
+            throw new RuntimeException('Workflow run storage is unavailable. Run plugin migrations.');
+        }
+
+        $normalized = $this->normalizeWorkflowRunPayload($payload);
+        $workflow = $this->getWorkflowById((int)$normalized['workflowId']);
+        if (!is_array($workflow)) {
+            throw new InvalidArgumentException('Workflow not found.');
+        }
+
+        if ((int)($workflow['accountId'] ?? 0) !== $credentialId) {
+            throw new InvalidArgumentException('This managed account is not bound to the requested workflow.');
+        }
+
+        if (strtolower(trim((string)($workflow['status'] ?? ''))) !== self::STATUS_ACTIVE) {
+            throw new InvalidArgumentException('Only active workflows can accept run reports.');
+        }
+
+        $db = Craft::$app->getDb();
+        $now = gmdate('Y-m-d H:i:s');
+        $existingRun = null;
+        $runId = (int)($normalized['runId'] ?? 0);
+        if ($runId > 0) {
+            $existingRun = (new Query())
+                ->from(self::TABLE_WORKFLOW_RUNS)
+                ->where([
+                    'id' => $runId,
+                    'workflowId' => (int)$normalized['workflowId'],
+                ])
+                ->one();
+            if (!is_array($existingRun)) {
+                throw new InvalidArgumentException('Workflow run not found.');
+            }
+        }
+
+        $status = (string)$normalized['status'];
+        $workerId = $normalized['workerId'] !== ''
+            ? $normalized['workerId']
+            : (string)($workflow['account']['handle'] ?? $workflow['accountDisplayName'] ?? ('workflow-' . $credentialId));
+        $heartbeatAt = $normalized['heartbeatAt'] ?? $now;
+        $startedAt = $normalized['startedAt']
+            ?? ($status === 'started' ? $heartbeatAt : null)
+            ?? ($existingRun['startedAt'] ?? null);
+        $completedAt = $normalized['completedAt']
+            ?? ($this->runStatusIsTerminal($status) ? $heartbeatAt : null)
+            ?? ($existingRun['completedAt'] ?? null);
+        $scheduledFor = $normalized['scheduledFor']
+            ?? ($existingRun['scheduledFor'] ?? null)
+            ?? $this->resolveLatestScheduledOccurrenceUtc($workflow)
+            ?? $heartbeatAt;
+        $claimedAt = $normalized['claimedAt']
+            ?? ($status === 'started' ? $heartbeatAt : null)
+            ?? ($existingRun['claimedAt'] ?? null);
+
+        $runRow = [
+            'workflowId' => (int)$normalized['workflowId'],
+            'status' => $status,
+            'scheduledFor' => $scheduledFor,
+            'claimedAt' => $claimedAt,
+            'startedAt' => $startedAt,
+            'completedAt' => $completedAt,
+            'workerId' => $workerId,
+            'summary' => $normalized['summary'] !== '' ? $normalized['summary'] : null,
+            'logExcerpt' => $normalized['logExcerpt'] !== '' ? $normalized['logExcerpt'] : null,
+            'approvalIdsJson' => Json::encode($normalized['approvalIds']),
+            'outcomeRefsJson' => Json::encode($normalized['outcomeRefs']),
+            'metadataJson' => Json::encode($normalized['metadata']),
+            'dateUpdated' => $now,
+        ];
+
+        if (is_array($existingRun)) {
+            $db->createCommand()->update(self::TABLE_WORKFLOW_RUNS, $runRow, ['id' => $runId])->execute();
+        } else {
+            $runRow['dateCreated'] = $now;
+            $runRow['uid'] = StringHelper::UUID();
+            $db->createCommand()->insert(self::TABLE_WORKFLOW_RUNS, $runRow)->execute();
+            $runId = (int)$db->getLastInsertID();
+        }
+
+        $workflowUpdate = [
+            'lastWorkerId' => $workerId,
+            'lastHeartbeatAt' => $heartbeatAt,
+            'dateUpdated' => $now,
+        ];
+        if ($status === 'started') {
+            $workflowUpdate['lastClaimedAt'] = $claimedAt ?? $heartbeatAt;
+        }
+        $db->createCommand()->update(self::TABLE_WORKFLOWS, $workflowUpdate, ['id' => (int)$normalized['workflowId']])->execute();
+
+        $reportedRun = (new Query())
+            ->from(self::TABLE_WORKFLOW_RUNS)
+            ->where(['id' => $runId])
+            ->one();
+
+        if (!is_array($reportedRun)) {
+            throw new RuntimeException('Unable to load workflow run after report.');
+        }
+
+        return $this->hydrateRun($reportedRun);
     }
 
     public function createWorkflow(array $payload): array
@@ -316,6 +485,8 @@ class WorkflowService extends Component
             'accountId' => (int)($workflow['accountId'] ?? 0),
             'targetSetId' => $workflow['targetSetId'] ?? null,
             'ownerUserId' => (int)($workflow['ownerUserId'] ?? 0),
+            'entryIds' => (array)($workflow['config']['entryIds'] ?? []),
+            'productIds' => (array)($workflow['config']['productIds'] ?? []),
             'sectionHandles' => (array)($workflow['config']['sectionHandles'] ?? []),
             'siteIds' => (array)($workflow['config']['siteIds'] ?? []),
             'promptContext' => (string)($workflow['config']['promptContext'] ?? ''),
@@ -366,6 +537,8 @@ class WorkflowService extends Component
                 'timeOfDay' => (string)($workflow['timeOfDay'] ?? ''),
             ],
             'config' => [
+                'entryIds' => array_values(array_map('intval', (array)($config['entryIds'] ?? []))),
+                'productIds' => array_values(array_map('intval', (array)($config['productIds'] ?? []))),
                 'sectionHandles' => array_values(array_map('strval', (array)($config['sectionHandles'] ?? []))),
                 'siteIds' => array_values(array_map('intval', (array)($config['siteIds'] ?? []))),
                 'promptContext' => (string)($config['promptContext'] ?? ''),
@@ -401,6 +574,7 @@ class WorkflowService extends Component
             'active' => 0,
             'paused' => 0,
             'attention' => 0,
+            'broadAccounts' => 0,
         ];
 
         foreach ($this->getWorkflows() as $workflow) {
@@ -415,9 +589,73 @@ class WorkflowService extends Component
             if ((bool)($workflow['needsAttention'] ?? false)) {
                 $summary['attention']++;
             }
+            if ((bool)($workflow['accountScopeCoverage']['isBroader'] ?? false)) {
+                $summary['broadAccounts']++;
+            }
         }
 
         return $summary;
+    }
+
+    public function getAccountScopeCoverageByCredentialId(): array
+    {
+        $coverageByCredentialId = [];
+        foreach ($this->getWorkflows() as $workflow) {
+            if (!is_array($workflow)) {
+                continue;
+            }
+
+            $credentialId = (int)($workflow['accountId'] ?? 0);
+            if ($credentialId <= 0) {
+                continue;
+            }
+
+            $workflowCoverage = (array)($workflow['accountScopeCoverage'] ?? []);
+            if (!isset($coverageByCredentialId[$credentialId])) {
+                $coverageByCredentialId[$credentialId] = [
+                    'credentialId' => $credentialId,
+                    'workflowCount' => 0,
+                    'workflowNames' => [],
+                    'extraScopes' => [],
+                    'isBroader' => false,
+                    'summary' => 'Aligned with attached workflows',
+                    'meta' => '',
+                ];
+            }
+
+            $coverageByCredentialId[$credentialId]['workflowCount']++;
+            $workflowName = trim((string)($workflow['name'] ?? ''));
+            if ($workflowName !== '' && !in_array($workflowName, $coverageByCredentialId[$credentialId]['workflowNames'], true)) {
+                $coverageByCredentialId[$credentialId]['workflowNames'][] = $workflowName;
+            }
+
+            foreach ((array)($workflowCoverage['extraScopes'] ?? []) as $extraScope) {
+                $normalizedExtraScope = trim((string)$extraScope);
+                if ($normalizedExtraScope === '' || in_array($normalizedExtraScope, $coverageByCredentialId[$credentialId]['extraScopes'], true)) {
+                    continue;
+                }
+                $coverageByCredentialId[$credentialId]['extraScopes'][] = $normalizedExtraScope;
+            }
+
+            if ((bool)($workflowCoverage['isBroader'] ?? false)) {
+                $coverageByCredentialId[$credentialId]['isBroader'] = true;
+            }
+        }
+
+        foreach ($coverageByCredentialId as $credentialId => $coverage) {
+            $extraScopes = array_values(array_map('strval', (array)($coverage['extraScopes'] ?? [])));
+            if (!empty($extraScopes)) {
+                $coverageByCredentialId[$credentialId]['summary'] = 'Broader than attached workflows';
+                $coverageByCredentialId[$credentialId]['meta'] = $this->describeScopeList($extraScopes, 'extra scope');
+            } else {
+                $coverageByCredentialId[$credentialId]['summary'] = 'Aligned with attached workflows';
+                $coverageByCredentialId[$credentialId]['meta'] = ((int)($coverage['workflowCount'] ?? 0) > 0)
+                    ? ((int)$coverage['workflowCount'] . ' workflow' . ((int)$coverage['workflowCount'] === 1 ? '' : 's'))
+                    : '';
+            }
+        }
+
+        return $coverageByCredentialId;
     }
 
     private function hydrateWorkflows(array $rows): array
@@ -460,16 +698,19 @@ class WorkflowService extends Component
             $templateRequiresTargetSet = $this->templateRequiresTargetSet($template);
             $hasTargetSet = !$templateRequiresTargetSet || isset($targetSetsById[$targetSetId]);
             $latestRunStatus = strtolower(trim((string)($latestRun['status'] ?? '')));
+            $accountScopeCoverage = $this->evaluateWorkflowAccountScopeCoverage($credentialsById[$accountId] ?? null, $template);
             $needsAttention = $status === self::STATUS_ERROR
                 || !$hasAccount
                 || !$hasTargetSet
-                || in_array($latestRunStatus, ['blocked', 'failed', 'error'], true);
+                || in_array($latestRunStatus, ['blocked', 'failed', 'error'], true)
+                || (bool)($accountScopeCoverage['isBroader'] ?? false);
             $attentionState = $this->buildWorkflowAttentionState(
                 !$hasAccount,
                 !$hasTargetSet,
                 $status,
                 $latestRunStatus,
-                $latestRun
+                $latestRun,
+                $accountScopeCoverage
             );
 
             $workflows[] = [
@@ -499,6 +740,8 @@ class WorkflowService extends Component
                 'ownerLabel' => $ownerUserId > 0 ? (string)($ownersById[$ownerUserId]['label'] ?? 'Unknown owner') : 'Unassigned',
                 'config' => $config,
                 'configSummary' => $this->buildConfigSummary($config),
+                'readBoundary' => $this->buildReadBoundaryPayload($config),
+                'accountScopeCoverage' => $accountScopeCoverage,
                 'latestRun' => $latestRun,
                 'needsAttention' => $needsAttention,
                 'attentionLabels' => $attentionState['labels'],
@@ -520,7 +763,8 @@ class WorkflowService extends Component
         bool $missingTargetSet,
         string $status,
         string $latestRunStatus,
-        ?array $latestRun
+        ?array $latestRun,
+        array $accountScopeCoverage = []
     ): array {
         $labels = [];
         $detail = '';
@@ -539,6 +783,13 @@ class WorkflowService extends Component
 
         if ($status === self::STATUS_ERROR) {
             $labels[] = 'Workflow error';
+        }
+
+        if ((bool)($accountScopeCoverage['isBroader'] ?? false)) {
+            $labels[] = 'Account broader than workflow';
+            if ($detail === '') {
+                $detail = $this->describeScopeList((array)($accountScopeCoverage['extraScopes'] ?? []), 'extra scope');
+            }
         }
 
         if ($latestRunStatus === 'blocked') {
@@ -762,6 +1013,8 @@ class WorkflowService extends Component
         $ownerUserId = $ownerUserId > 0 ? $ownerUserId : null;
 
         $sectionHandles = $this->validateSectionHandles((array)($payload['sectionHandles'] ?? $existing['config']['sectionHandles'] ?? []));
+        $entryIds = $this->validateEntryIds((array)($payload['entryIds'] ?? $existing['config']['entryIds'] ?? []));
+        $productIds = $this->validateProductIds((array)($payload['productIds'] ?? $existing['config']['productIds'] ?? []));
         $siteIds = $this->validateSiteIds((array)($payload['siteIds'] ?? $existing['config']['siteIds'] ?? []));
         $promptContext = trim((string)($payload['promptContext'] ?? $existing['config']['promptContext'] ?? ''));
         $operatorNotes = trim((string)($payload['operatorNotes'] ?? $existing['config']['operatorNotes'] ?? ''));
@@ -779,6 +1032,8 @@ class WorkflowService extends Component
             'targetSetId' => $targetSetId,
             'ownerUserId' => $ownerUserId,
             'config' => [
+                'entryIds' => $entryIds,
+                'productIds' => $productIds,
                 'sectionHandles' => $sectionHandles,
                 'siteIds' => $siteIds,
                 'promptContext' => $promptContext,
@@ -845,7 +1100,7 @@ class WorkflowService extends Component
         }
 
         if (empty($normalized)) {
-            throw new InvalidArgumentException('Choose at least one section.');
+            return [];
         }
 
         $knownHandles = [];
@@ -869,7 +1124,7 @@ class WorkflowService extends Component
     {
         $normalized = $this->normalizeIntegerIds($siteIds);
         if (empty($normalized)) {
-            throw new InvalidArgumentException('Choose at least one site.');
+            return [];
         }
 
         $knownIds = [];
@@ -887,6 +1142,323 @@ class WorkflowService extends Component
 
         sort($normalized);
         return $normalized;
+    }
+
+    private function validateEntryIds(array $entryIds): array
+    {
+        $normalized = $this->normalizeIntegerIds($entryIds);
+        if (empty($normalized)) {
+            return [];
+        }
+
+        $foundIds = Entry::find()
+            ->id($normalized)
+            ->status(null)
+            ->site('*')
+            ->limit(null)
+            ->ids();
+        $foundIds = $this->normalizeIntegerIds($foundIds);
+        $missing = array_values(array_diff($normalized, $foundIds));
+        if (!empty($missing)) {
+            throw new InvalidArgumentException('Unknown entry IDs: ' . implode(', ', $missing) . '.');
+        }
+
+        sort($normalized);
+        return $normalized;
+    }
+
+    private function validateProductIds(array $productIds): array
+    {
+        $normalized = $this->normalizeIntegerIds($productIds);
+        if (empty($normalized)) {
+            return [];
+        }
+
+        if (!Plugin::getInstance()->isCommercePluginEnabled()) {
+            throw new InvalidArgumentException('Product boundaries require Craft Commerce.');
+        }
+
+        $productClass = '\\craft\\commerce\\elements\\Product';
+        if (!class_exists($productClass)) {
+            throw new InvalidArgumentException('Craft Commerce product class is unavailable.');
+        }
+
+        $foundIds = $productClass::find()
+            ->id($normalized)
+            ->status(null)
+            ->site('*')
+            ->limit(null)
+            ->ids();
+        $foundIds = $this->normalizeIntegerIds($foundIds);
+        $missing = array_values(array_diff($normalized, $foundIds));
+        if (!empty($missing)) {
+            throw new InvalidArgumentException('Unknown product IDs: ' . implode(', ', $missing) . '.');
+        }
+
+        sort($normalized);
+        return $normalized;
+    }
+
+    private function buildRuntimeWorkflowPayload(array $workflow): array
+    {
+        $schedule = $this->buildRuntimeSchedulePayload($workflow);
+        $config = (array)($workflow['config'] ?? []);
+        $latestRun = is_array($workflow['latestRun'] ?? null) ? (array)$workflow['latestRun'] : null;
+
+        return [
+            'id' => (int)($workflow['id'] ?? 0),
+            'name' => (string)($workflow['name'] ?? ''),
+            'description' => (string)($workflow['description'] ?? ''),
+            'templateHandle' => (string)($workflow['templateHandle'] ?? ''),
+            'templateDisplayName' => (string)($workflow['template']['displayName'] ?? $workflow['templateHandle'] ?? 'Workflow'),
+            'mode' => (string)($workflow['template']['mode'] ?? 'read-only'),
+            'schedule' => $schedule,
+            'readBoundary' => $this->buildReadBoundaryPayload($config),
+            'accountScopeCoverage' => [
+                'isBroader' => (bool)($workflow['accountScopeCoverage']['isBroader'] ?? false),
+                'extraScopes' => array_values(array_map('strval', (array)($workflow['accountScopeCoverage']['extraScopes'] ?? []))),
+                'summary' => (string)($workflow['accountScopeCoverage']['summary'] ?? ''),
+                'meta' => (string)($workflow['accountScopeCoverage']['meta'] ?? ''),
+            ],
+            'config' => [
+                'promptContext' => (string)($config['promptContext'] ?? ''),
+                'operatorNotes' => (string)($config['operatorNotes'] ?? ''),
+            ],
+            'latestRun' => $latestRun,
+        ];
+    }
+
+    private function buildRuntimeSchedulePayload(array $workflow): array
+    {
+        $latestRun = is_array($workflow['latestRun'] ?? null) ? (array)$workflow['latestRun'] : null;
+        $latestScheduledAt = $this->resolveLatestScheduledOccurrenceUtc($workflow);
+        $nextDueAt = $this->resolveNextScheduledOccurrenceUtc($workflow);
+        $latestRunAt = $this->resolveLatestRunActivityAt($latestRun);
+        $createdAt = $this->normalizeDateTimeValue($workflow['dateCreated'] ?? null);
+        $isDue = false;
+
+        if (
+            strtolower(trim((string)($workflow['status'] ?? ''))) === self::STATUS_ACTIVE
+            && $latestScheduledAt !== null
+            && ($createdAt === null || strcmp($latestScheduledAt, $createdAt) >= 0)
+        ) {
+            $isDue = $latestRunAt === null || strcmp($latestRunAt, $latestScheduledAt) < 0;
+        }
+
+        return [
+            'cadence' => (string)($workflow['cadence'] ?? 'weekly'),
+            'weekday' => (int)($workflow['weekday'] ?? 0),
+            'timeOfDay' => (string)($workflow['timeOfDay'] ?? ''),
+            'timezone' => (string)($workflow['timezone'] ?? 'UTC'),
+            'label' => (string)($workflow['scheduleLabel'] ?? 'Manual'),
+            'nextDueAt' => $nextDueAt,
+            'latestScheduledAt' => $latestScheduledAt,
+            'isDue' => $isDue,
+        ];
+    }
+
+    private function buildReadBoundaryPayload(array $config): array
+    {
+        $entryIds = array_values(array_map('intval', (array)($config['entryIds'] ?? [])));
+        $productIds = array_values(array_map('intval', (array)($config['productIds'] ?? [])));
+        $sectionHandles = array_values(array_map('strval', (array)($config['sectionHandles'] ?? [])));
+        $siteIds = array_values(array_map('intval', (array)($config['siteIds'] ?? [])));
+
+        return [
+            'entryIds' => $entryIds,
+            'productIds' => $productIds,
+            'sectionHandles' => $sectionHandles,
+            'siteIds' => $siteIds,
+            'summary' => $this->buildConfigSummary($config),
+            'isBounded' => !empty($entryIds) || !empty($productIds) || !empty($sectionHandles) || !empty($siteIds),
+        ];
+    }
+
+    private function evaluateWorkflowAccountScopeCoverage(?array $account, ?array $template): array
+    {
+        if (!is_array($account) || !is_array($template)) {
+            return [
+                'isBroader' => false,
+                'extraScopes' => [],
+                'allowedScopes' => [],
+                'summary' => '',
+                'meta' => '',
+            ];
+        }
+
+        $allowedScopes = $this->buildWorkflowAllowedScopes($template);
+        $accountScopes = array_values(array_unique(array_filter(array_map(
+            static fn($scope): string => trim((string)$scope),
+            (array)($account['scopes'] ?? [])
+        ))));
+        $extraScopes = [];
+        foreach ($accountScopes as $scope) {
+            if (!in_array($scope, $allowedScopes, true)) {
+                $extraScopes[] = $scope;
+            }
+        }
+
+        return [
+            'isBroader' => !empty($extraScopes),
+            'extraScopes' => $extraScopes,
+            'allowedScopes' => $allowedScopes,
+            'summary' => !empty($extraScopes) ? 'Account broader than workflow' : 'Aligned with workflow',
+            'meta' => !empty($extraScopes) ? $this->describeScopeList($extraScopes, 'extra scope') : '',
+        ];
+    }
+
+    private function buildWorkflowAllowedScopes(array $template): array
+    {
+        $scopes = array_merge(
+            self::RUNTIME_BASELINE_SCOPES,
+            array_values(array_map('strval', (array)($template['requiredScopes'] ?? []))),
+            array_values(array_map('strval', (array)($template['recommendedOptionalScopes'] ?? [])))
+        );
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn($scope): string => trim((string)$scope),
+            $scopes
+        ))));
+    }
+
+    private function describeScopeList(array $scopes, string $noun): string
+    {
+        $normalized = array_values(array_unique(array_filter(array_map(
+            static fn($scope): string => trim((string)$scope),
+            $scopes
+        ))));
+        if (empty($normalized)) {
+            return '';
+        }
+
+        $visible = array_slice($normalized, 0, 3);
+        $label = count($normalized) . ' ' . $noun . (count($normalized) === 1 ? '' : 's');
+        $detail = implode(', ', $visible);
+        if (count($normalized) > count($visible)) {
+            $detail .= ', +' . (count($normalized) - count($visible)) . ' more';
+        }
+
+        return $label . ': ' . $detail;
+    }
+
+    private function normalizeWorkflowRunPayload(array $payload): array
+    {
+        $workflowId = (int)($payload['workflowId'] ?? 0);
+        if ($workflowId <= 0) {
+            throw new InvalidArgumentException('`workflowId` is required.');
+        }
+
+        $status = strtolower(trim((string)($payload['status'] ?? '')));
+        $allowedStatuses = ['started', 'succeeded', 'failed', 'blocked', 'approval_requested'];
+        if (!in_array($status, $allowedStatuses, true)) {
+            throw new InvalidArgumentException('Unsupported workflow run status.');
+        }
+
+        return [
+            'workflowId' => $workflowId,
+            'runId' => (int)($payload['runId'] ?? 0),
+            'status' => $status,
+            'workerId' => trim((string)($payload['workerId'] ?? '')),
+            'summary' => trim((string)($payload['summary'] ?? '')),
+            'logExcerpt' => trim((string)($payload['logExcerpt'] ?? '')),
+            'scheduledFor' => $this->normalizeWorkflowRunDateTime($payload['scheduledFor'] ?? null, 'scheduledFor'),
+            'claimedAt' => $this->normalizeWorkflowRunDateTime($payload['claimedAt'] ?? null, 'claimedAt'),
+            'startedAt' => $this->normalizeWorkflowRunDateTime($payload['startedAt'] ?? null, 'startedAt'),
+            'completedAt' => $this->normalizeWorkflowRunDateTime($payload['completedAt'] ?? null, 'completedAt'),
+            'heartbeatAt' => $this->normalizeWorkflowRunDateTime($payload['heartbeatAt'] ?? null, 'heartbeatAt'),
+            'approvalIds' => $this->normalizeIntegerIds((array)($payload['approvalIds'] ?? [])),
+            'outcomeRefs' => array_values(array_filter(array_map(
+                static fn($value): string => trim((string)$value),
+                (array)($payload['outcomeRefs'] ?? [])
+            ))),
+            'metadata' => is_array($payload['metadata'] ?? null) ? (array)$payload['metadata'] : [],
+        ];
+    }
+
+    private function normalizeWorkflowRunDateTime(mixed $value, string $fieldName): ?string
+    {
+        $normalized = trim((string)$value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        try {
+            return (new DateTimeImmutable($normalized))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        } catch (\Throwable) {
+            throw new InvalidArgumentException(sprintf('`%s` must be a valid datetime.', $fieldName));
+        }
+    }
+
+    private function runStatusIsTerminal(string $status): bool
+    {
+        return in_array($status, ['succeeded', 'failed', 'blocked', 'approval_requested'], true);
+    }
+
+    private function resolveLatestRunActivityAt(?array $latestRun): ?string
+    {
+        if (!is_array($latestRun)) {
+            return null;
+        }
+
+        foreach (['completedAt', 'startedAt', 'claimedAt', 'scheduledFor'] as $field) {
+            $value = $this->normalizeDateTimeValue($latestRun[$field] ?? null);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveLatestScheduledOccurrenceUtc(array $workflow): ?string
+    {
+        $schedule = $this->resolveScheduleWindow($workflow);
+        return $schedule['latestScheduledAtUtc'];
+    }
+
+    private function resolveNextScheduledOccurrenceUtc(array $workflow): ?string
+    {
+        $schedule = $this->resolveScheduleWindow($workflow);
+        return $schedule['nextScheduledAtUtc'];
+    }
+
+    private function resolveScheduleWindow(array $workflow): array
+    {
+        $weekday = (int)($workflow['weekday'] ?? 0);
+        $timeOfDay = trim((string)($workflow['timeOfDay'] ?? ''));
+        $timezone = $this->resolveWorkflowTimezone($workflow['timezone'] ?? null, null, []);
+        if ($weekday < 1 || $weekday > 7 || !preg_match('/^(?<hour>\d{2}):(?<minute>\d{2})$/', $timeOfDay, $matches)) {
+            return [
+                'latestScheduledAtUtc' => null,
+                'nextScheduledAtUtc' => null,
+            ];
+        }
+
+        try {
+            $zone = new DateTimeZone($timezone);
+            $now = new DateTimeImmutable('now', $zone);
+            $hour = (int)($matches['hour'] ?? 0);
+            $minute = (int)($matches['minute'] ?? 0);
+            $candidate = $now->setTime($hour, $minute);
+            $daysUntilScheduled = ($weekday - (int)$now->format('N') + 7) % 7;
+            if ($daysUntilScheduled > 0) {
+                $candidate = $candidate->modify('+' . $daysUntilScheduled . ' days');
+            } elseif ($candidate <= $now) {
+                $candidate = $candidate->modify('+7 days');
+            }
+
+            $latestScheduledAt = $candidate->modify('-7 days');
+
+            return [
+                'latestScheduledAtUtc' => $latestScheduledAt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+                'nextScheduledAtUtc' => $candidate->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+            ];
+        } catch (\Throwable) {
+            return [
+                'latestScheduledAtUtc' => null,
+                'nextScheduledAtUtc' => null,
+            ];
+        }
     }
 
     private function setWorkflowStatus(int $workflowId, string $status): bool
@@ -923,6 +1495,9 @@ class WorkflowService extends Component
             '- Mode: `' . trim((string)($template['mode'] ?? 'read-only')) . '`',
             '- Focus: `' . trim((string)($template['focusLabel'] ?? 'Content review')) . '`',
             '- Schedule: `' . trim((string)($workflow['scheduleLabel'] ?? '')) . '`',
+            '- Read boundary: `' . trim((string)($workflow['readBoundary']['summary'] ?? $this->buildConfigSummary($config) ?: 'Unbounded')) . '`',
+            '- Entry IDs: `' . (!empty($config['entryIds']) ? implode(', ', array_map('strval', (array)$config['entryIds'])) : 'unbounded') . '`',
+            '- Product IDs: `' . (!empty($config['productIds']) ? implode(', ', array_map('strval', (array)$config['productIds'])) : 'unbounded') . '`',
             '- Sections: `' . implode(', ', array_values(array_map('strval', (array)($config['sectionHandles'] ?? [])))) . '`',
             '- Sites: `' . implode(', ', array_map('strval', (array)($config['siteIds'] ?? []))) . '`',
             '',
@@ -934,6 +1509,7 @@ class WorkflowService extends Component
             '- `run-worker.sh`',
             '- `cron.example`',
             '- `output-contract.md`',
+            '- workflow polling/reporting API contract',
             '',
             '## Important boundary',
             '',
@@ -941,6 +1517,7 @@ class WorkflowService extends Component
             '- download the matching account handoff from `Agents -> Accounts` when you need a token-filled `.env`',
             '- this first workflow slice is read-only and does not mutate Craft content',
             '- Agents stores workflow state and visibility; the worker still runs externally',
+            '- recent runs in Craft are backed by the workflow polling/reporting API',
             '- the cron example assumes the host already runs in the intended server/runtime timezone',
             '',
             '## External output storage',
@@ -973,6 +1550,11 @@ class WorkflowService extends Component
             'WORKFLOW_ID=' . (int)($workflow['id'] ?? 0),
             'WORKFLOW_TEMPLATE=' . trim((string)($workflow['templateHandle'] ?? '')),
             'WORKFLOW_NAME=' . trim((string)($workflow['name'] ?? '')),
+            'WORKFLOW_DISCOVERY_PATH=/workflows',
+            'WORKFLOW_DETAIL_PATH=/workflows/show',
+            'WORKFLOW_REPORT_PATH=/workflows/run-report',
+            'ENTRY_IDS=' . implode(',', array_map('strval', (array)($config['entryIds'] ?? []))),
+            'PRODUCT_IDS=' . implode(',', array_map('strval', (array)($config['productIds'] ?? []))),
             'SECTION_HANDLES=' . implode(',', array_map('strval', (array)($config['sectionHandles'] ?? []))),
             'SITE_IDS=' . implode(',', array_map('strval', (array)($config['siteIds'] ?? []))),
             'PROMPT_CONTEXT=' . trim((string)($config['promptContext'] ?? '')),
@@ -1004,9 +1586,16 @@ const workflowName = process.env.WORKFLOW_NAME || %s;
 const templateHandle = process.env.WORKFLOW_TEMPLATE || %s;
 const baseUrl = (process.env.BASE_URL || '').replace(/\/$/, '');
 const token = process.env.AGENTS_TOKEN || '';
+const workflowDiscoveryPath = process.env.WORKFLOW_DISCOVERY_PATH || '/workflows';
+const workflowDetailPath = process.env.WORKFLOW_DETAIL_PATH || '/workflows/show';
+const workflowReportPath = process.env.WORKFLOW_REPORT_PATH || '/workflows/run-report';
+const entryIds = (process.env.ENTRY_IDS || '').split(',').map((value) => value.trim()).filter(Boolean);
+const productIds = (process.env.PRODUCT_IDS || '').split(',').map((value) => value.trim()).filter(Boolean);
 const sectionHandles = (process.env.SECTION_HANDLES || '').split(',').map((value) => value.trim()).filter(Boolean);
 const siteIds = (process.env.SITE_IDS || '').split(',').map((value) => value.trim()).filter(Boolean);
 const promptContext = process.env.PROMPT_CONTEXT || '';
+const outputRoot = process.env.OUTPUT_ROOT || '';
+const reportPath = process.env.REPORT_PATH || '';
 
 async function fetchJson(path) {
   const response = await fetch(baseUrl + path, {
@@ -1023,19 +1612,83 @@ async function fetchJson(path) {
   return response.json();
 }
 
+async function postJson(path, body) {
+  const response = await fetch(baseUrl + path, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 async function main() {
   if (!baseUrl || !token) {
     throw new Error('Set BASE_URL and AGENTS_TOKEN before running this worker scaffold.');
   }
 
   const whoami = await fetchJson('/auth/whoami');
+  const due = await fetchJson(`${workflowDiscoveryPath}?dueOnly=1&limit=20`);
+  const candidate = Array.isArray(due.data)
+    ? due.data.find((item) => String(item.id) === String(workflowId))
+    : null;
+
+  if (!candidate) {
+    console.log(`[workflow] ${workflowName}: nothing due right now.`);
+    return;
+  }
+
+  const detail = await fetchJson(`${workflowDetailPath}?id=${encodeURIComponent(String(workflowId))}`);
+  const started = await postJson(workflowReportPath, {
+    workflowId: Number(workflowId),
+    status: 'started',
+    scheduledFor: candidate.schedule?.latestScheduledAt || null,
+    summary: 'Scaffold run started.',
+    metadata: {
+      source: 'bundle-scaffold',
+      templateHandle,
+    },
+  });
+
+  const readBoundary = detail.data?.readBoundary || {};
+  const summary = [
+    `Bound account: ${whoami.principal?.credentialId || 'unknown'}`,
+    `Entry IDs: ${entryIds.join(', ') || readBoundary.entryIds?.join(', ') || 'unbounded'}`,
+    `Product IDs: ${productIds.join(', ') || readBoundary.productIds?.join(', ') || 'unbounded'}`,
+    `Sections: ${sectionHandles.join(', ') || readBoundary.sectionHandles?.join(', ') || 'unbounded'}`,
+    `Sites: ${siteIds.join(', ') || readBoundary.siteIds?.join(', ') || 'unbounded'}`,
+    `Prompt context: ${promptContext || 'none'}`,
+    'Next step: replace this scaffold body with the real external fetch/review/report loop.',
+  ].join('\n');
+
+  if (reportPath) {
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    const path = await import('node:path');
+    await mkdir(path.dirname(reportPath), { recursive: true });
+    await writeFile(reportPath, `${summary}\n`, 'utf8');
+  }
+
+  await postJson(workflowReportPath, {
+    workflowId: Number(workflowId),
+    runId: started.data?.id || null,
+    status: 'succeeded',
+    summary: 'Scaffold run completed and reported.',
+    metadata: {
+      outputRoot,
+      reportPath,
+    },
+  });
+
   console.log(`[workflow] ${workflowName} (${templateHandle})`);
-  console.log(`[workflow] bound account: ${whoami.handle || whoami.id || 'unknown'}`);
-  console.log(`[workflow] sections: ${sectionHandles.join(', ') || 'all configured in workflow config'}`);
-  console.log(`[workflow] sites: ${siteIds.join(', ') || 'all configured in workflow config'}`);
-  console.log(`[workflow] prompt context: ${promptContext || 'none'}`);
-  console.log(`[workflow] output root: ${process.env.OUTPUT_ROOT || 'set OUTPUT_ROOT in .env'}`);
-  console.log(`[workflow] next step: implement the read-only fetch + analysis loop for workflow #${workflowId}.`);
+  console.log(summary);
 }
 
 main().catch((error) => {
@@ -1143,10 +1796,22 @@ BASH;
 
     private function buildConfigSummary(array $config): string
     {
+        $entryIds = array_values(array_map('intval', (array)($config['entryIds'] ?? [])));
+        $productIds = array_values(array_map('intval', (array)($config['productIds'] ?? [])));
         $sections = array_values(array_map('strval', (array)($config['sectionHandles'] ?? [])));
         $sites = array_values(array_map('intval', (array)($config['siteIds'] ?? [])));
 
         $parts = [];
+        if (!empty($entryIds)) {
+            $parts[] = count($entryIds) === 1
+                ? 'Entry ID: ' . (string)$entryIds[0]
+                : count($entryIds) . ' entry IDs';
+        }
+        if (!empty($productIds)) {
+            $parts[] = count($productIds) === 1
+                ? 'Product ID: ' . (string)$productIds[0]
+                : count($productIds) . ' product IDs';
+        }
         if (!empty($sections)) {
             $parts[] = 'Sections: ' . implode(', ', $sections);
         }
@@ -1157,7 +1822,7 @@ BASH;
             $parts[] = 'Context set';
         }
 
-        return implode(' · ', $parts);
+        return !empty($parts) ? implode(' · ', $parts) : 'Unbounded read review';
     }
 
     private function buildOutputContract(array $workflow, string $workflowSlug): string
@@ -1195,10 +1860,12 @@ Recommended minimum:
 
 Recommended handoff pattern:
 
-1. Save normalized input data to `raw/` only if you need audit/debugging.
-2. Let the external agent reason over those saved inputs or an in-memory normalized dataset.
-3. Save the final summary/report to `reports/latest.md`.
-4. Update `state/state.json` after a successful run.
+1. Discover due workflows through `GET /agents/v1/workflows`.
+2. Mark the run as started through `POST /agents/v1/workflows/run-report`.
+3. Save normalized input data to `raw/` only if you need audit/debugging.
+4. Let the external agent reason over those saved inputs or an in-memory normalized dataset.
+5. Save the final summary/report to `reports/latest.md`.
+6. Report the final run outcome back to Agents so `Latest Run` and `Recent runs` stay accurate.
 MD;
     }
 

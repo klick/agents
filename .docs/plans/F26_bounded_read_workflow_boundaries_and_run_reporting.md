@@ -180,3 +180,34 @@ Likely supporting files:
 
 - This slice is the best next follow-on to `Workflows` because it turns the new CP surface into a real operational contract.
 - It should land before provider-backed copilot/orchestration work and before broader delegated operator-access ideas.
+
+## Implementation Order Into F27
+
+`F26` should establish the runtime truth first.
+
+The intended order is:
+
+1. define workflow-scoped read boundaries
+2. define the worker-facing due/discover and run-reporting contract
+3. back `Latest Run` and `Recent runs` with intentional data
+4. only then expose broader machine-facing discovery and bootstrap in `F27`
+
+That means `F26` is the slice that answers:
+
+- what a workflow instance is allowed to read
+- how a worker discovers due work
+- how a worker reports execution state back
+
+And `F27` should build on that rather than inventing a second overlapping workflow model.
+
+Practical boundary:
+
+- `F26` makes workflow execution state intentional
+- `F27` makes workflow discovery and bootstrap intentional
+
+If sequencing pressure forces a split inside `F26`, the minimum viable handoff into `F27` is:
+
+- stable workflow instance shape
+- stable due/discover endpoint shape
+- stable run-status writeback shape
+- stable boundary summary shape for CP and API reuse

@@ -9,6 +9,8 @@
 {% set currentTemplate = currentWorkflow ? (currentWorkflow.template ?? null) : (selectedCreateTemplate ?? workflowTemplates[0] ?? null) %}
 {% set currentTemplateRequiredScopes = currentTemplate.requiredScopes ?? [] %}
 {% set currentConfig = currentWorkflow ? (currentWorkflow.config ?? {}) : {} %}
+{% set currentEntryIds = currentConfig.entryIds ?? [] %}
+{% set currentProductIds = currentConfig.productIds ?? [] %}
 {% set currentSectionHandles = currentConfig.sectionHandles ?? [] %}
 {% set currentSiteIds = currentConfig.siteIds ?? [] %}
 {% set canCreateWorkflowFromEligibleAccount = workflowAccountGuidance.hasEligibleAccounts ?? true %}
@@ -402,9 +404,42 @@
                 </div>
 
                 <div class="agents-workflows-form-grid">
+                  {{ forms.elementSelectField({
+                    label: 'Entries',
+                    instructions: 'Optional entry boundary for a tighter read scope. Leave blank for section- or site-level review.',
+                    id: 'workflowEntryIds',
+                    name: 'workflowEntryIds',
+                    elementType: 'craft\\elements\\Entry',
+                    selectionLabel: 'Select entries'|t('app'),
+                    elements: [],
+                    limit: null,
+                    viewMode: 'list-inline',
+                    sources: ['*'],
+                    criteria: {
+                      status: null,
+                    },
+                  }) }}
+
+                  {% if workflowProductElementType %}
+                    {{ forms.elementSelectField({
+                      label: 'Products',
+                      instructions: 'Optional product boundary for commerce-facing workflows. Leave blank when products are not part of the read boundary.',
+                      id: 'workflowProductIds',
+                      name: 'workflowProductIds',
+                      elementType: workflowProductElementType,
+                      selectionLabel: 'Select products'|t('app'),
+                      elements: [],
+                      limit: null,
+                      viewMode: 'list-inline',
+                      sources: ['*'],
+                    }) }}
+                  {% endif %}
+                </div>
+
+                <div class="agents-workflows-form-grid">
                   <div class="field">
                     <div class="heading"><label>Sections</label></div>
-                    <div class="instructions"><p>Pick the sections the external worker should review on each run.</p></div>
+                    <div class="instructions"><p>Optional section boundary. Leave blank for broader review.</p></div>
                     <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
                       {% for section in availableSections %}
                         <label class="agents-workflow-checkbox">
@@ -420,7 +455,7 @@
 
                   <div class="field">
                     <div class="heading"><label>Sites</label></div>
-                    <div class="instructions"><p>Choose the sites/locales the worker should operate against.</p></div>
+                    <div class="instructions"><p>Optional site boundary. Leave blank when the workflow may review all configured sites.</p></div>
                     <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
                       {% for site in availableSites %}
                         <label class="agents-workflow-checkbox">
@@ -573,8 +608,42 @@
                 </div>
 
                 <div class="agents-workflows-form-grid">
+                  {{ forms.elementSelectField({
+                    label: 'Entries',
+                    instructions: 'Optional entry boundary for a tighter read scope.',
+                    id: 'workflowEntryIds',
+                    name: 'workflowEntryIds',
+                    elementType: 'craft\\elements\\Entry',
+                    selectionLabel: 'Select entries'|t('app'),
+                    elements: selectedWorkflowEntryElements ?? [],
+                    limit: null,
+                    viewMode: 'list-inline',
+                    sources: ['*'],
+                    criteria: {
+                      status: null,
+                    },
+                  }) }}
+
+                  {% if workflowProductElementType %}
+                    {{ forms.elementSelectField({
+                      label: 'Products',
+                      instructions: 'Optional product boundary for commerce-facing workflows.',
+                      id: 'workflowProductIds',
+                      name: 'workflowProductIds',
+                      elementType: workflowProductElementType,
+                      selectionLabel: 'Select products'|t('app'),
+                      elements: selectedWorkflowProductElements ?? [],
+                      limit: null,
+                      viewMode: 'list-inline',
+                      sources: ['*'],
+                    }) }}
+                  {% endif %}
+                </div>
+
+                <div class="agents-workflows-form-grid">
                   <div class="field">
                     <div class="heading"><label>Sections</label></div>
+                    <div class="instructions"><p>Optional section boundary. Leave blank for broader review.</p></div>
                     <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
                       {% for section in availableSections %}
                         <label class="agents-workflow-checkbox">
@@ -590,6 +659,7 @@
 
                   <div class="field">
                     <div class="heading"><label>Sites</label></div>
+                    <div class="instructions"><p>Optional site boundary. Leave blank when the workflow may review all configured sites.</p></div>
                     <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
                       {% for site in availableSites %}
                         <label class="agents-workflow-checkbox">
@@ -639,9 +709,11 @@
                   label: currentWorkflow.accountDisplayName,
                   url: accountsUrl,
                 }, with_context = false) }}</div>
-                <div><strong>Focus:</strong> {{ currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope') }}</div>
-                <div><strong>Sections:</strong> {{ currentSectionHandles|length ? currentSectionHandles|join(', ') : 'None' }}</div>
-                <div><strong>Sites:</strong> {{ currentSiteIds|length ? currentSiteIds|join(', ') : 'None' }}</div>
+                <div><strong>Read boundary:</strong> {{ currentWorkflow.readBoundary.summary ?: (currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope')) }}</div>
+                <div><strong>Entry IDs:</strong> {{ currentEntryIds|length ? currentEntryIds|join(', ') : 'Unbounded' }}</div>
+                <div><strong>Product IDs:</strong> {{ currentProductIds|length ? currentProductIds|join(', ') : 'Unbounded' }}</div>
+                <div><strong>Sections:</strong> {{ currentSectionHandles|length ? currentSectionHandles|join(', ') : 'Unbounded' }}</div>
+                <div><strong>Sites:</strong> {{ currentSiteIds|length ? currentSiteIds|join(', ') : 'Unbounded' }}</div>
               </div>
             {% endif %}
           </section>
@@ -658,6 +730,11 @@
               <div class="agents-workflows-side-stack">
                 <div><strong>Mode:</strong> Poll-first external worker</div>
                 <div><strong>Workflow mode:</strong> {{ currentTemplate.mode == 'read-only' ? 'Read-only review' : currentTemplate.mode|title }}</div>
+                <div><strong>Read boundary:</strong> {{ currentWorkflow.readBoundary.summary ?: 'Unbounded read review' }}</div>
+                <div><strong>Account fit:</strong> {{ currentWorkflow.accountScopeCoverage.isBroader ? 'Broader than this workflow' : 'Aligned with this workflow' }}</div>
+                {% if currentWorkflow.accountScopeCoverage.isBroader and currentWorkflow.accountScopeCoverage.meta %}
+                  <div><strong>Extra scopes:</strong> {{ currentWorkflow.accountScopeCoverage.meta }}</div>
+                {% endif %}
                 <div><strong>Last worker:</strong> {{ currentWorkflow.lastWorkerId ?: 'None yet' }}</div>
                 <div><strong>Last claim:</strong> {{ currentWorkflow.lastClaimedAt ? include('agents/_partials/relative-short-date', { value: currentWorkflow.lastClaimedAt }, with_context = false) : 'Never' }}</div>
                 <div><strong>Last heartbeat:</strong> {{ currentWorkflow.lastHeartbeatAt ? include('agents/_partials/relative-short-date', { value: currentWorkflow.lastHeartbeatAt }, with_context = false) : 'Never' }}</div>
@@ -690,13 +767,13 @@
                   </table>
                 </div>
               {% else %}
-                <p class="agents-subtle">No runs yet. This workflow stores run history after an external worker starts claiming and reporting runs.</p>
+                <p class="agents-subtle">No runs yet. This workflow stores run history after an external runtime discovers due work and reports run lifecycle events through the workflow API.</p>
               {% endif %}
             </section>
 
             <section class="border rounded p-3 agents-workflows-side-card">
               <h2 class="h4">Worker / Agent Handoff</h2>
-              <p class="agents-subtle">Download a handoff bundle with `README.md`, `.env.example`, `worker.mjs`, `run-worker.sh`, a cron example, and explicit output-storage guidance. Live tokens stay on the account surface.</p>
+              <p class="agents-subtle">Download a handoff bundle with `README.md`, `.env.example`, `worker.mjs`, `run-worker.sh`, a cron example, explicit read-boundary guidance, and the workflow polling/reporting contract. Live tokens stay on the account surface.</p>
               <form method="post" accept-charset="UTF-8">
                 {{ csrfInput() }}
                 {{ actionInput('agents/dashboard/download-workflow-bundle') }}

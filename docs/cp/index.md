@@ -150,15 +150,15 @@ Current responsibilities:
 - managed account binding for the workflow
 - curated read-only workflow-type library
 - visible workflow handoff downloads from the registry and detail surface
-- workflow handoff bundle with `README.md`, `.env.example`, worker scaffold, cron example, and output-storage guidance
-- optional recent-run visibility when an external integration records workflow-run rows
+- workflow handoff bundle with `README.md`, `.env.example`, worker scaffold, explicit workflow API paths, cron example, and output-storage guidance
+- recent-run visibility backed by the workflow polling and run-reporting contract
 
 Important boundary:
 
 - Agents stores workflow intent, account binding, and handoff export
-- the actual schedule runner, fetch/reasoning loop, and execution still happen in external workers
+- the actual schedule runner, fetch/reasoning loop, and execution still happen in external runtimes
 - the current slice does not turn Agents into a job runner, cron controller, or generic orchestration host
-- recent-run views only show data if something external writes those run rows today
+- `Latest Run` and `Recent runs` are populated when the bound runtime reports lifecycle state through the workflow API
 - the first stable slice is read-only and workflow-type-based, not a generic builder
 - write-oriented workflow types can land later, but they are intentionally out of scope for this first official surface
 
