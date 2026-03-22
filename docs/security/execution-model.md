@@ -2,11 +2,16 @@
 
 Agents is the governed machine-access layer for Craft CMS and Craft Commerce.
 
+A managed account can be used by an external runtime such as an agent, orchestrator, worker, or script.
+
+You set the boundary. External runtimes work inside it. Agents enforces the rules.
+
 ## Trust boundary
 
 - Production actions execute through scoped API routes and policy controls.
 - Runtime behavior is deterministic: request validation, stable error codes, auditable records.
 - Managed credentials, scopes, and optional approvals define the production control boundary.
+- External runtimes do the reasoning, orchestration, and tool calling outside Craft.
 - The plugin does not execute agent-provided shell commands as part of production action handling.
 - CLI commands (`craft agents/*`) are operator/developer tools for diagnostics and workflow support.
 
@@ -25,7 +30,7 @@ Agents is the governed machine-access layer for Craft CMS and Craft Commerce.
 ## Why this model
 
 - Keeps production behavior auditable and policy-constrained.
-- Gives AI agents, automations, and integrations one consistent access surface instead of custom endpoint sprawl.
+- Gives external runtimes one consistent access surface instead of custom endpoint sprawl.
 - Avoids broad shell-execution risk in multi-tenant/production environments.
 - Preserves CLI velocity for operators without making CLI the runtime trust boundary.
 - Makes readiness, sync-state, lifecycle posture, and incident visibility part of the operating model instead of afterthoughts.

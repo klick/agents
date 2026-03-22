@@ -2,9 +2,11 @@
 
 Use this guide to get from a new managed account to a real scheduled worker call.
 
+A worker is one valid kind of external runtime. It is the simplest first pattern when you want deterministic fetches, cron scheduling, and cheap repeatable proof that the token works.
+
 By the end of this flow, you will have:
 
-- a read-only worker account in Craft
+- a read-only managed account in Craft
 - a worker `.env` file
 - a successful worker run against `/agents/v1/*`
 - a cron example for repeating that check
@@ -19,9 +21,9 @@ Example worker path:
 
 - `examples/workers/node-bootstrap/`
 
-## 1. Create a read-only worker account
+## 1. Create a read-only account for the worker
 
-In `Agents -> Accounts`, create a managed account for the worker.
+In `Agents -> Accounts`, create a managed account for the worker runtime.
 
 Recommended fields:
 
@@ -59,6 +61,8 @@ Some installs may expose helper actions such as config export or account validat
 - token
 - worker environment
 - real external run
+
+If your integration uses an agent or orchestrator directly, the same managed account model still applies. This guide just uses a worker because it is the simplest first runtime to explain and schedule.
 
 ## 3. Configure the example worker
 
@@ -143,5 +147,6 @@ This flow validates the current onboarding model before any future pairing/conne
 
 - [Installation & Setup](/get-started/installation-setup)
 - [Configuration](/get-started/configuration)
+- [External Runtimes](/get-started/external-runtimes)
 - [Agent Bootstrap](/api/agent-bootstrap)
 - [Starter Packs](/api/starter-packs)

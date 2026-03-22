@@ -1,6 +1,15 @@
 # Get Started
 
-Agents is the governed machine-access layer for Craft CMS and Craft Commerce. Start by installing the plugin, configuring machine credentials, and validating the API and control-plane posture before connecting agents, automations, or external integrations.
+Agents is the governed machine-access layer for Craft CMS and Craft Commerce. Start by installing the plugin, configuring machine credentials, and validating the API and control-plane posture before connecting an external runtime.
+
+In these docs, an external runtime can be:
+
+- an agent
+- an orchestrator
+- a worker
+- a script
+
+You set the boundary. External runtimes work inside it.
 
 ## Requirements
 
@@ -25,7 +34,11 @@ php craft plugin/install agents
 
 ## First Worker
 
-If you want one practical end-to-end bootstrap before building a fuller integration, start with a managed account plus the public Node worker example:
+If you want one practical end-to-end bootstrap before building a fuller integration, start with a managed account plus the public Node worker example.
+
+A worker is the simplest first external runtime because it makes scheduling, retries, and deterministic fetch/proof behavior easy to understand.
+
+The product does not require every integration to use a separate worker process, but it is the calmest first path:
 
 - create a read-only managed account with `health:read`, `readiness:read`, and `auth:read`
 - place the one-time token into `examples/workers/node-bootstrap/.env`
@@ -44,6 +57,7 @@ See:
 - [Installation & Setup](/get-started/installation-setup)
 - [Configuration](/get-started/configuration)
 - [First Worker](/get-started/first-worker)
+- [External Runtimes](/get-started/external-runtimes)
 - [Agents vs Element API](/get-started/agents-vs-element-api)
 - [Workflow Guides](/workflows/)
 - [Agent Bootstrap](/api/agent-bootstrap)

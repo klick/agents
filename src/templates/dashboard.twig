@@ -1265,11 +1265,11 @@
         {% set readinessDisplayStateLabel = 'Ready' %}
         {% set readinessDisplayHeadlineLabel = 'Ready to Connect' %}
         {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
-        {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
+        {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an external runtime to start building live-readiness evidence.' %}
         {% set readinessDisplayStateTone = 'good' %}
         {% set statusScreenPrimaryActionLabel = 'Create managed account' %}
         {% set statusScreenPrimaryActionUrl = accountsUrl ~ '#addAgentSection' %}
-        {% set statusScreenSecondaryActionLabel = 'Guide to create your first worker' %}
+        {% set statusScreenSecondaryActionLabel = 'Guide to create your first runtime' %}
         {% set statusScreenSecondaryActionUrl = firstWorkerGuideUrl %}
         {% set statusScreenShowDetailsCta = true %}
         {% set statusScreenSummaryCards = [
@@ -1283,7 +1283,7 @@
             label: 'Accounts',
             value: 'Not created',
             tone: 'muted',
-            copy: 'Create your first managed account when you are ready to connect a worker.'
+            copy: 'Create your first managed account when you are ready to connect an external runtime.'
           },
           {
             label: 'Connection',
@@ -1299,7 +1299,7 @@
           },
         ] %}
         {% set statusScreenGuideTitle = 'Start with one account' %}
-        {% set statusScreenGuideBody = 'You do not need to set up the whole system first. Create one managed account, connect a worker, and confirm the first authenticated request.' %}
+        {% set statusScreenGuideBody = 'You do not need to set up the whole system first. Create one managed account, connect an external runtime, and confirm the first authenticated request.' %}
         {% set statusScreenGuideChecklist = [
           'Runtime is enabled',
           'First account created',

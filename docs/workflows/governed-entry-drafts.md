@@ -2,6 +2,8 @@
 
 Use this workflow when you want to test or build the real governed draft-write path against an entry.
 
+The public example uses a worker, but the same governed flow can also be driven by another external runtime if it can manage the same request and execute-approved phases safely.
+
 This is the simplest write-side workflow in Agents:
 
 - request approval for `entry.updateDraft`
@@ -56,6 +58,8 @@ The worker supports two modes:
 
 2. `execute-approved`
 - executes the draft action after a human approved the request
+
+If your agent or orchestrator already handles scheduling, state, and tool calls cleanly, it can drive the same flow directly. The worker example stays useful because it makes the approval boundary, idempotency, and execute-approved phase explicit.
 
 ## Suggested Flow
 

@@ -4,6 +4,10 @@ Governed machine access for Craft CMS and Craft Commerce.
 
 Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It provides one governed machine-access layer with scoped APIs, managed credentials, diagnostics, and optional approval controls, so production behavior stays predictable, observable, and auditable.
 
+Managed accounts can be used by external runtimes such as agents, orchestrators, workers, and scripts.
+
+You set the boundary. External runtimes work inside it. Agents enforces the rules through scopes, approvals, and audit records.
+
 Current plugin version: **0.27.1**
 
 ## For Agencies Running Craft Sites For Clients
@@ -96,6 +100,8 @@ That is the role of workflow starter kits: turning governed machine access into 
 
 ## Trust Boundary
 
+- Operators define the governed boundary.
+- External runtimes operate inside that boundary.
 - Production actions flow through scoped HTTP APIs, request validation, policy gates, and audit records.
 - The plugin is not a shell execution layer for production agents.
 - `craft agents/*` commands are operator and developer tooling, not the production trust boundary.

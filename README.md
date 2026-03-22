@@ -8,6 +8,10 @@ Current plugin version: **0.27.1**
 
 Agents gives Craft a safe API and control plane for AI agents, automations, and integrations. It is the governed machine-access layer for Craft CMS and Craft Commerce, combining scoped APIs, managed credentials, diagnostics, and optional approval controls so production behavior stays predictable, observable, and auditable.
 
+Managed accounts can be used by external runtimes such as agents, orchestrators, workers, and scripts.
+
+You set the boundary. External runtimes work inside it. Agents enforces the rules through scoped access, optional approvals, and audit records.
+
 Agents is designed for agencies and delivery teams that manage Craft sites on behalf of clients. It gives those teams a governed way to introduce automation without losing visibility, approval control, or operational accountability.
 
 ## Product Direction
@@ -23,6 +27,7 @@ That means making it easier to automate approved content or commerce lanes safel
 
 - Public docs: https://marcusscheller.com/docs/agents/
 - First worker guide: https://marcusscheller.com/docs/agents/get-started/first-worker
+- External runtimes: https://marcusscheller.com/docs/agents/get-started/external-runtimes
 - API overview: https://marcusscheller.com/docs/agents/api/
 - External plugin adapters: https://marcusscheller.com/docs/agents/api/external-plugin-adapters
 - Control panel: https://marcusscheller.com/docs/agents/cp/

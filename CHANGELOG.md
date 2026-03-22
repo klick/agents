@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Added a first-run onboarding start flow at `agents/start` with guided `welcome`, `create`, and `ready` states for setting up the first managed account.
+- Added persisted onboarding state tracking plus a dedicated migration/service layer so the control panel can track onboarding progress, preview stages, dismissal, and completion.
+- Added a dedicated onboarding regression check to cover the new start-flow surfaces and state transitions.
+
+### Changed
+
+- Updated plugin/control-panel wiring so onboarding can be surfaced as an operator-facing setup path instead of leaving first-run account setup to the existing registry pages only.
+- Expanded the onboarding presentation assets and supporting roadmap/docs coverage for the new start experience, including the hero avatar/icon library used by the new onboarding screen.
+
 ## 0.27.1 - 2026-03-21
 
 ### Changed

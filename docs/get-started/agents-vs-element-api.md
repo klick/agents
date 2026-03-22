@@ -8,7 +8,7 @@ The difference is that `Agents` is not just an endpoint tool. It is a governed m
 
 | Area | Element API | Agents |
 | --- | --- | --- |
-| Primary job | Publish custom JSON/feed endpoints for elements | Act as a governed backend for machines, workers, and LLMs |
+| Primary job | Publish custom JSON/feed endpoints for elements | Act as a governed backend for external runtimes such as agents, orchestrators, workers, and LLMs |
 | Setup model | Define routes in `config/element-api.php` and write the query/transformer yourself | Create managed accounts, assign scopes, and use a stable API surface |
 | Auth model | Whatever you build yourself | Built-in machine credentials, scoped tokens, optional TTL/IP controls |
 | Discovery | No standard self-description by default | `/capabilities`, `/openapi.json`, `/auth/whoami` for machine-readable discovery |
@@ -41,7 +41,7 @@ Put more bluntly:
 - You need least-privilege machine tokens.
 - You want governed draft or proposal flows.
 - You want readiness, diagnostics, and a stable machine contract.
-- You are connecting external assistants, workers, or automations.
+- You are connecting external assistants, orchestrators, workers, or automations.
 
 ## Practical Difference
 

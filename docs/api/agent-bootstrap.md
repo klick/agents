@@ -1,6 +1,8 @@
 # Agent Bootstrap
 
-Use this page for a deterministic "first working call" path.
+Use this page for a deterministic "first working call" path from any external runtime.
+
+That external runtime may be an agent, orchestrator, worker, or script. The examples here are deliberately simple and can be used from any of those shapes.
 
 Base path: `/agents/v1`
 

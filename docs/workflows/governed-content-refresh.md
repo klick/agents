@@ -1,6 +1,6 @@
 # Governed Content Refresh
 
-Use this workflow when you want an operator-copy/paste path for a scheduled worker that:
+Use this workflow when you want an operator-copy/paste path for a scheduled external runtime that:
 
 - reads entry data from Craft
 - derives draft content from that data
@@ -10,15 +10,15 @@ Use this workflow when you want an operator-copy/paste path for a scheduled work
 This is the most practical first agency-style write workflow because it keeps the system simple:
 
 - one managed account
-- one cron-driven worker
+- one cron-driven worker or equivalent runtime entry point
 - one reasoning layer you can replace later
 - one approval surface in Craft
 
 ## What This Workflow Covers
 
 1. create a write-capable managed account
-2. configure a worker `.env`
-3. schedule the worker with cron
+2. configure a worker `.env` or equivalent runtime secret input
+3. schedule the runtime with cron or an equivalent runner
 4. read entry data from Craft
 5. generate a draft proposal
 6. submit the approval request with the full draft payload
@@ -29,7 +29,7 @@ This is the most practical first agency-style write workflow because it keeps th
 Create a managed account in `Agents -> Accounts` with:
 
 - Name: `Governed Content Refresh`
-- Description: `Scheduled worker that reads entry data and requests governed refresh drafts.`
+- Description: `External runtime that reads entry data and requests governed refresh drafts.`
 
 Recommended scopes:
 
@@ -51,15 +51,26 @@ The approval request stores the payload Craft will later execute.
 
 That matters because the Craft control panel already auto-executes a finally approved request when the approver has execute permission. So the operator-friendly path is:
 
-1. the worker submits the full draft payload
+1. the runtime submits the full draft payload
 2. humans approve it
 3. the final approval creates the saved draft
 
 That avoids a second worker phase unless you explicitly want one.
 
+## Runtime Pattern
+
+This workflow supports two valid shapes:
+
+1. direct agent/orchestrator runtime
+   - the external runtime fetches data from Agents directly, reasons over it, and submits the approval request
+2. worker-first runtime
+   - a deterministic worker/script handles scheduling, auth, idempotency, and data preparation, then passes a bounded dataset into a reasoning step
+
+The public example uses the second pattern because it is easier to schedule, cheaper to rerun, and easier to reason about operationally.
+
 ## Example Worker
 
-Copy/paste-ready example path:
+Copy/paste-ready reference path:
 
 - `examples/workers/governed-content-refresh/`
 
@@ -103,6 +114,8 @@ Keep the split like this:
 - worker: auth, scheduling, idempotency, payload transport
 - agent/reasoning step: decide the proposed draft values
 
+If your external runtime already handles scheduling and tool calls well, it can use the same managed account directly without introducing a separate worker process.
+
 ## Current Constraint
 
 The current entry read API returns entry metadata like:
@@ -136,3 +149,4 @@ Use [Governed Entry Drafts](/workflows/governed-entry-drafts) instead when:
 
 - [Governed Entry Drafts](/workflows/governed-entry-drafts)
 - [First Worker](/get-started/first-worker)
+- [External Runtimes](/get-started/external-runtimes)

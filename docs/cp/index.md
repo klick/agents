@@ -2,6 +2,10 @@
 
 The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure runtime behavior, and, when experimental writes are enabled, review governed approval and rule flows.
 
+Managed accounts are used by external runtimes such as agents, orchestrators, workers, and scripts.
+
+You set the boundary in the CP. External runtimes work inside it. Agents enforces the rules.
+
 Agents CP is not a shell execution layer. Production behavior still flows through scoped APIs, request validation, policy controls, and audit records.
 
 ## Top-Level CP Architecture
@@ -97,6 +101,8 @@ Notable current behavior:
 
 `Accounts` is the managed machine-identity surface.
 
+This is where operators define the governed boundary for each external runtime.
+
 Current responsibilities:
 
 - lifecycle summary strip (`Managed accounts`, `Paused accounts`, `Need attention`)
@@ -120,6 +126,7 @@ Current responsibilities:
 - usage metadata and optional live activity indicator
 - assignment of existing `Target Sets` to write-capable accounts
 - bounded `entry.updateDraft` helper snippets for assigned target sets in account details
+- worker-oriented `.env` bootstrap helpers for teams using a worker or script runtime
 - dedicated account-template section below the create form
 - suggested account profiles for common core-Craft integration shapes
 - Commerce-only scopes appear only when Craft Commerce is installed
