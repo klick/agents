@@ -15,19 +15,34 @@
 {% set getStartedUrl = getStartedUrl ?? 'https://marcusscheller.com/docs/agents/get-started/' %}
 {% set firstWorkerGuideUrl = firstWorkerGuideUrl ?? 'https://marcusscheller.com/docs/agents/get-started/first-worker' %}
 {% set onboardingPreviewParam = 'onboardingPreview' %}
-{% set avatarVariants = ['orbit', 'node', 'shield', 'bot', 'spark', 'grid'] %}
+{% set avatarVariantCount = 216 %}
+{% set avatarExtraVariants = [
+  'figma-11',
+  'figma-37',
+  'figma-58',
+  'figma-84',
+  'figma-109',
+  'figma-143',
+  'figma-177',
+  'figma-205',
+] %}
 {% set firstCredential = onboardingState.firstCredential ?? null %}
 {% set onboardingCreateUrl = cpUrl('agents/start', onboardingPreviewStage ? { (onboardingPreviewParam): onboardingPreviewStage, onboardingStep: 'create' } : { onboardingStep: 'create' }) %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
 
-  <div class="agents-onboarding-shell">
+  <div class="agents-onboarding-shell{% if onboardingStage != 'welcome' %} agents-onboarding-shell--compact{% endif %}">
     <div class="agents-onboarding-hero-strip" aria-hidden="true">
-      <div class="agents-onboarding-hero-grid">
-        {% for index in 1..90 %}
-          {% set variant = avatarVariants[(loop.index0 % avatarVariants|length)] %}
-          <div class="agents-onboarding-hero-avatar agents-onboarding-hero-avatar--{{ variant }}">
+      <div class="agents-onboarding-hero-field">
+        {% for iconIndex in 1..avatarVariantCount %}
+          {% set variant = 'figma-' ~ '%02d'|format(iconIndex) %}
+          <div class="agents-onboarding-hero-avatar agents-onboarding-hero-avatar--{{ variant }}" data-onboarding-hero-avatar data-onboarding-hero-avatar-id="{{ iconIndex }}" data-onboarding-hero-avatar-variant="{{ variant }}">
+            {% include 'agents/_partials/onboarding-avatar' with { variant: variant } only %}
+          </div>
+        {% endfor %}
+        {% for variant in avatarExtraVariants %}
+          <div class="agents-onboarding-hero-avatar agents-onboarding-hero-avatar--{{ variant }} agents-onboarding-hero-avatar--extra" data-onboarding-hero-avatar data-onboarding-hero-avatar-id="{{ avatarVariantCount + loop.index }}" data-onboarding-hero-avatar-variant="{{ variant }}">
             {% include 'agents/_partials/onboarding-avatar' with { variant: variant } only %}
           </div>
         {% endfor %}
@@ -49,7 +64,7 @@
         <section class="agents-onboarding-panel agents-onboarding-panel--create">
           <header class="agents-onboarding-copy">
             <h1>Create your first <em>managed account</em></h1>
-            <p>A managed account is the machine identity your worker will use to connect to this site. Start with a name and short note. You can refine access later.</p>
+            <p>A managed account is the machine identity your worker will use to connect to this site.<br>Start with a name and short note. You can refine access later.</p>
           </header>
 
           {% if canManageCredentials %}
@@ -91,7 +106,7 @@
         <section class="agents-onboarding-panel agents-onboarding-panel--ready">
           <header class="agents-onboarding-copy">
             <h1>Your first managed account is ready</h1>
-            <p>Use this token to connect your first worker to this site. You can reveal it only once.</p>
+            <p>Use this token to connect your first worker to this site.<br>You can reveal it only once.</p>
           </header>
 
           <div class="agents-onboarding-token-card">
@@ -128,7 +143,7 @@
         <section class="agents-onboarding-panel agents-onboarding-panel--welcome">
           <header class="agents-onboarding-copy">
             <h1>Create your first <em>managed account</em></h1>
-            <p>Give your first worker a controlled way to access this site. Create one managed account now and connect it in the next step.</p>
+            <p>Give your first worker a controlled way to access this site.<br>Create one managed account now and connect it in the next step.</p>
           </header>
 
           <div class="agents-onboarding-panel__cta">
@@ -154,6 +169,10 @@
   </div>
 
   <style>
+    #content.content-pane {
+      padding: 0 !important;
+    }
+
     .agents-onboarding-shell {
       position: relative;
       min-height: calc(100vh - 84px);
@@ -171,7 +190,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 48px;
+      gap: 100px;
       padding-top: 8px;
     }
 
@@ -181,37 +200,71 @@
       left: -24px;
       right: -24px;
       height: 230px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
       overflow: hidden;
       pointer-events: none;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.92) 72%, rgba(255, 255, 255, 0) 100%);
     }
 
-    .agents-onboarding-hero-grid {
-      display: grid;
-      grid-template-columns: repeat(18, minmax(0, 1fr));
-      gap: 20px 24px;
+    .agents-onboarding-hero-field {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-content: flex-start;
+      gap: 24px;
       width: calc(100% + 48px);
-      min-width: 1280px;
+      min-width: 1080px;
       margin-left: -24px;
-      padding: 18px 24px 120px;
-      transform: translateY(-18px);
+      padding: 18px 24px 12px;
+    }
+
+    @property --agents-onboarding-pulse-color {
+      syntax: '<color>';
+      inherits: false;
+      initial-value: #BBC7D5;
     }
 
     .agents-onboarding-hero-avatar {
+      --agents-onboarding-pulse-color: #BBC7D5;
+      --fill-0: var(--agents-onboarding-pulse-color);
+      --stroke-0: var(--agents-onboarding-pulse-color);
       width: 40px;
       height: 40px;
-      color: rgba(187, 199, 213, 0.5);
+      color: var(--agents-onboarding-pulse-color);
+      transition: opacity 180ms ease, filter 180ms ease;
     }
 
     .agents-onboarding-hero-avatar svg {
       width: 100%;
       height: 100%;
       display: block;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.7;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+    }
+
+    .agents-onboarding-hero-avatar.is-live-read,
+    .agents-onboarding-hero-avatar.is-live-write {
+      animation: agents-onboarding-hero-pulse 2000ms ease-out 1;
+    }
+
+    @keyframes agents-onboarding-hero-pulse {
+      0% {
+        --agents-onboarding-pulse-color: #BBC7D5;
+        opacity: 0.85;
+        filter: none;
+      }
+
+      25% {
+        --agents-onboarding-pulse-color: #596673;
+        opacity: 1;
+        filter: drop-shadow(0 0 10px rgba(89, 102, 115, 0.22));
+      }
+
+      100% {
+        --agents-onboarding-pulse-color: #BBC7D5;
+        opacity: 1;
+        filter: none;
+      }
     }
 
     .agents-onboarding-logo {
@@ -237,6 +290,43 @@
       display: block;
     }
 
+    .agents-onboarding-shell--compact .agents-onboarding-shell__inner {
+      gap: 48px;
+    }
+
+    .agents-onboarding-shell--compact .agents-onboarding-hero-strip {
+      height: 220px;
+    }
+
+    .agents-onboarding-shell--compact .agents-onboarding-logo__mark {
+      width: 100px;
+      height: 100px;
+    }
+
+    @media (min-width: 1024px) {
+      .agents-onboarding-hero-strip {
+        height: 320px;
+      }
+
+      .agents-onboarding-hero-field {
+        gap: 32px;
+      }
+
+      .agents-onboarding-logo__mark {
+        width: 150px;
+        height: 150px;
+      }
+
+      .agents-onboarding-copy h1 {
+        font-size: 48px;
+      }
+
+      .agents-onboarding-panel--create .agents-onboarding-copy h1,
+      .agents-onboarding-panel--ready .agents-onboarding-copy h1 {
+        font-size: 48px;
+      }
+    }
+
     .agents-onboarding-panel {
       width: 100%;
       max-width: 1400px;
@@ -258,7 +348,7 @@
     .agents-onboarding-copy h1 {
       margin: 0;
       color: #d72222;
-      font-size: 48px;
+      font-size: 36px;
       line-height: 1.05;
       font-weight: 700;
       max-width: 980px;
@@ -270,24 +360,24 @@
 
     .agents-onboarding-copy p {
       margin: 0;
-      max-width: 780px;
+      max-width: 500px;
       color: #596673;
-      font-size: 24px;
+      font-size: 16px;
       line-height: 1.25;
     }
 
     .agents-onboarding-panel--create .agents-onboarding-copy h1,
     .agents-onboarding-panel--ready .agents-onboarding-copy h1 {
-      font-size: 24px;
+      font-size: 36px;
       line-height: 1.2;
     }
 
     .agents-onboarding-panel--create .agents-onboarding-copy p,
     .agents-onboarding-panel--ready .agents-onboarding-copy p {
-      font-size: 14px;
+      font-size: 16px;
       line-height: 1.45;
       font-weight: 700;
-      max-width: 640px;
+      max-width: 500px;
     }
 
     .agents-onboarding-panel__cta {
@@ -477,7 +567,7 @@
       }
 
       .agents-onboarding-copy p {
-        font-size: 18px;
+        font-size: 16px;
       }
 
       .agents-onboarding-panel--create .agents-onboarding-copy h1,
@@ -538,6 +628,119 @@
           }
         });
       }
+    })();
+
+    (() => {
+      const onboardingStage = '{{ onboardingStage|e('js') }}';
+      const simulationQueryParams = new URLSearchParams(window.location.search || '');
+      const simulationEnabledRaw = (simulationQueryParams.get('simulatePulse') || '').trim().toLowerCase();
+      const simulationEnabledIsCount = /^\d+$/.test(simulationEnabledRaw) && Number.parseInt(simulationEnabledRaw, 10) > 0;
+      const temporarySimulationEnabled = simulationEnabledIsCount || ['1', 'true', 'yes', 'on'].includes(simulationEnabledRaw);
+      if (!temporarySimulationEnabled || onboardingStage !== 'welcome') {
+        return;
+      }
+
+      const heroAvatars = Array.from(document.querySelectorAll('[data-onboarding-hero-avatar]'));
+      if (!heroAvatars.length) {
+        return;
+      }
+
+      const simulationTargetCountRaw = Number.parseInt(
+        simulationQueryParams.get('simulatePulseAgents') || simulationEnabledRaw || '4',
+        10,
+      );
+      const simulationTargetCount = Number.isInteger(simulationTargetCountRaw) && simulationTargetCountRaw > 0
+        ? Math.min(simulationTargetCountRaw, heroAvatars.length)
+        : 4;
+      const simulationModeRaw = (simulationQueryParams.get('simulatePulseMode') || 'mixed').trim().toLowerCase();
+      const simulationMode = ['read', 'write', 'mixed'].includes(simulationModeRaw) ? simulationModeRaw : 'mixed';
+      const simulationIntervalRaw = Number.parseInt(simulationQueryParams.get('simulatePulseIntervalMs') || '', 10);
+      const simulationIntervalMs = Number.isInteger(simulationIntervalRaw)
+        ? Math.max(400, Math.min(simulationIntervalRaw, 15000))
+        : 1800;
+      const pulseClassRead = 'is-live-read';
+      const pulseClassWrite = 'is-live-write';
+      const pulseDurationMs = 2000;
+      const pulseTimeoutByAvatarId = new Map();
+      let pulseTimer = null;
+
+      const clearPulseClasses = (avatar) => {
+        avatar.classList.remove(pulseClassRead, pulseClassWrite);
+      };
+
+      const schedulePulseClear = (avatar) => {
+        const avatarId = avatar.dataset.onboardingHeroAvatarId || '';
+        const existing = pulseTimeoutByAvatarId.get(avatarId);
+        if (existing) {
+          window.clearTimeout(existing);
+        }
+
+        const timeoutId = window.setTimeout(() => {
+          clearPulseClasses(avatar);
+          pulseTimeoutByAvatarId.delete(avatarId);
+        }, pulseDurationMs);
+        pulseTimeoutByAvatarId.set(avatarId, timeoutId);
+      };
+
+      const applyPulse = (avatar, operation) => {
+        clearPulseClasses(avatar);
+        avatar.classList.add(operation === 'write' ? pulseClassWrite : pulseClassRead);
+        schedulePulseClear(avatar);
+      };
+
+      const pickRandomTargets = () => {
+        const pool = [...heroAvatars];
+        const picks = [];
+        while (pool.length && picks.length < simulationTargetCount) {
+          const index = Math.floor(Math.random() * pool.length);
+          picks.push(pool.splice(index, 1)[0]);
+        }
+        return picks;
+      };
+
+      const resolveOperation = () => {
+        if (simulationMode === 'mixed') {
+          return Math.random() >= 0.5 ? 'write' : 'read';
+        }
+        return simulationMode === 'write' ? 'write' : 'read';
+      };
+
+      const runPulseSimulation = () => {
+        pickRandomTargets().forEach((avatar) => {
+          applyPulse(avatar, resolveOperation());
+        });
+      };
+
+      const stopPulseSimulation = () => {
+        if (pulseTimer !== null) {
+          window.clearInterval(pulseTimer);
+          pulseTimer = null;
+        }
+        pulseTimeoutByAvatarId.forEach((timeoutId) => {
+          window.clearTimeout(timeoutId);
+        });
+        pulseTimeoutByAvatarId.clear();
+        heroAvatars.forEach(clearPulseClasses);
+      };
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          stopPulseSimulation();
+          return;
+        }
+
+        if (pulseTimer !== null) {
+          return;
+        }
+
+        runPulseSimulation();
+        pulseTimer = window.setInterval(runPulseSimulation, simulationIntervalMs);
+      });
+
+      window.addEventListener('beforeunload', stopPulseSimulation);
+
+      runPulseSimulation();
+      pulseTimer = window.setInterval(runPulseSimulation, simulationIntervalMs);
     })();
   </script>
 {% endblock %}

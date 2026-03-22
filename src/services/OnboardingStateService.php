@@ -9,6 +9,13 @@ use yii\db\Query;
 class OnboardingStateService extends Component
 {
     private const TABLE = '{{%agents_onboarding_state}}';
+    private const TIMESTAMP_COLUMNS = [
+        'startedAt',
+        'firstAccountCreatedAt',
+        'firstSuccessfulAuthAt',
+        'dismissedAt',
+        'completedAt',
+    ];
 
     public function getCpState(array $defaultScopes, ?string $previewStage = null): array
     {
@@ -161,14 +168,14 @@ class OnboardingStateService extends Component
         $updates = [];
 
         if (($row['firstAccountCreatedAt'] ?? null) === null && count($normalizedCredentials) > 0) {
-            $firstCredentialCreatedAt = $this->resolveEarliestCredentialTimestamp($normalizedCredentials, 'dateCreated');
+            $firstCredentialCreatedAt = $this->resolveEarliestCredentialTimestamp($normalizedCredentials, 'dateCreated', 'db');
             if ($firstCredentialCreatedAt !== null) {
                 $updates['firstAccountCreatedAt'] = $firstCredentialCreatedAt;
             }
         }
 
         if (($row['firstSuccessfulAuthAt'] ?? null) === null) {
-            $firstSuccessfulAuthAt = $this->resolveEarliestCredentialTimestamp($normalizedCredentials, 'lastUsedAt');
+            $firstSuccessfulAuthAt = $this->resolveEarliestCredentialTimestamp($normalizedCredentials, 'lastUsedAt', 'db');
             if ($firstSuccessfulAuthAt !== null) {
                 $updates['firstSuccessfulAuthAt'] = $firstSuccessfulAuthAt;
                 if (($row['completedAt'] ?? null) === null) {
@@ -230,6 +237,7 @@ class OnboardingStateService extends Component
             return;
         }
 
+        $updatedRow = $this->normalizeTimestampsForDatabase($updatedRow);
         unset($updatedRow['id'], $updatedRow['uid'], $updatedRow['dateCreated']);
         $updatedRow['dateUpdated'] = gmdate('Y-m-d H:i:s');
 
@@ -272,7 +280,7 @@ class OnboardingStateService extends Component
         return $normalized;
     }
 
-    private function resolveEarliestCredentialTimestamp(array $credentials, string $field): ?string
+    private function resolveEarliestCredentialTimestamp(array $credentials, string $field, string $format = 'iso'): ?string
     {
         $timestamps = [];
         foreach ($credentials as $credential) {
@@ -291,11 +299,25 @@ class OnboardingStateService extends Component
         }
 
         sort($timestamps);
-        return gmdate('Y-m-d\TH:i:s\Z', (int)$timestamps[0]);
+        return $this->formatTimestamp((int)$timestamps[0], $format);
     }
 
     private function normalizeTimestampValue(mixed $value): ?string
     {
+        return $this->normalizeTimestamp($value, 'iso');
+    }
+
+    private function normalizeTimestampValueForDatabase(mixed $value): ?string
+    {
+        return $this->normalizeTimestamp($value, 'db');
+    }
+
+    private function normalizeTimestamp(mixed $value, string $format): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $this->formatTimestamp($value->getTimestamp(), $format);
+        }
+
         if (!is_string($value)) {
             return null;
         }
@@ -310,7 +332,25 @@ class OnboardingStateService extends Component
             return null;
         }
 
-        return gmdate('Y-m-d\TH:i:s\Z', $timestamp);
+        return $this->formatTimestamp($timestamp, $format);
+    }
+
+    private function normalizeTimestampsForDatabase(array $row): array
+    {
+        foreach (self::TIMESTAMP_COLUMNS as $column) {
+            if (array_key_exists($column, $row)) {
+                $row[$column] = $this->normalizeTimestampValueForDatabase($row[$column]);
+            }
+        }
+
+        return $row;
+    }
+
+    private function formatTimestamp(int $timestamp, string $format = 'iso'): string
+    {
+        return $format === 'db'
+            ? gmdate('Y-m-d H:i:s', $timestamp)
+            : gmdate('Y-m-d\TH:i:s\Z', $timestamp);
     }
 
     private function stateTableExists(): bool

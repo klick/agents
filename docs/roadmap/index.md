@@ -100,7 +100,7 @@ Release outcome:
 
 ## Done (`v0.21.x`)
 
-- Shipped operator notifications (`F17`) with email-first delivery, recipient routing, recent-delivery visibility, and scheduled status-check support.
+- Shipped operator notifications with email-first delivery, recipient routing, recent-delivery visibility, and scheduled status-check support.
 - Reintroduced the public operator IA around `Status`, `Approvals`, `Accounts`, and `Settings` and hardened the governed approval flow.
 - Published the first-worker bootstrap path with a public guide and example worker.
 - Bound approved governed entry-draft requests to exact saved drafts and blocked conflicting saved-draft creation to reduce ambiguous draft apply behavior.
@@ -152,7 +152,7 @@ Release outcome:
 
 ## Done (`v0.25.0`)
 
-- Implemented `F21` governed write target sets and CP helpers as the main operator-safety slice for bounded client automation.
+- Implemented governed write target sets and CP helpers as the main operator-safety slice for bounded client automation.
 - Added reusable `Target Sets` with dedicated CP management, account assignment, approval summaries, and server-side request/execution enforcement.
 - Kept runnable worker setup account-scoped while moving target-set management into its own governance surface.
 - Continued flattening the public CP IA around shared page shells, cleaner section separators, and more consistent table-first registry views.
@@ -163,7 +163,7 @@ Release outcome:
 
 ## Done (`v0.24.0`)
 
-- Implemented `F15` production webhook probe.
+- Implemented the production webhook probe.
 - Added an admin-only `Webhook Probe` card in `Status` that sends a synthetic signed delivery against the live runtime webhook target.
 - Added a dedicated probe ledger with recent run history, payload inspection, triggered-by metadata, and cooldown visibility.
 - Kept the production probe separate from the dev-only `Webhook Test Sink` while reusing the same signing and outbound HTTP transport path.
@@ -202,7 +202,7 @@ Release outcome:
 
 ## Done (`v0.22.1`)
 
-- Tightened the post-`F20` operator surfaces with cleaner Accounts, Approvals, and Status card framing built around shared muted header strips and more native Craft action treatments.
+- Tightened the operator surfaces after approval diff review with cleaner Accounts, Approvals, and Status card framing built around shared muted header strips and more native Craft action treatments.
 - Fixed completed approval diffs so `Applied / Completed` can still show meaningful changed rows after an approved draft has been applied and the active draft no longer exists.
 - Added an operator-facing stale-status reset action and aligned the top Status verdict with the same final summary logic shown in the proof cards.
 
@@ -212,7 +212,7 @@ Release outcome:
 
 ## Done (`v0.22.0`)
 
-- Implemented `F20` approval content diff review surface.
+- Implemented the approval content diff review surface.
 - Added a dedicated `Diff` action next to `Review` for governed entry-draft approvals.
 - Shipped the first version as changed-only, field-aware, and optimized for fast human judgment, including a text-focused redline view.
 
@@ -222,7 +222,7 @@ Release outcome:
 
 ## Planned (Pre-`1.0.0`) First-Run Onboarding and Contract Stabilization
 
-- Implement `F24` fresh-install start screens and first-run onboarding as the main new-install adoption slice.
+- Implement fresh-install start screens and first-run onboarding as the main new-install adoption slice.
 - Add a branded welcome/start surface for fresh installs with short orientation copy, doc links, and a strong first-account CTA.
 - Add a lightweight bootstrap follow-up state that guides operators from “first account exists” to “first real machine use”.
 - Freeze the main CP IA.
@@ -245,7 +245,7 @@ Release outcome:
 
 ## Released (`v0.26.0`) Agency Stack Extension Foundation
 
-- Delivered the first `F12` slice:
+- Delivered the first agency stack extension slice:
   - provider registry + registration event
   - dynamic external-resource routes
   - external read scopes merged into capabilities/OpenAPI/schema
@@ -259,7 +259,7 @@ Release outcome:
 
 ## Released (`v0.27.0`) Agency Workflow Starter Kits and Companion Workers
 
-- Delivered the first `F19` slice:
+- Delivered the first workflow starter-kit slice:
   - public `Governed Content Refresh` workflow guide
   - companion worker scaffold under `examples/workers/governed-content-refresh/`
   - direct CP links from `Approvals` and account worker helpers into the starter-kit path
@@ -270,9 +270,28 @@ Release outcome:
 
 - Agencies now have the first repeatable starter-kit workflow and companion worker path for bounded governed draft refresh work, alongside calmer operator-facing CP surfaces.
 
-## Planned (`v0.28.x`) Agency Operator Copilot Foundation
+## Planned (`v0.28.x`) Operator-Managed Workflow Instances
 
-- Implement `F22` provider-backed orchestration foundation for optional in-product LLM support.
+- Implement operator-managed workflow instances as the next layer after starter kits and first-run onboarding.
+- Add a dedicated `Workflows` CP surface where operators can create, configure, pause, resume, and inspect workflow instances.
+- Keep workflow creation template-based rather than introducing a generic builder.
+- Keep execution in external workers:
+  - Agents stores workflow config, schedule intent, account binding, run history, and governance state
+  - workers discover workflow instances through a workflow API contract and report lifecycle events back
+- Start poll-first rather than webhook-first:
+  - workers should be able to claim or discover runnable workflow instances on a schedule
+  - webhooks may later become an optional wake-up optimization, not the primary execution model
+- Promote the existing `Governed Content Refresh` starter kit into the first managed workflow template.
+- Reuse the existing governed draft approval path instead of introducing a second write workflow.
+- Defer newsletter/campaign-oriented managed workflows until a campaign adapter exists.
+
+Release outcome:
+
+- Agencies can turn a reusable starter workflow into a managed, repeatable operating surface inside Craft without turning Agents into a generic orchestration platform.
+
+## Planned (`v0.29.x`) Agency Operator Copilot Foundation
+
+- Implement a provider-backed orchestration foundation for optional in-product LLM support.
 - Start with env-only site-level provider configuration as the convenient in-product path.
 - Support external assistants through the existing governed API and discovery surfaces, documented and supported in `v1` without introducing a heavy first-class external profile system.
 - Support recommendation-first jobs such as scope recommendation, summaries, report drafting, and other agency-facing explanation work before broader in-product assistant behavior.
@@ -283,23 +302,23 @@ Release outcome:
 
 - Agency teams get a constrained copilot for discovery, recommendations, and client-facing drafts without weakening the existing trust boundary.
 
-## Planned (`v0.29.x`) Agency Fleet Operations Assist and Dependency-Led Extensibility
+## Planned (`v0.30.x`) Agency Fleet Operations Assist and Dependency-Led Extensibility
 
-- Begin `F18`, phase 1 only.
+- Begin fleet operations assist, phase 1 only.
 - Keep it read-first and recommendation-first:
   - status visibility
   - approval queue visibility
   - account posture visibility
   - guided remediation
 - Do not introduce broad delegated self-administration.
-- Implement only the useful parts of `F13` if they are required by `F12`, `F21`, or later agency-facing governance work.
+- Implement only the useful parts of the custom-scope and field-policy layer if they are required by the adapter foundation, governed write boundaries, or later agency-facing governance work.
 - Keep extensibility work dependency-led rather than turning it into a standalone roadmap narrative.
 
 Release outcome:
 
 - Agencies can operate more client sites with better guided insight, while extensibility grows only where it directly supports real agency workflows.
 
-## Planned (`v0.30.x`) Pre-1.0 Consolidation
+## Planned (`v0.31.x`) Pre-1.0 Consolidation
 
 - Focus on bug fixing, upgrade safety, onboarding, and support polish.
 - Avoid major IA churn.
@@ -322,7 +341,7 @@ Before `1.0.0`, the following must be stable:
 - webhook delivery and verification model
 - upgrade and migration expectations
 
-## Post-`1.0.0` Candidate (`F25`) Commerce Governed Writes
+## Post-`1.0.0` Candidate Commerce Governed Writes
 
 - Evaluate Commerce mutations through the same trust-boundary model as governed entry drafts, not as unrestricted Commerce admin APIs.
 - Prioritize the work in phases:
@@ -342,7 +361,7 @@ Before `1.0.0`, the following must be stable:
   - much higher catalog complexity
   - more operator review burden
   - greater risk around variants, slugs, tax, inventory, shipping, and merchandising completeness
-- Reuse `F21` target-bound governance patterns, but extend them with Commerce-specific write bounds such as:
+- Reuse the existing target-bound governance patterns, but extend them with Commerce-specific write bounds such as:
   - store and currency selectors
   - max price delta / percentage movement
   - allowed discount archetypes
@@ -355,7 +374,7 @@ Release outcome:
 
 ## Parked / Not Before `1.0.0` Unless Reassessed
 
-- `F14` agent commerce via stablecoin spend rail remains intentionally parked and should not shape the near-term core roadmap.
+- agent commerce via stablecoin spend rail remains intentionally parked and should not shape the near-term core roadmap.
 
 ## Success Checks
 
