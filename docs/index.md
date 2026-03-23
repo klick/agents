@@ -8,7 +8,7 @@ Managed accounts can be used by external runtimes such as agents, orchestrators,
 
 You set the boundary. External runtimes work inside it. Agents enforces the rules through scopes, approvals, and audit records.
 
-Current plugin version: **0.28.1**
+Current plugin version: **0.29.0**
 
 ## For Agencies Running Craft Sites For Clients
 
@@ -22,7 +22,7 @@ Agents helps agencies turn AI and automation work into a governed service layer 
 
 - Ship automation work without inventing custom machine-access layers for every project
 - Keep approvals, audit trail, and machine credentials inside the Craft CP
-- Reuse successful workflow patterns across multiple client sites instead of rebuilding them each time
+- Reuse successful job patterns across multiple client sites instead of rebuilding them each time
 
 ## Current Product Focus
 
@@ -32,18 +32,18 @@ Near-term product work concentrates on two outcomes:
 
 Teams need to automate approved parts of a site without widening access beyond what the client or operator intended. That is where governed write boundaries, approvals, and clearer execution lanes matter.
 
-### Reusable Workflow Patterns
+### Reusable Job Patterns
 
 Teams also need more than raw API access. They need reusable patterns they can carry from one project to the next:
 
 - account templates
 - starter workers
-- workflow guides
+- job guides
 - bootstrap artifacts
 
-That is the role of workflow starter kits: turning governed machine access into repeatable delivery patterns instead of one-off integration work.
+That is the role of job starter kits: turning governed machine access into repeatable delivery patterns instead of one-off integration work.
 
-Current managed workflows in Agents are configuration and handoff surfaces, not hosted jobs. Agents can store workflow intent and show operator-facing visibility, but the actual schedule runner, fetch/reasoning loop, and execution still live in an external runtime you operate.
+Current managed jobs in Agents are configuration and handoff surfaces, not hosted jobs. Agents can store job intent and show operator-facing visibility, but the actual schedule runner, fetch/reasoning loop, and execution still live in an external runtime you operate.
 
 ## What Agents Provides
 
@@ -118,7 +118,7 @@ See [Execution Model](/security/execution-model) for explicit trust-boundary and
 2. [Configuration](/get-started/configuration)
 3. [First Worker](/get-started/first-worker)
 4. [Agents vs Element API](/get-started/agents-vs-element-api)
-5. [Workflow Guides](/workflows/)
+5. [Job Guides](/workflows/)
 6. [Get Started](/get-started/)
 7. [Status, Accounts & Approvals](/cp/)
 8. [API Overview](/api/)

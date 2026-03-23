@@ -10,43 +10,54 @@ use Klick\Agents\Plugin;
 class SecurityPolicyService extends Component
 {
     private const EFFECTIVE_POLICY_VERSION = 'env-profile-v1';
-    private const DEFAULT_TOKEN_SCOPES = [
+    private const SAFE_RUNTIME_DEFAULT_SCOPES = [
+        'auth:read',
         'health:read',
         'readiness:read',
-        'auth:read',
-        'adoption:read',
-        'metrics:read',
-        'lifecycle:read',
-        'diagnostics:read',
-        'products:read',
-        'variants:read',
-        'subscriptions:read',
-        'transfers:read',
-        'donations:read',
-        'orders:read',
-        'entries:read',
-        'assets:read',
-        'categories:read',
-        'tags:read',
-        'globalsets:read',
-        'addresses:read',
-        'contentblocks:read',
-        'changes:read',
-        'sections:read',
-        'users:read',
-        'workflows:read',
-        'workflows:report',
-        'syncstate:read',
-        'consumers:read',
-        'templates:read',
-        'schema:read',
         'capabilities:read',
         'openapi:read',
-        'control:policies:read',
-        'control:approvals:read',
-        'control:executions:read',
-        'control:audit:read',
-        'webhooks:dlq:read',
+    ];
+    private const JOB_RUNTIME_ADDON_SCOPES = [
+        'jobs:read',
+        'jobs:report',
+    ];
+    private const ACCOUNT_SCOPE_BUNDLES = [
+        'runtime_basics' => [
+            'label' => 'Agent Basics',
+            'hint' => 'Safe default for every new account. Covers auth checks, health checks, readiness, and machine-readable contract discovery.',
+        ],
+        'jobs' => [
+            'label' => 'Jobs',
+            'hint' => 'Add when an agent should discover, inspect, or report recurring Jobs.',
+        ],
+        'content_review' => [
+            'label' => 'Content Review',
+            'hint' => 'Read entries, assets, taxonomy, and site structure for content-focused review work.',
+        ],
+        'commerce_review' => [
+            'label' => 'Commerce Review',
+            'hint' => 'Read catalog, order, and commerce records for merchandising or operational review.',
+        ],
+        'sensitive_data' => [
+            'label' => 'Sensitive Data',
+            'hint' => 'High-trust read access for unredacted people, address, or order detail.',
+        ],
+        'sync_webhooks' => [
+            'label' => 'Sync & Webhooks',
+            'hint' => 'Change feeds, sync checkpoints, and webhook dead-letter operations.',
+        ],
+        'observability' => [
+            'label' => 'Observability & Diagnostics',
+            'hint' => 'Operator-facing telemetry, incident snapshots, diagnostics bundles, and support signals.',
+        ],
+        'governed_writes' => [
+            'label' => 'Governed Writes',
+            'hint' => 'Experimental or higher-risk write, approval, and execution scopes. Leave off unless the account truly needs them.',
+        ],
+        'other' => [
+            'label' => 'Other',
+            'hint' => 'Fallback bucket for uncommon or transitional scopes.',
+        ],
     ];
     private const DEFAULT_RATE_LIMIT_PER_MINUTE = 60;
     private const DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60;
@@ -101,6 +112,305 @@ class SecurityPolicyService extends Component
 
     private ?array $runtimeConfig = null;
 
+    public function getManagedAccountDefaultScopes(): array
+    {
+        return $this->filterUnavailableDefaultScopes(self::SAFE_RUNTIME_DEFAULT_SCOPES);
+    }
+
+    public function getJobRuntimeAddonScopes(): array
+    {
+        return $this->filterUnavailableDefaultScopes(self::JOB_RUNTIME_ADDON_SCOPES);
+    }
+
+    public function getAccountScopeBundles(): array
+    {
+        return self::ACCOUNT_SCOPE_BUNDLES;
+    }
+
+    public function getAccountScopeCatalog(): array
+    {
+        $catalog = [
+            'auth:read' => [
+                'label' => 'Auth Diagnostics',
+                'description' => 'Read authenticated caller diagnostics (`/auth/whoami`).',
+                'bundle' => 'runtime_basics',
+                'recommendedByDefault' => true,
+            ],
+            'health:read' => [
+                'label' => 'Service Health',
+                'description' => 'Read service health summary.',
+                'bundle' => 'runtime_basics',
+                'recommendedByDefault' => true,
+            ],
+            'readiness:read' => [
+                'label' => 'Readiness',
+                'description' => 'Read readiness summary and score.',
+                'bundle' => 'runtime_basics',
+                'recommendedByDefault' => true,
+            ],
+            'capabilities:read' => [
+                'label' => 'Capabilities',
+                'description' => 'Read capabilities descriptor endpoint.',
+                'bundle' => 'runtime_basics',
+                'recommendedByDefault' => true,
+            ],
+            'openapi:read' => [
+                'label' => 'OpenAPI Contract',
+                'description' => 'Read OpenAPI descriptor endpoint.',
+                'bundle' => 'runtime_basics',
+                'recommendedByDefault' => true,
+            ],
+            'schema:read' => [
+                'label' => 'Schema',
+                'description' => 'Read machine-readable endpoint schemas for a specific version.',
+                'bundle' => 'runtime_basics',
+            ],
+            'templates:read' => [
+                'label' => 'Templates',
+                'description' => 'Read canonical integration templates derived from schema and OpenAPI contracts.',
+                'bundle' => 'runtime_basics',
+            ],
+            'jobs:read' => [
+                'label' => 'Job Discovery',
+                'description' => 'Read managed Job discovery and detail endpoints for the bound account.',
+                'bundle' => 'jobs',
+                'recommendedForJobs' => true,
+            ],
+            'jobs:report' => [
+                'label' => 'Job Run Reporting',
+                'description' => 'Record managed Job run lifecycle state and summaries.',
+                'bundle' => 'jobs',
+                'recommendedForJobs' => true,
+            ],
+            'entries:read' => [
+                'label' => 'Entries',
+                'description' => 'Read live content entry endpoints.',
+                'bundle' => 'content_review',
+            ],
+            'entries:read_all_statuses' => [
+                'label' => 'Entries: All Statuses',
+                'description' => 'Read non-live entries, drafts, and broader status detail.',
+                'bundle' => 'content_review',
+            ],
+            'assets:read' => [
+                'label' => 'Assets',
+                'description' => 'Read asset list and lookup endpoints.',
+                'bundle' => 'content_review',
+            ],
+            'categories:read' => [
+                'label' => 'Categories',
+                'description' => 'Read category list and lookup endpoints.',
+                'bundle' => 'content_review',
+            ],
+            'tags:read' => [
+                'label' => 'Tags',
+                'description' => 'Read tag list and lookup endpoints.',
+                'bundle' => 'content_review',
+            ],
+            'globalsets:read' => [
+                'label' => 'Global Sets',
+                'description' => 'Read global set list and lookup endpoints.',
+                'bundle' => 'content_review',
+            ],
+            'contentblocks:read' => [
+                'label' => 'Content Blocks',
+                'description' => 'Read content block list and lookup endpoints.',
+                'bundle' => 'content_review',
+            ],
+            'changes:read' => [
+                'label' => 'Changes Feed',
+                'description' => 'Read the unified cross-resource incremental changes feed.',
+                'bundle' => 'content_review',
+            ],
+            'sections:read' => [
+                'label' => 'Sections',
+                'description' => 'Read section list endpoint.',
+                'bundle' => 'content_review',
+            ],
+            'products:read' => [
+                'label' => 'Products',
+                'description' => 'Read product snapshot endpoints.',
+                'bundle' => 'commerce_review',
+            ],
+            'variants:read' => [
+                'label' => 'Variants',
+                'description' => 'Read variant list and lookup endpoints.',
+                'bundle' => 'commerce_review',
+            ],
+            'subscriptions:read' => [
+                'label' => 'Subscriptions',
+                'description' => 'Read subscription list and lookup endpoints.',
+                'bundle' => 'commerce_review',
+            ],
+            'transfers:read' => [
+                'label' => 'Transfers',
+                'description' => 'Read transfer list and lookup endpoints.',
+                'bundle' => 'commerce_review',
+            ],
+            'donations:read' => [
+                'label' => 'Donations',
+                'description' => 'Read donation list and lookup endpoints.',
+                'bundle' => 'commerce_review',
+            ],
+            'orders:read' => [
+                'label' => 'Orders',
+                'description' => 'Read order metadata endpoints.',
+                'bundle' => 'commerce_review',
+            ],
+            'orders:read_sensitive' => [
+                'label' => 'Orders: Sensitive Detail',
+                'description' => 'Unredacted order PII and financial detail fields.',
+                'bundle' => 'sensitive_data',
+            ],
+            'addresses:read' => [
+                'label' => 'Addresses',
+                'description' => 'Read address list and lookup endpoints.',
+                'bundle' => 'sensitive_data',
+            ],
+            'addresses:read_sensitive' => [
+                'label' => 'Addresses: Sensitive Detail',
+                'description' => 'Unredacted address PII detail fields.',
+                'bundle' => 'sensitive_data',
+            ],
+            'users:read' => [
+                'label' => 'Users',
+                'description' => 'Read user list and lookup endpoints.',
+                'bundle' => 'sensitive_data',
+            ],
+            'users:read_sensitive' => [
+                'label' => 'Users: Sensitive Detail',
+                'description' => 'Unredacted user email and profile detail fields.',
+                'bundle' => 'sensitive_data',
+            ],
+            'syncstate:read' => [
+                'label' => 'Sync State',
+                'description' => 'Read per-integration sync-state lag and checkpoint status.',
+                'bundle' => 'sync_webhooks',
+            ],
+            'syncstate:write' => [
+                'label' => 'Sync State Writeback',
+                'description' => 'Record per-integration sync-state checkpoints for lag tracking.',
+                'bundle' => 'sync_webhooks',
+            ],
+            'consumers:read' => [
+                'label' => 'Consumers (Legacy Read)',
+                'description' => 'Deprecated alias for sync-state read access.',
+                'bundle' => 'sync_webhooks',
+            ],
+            'consumers:write' => [
+                'label' => 'Consumers (Legacy Write)',
+                'description' => 'Deprecated alias for sync-state write access.',
+                'bundle' => 'sync_webhooks',
+            ],
+            'webhooks:dlq:read' => [
+                'label' => 'Webhook Dead Letters',
+                'description' => 'Read failed webhook dead-letter events.',
+                'bundle' => 'sync_webhooks',
+            ],
+            'webhooks:dlq:replay' => [
+                'label' => 'Webhook Replay',
+                'description' => 'Replay failed webhook dead-letter events.',
+                'bundle' => 'sync_webhooks',
+            ],
+            'adoption:read' => [
+                'label' => 'Adoption Metrics',
+                'description' => 'Read adoption instrumentation snapshot (`/adoption/metrics`).',
+                'bundle' => 'observability',
+            ],
+            'metrics:read' => [
+                'label' => 'Observability Metrics',
+                'description' => 'Read observability metrics snapshot (`/metrics`).',
+                'bundle' => 'observability',
+            ],
+            'incidents:read' => [
+                'label' => 'Incidents',
+                'description' => 'Read redacted agent incident snapshot (`/incidents`).',
+                'bundle' => 'observability',
+            ],
+            'lifecycle:read' => [
+                'label' => 'Lifecycle Governance',
+                'description' => 'Read agent lifecycle governance snapshot (`/lifecycle`).',
+                'bundle' => 'observability',
+            ],
+            'diagnostics:read' => [
+                'label' => 'Diagnostics Bundle',
+                'description' => 'Read one-click diagnostics support bundle (`/diagnostics/bundle`).',
+                'bundle' => 'observability',
+            ],
+            'entries:write:draft' => [
+                'label' => 'Entry Draft Writes',
+                'description' => 'Create and update entry drafts through governed control actions.',
+                'bundle' => 'governed_writes',
+            ],
+            'entries:write' => [
+                'label' => 'Entry Draft Writes (Legacy Alias)',
+                'description' => 'Deprecated alias for `entries:write:draft`.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:policies:read' => [
+                'label' => 'Approval Policies: Read',
+                'description' => 'Read control action policies.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:policies:write' => [
+                'label' => 'Approval Policies: Write',
+                'description' => 'Create and update control action policies.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:approvals:read' => [
+                'label' => 'Approvals: Read',
+                'description' => 'Read approval request queue.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:approvals:request' => [
+                'label' => 'Approvals: Request',
+                'description' => 'Create control approval requests from an agent.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:approvals:decide' => [
+                'label' => 'Approvals: Decide',
+                'description' => 'Approve or reject pending control approvals.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:approvals:write' => [
+                'label' => 'Approvals: Combined Legacy Write',
+                'description' => 'Legacy combined scope for requesting and deciding approvals.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:executions:read' => [
+                'label' => 'Executions: Read',
+                'description' => 'Read the control action execution ledger.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:actions:simulate' => [
+                'label' => 'Actions: Simulate',
+                'description' => 'Run dry-run policy and approval evaluation without execution.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:actions:execute' => [
+                'label' => 'Actions: Execute',
+                'description' => 'Execute idempotent control actions.',
+                'bundle' => 'governed_writes',
+            ],
+            'control:audit:read' => [
+                'label' => 'Audit Log',
+                'description' => 'Read immutable control-plane audit log.',
+                'bundle' => 'governed_writes',
+            ],
+        ];
+
+        $available = [];
+        foreach ($catalog as $scope => $meta) {
+            if (!$this->isScopeAvailableForCp($scope)) {
+                continue;
+            }
+
+            $available[$scope] = $meta;
+        }
+
+        return $available;
+    }
+
     public function getRuntimeConfig(): array
     {
         if ($this->runtimeConfig !== null) {
@@ -154,7 +464,7 @@ class SecurityPolicyService extends Component
 
         $tokenScopes = $this->parseScopes((string)App::env('PLUGIN_AGENTS_TOKEN_SCOPES'));
         if (empty($tokenScopes)) {
-            $tokenScopes = self::DEFAULT_TOKEN_SCOPES;
+            $tokenScopes = $this->getManagedAccountDefaultScopes();
         }
         $tokenScopes = $this->filterUnavailableDefaultScopes($tokenScopes);
 
@@ -743,6 +1053,33 @@ class SecurityPolicyService extends Component
 
             return true;
         }));
+    }
+
+    private function isScopeAvailableForCp(string $scope): bool
+    {
+        $plugin = Plugin::getInstance();
+        $commerceEnabled = $plugin?->isCommercePluginEnabled() ?? false;
+        $writesExperimentalEnabled = $plugin?->isWritesExperimentalEnabled() ?? false;
+        $usersApiEnabled = $plugin?->isUsersApiEnabled() ?? false;
+        $addressesApiEnabled = $plugin?->isAddressesApiEnabled() ?? false;
+
+        if (!$commerceEnabled && in_array($scope, $this->commerceScopeKeys(), true)) {
+            return false;
+        }
+
+        if (!$usersApiEnabled && str_starts_with($scope, 'users:')) {
+            return false;
+        }
+
+        if (!$addressesApiEnabled && str_starts_with($scope, 'addresses:')) {
+            return false;
+        }
+
+        if (!$writesExperimentalEnabled && in_array($scope, $this->governedWriteScopeKeys(), true)) {
+            return false;
+        }
+
+        return true;
     }
 
     private function commerceScopeKeys(): array

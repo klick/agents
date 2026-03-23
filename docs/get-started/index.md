@@ -59,6 +59,6 @@ See:
 - [First Worker](/get-started/first-worker)
 - [External Runtimes](/get-started/external-runtimes)
 - [Agents vs Element API](/get-started/agents-vs-element-api)
-- [Workflow Guides](/workflows/)
+- [Job Guides](/workflows/)
 - [Agent Bootstrap](/api/agent-bootstrap)
 - [Starter Packs](/api/starter-packs)

@@ -1,6 +1,6 @@
 # Entry Translation Drafts
 
-Use this workflow when you want a worker to prepare localized entry drafts for review without publishing automatically.
+Use this job when you want a worker to prepare localized entry drafts for review without publishing automatically.
 
 This is a good fit for:
 

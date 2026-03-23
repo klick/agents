@@ -112,4 +112,4 @@ Both patterns fit the product.
 
 - [First Worker](/get-started/first-worker)
 - [Execution Model](/security/execution-model)
-- [Workflow Guides](/workflows/)
+- [Job Guides](/workflows/)

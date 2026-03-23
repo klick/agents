@@ -1,10 +1,10 @@
-# Accounts, Workflows, Target Sets, Approvals, Status & Settings
+# Accounts, Jobs, Boundaries, Approvals, Status & Settings
 
-The Craft control plane is the operator surface for Agents. It is where teams monitor runtime posture, manage machine accounts, configure runtime behavior, and, when experimental writes are enabled, review governed approval and rule flows.
+The Craft control plane is the operator surface for Agents. It is where teams define governed machine identities, attach them to recurring jobs, review approvals, and monitor agent posture.
 
-Managed accounts are used by external runtimes such as agents, orchestrators, workers, and scripts.
+Managed accounts are used by agents.
 
-You set the boundary in the CP. External runtimes work inside it. Agents enforces the rules.
+You set the boundary in the CP. Your agent works inside it. Agents enforces the rules.
 
 Agents CP is not a shell execution layer. Production behavior still flows through scoped APIs, request validation, policy controls, and audit records.
 
@@ -14,14 +14,13 @@ The Agents CP subnav currently exposes:
 
 - **Accounts**
   - URL: `admin/agents/accounts`
-  - managed machine-account lifecycle and access controls
-- **Workflows**
+  - managed machine-account lifecycle, access controls, and reusable backing identities
+- **Jobs**
   - URL: `admin/agents/workflows`
-  - operator-managed read-only workflow instances with external execution and bundle export
-- **Target Sets**
+  - operator-managed read-only job instances with external execution and bundle export
+- **Boundaries**
   - URL: `admin/agents/target-sets`
-  - shown only when governed-write CP is enabled
-  - reusable governed-write boundaries for bounded draft requests
+  - reusable governed-write boundaries for write-capable accounts
 - **Approvals**
   - URL: `admin/agents/approvals`
   - shown only when governed-write CP is enabled
@@ -29,45 +28,25 @@ The Agents CP subnav currently exposes:
   - URL: `admin/agents/status`
 - **Settings**
   - URL: `admin/agents/settings`
-  - runtime switches, operator notifications, webhook transport, reliability thresholds, and config-lock visibility
+  - agent switches, operator notifications, webhook transport, reliability thresholds, and config-lock visibility
 
 The section root `admin/agents` opens `Accounts`.
 
 ## Status
 
-`Status` is the primary runtime-operator surface:
+`Status` is the primary operator surface for agent health.
 
-- **Readiness**
-  - state card with overall verdict (`Ready`, `Degraded`, `Blocked`, `Unproven`)
-  - combined summary strip with shared operator dimensions:
-    - `Hard Gates`
-    - `Traffic / Access`
-    - `Delivery / Webhooks`
-    - `Integration / Capacity`
-    - `Accounts / Policy`
-    - `Confidence / Observability`
-  - `Details +` disclosure with merged proof panels for the same six domains
-  - in-card `Action Mapping` table that renders only problematic signals
-  - `Diagnostics Bundle` download
-  - production `Webhook Probe` card for synthetic signed delivery against the live receiver
-  - separate dead-letter queue replay section for operational recovery
-  - dev-only `Webhook Test Sink` section when local sink capture is enabled
-  - `Manual Request Test` tool for setup and one-off governed draft-request fallback when governed writing is enabled
-  - `Operator Notifications` card when notifications are enabled, with:
-    - resolved recipient visibility
-    - recent delivery outcomes
-    - manual `Run status check` action
+Current responsibilities:
 
-Fresh installs now stay `Ready` when the runtime is healthy but there is not enough live traffic yet to prove readiness. In that state, `Confidence / Observability` can read `Building`, sync-state remains optional until a worker starts reporting checkpoints, and missing accounts are treated as setup guidance rather than a hard failure. `Unproven` is reserved for actual monitoring gaps such as stale metrics or missing reliability evaluation.
+- overall verdict and readiness posture
+- account health and governed-write boundary warnings
+- job health, run visibility, and broader-than-needed account warnings
+- approval workload visibility
+- operator-notification visibility and checks
+- webhook readiness, probe, and delivery recovery tools
+- diagnostics and observability details
 
-This page is driven from runtime services, not hardcoded status:
-
-- readiness and health summaries
-- sync-state lag summary
-- observability metrics snapshot
-- security posture
-- webhook probe ledger
-- webhook dead-letter events
+Fresh installs stay `Ready` when Agents is healthy but there is not enough live traffic yet to prove confidence. In that state, missing accounts are setup guidance rather than a hard failure.
 
 ## Approvals
 
@@ -86,99 +65,83 @@ Current sections:
 Notable current behavior:
 
 - pending approvals can be reviewed, approved, or rejected from the CP
-- governed entry-draft approvals expose separate `Review` and `Diff` actions so content inspection is not overloaded onto the generic review flow
-- `Diff` opens a changed-only review modal with:
-  - `Structured` field-aware before/after rows
-  - `Focus` text-proofing review with `After / Before` switching for canonical-vs-requested reading
-- high-risk dual-approval rows show two explicit approval buttons so operators can see progress toward the second approval at a glance
-- decision buttons stack vertically at a consistent width for clearer review actions
-- review UI includes action labels, rule/risk context, assurance mode, SLA metadata, and review guards
-- when a saved draft is linked, the diff surface targets that exact draft; otherwise it falls back quietly to requested-versus-canonical comparison
-- approved draft-entry flows bind to the exact saved draft created by execution so `Review` and `Apply Draft` target a stable draft identity
-- governed draft execution is blocked when the canonical entry already has another saved draft and the follow-up surfaces the conflicting draft ids and draft links for operator cleanup
-- rules can be edited and deleted inline from the embedded rules table
-- rule forms use a human-readable governed-action selector for the current core action set
-- manual request creation no longer lives here; the operator fallback/test tool sits in `Status`
+- governed entry-draft approvals expose separate `Review` and `Diff` actions
+- high-risk dual-approval rows show two explicit approval buttons so progress toward the second approval stays visible
+- rules can be edited inline from the rules table
+- manual request creation now lives in `Status` as an operator fallback/test tool
 
 ## Accounts
 
 `Accounts` is the managed machine-identity surface.
 
-This is where operators define the governed boundary for each external runtime.
+This is where operators define the broad governed boundary for each agent.
 
 Current responsibilities:
 
 - lifecycle summary strip (`Managed accounts`, `Paused accounts`, `Need attention`)
-- one-time token reveal after create/rotate as an in-card overlay on the affected account
-- Craft-style managed-account registry with:
-  - default table view for comparison and operations
-  - alternate card view for lower-count overview and onboarding
+- one-time token reveal after create/rotate
 - create and edit flows for:
   - display name and handle
-  - short operator-facing description shown on the account card
-  - scopes, grouped by purpose with short operator guidance
-  - reusable governed-write target-set assignments for bounded draft-write accounts
+  - short operator-facing description
+  - scopes, grouped by purpose
   - owner user assignment with legacy-owner fallback
   - pause/resume state
   - force-human-approval mode for write-capable accounts
   - account-specific approval recipients
-  - event routing interests (resource/action subscriptions)
+  - reusable governed-write boundary assignments for bounded draft-write accounts
+  - event routing interests
   - TTL and reminder policy
   - IP allowlist
-- lifecycle risk details per account
 - usage metadata and optional live activity indicator
-- assignment of existing `Target Sets` to write-capable accounts
-- bounded `entry.updateDraft` helper snippets for assigned target sets in account details
-- visible worker / agent handoff downloads from the registry and detail surfaces
 - account handoff bundle with `.env`, `account.json`, smoke test, and external output-storage guidance
-- dedicated account-template section below the create form
-- suggested account profiles for common core-Craft integration shapes
-- Commerce-only scopes appear only when Craft Commerce is installed
-
-The visible page title is **Accounts**, and the route is `admin/agents/accounts`.
-
-## Workflows
-
-`Workflows` is a first-class CP surface for recurring read-only workflow instances.
-
-Current responsibilities:
-
-- registry of configured workflow instances
-- workflow-type-based creation
-- workflow detail/edit surface
-- schedule intent and runtime binding visibility
-- managed account binding for the workflow
-- curated read-only workflow-type library
-- visible workflow handoff downloads from the registry and detail surface
-- workflow handoff bundle with `README.md`, `.env.example`, worker scaffold, explicit workflow API paths, cron example, and output-storage guidance
-- recent-run visibility backed by the workflow polling and run-reporting contract
+- account templates for common agency jobs
+- visibility into job fit and whether an account is broader than its attached jobs
 
 Important boundary:
 
-- Agents stores workflow intent, account binding, and handoff export
-- the actual schedule runner, fetch/reasoning loop, and execution still happen in external runtimes
-- the current slice does not turn Agents into a job runner, cron controller, or generic orchestration host
-- `Latest Run` and `Recent runs` are populated when the bound runtime reports lifecycle state through the workflow API
-- the first stable slice is read-only and workflow-type-based, not a generic builder
-- write-oriented workflow types can land later, but they are intentionally out of scope for this first official surface
+- scopes and tokens still live on accounts
+- accounts are the hard machine-identity and trust-domain layer
+- jobs sit on top of those accounts; they do not mint separate tokens in this version
 
-The visible page title is **Workflows**, and the route is `admin/agents/workflows`.
+Reusable boundary management lives at `admin/agents/target-sets`, but it no longer appears as a separate `Status` card.
 
-## Target Sets
+## Jobs
 
-`Target Sets` appears only when the governed-write CP is enabled.
+`Jobs` is the recurring work surface.
 
 Current responsibilities:
 
-- reusable governed-write boundary definitions for `entry.updateDraft`
-- explicit allowed entries
-- explicit allowed sites
-- single create/edit flow for target-set maintenance
-- helper snippets for bounded worker `.env` setup and approval-request payloads
+- registry of configured job instances
+- job-type-based creation
+- job detail/edit surface
+- schedule intent and agent binding visibility
+- managed account binding for the job
+- explicit job boundary summary
+- visible handoff downloads from the registry and detail surface
+- handoff bundle with `README.md`, `.env.example`, example script files, explicit API paths, cron example, and output-storage guidance
+- recent-run visibility backed by the polling and run-reporting contract
 
-`Accounts` assigns existing target sets. `Target Sets` creates and edits them.
+Important boundary:
 
-The visible page title is **Target Sets**, and the route is `admin/agents/target-sets`.
+- Agents stores job intent, account binding, and handoff export
+- the actual schedule runner, fetch/reasoning loop, and execution still happen in the agent
+- `Latest Run` and `Recent runs` are populated when the bound agent reports lifecycle state through the job API contract
+- the first stable slice is read-only and job-type-based, not a generic builder
+- write-oriented jobs can land later, but they are intentionally out of scope for this first official surface
+
+The visible page title is **Jobs**, while the route stays `admin/agents/workflows` for now.
+
+## Boundaries
+
+`Boundary` is now the operator term for allowed scope inside a job or governed write lane.
+
+Current behavior:
+
+- read boundaries live on Jobs
+- governed-write reusable boundaries are managed through `admin/agents/target-sets`
+- Accounts can be assigned those reusable write boundaries for `entry.updateDraft`
+
+This is a surface-first abstraction pass. The underlying target-set storage and enforcement stay intact until a later backend migration is warranted.
 
 ## Settings
 
@@ -186,31 +149,15 @@ The visible page title is **Target Sets**, and the route is `admin/agents/target
 
 Current sections:
 
-- **Runtime Switches**
-  - enable/disable Agents API
-  - enable governed writing APIs (experimental)
-  - enable live usage indicator on Account cards
+- **Agent Switches**
 - **Operator Notifications**
-  - email-first recipient list
-  - approval requested / approval decided toggles
-  - execution issue toggle
-  - webhook DLQ failure toggle
-  - scheduled system-status transition toggle
-  - cron entry point: `php craft agents/notifications-check`
-  - `Status` shows recent notification deliveries and lets admins run the status check manually
 - **Webhooks**
-  - env-aware runtime webhook target field
-  - env-aware webhook signing secret field
-  - intended for env variable references, not inline production secrets
 - **Reliability Thresholds**
-  - sync-state lag warn threshold
-  - sync-state lag critical threshold
 - **Configuration Locks**
-  - explains when values are locked by env vars or `config/agents.php`
 
 ## Permissions
 
-The current permission model is split into two groups:
+The current permission model is split into three groups:
 
 - **Agents Access**
   - view managed accounts tab
@@ -218,9 +165,9 @@ The current permission model is split into two groups:
   - rotate managed account tokens
   - revoke managed account tokens
   - delete managed accounts
-- **Agents Workflows**
-  - view workflows tab
-  - create and edit workflows
+- **Agents Jobs**
+  - view jobs tab
+  - create and edit jobs
 - **Agents Approvals**
   - shown only when Approvals is enabled
   - view approvals tab
@@ -231,10 +178,10 @@ The current permission model is split into two groups:
 In addition:
 
 - `Settings` actions require admin access
-- `Workflows` requires the corresponding workflow permissions
+- `Jobs` requires the corresponding job permissions
 - `Approvals` requires the corresponding approvals permissions
 - `Accounts` actions require the corresponding Agents Access permissions
-- `Target Sets` inherits the same Accounts visibility/manage permissions
+- boundary management inherits the same Accounts visibility/manage permissions
 
 ## Deep Links
 
@@ -243,14 +190,17 @@ Primary current routes:
 - `admin/agents`
 - `admin/agents/accounts`
 - `admin/agents/workflows`
-- `admin/agents/target-sets`
 - `admin/agents/approvals`
 - `admin/agents/status`
-- `admin/agents/approvals/rules`
 - `admin/agents/settings`
 
-## Runtime Boundary Reminder
+Secondary route:
+
+- `admin/agents/target-sets`
+  - reusable governed-write boundary management
+
+## Agent Boundary Reminder
 
 - `craft agents/*` remains operator/developer tooling
-- CP actions are operator workflows on top of the governed API/runtime model
+- CP actions are operator jobs and approval flows on top of the governed API/agent model
 - machine integrations should still use the HTTP API and contract descriptors, not the CP UI

@@ -1,8 +1,8 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = "Target Sets" %}
-{% set selectedSubnavItem = "targetSets" %}
+{% set title = "Boundaries" %}
+{% set selectedSubnavItem = "boundaries" %}
 {% set targetSets = targetSets ?? [] %}
 {% set availableSites = availableSites ?? [] %}
 {% set editingTargetSet = editingTargetSet ?? null %}
@@ -17,8 +17,8 @@
   <div class="agents-page-shell">
     <div class="agents-page-header">
       <div class="agents-page-header__copy">
-        <h1>Target Sets</h1>
-        <p class="agents-page-intro">Reusable write boundaries for governed draft accounts. Each target set defines the allowed entries and sites for <code>entry.updateDraft</code> in this version.</p>
+        <h1>Boundaries</h1>
+        <p class="agents-page-intro">Reusable governed-write boundaries for accounts that can request <code>entry.updateDraft</code>. Each boundary defines the allowed entries and sites for that write lane in this version.</p>
       </div>
       {% if canManageCredentials %}
         <div class="agents-page-header__actions">
@@ -30,8 +30,8 @@
     <div class="agents-layout-stack agents-target-sets-shell">
       <div class="agents-target-sets-registry-shell">
         <div class="tableview tablepane agents-target-sets-registry-wrap">
-          <table class="data fullwidth big agents-target-sets-registry" data-name="Target Sets">
-            <caption class="visually-hidden">Target sets registry</caption>
+          <table class="data fullwidth big agents-target-sets-registry" data-name="Boundaries">
+            <caption class="visually-hidden">Boundaries registry</caption>
             <colgroup>
               <col class="agents-target-sets-registry__col agents-target-sets-registry__col--name">
               <col class="agents-target-sets-registry__col agents-target-sets-registry__col--bounds">
@@ -90,8 +90,8 @@
                   <td class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--actions">
                     <div class="buttons">
                       {% if canManageCredentials %}
-                        <a class="btn small" href="{{ cpUrl('agents/target-sets', { editTargetSetId: targetSet.id }) }}#targetSetFormSection">Edit</a>
-                        <form method="post" accept-charset="UTF-8" onsubmit="return confirm('Delete this target set?');">
+                          <a class="btn small" href="{{ cpUrl('agents/target-sets', { editTargetSetId: targetSet.id }) }}#targetSetFormSection">Edit</a>
+                        <form method="post" accept-charset="UTF-8" onsubmit="return confirm('Delete this boundary?');">
                           {{ csrfInput() }}
                           {{ actionInput('agents/dashboard/delete-target-set') }}
                           {{ redirectInput('agents/target-sets') }}
@@ -107,7 +107,7 @@
               {% else %}
                 <tr class="agents-target-sets-registry__row agents-target-sets-registry__row--empty">
                   <td colspan="4" class="agents-target-sets-registry__body-cell agents-target-sets-registry__body-cell--empty">
-                    No target sets yet.
+                    No boundaries yet.
                   </td>
                 </tr>
               {% endfor %}
@@ -120,7 +120,7 @@
         <section class="border rounded p-3 agents-target-sets-page-section" id="targetSetFormSection">
         <div class="agents-create-header">
           <div>
-            <h2 class="h4">{{ editingTargetSet ? 'Edit Target Set' : 'Create a Target Set' }}</h2>
+            <h2 class="h4">{{ editingTargetSet ? 'Edit Boundary' : 'Create a Boundary' }}</h2>
             <p class="agents-subtle agents-target-sets-page-note">{{ editingTargetSet ? 'Update the reusable allowed-entry and allowed-site boundary for governed draft requests.' : 'Define the allowed entries and sites for governed entry draft requests.' }}</p>
           </div>
         </div>
@@ -143,7 +143,7 @@
 
             {{ forms.textField({
               label: 'Handle',
-              instructions: 'Stable identifier for worker config and audit trails.',
+              instructions: 'Stable identifier for agent config and audit trails.',
               id: 'targetSetHandle',
               name: 'targetSetHandle',
               required: true,
@@ -164,7 +164,7 @@
 
             {{ forms.elementSelectField({
               label: 'Allowed entries',
-              instructions: 'Select the exact entries this target set may update.',
+              instructions: 'Select the exact entries this boundary may update.',
               id: 'targetSetAllowedEntryIds',
               name: 'targetSetAllowedEntryIds',
               elementType: 'craft\\elements\\Entry',
@@ -183,7 +183,7 @@
                 <label>Allowed sites</label>
               </div>
               <div class="instructions">
-                <p>Select the site IDs this target set may touch.</p>
+                <p>Select the site IDs this boundary may touch.</p>
               </div>
               <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked" id="targetSetAllowedSiteIdsField">
                 {% for site in availableSites %}
@@ -203,8 +203,8 @@
             </div>
 
             <div class="agents-form-actions">
-              <button class="btn submit" type="submit">{{ editingTargetSet ? 'Save Target Set' : 'Create Target Set' }}</button>
-              <a class="btn" href="{{ targetSetsIndexUrl }}">Cancel</a>
+              <button class="btn submit" type="submit">{{ editingTargetSet ? 'Save Boundary' : 'Create Boundary' }}</button>
+              <a class="btn" href="{{ accountsUrl }}">Back to Accounts</a>
             </div>
           </form>
         </div>
@@ -435,7 +435,7 @@
     border-radius: 4px;
     background: #d4dbe4;
     box-shadow: none;
-    color: #000000;
+    color: #25313e;
     font-weight: 400;
     line-height: normal;
   }
@@ -445,7 +445,7 @@
     border: 0;
     background: #c8d1dc;
     box-shadow: none;
-    color: #000000;
+    color: #25313e;
   }
 
   @media (max-width: 767px) {

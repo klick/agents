@@ -3,7 +3,7 @@
 {% set title = 'Agents Status' %}
 {% set selectedSubnavItem = 'status' %}
 {% set dashboardHeading = 'Status' %}
-{% set tabIntro = 'Review runtime, integration, and security posture before integrations or releases.' %}
+{% set tabIntro = 'Review agent access, integration, and security posture before integrations or releases.' %}
 
 {% block content %}
   {% include 'agents/_partials/cp-ui' %}
@@ -161,7 +161,7 @@
         {% set webhookTestSinkState = 'setup' %}
         {% set webhookTestSinkStateTone = 'muted' %}
         {% set webhookTestSinkStatusLine = 'Status: Enable PLUGIN_AGENTS_WEBHOOK_TEST_SINK=true to turn on local capture in dev.' %}
-        {% set webhookTestSinkNotice = 'The sink is opt-in. It reuses the normal runtime webhook URL and secret, so only point the runtime webhook target at the sink in local/dev.' %}
+        {% set webhookTestSinkNotice = 'The sink is opt-in. It reuses the normal Agents webhook URL and secret, so only point the agent webhook target at the sink in local/dev.' %}
         {% set webhookTestSinkEmptyCopy = 'The sink is not enabled yet.' %}
       {% elseif not webhookTestSinkEnabled %}
         {% set webhookTestSinkState = 'dev-disabled' %}
@@ -178,8 +178,8 @@
       {% elseif not webhookTestSinkWebhookUrlMatches or not webhookTestSinkWebhookSecretConfigured %}
         {% set webhookTestSinkState = 'misconfigured' %}
         {% set webhookTestSinkStateTone = 'warn' %}
-        {% set webhookTestSinkStatusLine = 'Status: Runtime webhook transport is not fully pointed at the local sink.' %}
-        {% set webhookTestSinkNotice = 'Runtime target is ' ~ webhookTestSinkWebhookTargetLabel ~ ' and secret is ' ~ webhookTestSinkWebhookSecretLabel ~ '. Point the runtime webhook URL at the sink URL below and keep the webhook secret configured to enable one-click test delivery.' %}
+        {% set webhookTestSinkStatusLine = 'Status: Agent webhook delivery is not fully pointed at the local sink.' %}
+        {% set webhookTestSinkNotice = 'Agent target is ' ~ webhookTestSinkWebhookTargetLabel ~ ' and secret is ' ~ webhookTestSinkWebhookSecretLabel ~ '. Point the agent webhook URL at the sink URL below and keep the webhook secret configured to enable one-click test delivery.' %}
         {% set webhookTestSinkEmptyCopy = 'Captures will appear here once delivery is routed to the sink.' %}
       {% elseif webhookTestSinkTotal == 0 %}
         {% set webhookTestSinkState = 'empty' %}
@@ -216,8 +216,8 @@
       {% elseif not webhookProbeUrlConfigured or not webhookProbeSecretConfigured %}
         {% set webhookProbeState = 'misconfigured' %}
         {% set webhookProbeStateTone = 'warn' %}
-        {% set webhookProbeStatusLine = 'Status: Configure both the runtime webhook URL and signing secret before sending a production probe.' %}
-        {% set webhookProbeNotice = 'The probe only runs against the live runtime webhook transport and requires both settings to be present.' %}
+        {% set webhookProbeStatusLine = 'Status: Configure both the agent webhook URL and signing secret before sending a production probe.' %}
+        {% set webhookProbeNotice = 'The probe only runs against the live agent webhook delivery path and requires both settings to be present.' %}
       {% elseif webhookProbeCooldownActive %}
         {% set webhookProbeState = 'cooldown' %}
         {% set webhookProbeStateTone = 'muted' %}
@@ -366,8 +366,8 @@
       {% elseif readinessIsBootstrapState %}
         {% set readinessStateKey = 'ready' %}
         {% set readinessStateLabel = 'Ready' %}
-        {% set readinessStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
-        {% set readinessStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
+        {% set readinessStateLead = 'Agents is healthy and ready for your first account or integration.' %}
+        {% set readinessStateSubcopy = 'Create a managed account or connect an agent to start building live-readiness evidence.' %}
         {% set readinessStateTone = 'good' %}
       {% elseif readinessHasMonitoringGap %}
         {% set readinessStateKey = 'unproven' %}
@@ -378,7 +378,7 @@
       {% elseif readinessHasObservationGap %}
         {% set readinessStateKey = 'ready' %}
         {% set readinessStateLabel = 'Ready' %}
-        {% set readinessStateLead = 'Core runtime is healthy and ready for machine traffic.' %}
+        {% set readinessStateLead = 'Agents is healthy and ready for machine traffic.' %}
         {% set readinessStateSubcopy = 'No issues need attention right now. Confidence signals will strengthen as routine traffic and account activity build over time.' %}
         {% set readinessStateTone = 'good' %}
       {% endif %}
@@ -388,7 +388,7 @@
         : (readinessHasMonitoringGap ? 'limited' : 'building') %}
       {% set readinessTrafficLead = 'Guarded requests observed in the last 60 minutes' %}
       {% if not agentsEnabled %}
-        {% set readinessTrafficLead = 'Runtime is disabled, so guarded traffic is blocked' %}
+        {% set readinessTrafficLead = 'Agents is disabled, so guarded traffic is blocked' %}
       {% elseif not readinessMetricsCurrent %}
         {% set readinessTrafficLead = 'Recent traffic metrics are stale' %}
       {% elseif not readinessHasObservedTraffic %}
@@ -412,7 +412,7 @@
       {% elseif telemetryDlqFailed > 0 %}
         {% set readinessDeliverySummary = telemetryDlqFailed ~ ' failed event' ~ (telemetryDlqFailed == 1 ? '' : 's') ~ ' need attention' %}
       {% endif %}
-      {% set readinessIntegrationLead = 'Sync-state reporting is optional until you connect a worker' %}
+      {% set readinessIntegrationLead = 'Sync-state reporting is optional until you connect an agent' %}
       {% if readinessConsumerLagCriticalCount > 0 %}
         {% set readinessIntegrationLead = 'One or more integrations are in critical lag' %}
       {% elseif readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60 %}
@@ -434,7 +434,7 @@
       {% endif %}
       {% set readinessCheckpointLine = readinessHasIntegrationTelemetry
         ? 'Checkpoint telemetry available'
-        : 'Checkpoint telemetry will appear after the first sync worker connects' %}
+        : 'Checkpoint telemetry will appear after the first sync agent connects' %}
       {% set readinessCredentialLine = 'Accounts available for machine access' %}
       {% if securityCredentialCount == 0 %}
         {% set readinessCredentialLine = 'No accounts configured yet' %}
@@ -442,13 +442,13 @@
         {% set readinessCredentialLine = 'Managed accounts available for machine access' %}
       {% endif %}
       {% set readinessCapacityLead = telemetryQueueDepth > 10
-        ? 'Queue depth is elevated and may slow runtime work'
+        ? 'Queue depth is elevated and may slow agent work'
         : 'Queue depth is within normal range' %}
-      {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+      {% set readinessBackpressureLine = 'No agent backpressure detected' %}
       {% if telemetryQueueDepth > 50 %}
-        {% set readinessBackpressureLine = 'Runtime backpressure is likely' %}
+        {% set readinessBackpressureLine = 'Agent backpressure is likely' %}
       {% elseif telemetryQueueDepth > 10 %}
-        {% set readinessBackpressureLine = 'Runtime backpressure is building' %}
+        {% set readinessBackpressureLine = 'Agent backpressure is building' %}
       {% endif %}
       {% set readinessCapacityLine = readinessHasActiveCredentials
         ? 'Active accounts seen in the last 7 days'
@@ -466,8 +466,8 @@
         ? 'Security warnings need review'
         : 'No active security warnings' %}
       {% set readinessObservabilityLine = readinessMetricsCurrent
-        ? 'Runtime metrics snapshot available'
-        : 'Runtime metrics snapshot is stale or missing' %}
+        ? 'Agent metrics snapshot available'
+        : 'Agent metrics snapshot is stale or missing' %}
       {% set readinessReliabilityLine = reliabilitySignalsEvaluated > 0
         ? 'Reliability thresholds evaluated'
         : 'Reliability thresholds have not been evaluated recently' %}
@@ -486,12 +486,12 @@
         {% set readinessTrafficLead = 'Waiting for first guarded traffic' %}
         {% set readinessDeliveryLead = 'Webhook delivery is optional until you need push-based wake-ups' %}
         {% set readinessIntegrationLead = 'No sync-state integrations connected yet' %}
-        {% set readinessCheckpointLine = 'Checkpoint telemetry will appear after the first sync worker connects' %}
+        {% set readinessCheckpointLine = 'Checkpoint telemetry will appear after the first sync agent connects' %}
         {% set readinessCredentialLine = 'Create a managed account when you are ready to connect an agent' %}
-        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
-        {% set readinessMonitoringLine = 'Monitoring is active and waiting for first runtime activity' %}
+        {% set readinessObservabilityLine = 'Agent metrics snapshot available' %}
+        {% set readinessMonitoringLine = 'Monitoring is active and waiting for first agent activity' %}
       {% endif %}
-      {% set readinessHardGateRuntimeLine = agentsEnabled ? 'Runtime is enabled' : 'Runtime is disabled' %}
+      {% set readinessHardGateRuntimeLine = agentsEnabled ? 'Agents is enabled' : 'Agents is disabled' %}
       {% set readinessHardGateDatabaseLine = readinessDbAvailable ? 'Database connection available' : 'Database connection unavailable' %}
       {% set readinessHardGateServicesLine = readinessCoreServicesOk ? 'Core Craft services available' : 'One or more core Craft services need attention' %}
       {% set readinessHardGateStatusLine = readinessHasBlockingGate
@@ -570,17 +570,17 @@
         {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
         {% set readinessCredentialLine = 'Managed accounts available for machine access' %}
         {% set readinessCapacityLead = 'Queue depth is within normal range' %}
-        {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+        {% set readinessBackpressureLine = 'No agent backpressure detected' %}
         {% set readinessCapacityLine = 'Active accounts seen in the last 7 days' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
         {% set readinessSecurityStatusLine = 'No active security warnings' %}
-        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
+        {% set readinessObservabilityLine = 'Agent metrics snapshot available' %}
         {% set readinessReliabilityLine = 'Reliability thresholds evaluated' %}
         {% set readinessReliabilityStatusLine = 'No warning or critical reliability signals detected' %}
         {% set readinessMonitoringLine = 'Monitoring is active for live traffic' %}
-        {% set readinessHardGateRuntimeLine = 'Runtime is enabled' %}
+        {% set readinessHardGateRuntimeLine = 'Agents is enabled' %}
         {% set readinessHardGateDatabaseLine = 'Database connection available' %}
         {% set readinessHardGateServicesLine = 'Core Craft services available' %}
         {% set readinessHardGateStatusLine = 'No blocking configuration issues detected' %}
@@ -617,17 +617,17 @@
         {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
         {% set readinessCredentialLine = 'Managed accounts available for machine access' %}
         {% set readinessCapacityLead = 'Queue depth is within normal range' %}
-        {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+        {% set readinessBackpressureLine = 'No agent backpressure detected' %}
         {% set readinessCapacityLine = 'Active accounts seen in the last 7 days' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
         {% set readinessSecurityStatusLine = 'No active security warnings' %}
-        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
+        {% set readinessObservabilityLine = 'Agent metrics snapshot available' %}
         {% set readinessReliabilityLine = 'Reliability thresholds evaluated' %}
         {% set readinessReliabilityStatusLine = '1 warning reliability signal detected' %}
         {% set readinessMonitoringLine = 'Monitoring is active for live traffic' %}
-        {% set readinessHardGateRuntimeLine = 'Runtime is enabled' %}
+        {% set readinessHardGateRuntimeLine = 'Agents is enabled' %}
         {% set readinessHardGateDatabaseLine = 'Database connection available' %}
         {% set readinessHardGateServicesLine = 'Core Craft services available' %}
         {% set readinessHardGateStatusLine = 'No blocking configuration issues detected' %}
@@ -655,7 +655,7 @@
         {% set readinessStateTone = 'bad' %}
         {% set readinessShowReadyState = false %}
         {% set readinessConfidenceLabel = 'limited' %}
-        {% set readinessTrafficLead = 'Runtime is disabled, so guarded traffic is blocked' %}
+        {% set readinessTrafficLead = 'Agents is disabled, so guarded traffic is blocked' %}
         {% set readinessDeliveryLead = 'Webhook delivery is not enabled for this environment' %}
         {% set readinessDeliverySummary = 'No delivery path is configured in this environment' %}
         {% set readinessIntegrationLead = 'One or more integrations are lagging behind' %}
@@ -663,18 +663,18 @@
         {% set readinessIntegrationStatusLine = 'Review lagging integrations in the table below' %}
         {% set readinessCheckpointLine = 'Checkpoint telemetry available' %}
         {% set readinessCredentialLine = 'No accounts configured yet' %}
-        {% set readinessCapacityLead = 'Queue depth is elevated and may slow runtime work' %}
-        {% set readinessBackpressureLine = 'Runtime backpressure is building' %}
+        {% set readinessCapacityLead = 'Queue depth is elevated and may slow agent work' %}
+        {% set readinessBackpressureLine = 'Agent backpressure is building' %}
         {% set readinessCapacityLine = 'No recent account activity observed' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
         {% set readinessSecurityStatusLine = 'Security warnings need review' %}
-        {% set readinessObservabilityLine = 'Runtime metrics snapshot available' %}
+        {% set readinessObservabilityLine = 'Agent metrics snapshot available' %}
         {% set readinessReliabilityLine = 'Reliability thresholds evaluated' %}
         {% set readinessReliabilityStatusLine = '1 warning reliability signal detected' %}
         {% set readinessMonitoringLine = 'Monitoring is active, but recent traffic is limited' %}
-        {% set readinessHardGateRuntimeLine = 'Runtime is disabled' %}
+        {% set readinessHardGateRuntimeLine = 'Agents is disabled' %}
         {% set readinessHardGateDatabaseLine = 'Database connection available' %}
         {% set readinessHardGateServicesLine = 'One or more core Craft services need attention' %}
         {% set readinessHardGateStatusLine = '2 blocking issues detected' %}
@@ -711,13 +711,13 @@
         {% set readinessCheckpointLine = 'Checkpoint telemetry has not been submitted yet' %}
         {% set readinessCredentialLine = 'No recent account activity observed' %}
         {% set readinessCapacityLead = 'Queue depth is within normal range' %}
-        {% set readinessBackpressureLine = 'No runtime backpressure detected' %}
+        {% set readinessBackpressureLine = 'No agent backpressure detected' %}
         {% set readinessCapacityLine = 'No recent account activity observed' %}
         {% set readinessTokenLine = 'Token authentication required' %}
         {% set readinessSecurityTransportLine = 'Header-based token transport only' %}
         {% set readinessPrivacyLine = 'Default privacy protections active' %}
         {% set readinessSecurityStatusLine = 'No active security warnings' %}
-        {% set readinessObservabilityLine = 'Runtime metrics snapshot is stale or missing' %}
+        {% set readinessObservabilityLine = 'Agent metrics snapshot is stale or missing' %}
         {% set readinessReliabilityLine = 'Reliability thresholds have not been evaluated recently' %}
         {% set readinessReliabilityStatusLine = 'No warning or critical reliability signals detected' %}
         {% set readinessMonitoringLine = 'Monitoring confidence is limited by stale metrics' %}
@@ -761,7 +761,6 @@
       {% set pausedAccountsUrl = cpUrl('agents/accounts', { listFilter: 'paused', focusFirstVisible: 1 }) %}
       {% set attentionAccountsUrl = cpUrl('agents/accounts', { listFilter: 'attention', focusFirstVisible: 1 }) %}
       {% set approvalsUrl = cpUrl('agents/approvals') %}
-      {% set targetSetsUrl = cpUrl('agents/target-sets') %}
       {% set readinessUrl = cpUrl('agents/status') %}
       {% set overviewUrl = readinessUrl %}
       {% set securityUrl = readinessUrl %}
@@ -770,10 +769,10 @@
       {% set webhooksGuideUrl = 'https://marcusscheller.com/docs/agents/webhooks' %}
       {% set readinessActionRows = [
         {
-          signal: 'Runtime disabled',
+          signal: 'Agents disabled',
           stateLabel: not agentsEnabled ? 'Blocked' : 'Clear',
           stateTone: not agentsEnabled ? 'bad' : 'muted',
-          impact: 'Guarded machine traffic cannot run while the runtime is disabled.',
+          impact: 'Guarded machine traffic cannot run while Agents is disabled.',
           primaryAction: 'Open plugin settings',
           secondaryAction: 'Review environment override',
           primaryUrl: settingsUrl ~ '#runtimeSwitchesSection',
@@ -795,7 +794,7 @@
           signal: 'Token enforcement relaxed',
           stateLabel: not securityTokenRequired ? 'Needs attention' : 'Clear',
           stateTone: not securityTokenRequired ? 'warn' : 'muted',
-          impact: 'Guarded requests can reach the runtime without the standard token requirement.',
+          impact: 'Guarded requests can reach Agents without the standard token requirement.',
           primaryAction: 'Open plugin settings',
           secondaryAction: 'Review configuration locks',
           primaryUrl: settingsUrl ~ '#runtimeSwitchesSection',
@@ -906,7 +905,7 @@
           stateLabel: not readinessHasIntegrationTelemetry ? 'Optional' : (readinessConsumerLagCriticalCount > 0 ? 'Blocked' : ((readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60) ? 'Needs attention' : 'Clear')),
           stateTone: not readinessHasIntegrationTelemetry ? 'muted' : (readinessConsumerLagCriticalCount > 0 ? 'bad' : ((readinessConsumerLagWarningCount > 0 or telemetryConsumerLagMaxSeconds > 60) ? 'warn' : 'muted')),
           impact: not readinessHasIntegrationTelemetry
-            ? 'Connect a sync worker only if you want checkpoint-based lag visibility for downstream systems.'
+            ? 'Connect a sync agent only if you want checkpoint-based lag visibility for downstream systems.'
             : 'Downstream systems may be operating on stale Craft or Commerce data.',
           primaryAction: not readinessHasIntegrationTelemetry ? 'Review integration detail' : 'Review lagging integrations',
           secondaryAction: not readinessHasIntegrationTelemetry ? 'Open reliability thresholds' : 'Open lag details',
@@ -918,9 +917,9 @@
           signal: 'Queue depth high',
           stateLabel: telemetryQueueDepth > 50 ? 'Blocked' : (telemetryQueueDepth > 10 ? 'Needs attention' : 'Clear'),
           stateTone: telemetryQueueDepth > 50 ? 'bad' : (telemetryQueueDepth > 10 ? 'warn' : 'muted'),
-          impact: 'Backpressure may delay runtime work and follow-up processing.',
+          impact: 'Backpressure may delay agent work and follow-up processing.',
           primaryAction: 'Open queue runbook',
-          secondaryAction: 'Check workers',
+          secondaryAction: 'Check agents',
           primaryUrl: readinessUrl ~ '#readinessProofCapacityRuntime',
           secondaryUrl: readinessUrl ~ '#readinessProofObservability',
           surface: 'External',
@@ -979,10 +978,10 @@
       {% elseif readinessPreviewState == 'blocked' %}
         {% set readinessActionRowsProblematic = [
           {
-            signal: 'Runtime disabled',
+            signal: 'Agents disabled',
             stateLabel: 'Blocked',
             stateTone: 'bad',
-            impact: 'Guarded machine traffic cannot run while the runtime is disabled.',
+            impact: 'Guarded machine traffic cannot run while Agents is disabled.',
             primaryAction: 'Open plugin settings',
             secondaryAction: 'Review environment override',
             primaryUrl: settingsUrl ~ '#runtimeSwitchesSection',
@@ -1050,7 +1049,7 @@
             signal: 'Managed accounts',
             stateLabel: 'Not created',
             stateTone: 'muted',
-            impact: 'Create a scoped managed account when you are ready to connect your first external agent or worker.',
+            impact: 'Create a scoped managed account when you are ready to connect your first agent.',
             primaryAction: 'Create managed account',
             secondaryAction: 'Open Accounts',
             primaryUrl: accountsUrl ~ '#addAgentSection',
@@ -1061,7 +1060,7 @@
             signal: 'Webhook delivery',
             stateLabel: 'Optional',
             stateTone: 'muted',
-            impact: 'Enable webhook delivery if you want external workers to wake on content or commerce changes instead of polling.',
+            impact: 'Enable webhook delivery if you want agents to wake on content or commerce changes instead of polling.',
             primaryAction: 'Review webhook posture',
             secondaryAction: 'Open Settings',
             primaryUrl: readinessUrl ~ '#webhookReliabilitySection',
@@ -1230,8 +1229,8 @@
         {% elseif readinessIsBootstrapState %}
           {% set readinessDisplayStateKey = 'ready' %}
           {% set readinessDisplayStateLabel = 'Ready' %}
-          {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
-          {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an external worker to start building live-readiness evidence.' %}
+          {% set readinessDisplayStateLead = 'Agents is healthy and ready for your first account or integration.' %}
+          {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an agent to start building live-readiness evidence.' %}
           {% set readinessDisplayStateTone = 'good' %}
         {% elseif readinessHasMonitoringGap or (readinessSummaryHasMuted and not readinessHasObservationGap) %}
           {% set readinessDisplayStateKey = 'unproven' %}
@@ -1242,7 +1241,7 @@
         {% elseif readinessHasObservationGap %}
           {% set readinessDisplayStateKey = 'ready' %}
           {% set readinessDisplayStateLabel = 'Ready' %}
-          {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for machine traffic.' %}
+          {% set readinessDisplayStateLead = 'Agents is healthy and ready for machine traffic.' %}
           {% set readinessDisplayStateSubcopy = 'No issues need attention right now. Confidence signals will strengthen as routine traffic and account activity build over time.' %}
           {% set readinessDisplayStateTone = 'good' %}
         {% endif %}
@@ -1263,17 +1262,17 @@
         {% set readinessDisplayStateKey = 'ready' %}
         {% set readinessDisplayStateLabel = 'Ready' %}
         {% set readinessDisplayHeadlineLabel = 'Ready' %}
-        {% set readinessDisplayStateLead = 'Core runtime is healthy and ready for your first account or integration.' %}
-        {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an external runtime to start building live-readiness evidence.' %}
+        {% set readinessDisplayStateLead = 'Agents is healthy and ready for your first account or integration.' %}
+        {% set readinessDisplayStateSubcopy = 'Create a managed account or connect an agent to start building live-readiness evidence.' %}
         {% set readinessDisplayStateTone = 'good' %}
         {% set statusScreenPrimaryActionLabel = 'Create managed account' %}
         {% set statusScreenPrimaryActionUrl = accountsUrl ~ '#addAgentSection' %}
-        {% set statusScreenSecondaryActionLabel = 'Guide to create your first runtime' %}
+        {% set statusScreenSecondaryActionLabel = 'Guide to create your first agent' %}
         {% set statusScreenSecondaryActionUrl = firstWorkerGuideUrl %}
         {% set statusScreenShowDetailsCta = true %}
         {% set statusScreenSummaryCards = [
           {
-            label: 'Runtime',
+            label: 'Agent Layer',
             value: 'Ready',
             tone: 'good',
             copy: 'Core services are available.'
@@ -1282,7 +1281,7 @@
             label: 'Accounts',
             value: 'Not created',
             tone: 'muted',
-            copy: 'Create your first managed account when you are ready to connect an external runtime.'
+            copy: 'Create your first managed account when you are ready to connect an agent.'
           },
           {
             label: 'Connection',
@@ -1298,9 +1297,9 @@
           },
         ] %}
         {% set statusScreenGuideTitle = 'Start with one account' %}
-        {% set statusScreenGuideBody = 'You do not need to set up the whole system first. Create one managed account, connect an external runtime, and confirm the first authenticated request.' %}
+        {% set statusScreenGuideBody = 'You do not need to set up the whole system first. Create one managed account, connect an agent, and confirm the first authenticated request.' %}
         {% set statusScreenGuideChecklist = [
-          'Runtime is enabled',
+          'Agents is enabled',
           'First account created',
           'First authenticated request succeeds'
         ] %}
@@ -1310,17 +1309,17 @@
         {% set readinessDisplayStateLabel = 'Ready' %}
         {% set readinessDisplayHeadlineLabel = 'Ready' %}
         {% set readinessDisplayStateLead = 'The environment is healthy and ready for ongoing machine traffic.' %}
-        {% set readinessDisplayStateSubcopy = 'Review details only if you need to inspect the current runtime posture.' %}
+        {% set readinessDisplayStateSubcopy = 'Review details only if you need to inspect the current agent posture.' %}
         {% set readinessDisplayStateTone = 'good' %}
         {% set statusScreenPrimaryActionLabel = 'Open Accounts' %}
         {% set statusScreenPrimaryActionUrl = accountsCardsUrl %}
         {% set statusScreenShowDetailsCta = true %}
         {% set statusScreenSummaryCards = [
           {
-            label: 'Runtime',
+            label: 'Agent Layer',
             value: 'Healthy',
             tone: 'good',
-            copy: 'Core runtime is enabled and stable.'
+            copy: 'Agents is enabled and stable.'
           },
           {
             label: 'Accounts',
@@ -1338,7 +1337,7 @@
             label: 'Webhooks',
             value: webhookEnabledForReadiness ? 'Configured' : 'Optional',
             tone: webhookEnabledForReadiness ? 'good' : 'muted',
-            copy: 'Delivery is available when your workflows need it.'
+            copy: 'Delivery is available when your jobs need it.'
           },
         ] %}
         {% set statusScreenGuideTitle = 'Everything looks healthy' %}
@@ -1347,7 +1346,7 @@
       {% elseif statusScreenPreview == 'incident' %}
         {% set statusScreenShowDetailsCta = true %}
         {% if readinessDisplayStateKey == 'blocked' %}
-          {% set statusScreenPrimaryActionLabel = 'Review runtime setting' %}
+          {% set statusScreenPrimaryActionLabel = 'Review agent setting' %}
           {% set statusScreenPrimaryActionUrl = settingsUrl ~ '#runtimeSwitchesSection' %}
           {% set statusScreenIssueCards = [
             {
@@ -1370,7 +1369,7 @@
             },
           ] %}
           {% set statusScreenGuideTitle = 'Fix the blocking issue first' %}
-          {% set statusScreenGuideBody = 'Once the blocking condition is cleared, the rest of the runtime can be reviewed normally.' %}
+          {% set statusScreenGuideBody = 'Once the blocking condition is cleared, the rest of the agent layer can be reviewed normally.' %}
         {% else %}
           {% set statusScreenPrimaryActionLabel = 'Open Accounts' %}
           {% set statusScreenPrimaryActionUrl = attentionAccountsUrl ~ '#agentsCardList' %}
@@ -1385,7 +1384,7 @@
               label: 'Delivery',
               value: webhookEnabledForReadiness ? 'Needs attention' : 'Optional',
               tone: webhookEnabledForReadiness ? 'warn' : 'muted',
-              copy: webhookEnabledForReadiness ? 'Webhook delivery failures need review.' : 'Webhook delivery is available when your workflows need it.'
+              copy: webhookEnabledForReadiness ? 'Webhook delivery failures need review.' : 'Webhook delivery is available when your jobs need it.'
             },
             {
               label: 'Observability',
@@ -1409,7 +1408,6 @@
         {% set securityLatestDlqUpdatedAt = securityLatestDlqRow.dateCreated|date('Y-m-d, H:i:s', timezone='UTC') %}
       {% endif %}
       {% set dashboardManagedCredentials = managedCredentials ?? [] %}
-      {% set dashboardTargetSets = targetSets ?? [] %}
       {% set dashboardControlSummary = controlSnapshot.summary|default({}) %}
       {% set dashboardApprovals = controlSnapshot.approvals|default([]) %}
       {% set dashboardAccountTotal = dashboardManagedCredentials|length %}
@@ -1421,7 +1419,6 @@
       {% set dashboardAccountNeedsAttention = 0 %}
       {% set dashboardWriteCapableAccounts = 0 %}
       {% set dashboardWriteAccountsWithoutTargetSets = 0 %}
-      {% set dashboardWritableEntryIds = [] %}
       {% for credential in dashboardManagedCredentials %}
         {% set credentialMode = (credential.mode ?? '')|lower %}
         {% if credentialMode == 'revoked' %}
@@ -1456,14 +1453,6 @@
           {% endif %}
         {% endif %}
       {% endfor %}
-      {% for targetSet in dashboardTargetSets %}
-        {% for entryId in targetSet.allowedEntryIds|default([]) %}
-          {% if entryId > 0 and entryId not in dashboardWritableEntryIds %}
-            {% set dashboardWritableEntryIds = dashboardWritableEntryIds|merge([entryId]) %}
-          {% endif %}
-        {% endfor %}
-      {% endfor %}
-      {% set dashboardWritableElementCount = dashboardWritableEntryIds|length %}
       {% set dashboardAccountStateSummary = dashboardAccountActive ~ ' active, ' ~ dashboardAccountPaused ~ ' paused, ' ~ dashboardAccountRevoked ~ ' revoked' %}
       {% set dashboardPendingApprovals = statusCanViewControl ? (dashboardControlSummary.approvalsPending|default(0)) : 0 %}
       {% set dashboardBlockedExecutions = statusCanViewControl ? (dashboardControlSummary.executionsBlocked|default(0)) : 0 %}
@@ -1501,7 +1490,7 @@
       {% set verdictPrimaryActionLabel = 'Open Accounts' %}
       {% set verdictPrimaryActionUrl = accountsCardsUrl %}
       {% if not agentsEnabled %}
-        {% set verdictPrimaryActionLabel = 'Review runtime setting' %}
+        {% set verdictPrimaryActionLabel = 'Review agent setting' %}
         {% set verdictPrimaryActionUrl = settingsUrl ~ '#runtimeSwitchesSection' %}
       {% elseif not readinessDbAvailable %}
         {% set verdictPrimaryActionLabel = 'View system details' %}
@@ -1520,8 +1509,8 @@
           title: 'Environment',
           tone: 'bad',
           copy: agentsEnabledSource == 'env'
-            ? 'Runtime is disabled by environment configuration. Remove the env override before trusting live traffic.'
-            : 'Runtime is disabled. Enable Agents before trusting live traffic.'
+            ? 'Agents is disabled by environment configuration. Remove the env override before trusting live traffic.'
+            : 'Agents is disabled. Enable Agents before trusting live traffic.'
         }]) %}
       {% elseif not readinessDbAvailable %}
         {% set verdictAttentionItems = verdictAttentionItems|merge([{
@@ -1540,7 +1529,7 @@
         {% set verdictAttentionItems = verdictAttentionItems|merge([{
           title: 'Accounts',
           tone: 'muted',
-          copy: 'No managed accounts exist yet. Create one account to start the first controlled worker connection.'
+          copy: 'No managed accounts exist yet. Create one account to start the first controlled agent connection.'
         }]) %}
       {% elseif dashboardAccountNeedsAttention > 0 %}
         {% set verdictAttentionItems = verdictAttentionItems|merge([{
@@ -1599,7 +1588,7 @@
           title: (statusScreenPreview == 'setup' or dashboardAccountTotal == 0) ? 'Next step' : 'Status',
           tone: readinessDisplayStateTone,
           copy: (statusScreenPreview == 'setup' or dashboardAccountTotal == 0)
-            ? 'Create a managed account, connect a worker, and let live traffic build confidence from real use.'
+            ? 'Create a managed account, connect an agent, and let live traffic build confidence from real use.'
             : 'Nothing needs attention right now. Use the cards to jump into the current operator surfaces.'
         }]) %}
       {% endif %}
@@ -1612,29 +1601,29 @@
           },
           {
             title: 'Start read-only first',
-            copy: 'Add write scopes and Target Sets only when a workflow truly needs governed draft updates.',
+            copy: 'Add write scopes and write boundaries only when a job truly needs governed draft updates.',
             url: firstWorkerGuideUrl
           },
           {
             title: 'Governed Content Refresh',
-            copy: 'When workers prepare content changes, let editors review diffs before anything is applied.',
+            copy: 'When agents prepare content changes, let editors review diffs before anything is applied.',
             url: governedContentRefreshWorkflowUrl
           }
         ]
         : [
           {
             title: 'Keep accounts task-specific',
-            copy: 'Use separate managed accounts for reporting, monitoring, and polling workers instead of sharing one broad token.',
+            copy: 'Use separate managed accounts for reporting, monitoring, and polling agents instead of sharing one broad token.',
             url: scopeGuideUrl
           },
           {
-            title: 'Give each worker only what it needs',
-            copy: 'Confirm a healthy first connection with read-only access before expanding scopes for a worker.',
+            title: 'Give each agent only what it needs',
+            copy: 'Confirm a healthy first connection with read-only access before expanding scopes for an agent.',
             url: firstWorkerGuideUrl
           },
           {
             title: 'Add push delivery only when needed',
-            copy: 'Webhooks and probe tools are optional until external workers need push-based wake-ups instead of polling.',
+            copy: 'Webhooks and probe tools are optional until agents need push-based wake-ups instead of polling.',
             url: webhooksGuideUrl
           }
         ] %}
@@ -1747,20 +1736,20 @@
       {% set workflowsCardActionLabel = 'Open Settings' %}
       {% set workflowsCardActionUrl = settingsUrl %}
       {% if not statusCanViewWorkflows %}
-        {% set workflowsCardLines = [{ text: 'Workflow visibility depends on workflow permissions for the current CP user.' }] %}
+        {% set workflowsCardLines = [{ text: 'Job visibility depends on job permissions for the current CP user.' }] %}
       {% elseif statusScreenPreview == 'setup' or dashboardWorkflowTotal == 0 %}
         {% set workflowsCardBadgeLabel = 'Not configured' %}
         {% set workflowsCardLines = [
-          { text: 'No workflow handoffs are configured yet.' },
-          { text: 'Add one workflow to document cadence, worker account, and review scope.' }
+          { text: 'No job handoffs are configured yet.' },
+          { text: 'Add one job to document cadence, backing account, and boundary.' }
         ] %}
-        {% set workflowsCardActionLabel = statusCanManageWorkflows ? 'Create Workflow' : 'Open Workflows' %}
+        {% set workflowsCardActionLabel = statusCanManageWorkflows ? 'Create Job' : 'Open Jobs' %}
         {% set workflowsCardActionUrl = statusCanManageWorkflows ? workflowCreateUrl : workflowsUrl %}
       {% elseif dashboardWorkflowAttention > 0 %}
         {% set workflowsCardBadgeTone = 'warn' %}
         {% set workflowsCardBadgeLabel = 'Needs attention' %}
         {% set workflowsCardLines = workflowsCardLines|merge([{
-          text: dashboardWorkflowAttention ~ ' workflow' ~ (dashboardWorkflowAttention == 1 ? '' : 's') ~ ' ' ~ (dashboardWorkflowAttention == 1 ? 'needs' : 'need') ~ ' review.',
+          text: dashboardWorkflowAttention ~ ' job' ~ (dashboardWorkflowAttention == 1 ? '' : 's') ~ ' ' ~ (dashboardWorkflowAttention == 1 ? 'needs' : 'need') ~ ' review.',
           url: workflowsUrl
         }]) %}
         {% if dashboardWorkflowFirstAttention %}
@@ -1771,7 +1760,7 @@
         {% endif %}
         {% if dashboardWorkflowBroad > 0 %}
           {% set workflowsCardLines = workflowsCardLines|merge([{
-            text: dashboardWorkflowBroad ~ ' workflow' ~ (dashboardWorkflowBroad == 1 ? '' : 's') ~ ' use a broader account than they need.',
+            text: dashboardWorkflowBroad ~ ' job' ~ (dashboardWorkflowBroad == 1 ? '' : 's') ~ ' use a broader account than they need.',
             url: workflowsUrl
           }]) %}
         {% endif %}
@@ -1783,18 +1772,18 @@
         {% else %}
           {% set workflowsCardLines = workflowsCardLines|merge([{
             text: dashboardWorkflowActive > 0
-              ? dashboardWorkflowActive ~ ' active workflow' ~ (dashboardWorkflowActive == 1 ? '' : 's') ~ ' still scheduled externally.'
-              : 'No workflow runs have been reported yet.'
+              ? dashboardWorkflowActive ~ ' active job' ~ (dashboardWorkflowActive == 1 ? '' : 's') ~ ' still scheduled externally.'
+              : 'No job runs have been reported yet.'
           }]) %}
         {% endif %}
-        {% set workflowsCardActionLabel = 'Open Workflows' %}
+        {% set workflowsCardActionLabel = 'Open Jobs' %}
         {% set workflowsCardActionUrl = workflowsUrl %}
       {% elseif dashboardWorkflowActive == 0 %}
         {% set workflowsCardBadgeLabel = 'Configured' %}
-        {% set workflowsCardLines = [{ text: dashboardWorkflowTotal ~ ' workflow' ~ (dashboardWorkflowTotal == 1 ? '' : 's') ~ ' configured.', url: workflowsUrl }] %}
+        {% set workflowsCardLines = [{ text: dashboardWorkflowTotal ~ ' job' ~ (dashboardWorkflowTotal == 1 ? '' : 's') ~ ' configured.', url: workflowsUrl }] %}
         {% set workflowsCardLines = workflowsCardLines|merge([{
           text: dashboardWorkflowDraft > 0
-            ? dashboardWorkflowDraft ~ ' workflow' ~ (dashboardWorkflowDraft == 1 ? '' : 's') ~ ' still in draft.'
+            ? dashboardWorkflowDraft ~ ' job' ~ (dashboardWorkflowDraft == 1 ? '' : 's') ~ ' still in draft.'
             : 'No active schedules are currently configured.'
         }]) %}
         {% if dashboardWorkflowLatestRun %}
@@ -1803,21 +1792,21 @@
             url: cpUrl('agents/workflows/' ~ dashboardWorkflowLatestRun.id)
           }]) %}
         {% else %}
-          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'Runs still have to be reported through the workflow API.' }]) %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'Runs still have to be reported through the job API contract.' }]) %}
         {% endif %}
-        {% set workflowsCardActionLabel = 'Open Workflows' %}
+        {% set workflowsCardActionLabel = 'Open Jobs' %}
         {% set workflowsCardActionUrl = workflowsUrl %}
       {% else %}
         {% set workflowsCardBadgeTone = 'good' %}
         {% set workflowsCardBadgeLabel = 'Ready' %}
-        {% set workflowsCardLines = [{ text: dashboardWorkflowTotal ~ ' workflow' ~ (dashboardWorkflowTotal == 1 ? '' : 's') ~ ' configured, ' ~ dashboardWorkflowActive ~ ' active.', url: workflowsUrl }] %}
+        {% set workflowsCardLines = [{ text: dashboardWorkflowTotal ~ ' job' ~ (dashboardWorkflowTotal == 1 ? '' : 's') ~ ' configured, ' ~ dashboardWorkflowActive ~ ' active.', url: workflowsUrl }] %}
         {% if dashboardWorkflowNextDue %}
           {% set workflowsCardLines = workflowsCardLines|merge([{
             text: 'Next due: ' ~ dashboardWorkflowNextDue.name ~ ' · ' ~ dashboardWorkflowNextDue.nextDueLabel,
             url: cpUrl('agents/workflows/' ~ dashboardWorkflowNextDue.id)
           }]) %}
         {% else %}
-          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'External workers control the actual schedule and execution.' }]) %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'Your agent controls the actual schedule and execution.' }]) %}
         {% endif %}
         {% if dashboardWorkflowLatestRun %}
           {% set workflowsCardLines = workflowsCardLines|merge([{
@@ -1825,9 +1814,9 @@
             url: cpUrl('agents/workflows/' ~ dashboardWorkflowLatestRun.id)
           }]) %}
         {% else %}
-          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'No workflow runs have been reported yet.' }]) %}
+          {% set workflowsCardLines = workflowsCardLines|merge([{ text: 'No job runs have been reported yet.' }]) %}
         {% endif %}
-        {% set workflowsCardActionLabel = 'Open Workflows' %}
+        {% set workflowsCardActionLabel = 'Open Jobs' %}
         {% set workflowsCardActionUrl = workflowsUrl %}
       {% endif %}
 
@@ -1930,51 +1919,6 @@
         ] %}
       {% endif %}
 
-      {% set targetSetsCardBadgeTone = 'muted' %}
-      {% set targetSetsCardBadgeLabel = 'Unavailable' %}
-      {% set targetSetsCardLines = [] %}
-      {% set targetSetsCardActionLabel = 'Open Target Sets' %}
-      {% set targetSetsCardActionUrl = targetSetsUrl %}
-      {% if not writesExperimentalEnabled %}
-        {% set targetSetsCardBadgeLabel = 'Off' %}
-        {% set targetSetsCardLines = [
-          { text: 'Governed draft writes are off.' },
-          { text: 'Turn on experimental writes before configuring Target Sets.' }
-        ] %}
-        {% set targetSetsCardActionLabel = 'Open Settings' %}
-        {% set targetSetsCardActionUrl = settingsUrl %}
-      {% elseif not controlCpEnabled %}
-        {% set targetSetsCardBadgeLabel = 'Unavailable' %}
-        {% set targetSetsCardLines = [
-          { text: 'Target Sets need the control plane CP to be available.' },
-          { text: 'This environment is not exposing that surface right now.' }
-        ] %}
-      {% elseif not statusCanViewCredentials %}
-        {% set targetSetsCardLines = [{ text: 'Boundary visibility depends on credential permissions for the current CP user.' }] %}
-      {% elseif statusScreenPreview == 'setup' or dashboardWriteCapableAccounts == 0 %}
-        {% set targetSetsCardBadgeLabel = 'Optional' %}
-        {% set targetSetsCardLines = [
-          dashboardTargetSets|length > 0
-            ? { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' }
-            : { text: 'No target sets configured yet.' },
-          dashboardTargetSets|length > 0
-            ? { text: dashboardWritableElementCount ~ ' writable element' ~ (dashboardWritableElementCount == 1 ? '' : 's') ~ ' across all target sets' }
-            : { text: 'Only needed for governed draft writes.' }
-        ] %}
-      {% elseif dashboardTargetSets|length == 0 %}
-        {% set targetSetsCardBadgeLabel = 'Optional' %}
-        {% set targetSetsCardLines = [
-          { text: 'No target sets configured yet.' },
-          { text: 'Only needed for governed draft writes.' }
-        ] %}
-      {% else %}
-        {% set targetSetsCardBadgeTone = 'good' %}
-        {% set targetSetsCardBadgeLabel = 'Ready' %}
-        {% set targetSetsCardLines = [
-          { text: dashboardTargetSets|length ~ ' target set' ~ ((dashboardTargetSets|length) == 1 ? '' : 's') ~ ' configured' },
-          { text: dashboardWritableElementCount ~ ' writable element' ~ (dashboardWritableElementCount == 1 ? '' : 's') ~ ' across all target sets' }
-        ] %}
-      {% endif %}
 
       {% set webhooksCardBadgeTone = 'muted' %}
       {% set webhooksCardBadgeLabel = 'Optional' %}
@@ -1984,7 +1928,7 @@
       {% if statusScreenPreview == 'setup' %}
         {% set webhooksCardLines = [
           { text: 'Delivery is optional for first setup.' },
-          { text: 'Optional until workers need push delivery.' }
+          { text: 'Optional until agents need push delivery.' }
         ] %}
       {% elseif securityWebhookMisconfigured %}
         {% set webhooksCardBadgeTone = 'warn' %}
@@ -2012,7 +1956,7 @@
         {% set webhooksCardLines = [
           { text: 'Delivery is not configured.' },
           webhookProbeStorageReady
-            ? { text: 'Optional until workers need push delivery.' }
+            ? { text: 'Optional until agents need push delivery.' }
             : { text: 'Run plugin migrations before using webhook utilities.' }
         ] %}
       {% endif %}
@@ -2025,7 +1969,7 @@
       {% set webhookProbeCardActionUrl = settingsUrl %}
       {% if webhookProbeState == 'misconfigured' %}
         {% set webhookProbeCardLines = [
-          { text: 'Runtime webhook URL or secret is missing.', url: settingsUrl ~ '#webhookSection' },
+          { text: 'Agent webhook URL or secret is missing.', url: settingsUrl ~ '#webhookSection' },
           { text: webhookProbeStatusLine|replace({'Status: ': ''}) }
         ] %}
       {% elseif webhookProbeState == 'storage' %}
@@ -2067,7 +2011,7 @@
         ] %}
       {% elseif webhookTestSinkState == 'misconfigured' %}
         {% set webhookTestSinkCardLines = [
-          { text: 'Runtime webhook transport is not fully pointed at the local sink.', url: settingsUrl ~ '#webhookSection' },
+          { text: 'Agent webhook delivery is not fully pointed at the local sink.', url: settingsUrl ~ '#webhookSection' },
           { text: 'Target is ' ~ webhookTestSinkWebhookTargetLabel ~ ' and secret is ' ~ webhookTestSinkWebhookSecretLabel ~ '.' }
         ] %}
       {% elseif webhookTestSinkState == 'storage' %}
@@ -2095,7 +2039,7 @@
       {% if manualRequestToolEnabled %}
         {% set manualRequestToolCardLines = [
           { text: 'Setup and fallback tool for one-off governed draft requests.' },
-          { text: 'Use it before a worker exists or while a worker is temporarily unavailable.' }
+          { text: 'Use it before an agent exists or while an agent is temporarily unavailable.' }
         ] %}
       {% endif %}
 
@@ -2203,7 +2147,7 @@
           <article class="agents-status-dashboard-card border rounded p-0">
             <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
               <div class="agents-status-dashboard-card__header-copy">
-                <h2 class="agents-status-dashboard-card__title">Workflows</h2>
+                <h2 class="agents-status-dashboard-card__title">Jobs</h2>
               </div>
               <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ workflowsCardBadgeTone }}">{{ workflowsCardBadgeLabel }}</span>
             </div>
@@ -2279,33 +2223,6 @@
               {% endif %}
             </div>
           </article>
-
-          {% if showWriteDashboardCards %}
-            <article class="agents-status-dashboard-card border rounded p-0">
-              <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
-                <div class="agents-status-dashboard-card__header-copy">
-                  <h2 class="agents-status-dashboard-card__title">Target Sets</h2>
-                </div>
-                <span class="agents-status-dashboard-card__badge agents-status-dashboard-card__badge--{{ targetSetsCardBadgeTone }}">{{ targetSetsCardBadgeLabel }}</span>
-              </div>
-              <div class="agents-status-dashboard-card__body">
-                <ul class="agents-status-dashboard-card__list">
-                  {% for line in targetSetsCardLines %}
-                    <li>
-                      {% if (line.url ?? '') != '' %}
-                        <a href="{{ line.url }}" class="agents-status-dashboard-card__list-link">{{ line.text }}</a>
-                      {% else %}
-                        {{ line.text }}
-                      {% endif %}
-                    </li>
-                  {% endfor %}
-                </ul>
-              </div>
-              <div class="agents-status-dashboard-card__footer">
-                <a href="{{ targetSetsCardActionUrl }}" class="agents-status-dashboard-card__footer-link">{{ targetSetsCardActionLabel }} &rarr;</a>
-              </div>
-            </article>
-          {% endif %}
 
           <article class="agents-status-dashboard-card border rounded p-0">
             <div class="agents-status-dashboard-card__header agents-status-strip-card__top">
@@ -2529,7 +2446,7 @@
               <ul class="agents-readiness-ready-proof-list">
                 <li{% if securityWarnings > 0 or securityErrors > 0 or not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityCredentialCount > 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Configured accounts: <strong>{{ securityCredentialCount }}</strong> total (<strong>{{ securityManagedCredentialCount }}</strong> managed, <strong>{{ securityEnvCredentialCount }}</strong> environment)</li>
                 <li>Active accounts / guarded requests: <strong>{{ securityActiveCredentials7d }}</strong> / <strong>{{ securityRequestsTotal }}</strong></li>
-                <li>Default scopes in runtime policy: <strong>{{ securityDefaultScopeCount }}</strong>{% if securityDefaultScopePreview %} ({{ securityDefaultScopePreview }}){% endif %}</li>
+                <li>Default scopes in agent policy: <strong>{{ securityDefaultScopeCount }}</strong>{% if securityDefaultScopePreview %} ({{ securityDefaultScopePreview }}){% endif %}</li>
                 <li>Environment / profile: <strong>{{ securityPosture.environment|default('unknown') }}</strong> / <strong>{{ securityPosture.profile.name|default('unknown') }}</strong></li>
                 <li{% if not securityPrivacyRedaction %} class="agents-readiness-ready-proof-line--alert"{% elseif securityPrivacyRedaction and securityPosture.profile.defaultsApplied %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Privacy redaction / defaults applied: <strong>{{ securityPrivacyRedaction ? 'enabled' : 'disabled' }}</strong> / <strong>{{ securityPosture.profile.defaultsApplied ? 'yes' : 'no' }}</strong></li>
                 <li{% if securityWarnings > 0 or securityErrors > 0 %} class="agents-readiness-ready-proof-line--alert"{% elseif securityWarnings == 0 and securityErrors == 0 %} class="agents-readiness-ready-proof-line--ok"{% endif %}>Warnings / errors: <strong>{{ securityWarnings }}</strong> / <strong>{{ securityErrors }}</strong></li>
@@ -2636,7 +2553,7 @@
             <div class="agents-readiness-detail-dialog-head">
               <div class="agents-readiness-detail-dialog-heading">
                 <h2 class="agents-readiness-detail-dialog-title" id="trafficAccessDetailDialogTitle">Traffic / Access Detail</h2>
-                <p class="agents-readiness-detail-dialog-copy">Aggregate guarded-request posture from runtime counters, policy posture, and reliability thresholds.</p>
+                <p class="agents-readiness-detail-dialog-copy">Aggregate guarded-request posture from agent counters, policy posture, and reliability thresholds.</p>
               </div>
               <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close traffic and access detail">Close</button>
             </div>
@@ -2734,7 +2651,7 @@
             <div class="agents-readiness-detail-dialog-head">
               <div class="agents-readiness-detail-dialog-heading">
                 <h2 class="agents-readiness-detail-dialog-title" id="deliveryWebhooksDetailDialogTitle">Delivery / Webhooks Detail</h2>
-                <p class="agents-readiness-detail-dialog-copy">Webhook enablement, delivery posture, and dead-letter events from current runtime telemetry.</p>
+                <p class="agents-readiness-detail-dialog-copy">Webhook enablement, delivery posture, and dead-letter events from current agent telemetry.</p>
               </div>
               <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close delivery and webhooks detail">Close</button>
             </div>
@@ -2910,7 +2827,7 @@
               </div>
 
               <section class="agents-readiness-detail-panel">
-                <h3 class="agents-readiness-detail-panel-title">Runtime Scope Set</h3>
+                <h3 class="agents-readiness-detail-panel-title">Agent Scope Set</h3>
                 {% if securityDefaultScopes|length %}
                   <div class="agents-readiness-detail-chip-list">
                     {% for scope in securityDefaultScopes %}
@@ -2918,7 +2835,7 @@
                     {% endfor %}
                   </div>
                 {% else %}
-                  <p class="agents-readiness-detail-empty">No runtime scopes are configured.</p>
+                  <p class="agents-readiness-detail-empty">No agent scopes are configured.</p>
                 {% endif %}
                 {% if securityProfileDefaultsAppliedFields|length %}
                   <p class="agents-readiness-detail-signal-copy">
@@ -3092,7 +3009,7 @@
             <div class="agents-readiness-detail-dialog-head">
               <div class="agents-readiness-detail-dialog-heading">
                 <h2 class="agents-readiness-detail-dialog-title" id="integrationCapacityDetailDialogTitle">Integration / Capacity Detail</h2>
-                <p class="agents-readiness-detail-dialog-copy">Checkpoint lag, queue pressure, and runtime capacity posture from current sync-state telemetry.</p>
+                <p class="agents-readiness-detail-dialog-copy">Checkpoint lag, queue pressure, and agent capacity posture from current sync-state telemetry.</p>
               </div>
               <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close integration and capacity detail">Close</button>
             </div>
@@ -3458,7 +3375,7 @@
 
             <div class="agents-webhook-probe-footer">
               <ul class="agents-link-list agents-webhook-probe-notes">
-                <li>The production probe uses the live runtime webhook URL and signing secret.</li>
+                <li>The production probe uses the live agent webhook URL and signing secret.</li>
                 <li>Probe payloads are explicitly marked with <code>eventKind=probe</code>, <code>isProbe=true</code>, and a stable <code>probeId</code>.</li>
                 <li>A successful probe validates signed outbound HTTP delivery. It does not prove real content hooks or the normal business queue path fired.</li>
                 <li>Cooldown limits repeated probe traffic against the receiver.</li>
@@ -3623,7 +3540,7 @@
 
               <div class="agents-webhook-test-sink-footer">
                 <ul class="agents-link-list agents-webhook-test-sink-notes">
-                  <li><code>PLUGIN_AGENTS_WEBHOOK_URL</code> and <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> are the normal runtime webhook settings.</li>
+                  <li><code>PLUGIN_AGENTS_WEBHOOK_URL</code> and <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> are the normal agent webhook settings.</li>
                   <li>Only point <code>PLUGIN_AGENTS_WEBHOOK_URL</code> at the sink URL above in local/dev.</li>
                   <li>Keep <code>PLUGIN_AGENTS_WEBHOOK_SECRET</code> configured so signatures can be verified.</li>
                   <li>Use <strong>Send test webhook</strong> for a one-click local delivery check, or save an entry/product/order to test a real content-triggered event.</li>
@@ -3660,7 +3577,7 @@
             <div class="agents-readiness-detail-dialog-head">
               <div class="agents-readiness-detail-dialog-heading">
                 <h2 class="agents-readiness-detail-dialog-title" id="manualRequestToolDetailDialogTitle">Manual Request Test</h2>
-                <p class="agents-readiness-detail-dialog-copy">Setup and fallback tool for creating one governed <code>entry.updateDraft</code> request by hand before a worker is in place.</p>
+                <p class="agents-readiness-detail-dialog-copy">Setup and fallback tool for creating one governed <code>entry.updateDraft</code> request by hand before an agent is in place.</p>
               </div>
               <button type="button" class="agents-readiness-detail-dialog-close" data-agents-detail-close aria-label="Close manual request test detail">Close</button>
             </div>
@@ -3671,12 +3588,12 @@
                     <h2 class="agents-webhook-probe-title">Manual Request Test</h2>
                   </div>
                   <div class="agents-webhook-probe-actions">
-                    <a class="btn small agents-webhook-probe-button" href="{{ governedContentRefreshWorkflowUrl }}" target="_blank" rel="noopener">Open workflow</a>
+                    <a class="btn small agents-webhook-probe-button" href="{{ governedContentRefreshWorkflowUrl }}" target="_blank" rel="noopener">Open guide</a>
                     <a class="btn small agents-webhook-probe-button" href="{{ approvalsUrl }}">Open Approvals</a>
                   </div>
                 </div>
                 <div class="agents-status-strip-card__subcopy">
-                  <p class="agents-webhook-probe-copy">Use this only for setup, testing, or one-off fallback before a worker exists or while it is temporarily unavailable.</p>
+                  <p class="agents-webhook-probe-copy">Use this only for setup, testing, or one-off fallback before an agent exists or while it is temporarily unavailable.</p>
                   <p class="agents-webhook-probe-status agents-webhook-probe-status--muted">Final approval in Craft will execute the stored draft payload.</p>
                 </div>
 
@@ -3684,8 +3601,8 @@
                   <div class="agents-status-manual-request-notes">
                     <ul class="agents-link-list">
                       <li>Creates one governed <code>entry.updateDraft</code> request from the control plane.</li>
-                      <li>Best for proving a bounded lane before a worker is scheduled.</li>
-                      <li>Once a worker exists, let the worker create the request instead.</li>
+                      <li>Best for proving a bounded lane before an agent is scheduled.</li>
+                      <li>Once an agent exists, let the agent create the request instead.</li>
                     </ul>
                   </div>
 

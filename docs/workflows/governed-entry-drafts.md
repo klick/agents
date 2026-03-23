@@ -1,10 +1,10 @@
 # Governed Entry Drafts
 
-Use this workflow when you want to test or build the real governed draft-write path against an entry.
+Use this job when you want to test or build the real governed draft-write path against an entry.
 
 The public example uses a worker, but the same governed flow can also be driven by another external runtime if it can manage the same request and execute-approved phases safely.
 
-This is the simplest write-side workflow in Agents:
+This is the simplest write-side job in Agents:
 
 - request approval for `entry.updateDraft`
 - approve it in the control panel
@@ -64,7 +64,7 @@ If your agent or orchestrator already handles scheduling, state, and tool calls 
 ## Suggested Flow
 
 1. Create a managed account with the required scopes.
-   Optional but recommended: create one or more `Target Sets` in `Agents -> Target Sets`, then assign them in `Agents -> Accounts` so the account can only request draft updates for explicit entries/sites.
+   Optional but recommended: create one or more reusable boundaries from `Agents -> Accounts` via `Manage boundaries`, then assign them to the account so it can only request draft updates for explicit entries/sites.
 2. Configure the worker `.env` with:
    - `ENTRY_ID`
    - `SITE_ID`
@@ -78,14 +78,14 @@ If your agent or orchestrator already handles scheduling, state, and tool calls 
 ## Important Guardrails
 
 - use the correct `siteId` for the destination site/language
-- for target-set-constrained accounts, `payload.siteId` is required and must stay inside the assigned target-set boundary
-- keep the workflow approval-driven; do not auto-apply the draft
+- for boundary-constrained accounts, `payload.siteId` is required and must stay inside the assigned boundary
+- keep the job approval-driven; do not auto-apply the draft
 - if another saved draft already exists, either resolve it editorially or target the exact `DRAFT_ID`
 - treat `Apply Draft` as a separate human decision
 
 ## Why This Fits Agents
 
-This workflow exercises the exact control-plane boundary Agents is designed for:
+This job exercises the exact control-plane boundary Agents is designed for:
 
 - managed machine identity
 - explicit write scopes

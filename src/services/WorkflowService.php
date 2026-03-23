@@ -20,6 +20,7 @@ class WorkflowService extends Component
     private const TABLE_WORKFLOWS = '{{%agents_workflows}}';
     private const TABLE_WORKFLOW_RUNS = '{{%agents_workflow_runs}}';
     private const TABLE_CREDENTIALS = '{{%agents_credentials}}';
+    private const TEMPLATE_CUSTOM_READ_ONLY_JOB = 'custom-read-only-job';
     private const TEMPLATE_CONTENT_QUALITY_REVIEW = 'content-quality-review';
     private const TEMPLATE_LEGAL_CONSENT_REVIEW = 'legal-consent-review';
     private const TEMPLATE_CHANGE_MONITOR = 'change-monitor';
@@ -41,24 +42,42 @@ class WorkflowService extends Component
     {
         $templates = [
             [
+                'handle' => self::TEMPLATE_CUSTOM_READ_ONLY_JOB,
+                'displayName' => 'Custom Read-only Job',
+                'description' => 'Create a free-form read-only Job by defining the prompt, selecting sources, and setting the boundary yourself.',
+                'requiredScopes' => [
+                    'jobs:read',
+                    'jobs:report',
+                ],
+                'recommendedOptionalScopes' => [
+                    'capabilities:read',
+                    'openapi:read',
+                ],
+                'defaultSourceKeys' => [],
+                'mode' => 'read-only',
+                'focusLabel' => 'Operator-selected sources and boundary',
+                'defaultCadence' => 'weekly',
+                'defaultWeekday' => 4,
+                'defaultTimeOfDay' => '08:00',
+                'defaultTimezone' => 'Europe/Berlin',
+                'supportsTargetSet' => false,
+                'docsUrl' => 'https://marcusscheller.com/docs/agents/workflows',
+            ],
+            [
                 'handle' => self::TEMPLATE_CONTENT_QUALITY_REVIEW,
                 'displayName' => 'Content Quality Review',
                 'description' => 'Review entries, assets, and taxonomy on a recurring schedule and surface content-quality issues for operators.',
                 'requiredScopes' => [
-                    'workflows:read',
-                    'workflows:report',
-                    'entries:read',
+                    'jobs:read',
+                    'jobs:report',
                     'entries:read_all_statuses',
-                    'assets:read',
-                    'sections:read',
-                    'categories:read',
-                    'tags:read',
                 ],
                 'recommendedOptionalScopes' => [
                     'auth:read',
                     'capabilities:read',
                     'openapi:read',
                 ],
+                'defaultSourceKeys' => ['entries', 'assets', 'categories', 'tags', 'sections'],
                 'mode' => 'read-only',
                 'focusLabel' => 'Entries, assets, taxonomy',
                 'defaultCadence' => 'weekly',
@@ -73,17 +92,14 @@ class WorkflowService extends Component
                 'displayName' => 'Legal & Consent Review',
                 'description' => 'Review legal texts, consent-related content, and disclosure surfaces without changing site content.',
                 'requiredScopes' => [
-                    'workflows:read',
-                    'workflows:report',
-                    'entries:read',
-                    'global-sets:read',
-                    'assets:read',
-                    'sections:read',
+                    'jobs:read',
+                    'jobs:report',
                 ],
                 'recommendedOptionalScopes' => [
                     'capabilities:read',
                     'openapi:read',
                 ],
+                'defaultSourceKeys' => ['entries', 'globalsets', 'assets', 'sections'],
                 'mode' => 'read-only',
                 'focusLabel' => 'Legal texts, consent surfaces',
                 'defaultCadence' => 'weekly',
@@ -98,17 +114,14 @@ class WorkflowService extends Component
                 'displayName' => 'Change Monitor',
                 'description' => 'Track content and asset changes on a recurring schedule and summarize what changed for operators.',
                 'requiredScopes' => [
-                    'workflows:read',
-                    'workflows:report',
-                    'changes:read',
-                    'entries:read',
-                    'assets:read',
-                    'sections:read',
+                    'jobs:read',
+                    'jobs:report',
                 ],
                 'recommendedOptionalScopes' => [
                     'capabilities:read',
                     'openapi:read',
                 ],
+                'defaultSourceKeys' => ['changes', 'entries', 'assets', 'sections'],
                 'mode' => 'read-only',
                 'focusLabel' => 'Change feed, entries, assets',
                 'defaultCadence' => 'weekly',
@@ -123,19 +136,15 @@ class WorkflowService extends Component
                 'displayName' => 'Launch Readiness Review',
                 'description' => 'Run a recurring readiness review across content, assets, and structure before launches or major updates.',
                 'requiredScopes' => [
-                    'workflows:read',
-                    'workflows:report',
-                    'entries:read',
+                    'jobs:read',
+                    'jobs:report',
                     'entries:read_all_statuses',
-                    'assets:read',
-                    'sections:read',
-                    'categories:read',
-                    'tags:read',
                 ],
                 'recommendedOptionalScopes' => [
                     'capabilities:read',
                     'openapi:read',
                 ],
+                'defaultSourceKeys' => ['entries', 'assets', 'categories', 'tags', 'sections'],
                 'mode' => 'read-only',
                 'focusLabel' => 'Launch-facing content and assets',
                 'defaultCadence' => 'weekly',
@@ -153,18 +162,14 @@ class WorkflowService extends Component
                 'displayName' => 'Catalog Quality Review',
                 'description' => 'Review catalog data, merchandising content, and commerce-facing metadata on a recurring schedule.',
                 'requiredScopes' => [
-                    'workflows:read',
-                    'workflows:report',
-                    'products:read',
-                    'variants:read',
-                    'orders:read',
-                    'entries:read',
-                    'sections:read',
+                    'jobs:read',
+                    'jobs:report',
                 ],
                 'recommendedOptionalScopes' => [
                     'capabilities:read',
                     'openapi:read',
                 ],
+                'defaultSourceKeys' => ['products', 'variants', 'orders', 'entries', 'sections'],
                 'mode' => 'read-only',
                 'focusLabel' => 'Products, variants, supporting content',
                 'defaultCadence' => 'weekly',
@@ -189,6 +194,119 @@ class WorkflowService extends Component
         }
 
         return null;
+    }
+
+    public function getJobSourceCatalog(): array
+    {
+        $catalog = [
+            'entries' => [
+                'key' => 'entries',
+                'label' => 'Entries',
+                'description' => 'Published and live entry content.',
+                'group' => 'content',
+                'requiredScopes' => ['entries:read'],
+            ],
+            'assets' => [
+                'key' => 'assets',
+                'label' => 'Assets',
+                'description' => 'Asset metadata and file references.',
+                'group' => 'content',
+                'requiredScopes' => ['assets:read'],
+            ],
+            'categories' => [
+                'key' => 'categories',
+                'label' => 'Categories',
+                'description' => 'Category metadata and taxonomy structure.',
+                'group' => 'content',
+                'requiredScopes' => ['categories:read'],
+            ],
+            'tags' => [
+                'key' => 'tags',
+                'label' => 'Tags',
+                'description' => 'Tag vocabulary and content tagging.',
+                'group' => 'content',
+                'requiredScopes' => ['tags:read'],
+            ],
+            'globalsets' => [
+                'key' => 'globalsets',
+                'label' => 'Globals',
+                'description' => 'Global set content and site-wide snippets.',
+                'group' => 'content',
+                'requiredScopes' => ['globalsets:read'],
+            ],
+            'contentblocks' => [
+                'key' => 'contentblocks',
+                'label' => 'Content Blocks',
+                'description' => 'Reusable content block records.',
+                'group' => 'content',
+                'requiredScopes' => ['contentblocks:read'],
+            ],
+            'changes' => [
+                'key' => 'changes',
+                'label' => 'Changes',
+                'description' => 'Incremental change feed across supported resources.',
+                'group' => 'content',
+                'requiredScopes' => ['changes:read'],
+            ],
+            'sections' => [
+                'key' => 'sections',
+                'label' => 'Sections',
+                'description' => 'Section structure and content-group definitions.',
+                'group' => 'content',
+                'requiredScopes' => ['sections:read'],
+            ],
+            'users' => [
+                'key' => 'users',
+                'label' => 'Users',
+                'description' => 'User list and profile metadata.',
+                'group' => 'people',
+                'requiredScopes' => ['users:read'],
+            ],
+        ];
+
+        if (Plugin::getInstance()->isCommercePluginEnabled()) {
+            $catalog['products'] = [
+                'key' => 'products',
+                'label' => 'Products',
+                'description' => 'Product catalog data and merchandising metadata.',
+                'group' => 'commerce',
+                'requiredScopes' => ['products:read'],
+            ];
+            $catalog['variants'] = [
+                'key' => 'variants',
+                'label' => 'Variants',
+                'description' => 'Variant pricing and purchasable metadata.',
+                'group' => 'commerce',
+                'requiredScopes' => ['variants:read'],
+            ];
+            $catalog['orders'] = [
+                'key' => 'orders',
+                'label' => 'Orders',
+                'description' => 'Order metadata for reporting and operational review.',
+                'group' => 'commerce',
+                'requiredScopes' => ['orders:read'],
+            ];
+        }
+
+        return $catalog;
+    }
+
+    public function getJobSourceGroups(): array
+    {
+        return [
+            'content' => [
+                'label' => 'Content',
+                'description' => 'Content, assets, taxonomy, and site structure.',
+            ],
+            'commerce' => [
+                'label' => 'Commerce',
+                'description' => 'Catalog and order data.',
+            ],
+            'people' => [
+                'label' => 'People',
+                'description' => 'Users and people-related metadata.',
+            ],
+        ];
     }
 
     public function getWorkflows(): array
@@ -290,13 +408,13 @@ class WorkflowService extends Component
     public function reportWorkflowRun(int $credentialId, array $payload): array
     {
         if ($credentialId <= 0 || !$this->workflowRunsTableExists()) {
-            throw new RuntimeException('Workflow run storage is unavailable. Run plugin migrations.');
+            throw new RuntimeException('Job run storage is unavailable. Run plugin migrations.');
         }
 
         $normalized = $this->normalizeWorkflowRunPayload($payload);
         $workflow = $this->getWorkflowById((int)$normalized['workflowId']);
         if (!is_array($workflow)) {
-            throw new InvalidArgumentException('Workflow not found.');
+            throw new InvalidArgumentException('Job not found.');
         }
 
         if ((int)($workflow['accountId'] ?? 0) !== $credentialId) {
@@ -320,7 +438,7 @@ class WorkflowService extends Component
                 ])
                 ->one();
             if (!is_array($existingRun)) {
-                throw new InvalidArgumentException('Workflow run not found.');
+                throw new InvalidArgumentException('Job run not found.');
             }
         }
 
@@ -393,7 +511,7 @@ class WorkflowService extends Component
     public function createWorkflow(array $payload): array
     {
         if (!$this->workflowsTableExists()) {
-            throw new RuntimeException('Workflow storage table is unavailable. Run plugin migrations.');
+            throw new RuntimeException('Job storage table is unavailable. Run plugin migrations.');
         }
 
         $normalized = $this->normalizeWorkflowPayload($payload);
@@ -475,7 +593,7 @@ class WorkflowService extends Component
 
         return $this->createWorkflow([
             'templateHandle' => (string)($workflow['templateHandle'] ?? ''),
-            'name' => trim((string)($workflow['name'] ?? 'Workflow')) . ' Copy',
+            'name' => trim((string)($workflow['name'] ?? 'Job')) . ' Copy',
             'description' => (string)($workflow['description'] ?? ''),
             'status' => self::STATUS_DRAFT,
             'cadence' => (string)($workflow['cadence'] ?? 'weekly'),
@@ -485,6 +603,7 @@ class WorkflowService extends Component
             'accountId' => (int)($workflow['accountId'] ?? 0),
             'targetSetId' => $workflow['targetSetId'] ?? null,
             'ownerUserId' => (int)($workflow['ownerUserId'] ?? 0),
+            'sourceKeys' => (array)($workflow['config']['sourceKeys'] ?? []),
             'entryIds' => (array)($workflow['config']['entryIds'] ?? []),
             'productIds' => (array)($workflow['config']['productIds'] ?? []),
             'sectionHandles' => (array)($workflow['config']['sectionHandles'] ?? []),
@@ -509,8 +628,8 @@ class WorkflowService extends Component
     {
         $template = (array)($workflow['template'] ?? []);
         $config = (array)($workflow['config'] ?? []);
-        $workflowName = trim((string)($workflow['name'] ?? 'Managed Workflow'));
-        $workflowSlug = StringHelper::toKebabCase($workflowName) ?: 'managed-workflow';
+        $workflowName = trim((string)($workflow['name'] ?? 'Managed Job'));
+        $workflowSlug = StringHelper::toKebabCase($workflowName) ?: 'managed-job';
         $cronMinute = '15';
         $cronHour = '8';
         $cronWeekday = '4';
@@ -537,6 +656,7 @@ class WorkflowService extends Component
                 'timeOfDay' => (string)($workflow['timeOfDay'] ?? ''),
             ],
             'config' => [
+                'sourceKeys' => array_values(array_map('strval', (array)($config['sourceKeys'] ?? []))),
                 'entryIds' => array_values(array_map('intval', (array)($config['entryIds'] ?? []))),
                 'productIds' => array_values(array_map('intval', (array)($config['productIds'] ?? []))),
                 'sectionHandles' => array_values(array_map('strval', (array)($config['sectionHandles'] ?? []))),
@@ -618,7 +738,7 @@ class WorkflowService extends Component
                     'workflowNames' => [],
                     'extraScopes' => [],
                     'isBroader' => false,
-                    'summary' => 'Aligned with attached workflows',
+                    'summary' => 'Aligned with attached jobs',
                     'meta' => '',
                 ];
             }
@@ -645,12 +765,12 @@ class WorkflowService extends Component
         foreach ($coverageByCredentialId as $credentialId => $coverage) {
             $extraScopes = array_values(array_map('strval', (array)($coverage['extraScopes'] ?? [])));
             if (!empty($extraScopes)) {
-                $coverageByCredentialId[$credentialId]['summary'] = 'Broader than attached workflows';
+                $coverageByCredentialId[$credentialId]['summary'] = 'Broader than attached jobs';
                 $coverageByCredentialId[$credentialId]['meta'] = $this->describeScopeList($extraScopes, 'extra scope');
             } else {
-                $coverageByCredentialId[$credentialId]['summary'] = 'Aligned with attached workflows';
+                $coverageByCredentialId[$credentialId]['summary'] = 'Aligned with attached jobs';
                 $coverageByCredentialId[$credentialId]['meta'] = ((int)($coverage['workflowCount'] ?? 0) > 0)
-                    ? ((int)$coverage['workflowCount'] . ' workflow' . ((int)$coverage['workflowCount'] === 1 ? '' : 's'))
+                    ? ((int)$coverage['workflowCount'] . ' job' . ((int)$coverage['workflowCount'] === 1 ? '' : 's'))
                     : '';
             }
         }
@@ -698,7 +818,8 @@ class WorkflowService extends Component
             $templateRequiresTargetSet = $this->templateRequiresTargetSet($template);
             $hasTargetSet = !$templateRequiresTargetSet || isset($targetSetsById[$targetSetId]);
             $latestRunStatus = strtolower(trim((string)($latestRun['status'] ?? '')));
-            $accountScopeCoverage = $this->evaluateWorkflowAccountScopeCoverage($credentialsById[$accountId] ?? null, $template);
+            $scopeExpectation = $this->buildWorkflowScopeExpectation($template, $config);
+            $accountScopeCoverage = $this->evaluateWorkflowAccountScopeCoverage($credentialsById[$accountId] ?? null, $template, $config);
             $needsAttention = $status === self::STATUS_ERROR
                 || !$hasAccount
                 || !$hasTargetSet
@@ -733,7 +854,7 @@ class WorkflowService extends Component
                 'targetSetId' => $targetSetId > 0 ? $targetSetId : null,
                 'targetSet' => ($templateRequiresTargetSet && $targetSetId > 0) ? ($targetSetsById[$targetSetId] ?? null) : null,
                 'targetSetName' => $templateRequiresTargetSet
-                    ? (string)(($targetSetsById[$targetSetId]['name'] ?? $targetSetsById[$targetSetId]['handle'] ?? 'Missing target set'))
+                    ? (string)(($targetSetsById[$targetSetId]['name'] ?? $targetSetsById[$targetSetId]['handle'] ?? 'Missing boundary'))
                     : 'n/a',
                 'ownerUserId' => $ownerUserId > 0 ? $ownerUserId : null,
                 'ownerUser' => $ownerUserId > 0 ? ($ownersById[$ownerUserId] ?? null) : null,
@@ -741,7 +862,11 @@ class WorkflowService extends Component
                 'config' => $config,
                 'configSummary' => $this->buildConfigSummary($config),
                 'readBoundary' => $this->buildReadBoundaryPayload($config),
+                'scopeExpectation' => $scopeExpectation,
                 'accountScopeCoverage' => $accountScopeCoverage,
+                'accountCapabilitySummary' => $hasAccount
+                    ? $this->buildManagedAccountCapabilitySummary((array)$credentialsById[$accountId])
+                    : null,
                 'latestRun' => $latestRun,
                 'needsAttention' => $needsAttention,
                 'attentionLabels' => $attentionState['labels'],
@@ -775,18 +900,18 @@ class WorkflowService extends Component
         }
 
         if ($missingTargetSet) {
-            $labels[] = 'Missing target set';
+            $labels[] = 'Missing boundary';
             if ($detail === '') {
-                $detail = 'Select a required target set.';
+                $detail = 'Select a required boundary.';
             }
         }
 
         if ($status === self::STATUS_ERROR) {
-            $labels[] = 'Workflow error';
+            $labels[] = 'Job error';
         }
 
         if ((bool)($accountScopeCoverage['isBroader'] ?? false)) {
-            $labels[] = 'Account broader than workflow';
+            $labels[] = 'Account broader than job';
             if ($detail === '') {
                 $detail = $this->describeScopeList((array)($accountScopeCoverage['extraScopes'] ?? []), 'extra scope');
             }
@@ -962,7 +1087,7 @@ class WorkflowService extends Component
         $templateHandle = strtolower(trim((string)($payload['templateHandle'] ?? $existing['templateHandle'] ?? '')));
         $template = $this->getWorkflowTemplateByHandle($templateHandle);
         if ($template === null) {
-            throw new InvalidArgumentException('Unknown workflow template.');
+            throw new InvalidArgumentException('Unknown job type.');
         }
 
         $name = trim((string)($payload['name'] ?? $existing['name'] ?? ''));
@@ -970,18 +1095,18 @@ class WorkflowService extends Component
             $name = (string)$template['displayName'];
         }
         if ($name === '') {
-            throw new InvalidArgumentException('Workflow name is required.');
+            throw new InvalidArgumentException('Job name is required.');
         }
 
         $description = trim((string)($payload['description'] ?? $existing['description'] ?? ''));
         $status = strtolower(trim((string)($payload['status'] ?? $existing['status'] ?? self::STATUS_ACTIVE)));
         if (!in_array($status, [self::STATUS_ACTIVE, self::STATUS_PAUSED, self::STATUS_DRAFT, self::STATUS_ERROR], true)) {
-            throw new InvalidArgumentException('Unsupported workflow status.');
+            throw new InvalidArgumentException('Unsupported job status.');
         }
 
         $cadence = strtolower(trim((string)($payload['cadence'] ?? $existing['cadence'] ?? (string)($template['defaultCadence'] ?? 'weekly'))));
         if (!in_array($cadence, ['weekly'], true)) {
-            throw new InvalidArgumentException('Only weekly workflows are supported in this version.');
+            throw new InvalidArgumentException('Only weekly jobs are supported in this version.');
         }
 
         $weekday = (int)($payload['weekday'] ?? $existing['weekday'] ?? (int)($template['defaultWeekday'] ?? 4));
@@ -1001,7 +1126,7 @@ class WorkflowService extends Component
         );
 
         $accountId = (int)($payload['accountId'] ?? $existing['accountId'] ?? 0);
-        $credential = $this->validateCredentialForTemplate($accountId, $template);
+        $credential = $this->validateCredentialForJob($accountId);
 
         $targetSetId = null;
         if ($this->templateRequiresTargetSet($template)) {
@@ -1012,6 +1137,7 @@ class WorkflowService extends Component
         $ownerUserId = (int)($payload['ownerUserId'] ?? $existing['ownerUserId'] ?? 0);
         $ownerUserId = $ownerUserId > 0 ? $ownerUserId : null;
 
+        $sourceKeys = $this->validateJobSourceKeys((array)($payload['sourceKeys'] ?? $existing['config']['sourceKeys'] ?? []));
         $sectionHandles = $this->validateSectionHandles((array)($payload['sectionHandles'] ?? $existing['config']['sectionHandles'] ?? []));
         $entryIds = $this->validateEntryIds((array)($payload['entryIds'] ?? $existing['config']['entryIds'] ?? []));
         $productIds = $this->validateProductIds((array)($payload['productIds'] ?? $existing['config']['productIds'] ?? []));
@@ -1032,6 +1158,7 @@ class WorkflowService extends Component
             'targetSetId' => $targetSetId,
             'ownerUserId' => $ownerUserId,
             'config' => [
+                'sourceKeys' => $sourceKeys,
                 'entryIds' => $entryIds,
                 'productIds' => $productIds,
                 'sectionHandles' => $sectionHandles,
@@ -1042,10 +1169,10 @@ class WorkflowService extends Component
         ];
     }
 
-    private function validateCredentialForTemplate(int $credentialId, array $template): array
+    private function validateCredentialForJob(int $credentialId): array
     {
         if ($credentialId <= 0) {
-            throw new InvalidArgumentException('Choose a managed account for this workflow.');
+            throw new InvalidArgumentException('Choose a managed account for this job.');
         }
 
         $credential = $this->getManagedCredentialsById([$credentialId])[$credentialId] ?? null;
@@ -1053,30 +1180,31 @@ class WorkflowService extends Component
             throw new InvalidArgumentException('Managed account not found.');
         }
 
-        $scopes = array_map(static fn($scope): string => strtolower(trim((string)$scope)), (array)($credential['scopes'] ?? []));
-        foreach ((array)($template['requiredScopes'] ?? []) as $requiredScope) {
-            $normalizedRequiredScope = strtolower(trim((string)$requiredScope));
-            $satisfied = in_array($normalizedRequiredScope, $scopes, true);
-            if (!$satisfied && $normalizedRequiredScope === 'entries:write:draft') {
-                $satisfied = in_array('entries:write', $scopes, true);
+        return $credential;
+    }
+
+    private function validateJobSourceKeys(array $sourceKeys): array
+    {
+        $catalog = $this->getJobSourceCatalog();
+        $normalized = [];
+
+        foreach ($sourceKeys as $sourceKey) {
+            $value = strtolower(trim((string)$sourceKey));
+            if ($value === '' || !isset($catalog[$value]) || in_array($value, $normalized, true)) {
+                continue;
             }
 
-            if (!$satisfied) {
-                throw new InvalidArgumentException(sprintf(
-                    'Managed account `%s` is missing required scope `%s`.',
-                    (string)($credential['displayName'] ?? $credential['handle'] ?? $credentialId),
-                    (string)$requiredScope
-                ));
-            }
+            $normalized[] = $value;
         }
 
-        return $credential;
+        sort($normalized);
+        return $normalized;
     }
 
     private function validateTargetSetForCredential(int $targetSetId, int $credentialId): void
     {
         if ($targetSetId <= 0) {
-            throw new InvalidArgumentException('Choose a target set for this workflow.');
+            throw new InvalidArgumentException('Choose a boundary for this job.');
         }
 
         $assignedTargetSets = Plugin::getInstance()->getTargetSetService()->getTargetSetsForCredentialId($credentialId);
@@ -1086,7 +1214,7 @@ class WorkflowService extends Component
             }
         }
 
-        throw new InvalidArgumentException('The selected target set is not assigned to the chosen managed account.');
+        throw new InvalidArgumentException('The selected boundary is not assigned to the chosen managed account.');
     }
 
     private function validateSectionHandles(array $sectionHandles): array
@@ -1204,16 +1332,27 @@ class WorkflowService extends Component
         $schedule = $this->buildRuntimeSchedulePayload($workflow);
         $config = (array)($workflow['config'] ?? []);
         $latestRun = is_array($workflow['latestRun'] ?? null) ? (array)$workflow['latestRun'] : null;
+        $scopeExpectation = $this->buildWorkflowScopeExpectation(
+            is_array($workflow['template'] ?? null) ? (array)$workflow['template'] : null,
+            $config
+        );
 
         return [
             'id' => (int)($workflow['id'] ?? 0),
             'name' => (string)($workflow['name'] ?? ''),
             'description' => (string)($workflow['description'] ?? ''),
             'templateHandle' => (string)($workflow['templateHandle'] ?? ''),
-            'templateDisplayName' => (string)($workflow['template']['displayName'] ?? $workflow['templateHandle'] ?? 'Workflow'),
+            'templateDisplayName' => (string)($workflow['template']['displayName'] ?? $workflow['templateHandle'] ?? 'Job'),
             'mode' => (string)($workflow['template']['mode'] ?? 'read-only'),
             'schedule' => $schedule,
             'readBoundary' => $this->buildReadBoundaryPayload($config),
+            'expectedAccess' => [
+                'requiredScopes' => array_values(array_map('strval', (array)($scopeExpectation['requiredScopes'] ?? []))),
+                'visibleRequiredScopes' => array_values(array_map('strval', (array)($scopeExpectation['visibleRequiredScopes'] ?? []))),
+                'sourceKeys' => array_values(array_map('strval', (array)($scopeExpectation['sourceKeys'] ?? []))),
+                'sourceLabels' => array_values(array_map('strval', (array)($scopeExpectation['sourceLabels'] ?? []))),
+                'summary' => (string)($scopeExpectation['summary'] ?? ''),
+            ],
             'accountScopeCoverage' => [
                 'isBroader' => (bool)($workflow['accountScopeCoverage']['isBroader'] ?? false),
                 'extraScopes' => array_values(array_map('strval', (array)($workflow['accountScopeCoverage']['extraScopes'] ?? []))),
@@ -1221,6 +1360,7 @@ class WorkflowService extends Component
                 'meta' => (string)($workflow['accountScopeCoverage']['meta'] ?? ''),
             ],
             'config' => [
+                'sourceKeys' => array_values(array_map('strval', (array)($config['sourceKeys'] ?? []))),
                 'promptContext' => (string)($config['promptContext'] ?? ''),
                 'operatorNotes' => (string)($config['operatorNotes'] ?? ''),
             ],
@@ -1259,12 +1399,22 @@ class WorkflowService extends Component
 
     private function buildReadBoundaryPayload(array $config): array
     {
+        $sourceKeys = array_values(array_map('strval', (array)($config['sourceKeys'] ?? [])));
+        $sourceCatalog = $this->getJobSourceCatalog();
         $entryIds = array_values(array_map('intval', (array)($config['entryIds'] ?? [])));
         $productIds = array_values(array_map('intval', (array)($config['productIds'] ?? [])));
         $sectionHandles = array_values(array_map('strval', (array)($config['sectionHandles'] ?? [])));
         $siteIds = array_values(array_map('intval', (array)($config['siteIds'] ?? [])));
+        $sourceLabels = [];
+        foreach ($sourceKeys as $sourceKey) {
+            if (isset($sourceCatalog[$sourceKey]['label'])) {
+                $sourceLabels[] = (string)$sourceCatalog[$sourceKey]['label'];
+            }
+        }
 
         return [
+            'sourceKeys' => $sourceKeys,
+            'sourceLabels' => $sourceLabels,
             'entryIds' => $entryIds,
             'productIds' => $productIds,
             'sectionHandles' => $sectionHandles,
@@ -1274,9 +1424,131 @@ class WorkflowService extends Component
         ];
     }
 
-    private function evaluateWorkflowAccountScopeCoverage(?array $account, ?array $template): array
+    public function buildWorkflowScopeExpectation(?array $template, array $config): array
     {
-        if (!is_array($account) || !is_array($template)) {
+        $catalog = $this->getJobSourceCatalog();
+        $sourceKeys = $this->resolveConfiguredSourceKeys($config, $template);
+        $sourceLabels = [];
+        $sourceScopes = [];
+        foreach ($sourceKeys as $sourceKey) {
+            $sourceMeta = $catalog[$sourceKey] ?? null;
+            if (!is_array($sourceMeta)) {
+                continue;
+            }
+
+            $sourceLabels[] = (string)($sourceMeta['label'] ?? $sourceKey);
+            foreach ((array)($sourceMeta['requiredScopes'] ?? []) as $scope) {
+                $normalizedScope = strtolower(trim((string)$scope));
+                if ($normalizedScope !== '') {
+                    $sourceScopes[] = $normalizedScope;
+                }
+            }
+        }
+
+        $boundaryScopes = [];
+        if (!empty((array)($config['sectionHandles'] ?? []))) {
+            $boundaryScopes[] = 'sections:read';
+        }
+        if (!empty((array)($config['entryIds'] ?? []))) {
+            $boundaryScopes[] = 'entries:read';
+        }
+        if (!empty((array)($config['productIds'] ?? [])) && Plugin::getInstance()->isCommercePluginEnabled()) {
+            $boundaryScopes[] = 'products:read';
+        }
+
+        $requiredScopes = array_values(array_unique(array_filter(array_map(
+            static fn($scope): string => strtolower(trim((string)$scope)),
+            array_merge(
+                (array)($template['requiredScopes'] ?? []),
+                $sourceScopes,
+                $boundaryScopes
+            )
+        ))));
+        $recommendedOptionalScopes = array_values(array_unique(array_filter(array_map(
+            static fn($scope): string => strtolower(trim((string)$scope)),
+            (array)($template['recommendedOptionalScopes'] ?? [])
+        ))));
+
+        $visibleRequiredScopes = array_values(array_filter(
+            $requiredScopes,
+            static fn(string $scope): bool => !in_array($scope, self::RUNTIME_BASELINE_SCOPES, true)
+        ));
+
+        return [
+            'sourceKeys' => $sourceKeys,
+            'sourceLabels' => $sourceLabels,
+            'requiredScopes' => $requiredScopes,
+            'visibleRequiredScopes' => $visibleRequiredScopes,
+            'recommendedOptionalScopes' => $recommendedOptionalScopes,
+            'summary' => !empty($sourceLabels)
+                ? ('Reads ' . $this->humanizeList($sourceLabels))
+                : 'No explicit data sources yet',
+        ];
+    }
+
+    public function buildManagedAccountCapabilitySummary(array $account): array
+    {
+        $scopeCatalog = Plugin::getInstance()->getSecurityPolicyService()->getAccountScopeCatalog();
+        $readLabels = [];
+        $writeLabels = [];
+        $supportLabels = [];
+
+        foreach ((array)($account['scopes'] ?? []) as $scope) {
+            $normalizedScope = strtolower(trim((string)$scope));
+            if ($normalizedScope === '') {
+                continue;
+            }
+
+            $meta = $scopeCatalog[$normalizedScope] ?? [];
+            $label = (string)($meta['label'] ?? $normalizedScope);
+            $bundle = (string)($meta['bundle'] ?? '');
+
+            if ($bundle === 'governed_writes' || str_contains($normalizedScope, ':write')) {
+                if (!in_array($label, $writeLabels, true)) {
+                    $writeLabels[] = $label;
+                }
+                continue;
+            }
+
+            if (in_array($bundle, ['content_review', 'commerce_review', 'sensitive_data'], true)) {
+                if (!in_array($label, $readLabels, true)) {
+                    $readLabels[] = $label;
+                }
+                continue;
+            }
+
+            if (!in_array($bundle, ['runtime_basics'], true) && !in_array($label, $supportLabels, true)) {
+                $supportLabels[] = $label;
+            }
+        }
+
+        return [
+            'readLabels' => $readLabels,
+            'writeLabels' => $writeLabels,
+            'supportLabels' => $supportLabels,
+            'readSentence' => !empty($readLabels)
+                ? ('Can read ' . $this->humanizeList($readLabels) . '.')
+                : 'No explicit content, commerce, or people read access.',
+            'writeSentence' => !empty($writeLabels)
+                ? ('Can write ' . $this->humanizeList($writeLabels) . '.')
+                : 'No write access.',
+            'supportSentence' => !empty($supportLabels)
+                ? ('Also has ' . $this->humanizeList($supportLabels) . '.')
+                : '',
+            'headline' => !empty($readLabels)
+                ? ('Reads ' . $this->humanizeList($readLabels))
+                : (!empty($writeLabels) ? ('Writes ' . $this->humanizeList($writeLabels)) : 'Agent basics only'),
+        ];
+    }
+
+    public function buildWorkflowAccountScopeCoverageForConfig(array $account, ?array $template, array $config): array
+    {
+        return $this->evaluateWorkflowAccountScopeCoverage($account, $template, $config);
+    }
+
+    private function evaluateWorkflowAccountScopeCoverage(?array $account, ?array $template, array $config = []): array
+    {
+        if (!is_array($account)) {
             return [
                 'isBroader' => false,
                 'extraScopes' => [],
@@ -1286,7 +1558,8 @@ class WorkflowService extends Component
             ];
         }
 
-        $allowedScopes = $this->buildWorkflowAllowedScopes($template);
+        $scopeExpectation = $this->buildWorkflowScopeExpectation($template, $config);
+        $allowedScopes = $this->buildWorkflowAllowedScopes($scopeExpectation);
         $accountScopes = array_values(array_unique(array_filter(array_map(
             static fn($scope): string => trim((string)$scope),
             (array)($account['scopes'] ?? [])
@@ -1302,23 +1575,53 @@ class WorkflowService extends Component
             'isBroader' => !empty($extraScopes),
             'extraScopes' => $extraScopes,
             'allowedScopes' => $allowedScopes,
-            'summary' => !empty($extraScopes) ? 'Account broader than workflow' : 'Aligned with workflow',
+            'summary' => !empty($extraScopes) ? 'Account broader than job' : 'Aligned with job',
             'meta' => !empty($extraScopes) ? $this->describeScopeList($extraScopes, 'extra scope') : '',
         ];
     }
 
-    private function buildWorkflowAllowedScopes(array $template): array
+    private function buildWorkflowAllowedScopes(array $scopeExpectation): array
     {
         $scopes = array_merge(
-            self::RUNTIME_BASELINE_SCOPES,
-            array_values(array_map('strval', (array)($template['requiredScopes'] ?? []))),
-            array_values(array_map('strval', (array)($template['recommendedOptionalScopes'] ?? [])))
+            array_values(array_map('strval', (array)($scopeExpectation['requiredScopes'] ?? []))),
+            array_values(array_map('strval', (array)($scopeExpectation['recommendedOptionalScopes'] ?? [])))
         );
 
         return array_values(array_unique(array_filter(array_map(
             static fn($scope): string => trim((string)$scope),
             $scopes
         ))));
+    }
+
+    private function resolveConfiguredSourceKeys(array $config, ?array $template): array
+    {
+        if (array_key_exists('sourceKeys', $config)) {
+            return $this->validateJobSourceKeys((array)$config['sourceKeys']);
+        }
+
+        return $this->validateJobSourceKeys((array)($template['defaultSourceKeys'] ?? []));
+    }
+
+    private function humanizeList(array $items): string
+    {
+        $normalized = array_values(array_unique(array_filter(array_map(
+            static fn($item): string => trim((string)$item),
+            $items
+        ))));
+        if (empty($normalized)) {
+            return '';
+        }
+
+        if (count($normalized) === 1) {
+            return $normalized[0];
+        }
+
+        if (count($normalized) === 2) {
+            return $normalized[0] . ' and ' . $normalized[1];
+        }
+
+        $tail = array_pop($normalized);
+        return implode(', ', $normalized) . ', and ' . $tail;
     }
 
     private function describeScopeList(array $scopes, string $noun): string
@@ -1476,26 +1779,28 @@ class WorkflowService extends Component
     private function buildBundleReadme(array $workflow, array $template, string $workflowSlug): string
     {
         $config = (array)($workflow['config'] ?? []);
+        $scopeExpectation = $this->buildWorkflowScopeExpectation($template, $config);
         $lines = [
-            '# ' . trim((string)($workflow['name'] ?? 'Managed Workflow')),
+            '# ' . trim((string)($workflow['name'] ?? 'Managed Job')),
             '',
-            'Workflow type: `' . trim((string)($template['displayName'] ?? ($workflow['templateHandle'] ?? 'workflow'))) . '`',
+            'Job type: `' . trim((string)($template['displayName'] ?? ($workflow['templateHandle'] ?? 'job'))) . '`',
             '',
             trim((string)($workflow['description'] ?? '')),
             '',
             '## What this bundle is for',
             '',
-            '- bootstrap an external worker for this configured workflow instance',
+            '- bootstrap an external runtime for this configured job instance',
             '- keep schedule intent and read-only bindings visible outside Craft',
             '- start from a safe review/audit worker pattern before adding any deeper automation',
             '',
-            '## Workflow bindings',
+            '## Job bindings',
             '',
             '- Managed account: `' . trim((string)($workflow['accountDisplayName'] ?? '')) . '`',
             '- Mode: `' . trim((string)($template['mode'] ?? 'read-only')) . '`',
             '- Focus: `' . trim((string)($template['focusLabel'] ?? 'Content review')) . '`',
+            '- Sources: `' . (!empty($scopeExpectation['sourceLabels']) ? implode(', ', (array)$scopeExpectation['sourceLabels']) : 'operator-selected') . '`',
             '- Schedule: `' . trim((string)($workflow['scheduleLabel'] ?? '')) . '`',
-            '- Read boundary: `' . trim((string)($workflow['readBoundary']['summary'] ?? $this->buildConfigSummary($config) ?: 'Unbounded')) . '`',
+            '- Boundary: `' . trim((string)($workflow['readBoundary']['summary'] ?? $this->buildConfigSummary($config) ?: 'Unbounded')) . '`',
             '- Entry IDs: `' . (!empty($config['entryIds']) ? implode(', ', array_map('strval', (array)$config['entryIds'])) : 'unbounded') . '`',
             '- Product IDs: `' . (!empty($config['productIds']) ? implode(', ', array_map('strval', (array)$config['productIds'])) : 'unbounded') . '`',
             '- Sections: `' . implode(', ', array_values(array_map('strval', (array)($config['sectionHandles'] ?? [])))) . '`',
@@ -1509,20 +1814,20 @@ class WorkflowService extends Component
             '- `run-worker.sh`',
             '- `cron.example`',
             '- `output-contract.md`',
-            '- workflow polling/reporting API contract',
+            '- job polling/reporting API contract',
             '',
             '## Important boundary',
             '',
             '- this bundle does not include secrets',
             '- download the matching account handoff from `Agents -> Accounts` when you need a token-filled `.env`',
-            '- this first workflow slice is read-only and does not mutate Craft content',
-            '- Agents stores workflow state and visibility; the worker still runs externally',
-            '- recent runs in Craft are backed by the workflow polling/reporting API',
+            '- this first job slice is read-only and does not mutate Craft content',
+            '- Agents stores job state and visibility; the runtime still runs externally',
+            '- recent runs in Craft are backed by the job polling/reporting API',
             '- the cron example assumes the host already runs in the intended server/runtime timezone',
             '',
             '## External output storage',
             '',
-            '- Agents does not currently store fetched raw inputs, reasoning artifacts, or reports for workflow runs.',
+            '- Agents does not currently store fetched raw inputs, reasoning artifacts, or reports for job runs.',
             '- Save those outputs outside the Craft webroot and outside the plugin directory.',
             '- Suggested root: `/absolute/path/to/agents/workflows/' . $workflowSlug . '`',
             '- At minimum persist:',
@@ -1532,7 +1837,7 @@ class WorkflowService extends Component
             '',
             '## Docs',
             '',
-            '- Workflow library: ' . trim((string)($template['docsUrl'] ?? 'https://marcusscheller.com/docs/agents/workflows')),
+            '- Job library: ' . trim((string)($template['docsUrl'] ?? 'https://marcusscheller.com/docs/agents/workflows')),
             '- First worker: https://marcusscheller.com/docs/agents/get-started/first-worker',
         ];
 
@@ -1560,7 +1865,7 @@ class WorkflowService extends Component
             'PROMPT_CONTEXT=' . trim((string)($config['promptContext'] ?? '')),
             'REQUEST_TIMEOUT_MS=15000',
             'PRINT_JSON=1',
-            'OUTPUT_ROOT=/absolute/path/to/agents/workflows/' . (StringHelper::toKebabCase((string)($workflow['name'] ?? 'managed-workflow')) ?: 'managed-workflow'),
+            'OUTPUT_ROOT=/absolute/path/to/agents/workflows/' . (StringHelper::toKebabCase((string)($workflow['name'] ?? 'managed-job')) ?: 'managed-job'),
             'STATE_PATH=${OUTPUT_ROOT}/state/state.json',
             'REPORT_PATH=${OUTPUT_ROOT}/reports/latest.md',
             'RAW_ARCHIVE_DIR=${OUTPUT_ROOT}/raw',
@@ -1573,7 +1878,7 @@ class WorkflowService extends Component
     private function buildBundleWorkerScript(array $workflow, array $template): string
     {
         $workflowId = (int)($workflow['id'] ?? 0);
-        $workflowName = trim((string)($workflow['name'] ?? 'Managed Workflow'));
+        $workflowName = trim((string)($workflow['name'] ?? 'Managed Job'));
         $templateHandle = trim((string)($workflow['templateHandle'] ?? ''));
         $encodedWorkflowName = $this->encodeJsString($workflowName);
         $encodedTemplateHandle = $this->encodeJsString($templateHandle);
@@ -1796,12 +2101,22 @@ BASH;
 
     private function buildConfigSummary(array $config): string
     {
+        $sourceLabels = [];
+        $sourceCatalog = $this->getJobSourceCatalog();
+        foreach ($this->resolveConfiguredSourceKeys($config, null) as $sourceKey) {
+            if (isset($sourceCatalog[$sourceKey]['label'])) {
+                $sourceLabels[] = (string)$sourceCatalog[$sourceKey]['label'];
+            }
+        }
         $entryIds = array_values(array_map('intval', (array)($config['entryIds'] ?? [])));
         $productIds = array_values(array_map('intval', (array)($config['productIds'] ?? [])));
         $sections = array_values(array_map('strval', (array)($config['sectionHandles'] ?? [])));
         $sites = array_values(array_map('intval', (array)($config['siteIds'] ?? [])));
 
         $parts = [];
+        if (!empty($sourceLabels)) {
+            $parts[] = 'Sources: ' . $this->humanizeList($sourceLabels);
+        }
         if (!empty($entryIds)) {
             $parts[] = count($entryIds) === 1
                 ? 'Entry ID: ' . (string)$entryIds[0]
@@ -1830,7 +2145,7 @@ BASH;
         return <<<MD
 # Output Contract
 
-Agents does not currently store fetched raw inputs, reasoning artifacts, or reports for workflow runs.
+Agents does not currently store fetched raw inputs, reasoning artifacts, or reports for job runs.
 
 Store those files outside the Craft webroot and outside the plugin directory.
 
@@ -1854,13 +2169,13 @@ Recommended minimum:
   - last-successful run timestamp
   - checkpoint data needed for the next scheduled run
 - `reports/latest.md`
-  - latest human-readable workflow result
+  - latest human-readable job result
 - `raw/`
   - optional snapshots kept only when audit/debugging matters
 
 Recommended handoff pattern:
 
-1. Discover due workflows through `GET /agents/v1/workflows`.
+1. Discover due jobs through `GET /agents/v1/workflows`.
 2. Mark the run as started through `POST /agents/v1/workflows/run-report`.
 3. Save normalized input data to `raw/` only if you need audit/debugging.
 4. Let the external agent reason over those saved inputs or an in-memory normalized dataset.

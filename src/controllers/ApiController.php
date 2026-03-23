@@ -12,44 +12,6 @@ use yii\web\Response;
 
 class ApiController extends Controller
 {
-    private const DEFAULT_TOKEN_SCOPES = [
-        'health:read',
-        'readiness:read',
-        'auth:read',
-        'adoption:read',
-        'metrics:read',
-        'lifecycle:read',
-        'diagnostics:read',
-        'products:read',
-        'variants:read',
-        'subscriptions:read',
-        'transfers:read',
-        'donations:read',
-        'orders:read',
-        'entries:read',
-        'assets:read',
-        'categories:read',
-        'tags:read',
-        'globalsets:read',
-        'addresses:read',
-        'contentblocks:read',
-        'changes:read',
-        'sections:read',
-        'users:read',
-        'workflows:read',
-        'workflows:report',
-        'syncstate:read',
-        'consumers:read',
-        'templates:read',
-        'schema:read',
-        'capabilities:read',
-        'openapi:read',
-        'control:policies:read',
-        'control:approvals:read',
-        'control:executions:read',
-        'control:audit:read',
-        'webhooks:dlq:read',
-    ];
     private const ERROR_INVALID_REQUEST = 'INVALID_REQUEST';
     private const ERROR_UNAUTHORIZED = 'UNAUTHORIZED';
     private const ERROR_FORBIDDEN = 'FORBIDDEN';
@@ -1343,9 +1305,9 @@ class ApiController extends Controller
             ['method' => 'GET', 'path' => '/sections', 'requiredScopes' => ['sections:read']],
             ['method' => 'GET', 'path' => '/users', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
             ['method' => 'GET', 'path' => '/users/show', 'requiredScopes' => ['users:read'], 'optionalScopes' => ['users:read_sensitive']],
-            ['method' => 'GET', 'path' => '/workflows', 'requiredScopes' => ['workflows:read']],
-            ['method' => 'GET', 'path' => '/workflows/show', 'requiredScopes' => ['workflows:read']],
-            ['method' => 'POST', 'path' => '/workflows/run-report', 'requiredScopes' => ['workflows:report']],
+            ['method' => 'GET', 'path' => '/workflows', 'requiredScopes' => ['jobs:read']],
+            ['method' => 'GET', 'path' => '/workflows/show', 'requiredScopes' => ['jobs:read']],
+            ['method' => 'POST', 'path' => '/workflows/run-report', 'requiredScopes' => ['jobs:report']],
             ['method' => 'GET', 'path' => '/sync-state/lag', 'requiredScopes' => ['syncstate:read'], 'optionalScopes' => ['consumers:read']],
             ['method' => 'POST', 'path' => '/sync-state/checkpoint', 'requiredScopes' => ['syncstate:write'], 'optionalScopes' => ['consumers:write']],
             ['method' => 'GET', 'path' => '/consumers/lag', 'requiredScopes' => ['consumers:read'], 'optionalScopes' => ['syncstate:read'], 'deprecated' => true, 'replacedBy' => '/sync-state/lag'],
@@ -1945,7 +1907,7 @@ class ApiController extends Controller
                     '400' => ['description' => 'Invalid request'],
                     '403' => ['description' => 'Managed account required'],
                 ]),
-                'x-required-scopes' => ['workflows:read'],
+                'x-required-scopes' => ['jobs:read'],
             ]],
             '/workflows/show' => ['get' => [
                 'summary' => 'Read one workflow instance bound to the authenticated managed account',
@@ -1958,7 +1920,7 @@ class ApiController extends Controller
                     '403' => ['description' => 'Managed account required'],
                     '404' => ['description' => 'Workflow not found'],
                 ]),
-                'x-required-scopes' => ['workflows:read'],
+                'x-required-scopes' => ['jobs:read'],
             ]],
             '/workflows/run-report' => ['post' => [
                 'summary' => 'Record workflow run lifecycle state for a managed workflow instance',
@@ -1995,7 +1957,7 @@ class ApiController extends Controller
                     '403' => ['description' => 'Managed account required'],
                     '404' => ['description' => 'Workflow run not found'],
                 ]),
-                'x-required-scopes' => ['workflows:report'],
+                'x-required-scopes' => ['jobs:report'],
             ]],
             '/sync-state/lag' => ['get' => [
                 'summary' => 'List sync-state lag by integration/resource',
@@ -2506,7 +2468,7 @@ class ApiController extends Controller
 
     public function actionWorkflows(): Response
     {
-        if (($guard = $this->guardRequest('workflows:read')) !== null) {
+        if (($guard = $this->guardRequest('jobs:read')) !== null) {
             return $guard;
         }
 
@@ -2553,7 +2515,7 @@ class ApiController extends Controller
 
     public function actionWorkflowShow(): Response
     {
-        if (($guard = $this->guardRequest('workflows:read')) !== null) {
+        if (($guard = $this->guardRequest('jobs:read')) !== null) {
             return $guard;
         }
 
@@ -2587,7 +2549,7 @@ class ApiController extends Controller
 
     public function actionWorkflowRunReport(): Response
     {
-        if (($guard = $this->guardRequest('workflows:report', ['POST'])) !== null) {
+        if (($guard = $this->guardRequest('jobs:report', ['POST'])) !== null) {
             return $guard;
         }
 
@@ -3625,60 +3587,15 @@ class ApiController extends Controller
 
     private function availableScopes(): array
     {
-        $scopes = [
-            'health:read' => 'Read service health summary.',
-            'readiness:read' => 'Read readiness summary and score.',
-            'auth:read' => 'Read authenticated caller diagnostics (`/auth/whoami`).',
-            'adoption:read' => 'Read adoption instrumentation snapshot (`/adoption/metrics`).',
-            'metrics:read' => 'Read observability metrics snapshot (`/metrics`).',
-            'incidents:read' => 'Read redacted runtime incident snapshot (`/incidents`).',
-            'lifecycle:read' => 'Read agent lifecycle governance snapshot (`/lifecycle`).',
-            'diagnostics:read' => 'Read one-click diagnostics support bundle (`/diagnostics/bundle`).',
-            'products:read' => 'Read product snapshot endpoints.',
-            'variants:read' => 'Read variant list and lookup endpoints.',
-            'subscriptions:read' => 'Read subscription list and lookup endpoints.',
-            'transfers:read' => 'Read transfer list and lookup endpoints.',
-            'donations:read' => 'Read donation list and lookup endpoints.',
-            'orders:read' => 'Read order metadata endpoints.',
-            'orders:read_sensitive' => 'Unredacted order PII/financial detail fields.',
-            'entries:read' => 'Read live content entry endpoints.',
-            'entries:read_all_statuses' => 'Read non-live entries/statuses and unrestricted detail lookup.',
-            'entries:write:draft' => 'Create/update entry drafts through governed control actions (for example `entry.updateDraft`).',
-            'entries:write' => 'Deprecated alias for `entries:write:draft`.',
-            'assets:read' => 'Read asset list and lookup endpoints.',
-            'categories:read' => 'Read category list and lookup endpoints.',
-            'tags:read' => 'Read tag list and lookup endpoints.',
-            'globalsets:read' => 'Read global set list and lookup endpoints.',
-            'addresses:read' => 'Read address list and lookup endpoints.',
-            'addresses:read_sensitive' => 'Unredacted address PII detail fields.',
-            'contentblocks:read' => 'Read content block list and lookup endpoints.',
-            'changes:read' => 'Read unified cross-resource incremental changes feed.',
-            'sections:read' => 'Read section list endpoint.',
-            'users:read' => 'Read user list and lookup endpoints.',
-            'users:read_sensitive' => 'Unredacted user email/profile detail fields.',
-            'workflows:read' => 'Read managed workflow discovery/detail endpoints for the bound account.',
-            'workflows:report' => 'Record managed workflow run lifecycle state and summaries.',
-            'syncstate:read' => 'Read per-integration sync-state lag/checkpoint status.',
-            'syncstate:write' => 'Record per-integration sync-state checkpoints for lag tracking.',
-            'consumers:read' => 'Deprecated alias for `syncstate:read`.',
-            'consumers:write' => 'Deprecated alias for `syncstate:write`.',
-            'templates:read' => 'Read canonical integration templates derived from schema/openapi contracts.',
-            'schema:read' => 'Read machine-readable endpoint schemas for a specific version.',
-            'capabilities:read' => 'Read capabilities descriptor endpoint.',
-            'openapi:read' => 'Read OpenAPI descriptor endpoint.',
-            'control:policies:read' => 'Read control action policies.',
-            'control:policies:write' => 'Create and update control action policies.',
-            'control:approvals:read' => 'Read approval request queue.',
-            'control:approvals:request' => 'Create control approval requests (agent/orchestrator flow).',
-            'control:approvals:decide' => 'Approve or reject pending control approvals (human sign-off flow).',
-            'control:approvals:write' => 'Legacy combined scope for request+decide control approvals.',
-            'control:executions:read' => 'Read control action execution ledger.',
-            'control:actions:simulate' => 'Run dry-run policy and approval evaluation without execution.',
-            'control:actions:execute' => 'Execute idempotent control actions.',
-            'control:audit:read' => 'Read immutable control-plane audit log.',
-            'webhooks:dlq:read' => 'Read failed webhook dead-letter events.',
-            'webhooks:dlq:replay' => 'Replay failed webhook dead-letter events.',
-        ];
+        $catalog = Plugin::getInstance()->getSecurityPolicyService()->getAccountScopeCatalog();
+        $scopes = [];
+        foreach ($catalog as $scope => $meta) {
+            $description = trim((string)($meta['description'] ?? ''));
+            if ($description === '') {
+                continue;
+            }
+            $scopes[$scope] = $description;
+        }
         if (!$this->isWritesExperimentalEnabled()) {
             foreach ($this->governedWriteScopeKeys() as $scope) {
                 unset($scopes[$scope]);
@@ -3846,7 +3763,12 @@ class ApiController extends Controller
 
     private function defaultTokenScopes(): array
     {
-        return array_values((array)($this->getSecurityConfig()['tokenScopes'] ?? self::DEFAULT_TOKEN_SCOPES));
+        $configuredScopes = array_values((array)($this->getSecurityConfig()['tokenScopes'] ?? []));
+        if ($configuredScopes !== []) {
+            return $configuredScopes;
+        }
+
+        return Plugin::getInstance()->getSecurityPolicyService()->getManagedAccountDefaultScopes();
     }
 
     private function errorTaxonomy(): array

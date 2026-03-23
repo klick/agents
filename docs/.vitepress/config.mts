@@ -10,7 +10,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Get Started', link: '/get-started/' },
-      { text: 'Workflows', link: '/workflows/' },
+      { text: 'Jobs', link: '/workflows/' },
       { text: 'Control Plane', link: '/cp/' },
       { text: 'API', link: '/api/' },
       { text: 'Security', link: '/security/' },
@@ -42,9 +42,9 @@ export default defineConfig({
         ]
       },
       {
-        text: 'Workflows',
+        text: 'Jobs',
         items: [
-          { text: 'Workflow Guides', link: '/workflows/' },
+          { text: 'Job Guides', link: '/workflows/' },
           { text: 'Governed Entry Drafts', link: '/workflows/governed-entry-drafts' },
           { text: 'Entry Translation Drafts', link: '/workflows/entry-translation-drafts' }
         ]

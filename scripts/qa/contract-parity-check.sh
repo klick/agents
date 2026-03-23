@@ -6,6 +6,7 @@ PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 API_CONTROLLER="$PLUGIN_ROOT/src/controllers/ApiController.php"
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
+SECURITY_POLICY_SERVICE="$PLUGIN_ROOT/src/services/SecurityPolicyService.php"
 ENDPOINTS_DOC="$PLUGIN_ROOT/docs/api/endpoints.md"
 SCOPES_DOC="$PLUGIN_ROOT/docs/api/auth-and-scopes.md"
 
@@ -55,6 +56,7 @@ ensure_subset() {
 
 require_file "$API_CONTROLLER"
 require_file "$PLUGIN_FILE"
+require_file "$SECURITY_POLICY_SERVICE"
 require_file "$ENDPOINTS_DOC"
 require_file "$SCOPES_DOC"
 
@@ -92,11 +94,11 @@ cut -d' ' -f2 "$capabilities_endpoints" | LC_ALL=C sort -u >"$capabilities_paths
 } | grep -v '^/plugins/<pluginHandle:' | LC_ALL=C sort -u >"$routes_paths"
 
 awk '
-  /private function availableScopes\(\): array/ { in_section=1; next }
-  /private function isWritesExperimentalEnabled\(\): bool/ { in_section=0 }
+  /public function getAccountScopeCatalog\(\): array/ { in_section=1; next }
+  /public function getRuntimeConfig\(\): array/ { in_section=0 }
   in_section { print }
-' "$API_CONTROLLER" \
-  | perl -ne 'while (/\x27([a-z0-9:_]+)\x27\s*=>/g) { print "$1\n"; }' \
+' "$SECURITY_POLICY_SERVICE" \
+  | perl -ne 'if (/^\s{12}\x27([a-z0-9:_]+)\x27\s*=>\s*\[$/) { print "$1\n"; }' \
   | LC_ALL=C sort -u >"$available_scopes"
 
 perl -0777 -ne '

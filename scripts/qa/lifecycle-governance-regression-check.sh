@@ -37,6 +37,7 @@ CLI_CONTROLLER="$PLUGIN_ROOT/src/console/controllers/AgentsController.php"
 DASHBOARD_CONTROLLER="$PLUGIN_ROOT/src/controllers/DashboardController.php"
 CREDENTIALS_TEMPLATE="$PLUGIN_ROOT/src/templates/credentials.twig"
 LIFECYCLE_SERVICE="$PLUGIN_ROOT/src/services/LifecycleGovernanceService.php"
+SECURITY_POLICY_SERVICE="$PLUGIN_ROOT/src/services/SecurityPolicyService.php"
 VITEPRESS_LIFECYCLE_DOC="$PLUGIN_ROOT/docs/troubleshooting/agent-lifecycle-governance.md"
 CLI_DOC="$PLUGIN_ROOT/docs/cli/index.md"
 
@@ -52,7 +53,8 @@ expect_fixed "public function actionLifecycle(): Response" "$API_CONTROLLER" "Li
 expect_fixed "['method' => 'GET', 'path' => '/lifecycle', 'requiredScopes' => ['lifecycle:read']]" "$API_CONTROLLER" "Lifecycle capabilities contract missing"
 expect_fixed "'/lifecycle' => ['get' => [" "$API_CONTROLLER" "Lifecycle OpenAPI contract missing"
 expect_fixed "'lifecycle.snapshot'" "$API_CONTROLLER" "Lifecycle schema catalog contract missing"
-expect_fixed "'lifecycle:read' => 'Read agent lifecycle governance snapshot" "$API_CONTROLLER" "Lifecycle scope catalog missing"
+expect_fixed "'lifecycle:read' => [" "$SECURITY_POLICY_SERVICE" "Lifecycle scope catalog missing"
+expect_fixed "Read agent lifecycle governance snapshot" "$SECURITY_POLICY_SERVICE" "Lifecycle scope catalog description missing"
 
 expect_fixed "'lifecycle-report'" "$CLI_CONTROLLER" "Lifecycle CLI options binding missing"
 expect_fixed "public function actionLifecycleReport(): int" "$CLI_CONTROLLER" "Lifecycle CLI action missing"

@@ -136,6 +136,8 @@ Use when a worker reports on system state, reliability, or account posture.
 | `syncstate:write` | Record checkpoints for sync lag tracking. | The worker is a real incremental sync consumer. | The worker is not responsible for checkpoints. |
 | `consumers:read` | Deprecated alias for `syncstate:read`. | Only for older integrations. | New workers should not use it. |
 | `consumers:write` | Deprecated alias for `syncstate:write`. | Only for older integrations. | New workers should not use it. |
+| `jobs:read` | Read managed Job definitions assigned to the account. | The agent discovers or fetches Job config from Agents before it runs. | The operator handles job instructions outside Agents entirely. |
+| `jobs:report` | Report Job run status back to Agents. | The agent should record started, blocked, failed, or succeeded runs in the Jobs view. | Operators do not need run visibility inside Agents. |
 | `webhooks:dlq:read` | Read failed webhook dead-letter events. | You are building webhook operations or failure reporting. | The worker does not manage webhook delivery issues. |
 | `webhooks:dlq:replay` | Replay failed webhook dead-letter events. | An operator or recovery worker needs to retry failed deliveries. | The worker should never influence webhook delivery. |
 

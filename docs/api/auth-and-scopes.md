@@ -76,6 +76,8 @@ Read scopes:
 - `users:read_sensitive` (only when `PLUGIN_AGENTS_ENABLE_USERS_API=true`)
 - `syncstate:read`
 - `syncstate:write`
+- `jobs:read`
+- `jobs:report`
 - `templates:read`
 - `entries:write:draft` (experimental; only effective when `PLUGIN_AGENTS_WRITES_EXPERIMENTAL=true`)
 - `entries:write` (deprecated alias for `entries:write:draft`)

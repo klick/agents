@@ -1,19 +1,19 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = selectedWorkflow ? (selectedWorkflow.name ?: 'Workflow') : 'Workflows' %}
-{% set selectedSubnavItem = 'workflows' %}
+{% set title = selectedWorkflow ? (selectedWorkflow.name ?: 'Job') : 'Jobs' %}
+{% set selectedSubnavItem = 'jobs' %}
 {% set workflowsIndexUrl = cpUrl('agents/workflows') %}
 {% set workflowCreateUrl = cpUrl('agents/workflows', { workflowCreate: 'create' }) ~ '#workflowCreateSection' %}
 {% set currentWorkflow = selectedWorkflow ?? null %}
 {% set currentTemplate = currentWorkflow ? (currentWorkflow.template ?? null) : (selectedCreateTemplate ?? workflowTemplates[0] ?? null) %}
 {% set currentTemplateRequiredScopes = currentTemplate.requiredScopes ?? [] %}
-{% set currentConfig = currentWorkflow ? (currentWorkflow.config ?? {}) : {} %}
-{% set currentEntryIds = currentConfig.entryIds ?? [] %}
-{% set currentProductIds = currentConfig.productIds ?? [] %}
-{% set currentSectionHandles = currentConfig.sectionHandles ?? [] %}
-{% set currentSiteIds = currentConfig.siteIds ?? [] %}
-{% set canCreateWorkflowFromEligibleAccount = workflowAccountGuidance.hasEligibleAccounts ?? true %}
+{% set currentConfig = currentWorkflow ? (currentWorkflow.config ?? {}) : (createJobState ?? {}) %}
+{% set currentEntryIds = currentWorkflow ? (editJobState.entryIds ?? []) : (createJobState.entryIds ?? []) %}
+{% set currentProductIds = currentWorkflow ? (editJobState.productIds ?? []) : (createJobState.productIds ?? []) %}
+{% set currentSectionHandles = currentWorkflow ? (editJobState.sectionHandles ?? []) : (createJobState.sectionHandles ?? []) %}
+{% set currentSiteIds = currentWorkflow ? (editJobState.siteIds ?? []) : (createJobState.siteIds ?? []) %}
+{% set currentSourceKeys = currentWorkflow ? (editJobState.sourceKeys ?? []) : (createJobState.sourceKeys ?? []) %}
 {% set workflowListFilterRaw = (craft.app.request.getQueryParam('listFilter', '')|lower) %}
 {% set workflowListFilter = workflowListFilterRaw == 'attention' ? 'attention' : '' %}
 {% set showWorkflowRiskColumn = workflowListFilter == 'attention' %}
@@ -47,12 +47,12 @@
   <div class="agents-page-shell">
     <div class="agents-page-header">
       <div class="agents-page-header__copy">
-        <h1>{{ currentWorkflow ? currentWorkflow.name : 'Workflows' }}</h1>
+        <h1>{{ currentWorkflow ? currentWorkflow.name : 'Jobs' }}</h1>
         {% if currentWorkflow %}
-          <p class="agents-page-intro">Workflow type: <strong>{{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</strong> &middot; Schedule: {{ currentWorkflow.scheduleLabel }} &middot; Account: {{ include('agents/_partials/managed-account-ref', {
+          <p class="agents-page-intro">Job type: <strong>{{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</strong> &middot; Schedule: {{ currentWorkflow.scheduleLabel }} &middot; Account: {{ include('agents/_partials/managed-account-ref', {
             label: currentWorkflow.accountDisplayName,
             url: accountsUrl,
-          }, with_context = false) }} &middot; Focus: {{ currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope') }}</p>
+          }, with_context = false) }} &middot; Boundary: {{ currentWorkflow.readBoundary.summary ?: (currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope')) }}</p>
         {% endif %}
       </div>
       <div class="agents-page-header__actions">
@@ -82,23 +82,28 @@
   <div class="agents-layout-stack">
     {% if not currentWorkflow %}
       <div class="agents-page-shell">
-        <section class="agents-workflows-summary" aria-label="Workflow Filters">
-          <section class="agents-table-toolbar" aria-label="Workflow view options">
+        <section class="agents-workflows-summary" aria-label="Job Filters">
+          <section class="agents-table-toolbar" aria-label="Job view options">
             <div class="agents-table-toolbar__filters">
               <div class="agents-filter-strip-wrap">
-                <nav class="agents-filter-strip" aria-label="Workflow filters">
+                <nav class="agents-filter-strip" aria-label="Job filters">
                   <a class="agents-filter-strip__item{{ workflowListFilter == '' ? ' is-selected' : '' }}" href="{{ workflowAllFilterUrl }}">All</a>
                   <a class="agents-filter-strip__item{{ workflowListFilter == 'attention' ? ' is-selected' : '' }}" href="{{ workflowAttentionFilterUrl }}">Need attention</a>
                 </nav>
               </div>
             </div>
+            {% if canManageWorkflows %}
+              <div class="agents-table-toolbar__controls">
+                <a class="btn submit" href="{{ workflowCreateUrl }}">+ Add</a>
+              </div>
+            {% endif %}
           </section>
         </section>
 
         <section class="agents-workflows-registry-shell agents-standard-registry-shell">
           <div class="tableview tablepane agents-workflows-registry-wrap agents-standard-registry-wrap">
-            <table class="data fullwidth big agents-workflows-registry agents-standard-registry" data-name="Workflows">
-              <caption class="visually-hidden">Workflow registry</caption>
+            <table class="data fullwidth big agents-workflows-registry agents-standard-registry" data-name="Jobs">
+              <caption class="visually-hidden">Jobs registry</caption>
               <colgroup>
                 <col class="agents-workflows-registry__col agents-workflows-registry__col--icon">
                 <col class="agents-workflows-registry__col agents-workflows-registry__col--workflow">
@@ -114,13 +119,13 @@
               <thead>
                 <tr>
                   <th scope="col" class="agents-standard-registry__header-cell agents-workflows-registry__header-cell--icon"><span class="visually-hidden">Type</span></th>
-                  <th scope="col" class="agents-standard-registry__header-cell">Workflow</th>
+                  <th scope="col" class="agents-standard-registry__header-cell">Job</th>
                   {% if showWorkflowRiskColumn %}
                     <th scope="col" class="agents-standard-registry__header-cell agents-table-attention-heading">Risk</th>
                   {% endif %}
                   <th scope="col" class="agents-standard-registry__header-cell">Schedule</th>
                   <th scope="col" class="agents-standard-registry__header-cell">Managed Account</th>
-                  <th scope="col" class="agents-standard-registry__header-cell">Focus</th>
+                  <th scope="col" class="agents-standard-registry__header-cell">Boundary</th>
                   <th scope="col" class="agents-standard-registry__header-cell">Latest Run</th>
                   <th scope="col" class="agents-standard-registry__header-cell">Actions</th>
                 </tr>
@@ -133,15 +138,9 @@
                   <tr class="agents-workflows-registry__row{% if workflow.needsAttention %} agents-workflows-registry__row--attention{% endif %}">
                     <td class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--icon" aria-hidden="true">
                       <span class="agents-workflows-registry-icon">
-                        <svg focusable="false" preserveAspectRatio="xMidYMid meet" fill="currentColor" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-                          <switch>
-                            <foreignObject width="1" height="1" x="0" y="0" requiredExtensions="http://ns.adobe.com/AdobeIllustrator/10.0/"></foreignObject>
-                            <g>
-                              <path d="M16,27c-3.6,0-7.1-1.8-9.2-5H12v-2H4v8h2v-3.7c2.5,3,6.1,4.7,10,4.7V27z"></path>
-                              <path d="M31,23v-2h-2.1c-0.1-0.6-0.4-1.2-0.7-1.8l1.5-1.5l-1.4-1.4l-1.5,1.5c-0.5-0.3-1.1-0.6-1.8-0.7V15h-2v2.1 c-0.6,0.1-1.2,0.4-1.8,0.7l-1.5-1.5l-1.4,1.4l1.5,1.5c-0.3,0.5-0.6,1.1-0.7,1.8H17v2h2.1c0.1,0.6,0.4,1.2,0.7,1.8l-1.5,1.5 l1.4,1.4l1.5-1.5c0.5,0.3,1.1,0.6,1.8,0.7V29h2v-2.1c0.6-0.1,1.2-0.4,1.8-0.7l1.5,1.5l1.4-1.4l-1.5-1.5c0.3-0.5,0.6-1.1,0.7-1.8 H31z M24,25c-1.7,0-3-1.3-3-3s1.3-3,3-3s3,1.3,3,3S25.7,25,24,25z"></path>
-                              <path d="M20,10h5.2C21.9,4.9,15.1,3.5,10,6.8c-3.1,2-5,5.5-5,9.2H3C3,8.8,8.8,3,16,3c3.9,0,7.5,1.7,10,4.7V4h2v8h-8V10z"></path>
-                            </g>
-                          </switch>
+                        <svg focusable="false" preserveAspectRatio="xMidYMid meet" fill="currentColor" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M30,13A11,11,0,0,0,19,2H11a9,9,0,0,0-9,9v3a5,5,0,0,0,5,5H8.1A5,5,0,0,0,13,23h1.38l4,7,1.73-1-4-6.89A2,2,0,0,0,14.38,21H13a3,3,0,0,1,0-6h1V13H13a5,5,0,0,0-4.9,4H7a3,3,0,0,1-3-3V12H6A3,3,0,0,0,9,9V8H7V9a1,1,0,0,1-1,1H4.08A7,7,0,0,1,11,4h6V6a1,1,0,0,1-1,1H14V9h2a3,3,0,0,0,3-3V4a9,9,0,0,1,8.05,5H26a3,3,0,0,0-3,3v1h2V12a1,1,0,0,1,1-1h1.77A8.76,8.76,0,0,1,28,13v1a5,5,0,0,1-5,5H20v2h3a7,7,0,0,0,3-.68V21a3,3,0,0,1-3,3H22v2h1a5,5,0,0,0,5-5V18.89A7,7,0,0,0,30,14Z"></path>
+                          <title>Cognitive</title>
                         </svg>
                       </span>
                     </td>
@@ -189,7 +188,7 @@
                   </tr>
                 {% else %}
                   <tr>
-                    <td colspan="{{ showWorkflowRiskColumn ? 8 : 7 }}" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--empty agents-standard-registry__body-cell--empty">No workflows yet. Start from a read-only workflow type.</td>
+                    <td colspan="{{ showWorkflowRiskColumn ? 8 : 7 }}" class="agents-workflows-registry__body-cell agents-workflows-registry__body-cell--empty agents-standard-registry__body-cell--empty">No jobs yet. Start from a read-only job type.</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -197,7 +196,7 @@
           </div>
         </section>
 
-        <p class="agents-page-intro agents-page-intro--after-table">Create and manage recurring read-only workflow instances without turning Agents into a runtime host. Agents stores schedule intent, bindings, bundle export, and run visibility. External workers still execute the real work.</p>
+        <p class="agents-page-intro agents-page-intro--after-table">Create and manage recurring read-only jobs without turning Agents into a hosted agent. Agents stores schedule intent, bindings, bundle export, and run visibility. Your agent still executes the real work.</p>
       </div>
 
         {% if workflowTypesCount %}
@@ -212,17 +211,17 @@
           <details class="agents-workflow-types-panel"{% if workflowTypesExpanded %} open{% endif %} id="workflowTypesSection">
             <summary class="agents-workflow-types-toggle">
               <span class="agents-workflow-types-toggle__copy">
-                <span class="agents-workflow-types-toggle__title">Workflow Types</span>
+                <span class="agents-workflow-types-toggle__title">Job Types</span>
                 <span class="agents-workflow-types-toggle__meta">{{ workflowTypesCount }} available</span>
               </span>
             </summary>
 
             <div class="agents-workflow-types-panel__body">
-              <p class="agents-subtle agents-workflow-types-note">Workflow types stay curated for now so Agents can validate required access, generate the right handoff bundle, and keep worker expectations predictable.</p>
+              <p class="agents-subtle agents-workflow-types-note">Job types stay curated for now so Agents can validate required access, generate the right handoff bundle, and keep agent expectations predictable.</p>
 
               <div class="tableview tablepane agents-workflow-types-registry-wrap agents-standard-registry-wrap">
-                <table class="data fullwidth big agents-workflow-types-registry agents-standard-registry" data-name="Workflow Types">
-                  <caption class="visually-hidden">Workflow types</caption>
+                <table class="data fullwidth big agents-workflow-types-registry agents-standard-registry" data-name="Job Types">
+                  <caption class="visually-hidden">Job types</caption>
                   <colgroup>
                     <col class="agents-workflow-types-registry__col agents-workflow-types-registry__col--type">
                     <col class="agents-workflow-types-registry__col agents-workflow-types-registry__col--purpose">
@@ -231,7 +230,7 @@
                   </colgroup>
                   <thead>
                     <tr>
-                      <th scope="col" class="agents-standard-registry__header-cell">Workflow Type</th>
+                      <th scope="col" class="agents-standard-registry__header-cell">Job Type</th>
                       <th scope="col" class="agents-standard-registry__header-cell">Purpose</th>
                       <th scope="col" class="agents-standard-registry__header-cell">Coverage</th>
                       <th scope="col" class="agents-standard-registry__header-cell">Actions</th>
@@ -273,31 +272,16 @@
         {% endif %}
 
         {% if canManageWorkflows and showCreateWorkflow %}
-          <section class="agents-workflows-create-shell border rounded p-3" id="workflowCreateSection">
+          <section class="agents-workflows-create-shell" id="workflowCreateSection">
             <div class="agents-create-header">
               <div>
-                <h2 class="h4">Create Workflow</h2>
-                <p class="agents-subtle agents-workflows-note">Choose a supported read-only workflow type. Types stay curated so Agents can validate access, shape the handoff bundle, and keep worker expectations clear.</p>
+                <h2 class="h4">Create Job</h2>
+                <p class="agents-subtle agents-workflows-note">Type: {{ currentTemplate.displayName ?? 'Job type' }} &middot; <a href="#workflowTypesSection">Browse job types</a></p>
               </div>
             </div>
 
-            <article class="agents-workflow-type-summary">
-              <div class="agents-workflow-type-summary__eyebrow">Workflow type</div>
-              <div class="agents-workflow-type-summary__title">{{ currentTemplate.displayName ?? 'Workflow Type' }}</div>
-              <p class="agents-workflow-type-summary__copy">{{ currentTemplate.description ?? 'Recurring read-only review workflow.' }}</p>
-              <div class="agents-workflow-type-summary__meta">
-                <span>{{ currentTemplate.mode == 'read-only' ? 'Read-only' : currentTemplate.mode|title }}</span>
-                <span>{{ currentTemplate.focusLabel ?? 'Configured review scope' }}</span>
-                <span>{{ currentTemplateRequiredScopes|length }} required scopes</span>
-              </div>
-              {% if currentTemplateRequiredScopes|length %}
-                <p class="agents-workflow-type-summary__detail"><strong>Required access:</strong> {% for scope in currentTemplateRequiredScopes %}<code>{{ scope }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
-              {% endif %}
-              <p class="agents-workflow-type-summary__action"><a href="#workflowTypesSection">Browse workflow types &rarr;</a></p>
-            </article>
-
-            <div class="agents-workflows-form-shell">
-              <form method="post" accept-charset="UTF-8">
+            <div class="agents-workflows-form-shell agents-job-create-form-shell">
+              <form method="post" accept-charset="UTF-8" data-job-form class="agents-job-create-form">
                 {{ csrfInput() }}
                 {{ actionInput('agents/dashboard/create-workflow') }}
                 {{ redirectInput('agents/workflows') }}
@@ -305,189 +289,193 @@
                 <input type="hidden" name="workflowStatus" value="active">
                 <input type="hidden" name="workflowCadence" value="weekly">
 
-                {% if not canCreateWorkflowFromEligibleAccount %}
-                  <div class="agents-workflow-account-guidance">
-                    <div class="agents-workflow-account-guidance__title">No matching account yet</div>
-                    <p class="agents-workflow-account-guidance__copy">
-                      {% if workflowAccountGuidance.hasAnyAccounts %}
-                        None of the current managed accounts has the read scopes {{ workflowAccountGuidance.templateDisplayName }} needs.
-                      {% else %}
-                        Create a managed account first, then come back to configure this workflow.
-                      {% endif %}
-                    </p>
-                    {% if workflowAccountGuidance.requiredScopes|length %}
-                      <div class="agents-workflow-account-guidance__meta">
-                        Required scopes:
-                        {% for scope in workflowAccountGuidance.requiredScopes %}
-                          <code>{{ scope }}</code>{% if not loop.last %}, {% endif %}
-                        {% endfor %}
-                      </div>
-                    {% endif %}
-                    {% if workflowAccountGuidance.ineligibleAccounts|length %}
-                      <div class="agents-workflow-account-guidance__list">
-                        {% for account in workflowAccountGuidance.ineligibleAccounts %}
-                          <div class="agents-workflow-account-guidance__item">
-                            {{ include('agents/_partials/managed-account-ref', {
-                              label: account.displayName,
-                              url: accountsUrl,
-                            }, with_context = false) }}{% if account.handle %} ({{ account.handle }}){% endif %}: missing {{ account.missingScopes|join(', ') ?: 'required scopes' }}
-                          </div>
-                        {% endfor %}
-                      </div>
-                    {% endif %}
-                    <p class="agents-workflow-account-guidance__action"><a href="{{ matchingAccountCreateUrl ?? accountsUrl }}">Create matching account in Accounts &rarr;</a></p>
-                  </div>
-                {% endif %}
-
-                {{ forms.textField({
-                  label: 'Workflow name',
-                  id: 'workflowName',
-                  name: 'workflowName',
-                  required: true,
-                  value: currentTemplate.displayName ?? 'Workflow',
-                  instructions: 'Operator-facing name shown in the workflow registry.',
-                }) }}
-
-                {{ forms.textField({
-                  label: 'Short description',
-                  id: 'workflowDescription',
-                  name: 'workflowDescription',
-                  maxlength: 255,
-                  value: currentTemplate.description ?? '',
-                  instructions: 'Short purpose statement for operators and reviewers.',
-                }) }}
-
-                <div class="field">
-                  <div class="heading"><label for="workflowAccountId">Managed account</label></div>
-                  <div class="instructions"><p>Choose a managed account with the read scopes this workflow type needs.</p></div>
-                  <div class="select">
-                    <select id="workflowAccountId" name="workflowAccountId" required{% if not canCreateWorkflowFromEligibleAccount %} disabled{% endif %}>
-                      <option value="">{{ canCreateWorkflowFromEligibleAccount ? 'Select account' : 'No matching account yet' }}</option>
-                      {% for account in eligibleWorkflowAccounts %}
-                        <option value="{{ account.id }}">
-                          {{ account.displayName }}{% if account.handle %} ({{ account.handle }}){% endif %}
-                        </option>
-                      {% endfor %}
-                    </select>
-                  </div>
-                </div>
-
-                <div class="agents-workflows-schedule-panel">
-                  <div class="agents-workflows-schedule-panel__title">Schedule</div>
-                  <div class="agents-workflows-schedule-grid">
-                    <div class="field">
-                      <div class="heading"><label for="workflowWeekday">Day</label></div>
-                      <div class="select">
-                        <select id="workflowWeekday" name="workflowWeekday" required>
-                          {% for option in workflowWeekdayOptions %}
-                            <option value="{{ option.value }}"{% if option.value == 4 %} selected{% endif %}>{{ option.label }}</option>
-                          {% endfor %}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div class="field agents-workflows-time-field">
-                      <div class="heading"><label for="workflowTimeOfDay">Time</label></div>
-                      <div class="input ltr">
-                        <input
-                          class="text agents-workflows-time-input"
-                          type="time"
-                          id="workflowTimeOfDay"
-                          name="workflowTimeOfDay"
-                          value="08:00"
-                          step="900"
-                          required>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-                <div class="agents-workflows-form-grid">
-                  {{ forms.elementSelectField({
-                    label: 'Entries',
-                    instructions: 'Optional entry boundary for a tighter read scope. Leave blank for section- or site-level review.',
-                    id: 'workflowEntryIds',
-                    name: 'workflowEntryIds',
-                    elementType: 'craft\\elements\\Entry',
-                    selectionLabel: 'Select entries'|t('app'),
-                    elements: [],
-                    limit: null,
-                    viewMode: 'list-inline',
-                    sources: ['*'],
-                    criteria: {
-                      status: null,
-                    },
+                <section class="agents-job-create-section agents-job-create-section--intro">
+                  {{ forms.textField({
+                    label: 'Job name',
+                    id: 'workflowName',
+                    name: 'workflowName',
+                    required: true,
+                    value: createJobState.name ?? currentTemplate.displayName ?? 'Job',
+                    instructions: 'Operator-facing name shown in the jobs registry.',
                   }) }}
 
-                  {% if workflowProductElementType %}
+                  {{ forms.textField({
+                    label: 'Short description',
+                    id: 'workflowDescription',
+                    name: 'workflowDescription',
+                    maxlength: 255,
+                    value: createJobState.description ?? currentTemplate.description ?? '',
+                    instructions: 'Short purpose statement for operators and reviewers.',
+                  }) }}
+
+                  {{ forms.textareaField({
+                    label: 'Prompt / policy context',
+                    id: 'workflowPromptContext',
+                    name: 'workflowPromptContext',
+                    rows: 4,
+                    value: createJobState.promptContext ?? '',
+                    instructions: 'Describe what the agent should produce or review. Keep the prompt focused on the work, not on access.',
+                  }) }}
+                </section>
+
+                <div class="agents-job-create-divider" aria-hidden="true"></div>
+
+                <section class="agents-job-create-section agents-job-create-section--sources">
+                  <div class="field">
+                    <div class="heading"><label>What should the agent read?</label></div>
+                    <div class="instructions"><p>Click the content needs for this Job. Agents uses these picks to reduce the account list asynchronously.</p></div>
+                    <div class="agents-job-source-groups">
+                      {% for sourceGroupKey, sourceGroup in workflowSourceGroups %}
+                        {% set hasGroupSources = false %}
+                        {% for sourceKey, source in workflowSourceCatalog %}
+                          {% if source.group == sourceGroupKey %}
+                            {% set hasGroupSources = true %}
+                          {% endif %}
+                        {% endfor %}
+                        {% if hasGroupSources %}
+                          <section class="agents-job-source-group">
+                            <div class="agents-job-source-group__header">
+                              <div class="agents-job-source-group__title">{{ sourceGroup.label }}</div>
+                            <div class="agents-job-source-group__description">{{ sourceGroup.description }}</div>
+                          </div>
+                          <div class="agents-capability-group-pills agents-job-source-pill-row">
+                            {% for sourceKey, source in workflowSourceCatalog %}
+                              {% if source.group == sourceGroupKey %}
+                                <label class="agents-capability-pill agents-capability-pill--job" title="{{ source.description }}">
+                                  <input type="checkbox" name="workflowSourceKeys[]" value="{{ source.key }}"{% if source.key in (createJobState.sourceKeys ?? []) %} checked{% endif %}>
+                                  <span class="agents-capability-pill-copy">
+                                    <span class="agents-capability-pill-title">{{ source.label }}</span>
+                                  </span>
+                                </label>
+                              {% endif %}
+                            {% endfor %}
+                          </div>
+                          </section>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  <div class="agents-job-boundary-grid">
                     {{ forms.elementSelectField({
-                      label: 'Products',
-                      instructions: 'Optional product boundary for commerce-facing workflows. Leave blank when products are not part of the read boundary.',
-                      id: 'workflowProductIds',
-                      name: 'workflowProductIds',
-                      elementType: workflowProductElementType,
-                      selectionLabel: 'Select products'|t('app'),
+                      label: 'Entries',
+                      instructions: 'Optional boundary for a tighter entry review scope. Leave blank for section- or site-level review.',
+                      id: 'workflowEntryIds',
+                      name: 'workflowEntryIds',
+                      elementType: 'craft\\elements\\Entry',
+                      selectionLabel: 'Select entries'|t('app'),
                       elements: [],
                       limit: null,
                       viewMode: 'list-inline',
                       sources: ['*'],
+                      criteria: {
+                        status: null,
+                      },
                     }) }}
-                  {% endif %}
-                </div>
 
-                <div class="agents-workflows-form-grid">
-                  <div class="field">
-                    <div class="heading"><label>Sections</label></div>
-                    <div class="instructions"><p>Optional section boundary. Leave blank for broader review.</p></div>
-                    <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
-                      {% for section in availableSections %}
-                        <label class="agents-workflow-checkbox">
-                          <input type="checkbox" name="workflowSectionHandles[]" value="{{ section.handle }}">
-                          <span class="agents-workflow-checkbox__copy">
-                            <span class="agents-workflow-checkbox__title">{{ section.name ?: section.handle }}</span>
-                            <span class="agents-workflow-checkbox__meta">{{ section.handle }}</span>
-                          </span>
-                        </label>
-                      {% endfor %}
+                    {% if workflowProductElementType %}
+                      {{ forms.elementSelectField({
+                        label: 'Products',
+                        instructions: 'Optional boundary for commerce-facing jobs. Leave blank when products are not part of the boundary.',
+                        id: 'workflowProductIds',
+                        name: 'workflowProductIds',
+                        elementType: workflowProductElementType,
+                        selectionLabel: 'Select products'|t('app'),
+                        elements: [],
+                        limit: null,
+                        viewMode: 'list-inline',
+                        sources: ['*'],
+                      }) }}
+                    {% endif %}
+
+                    <div class="field">
+                      <div class="heading"><label>Sections</label></div>
+                      <div class="instructions"><p>Optional boundary for a tighter section-level review scope.</p></div>
+                      <div class="agents-job-boundary-pills">
+                        {% for section in availableSections %}
+                          <label class="agents-job-boundary-pill">
+                            <input type="checkbox" name="workflowSectionHandles[]" value="{{ section.handle }}"{% if section.handle in (createJobState.sectionHandles ?? []) %} checked{% endif %}>
+                            <span class="agents-job-boundary-pill__copy">{{ section.name ?: section.handle }}</span>
+                          </label>
+                        {% endfor %}
+                      </div>
+                    </div>
+
+                    <div class="field">
+                      <div class="heading"><label>Sites</label></div>
+                      <div class="instructions"><p>Optional boundary for a tighter site-level review scope.</p></div>
+                      <div class="agents-job-boundary-pills">
+                        {% for site in availableSites %}
+                          <label class="agents-job-boundary-pill">
+                            <input type="checkbox" name="workflowSiteIds[]" value="{{ site.id }}"{% if site.id in (createJobState.siteIds ?? []) %} checked{% endif %}>
+                            <span class="agents-job-boundary-pill__copy">{{ site.name ?: ('Site #' ~ site.id) }}</span>
+                          </label>
+                        {% endfor %}
+                      </div>
                     </div>
                   </div>
+                </section>
 
+                <section class="agents-job-create-section">
                   <div class="field">
-                    <div class="heading"><label>Sites</label></div>
-                    <div class="instructions"><p>Optional site boundary. Leave blank when the workflow may review all configured sites.</p></div>
-                    <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
-                      {% for site in availableSites %}
-                        <label class="agents-workflow-checkbox">
-                          <input type="checkbox" name="workflowSiteIds[]" value="{{ site.id }}">
-                          <span class="agents-workflow-checkbox__copy">
-                            <span class="agents-workflow-checkbox__title">{{ site.name ?: ('Site #' ~ site.id) }}</span>
-                            <span class="agents-workflow-checkbox__meta">{{ site.handle ?: ('#' ~ site.id) }}</span>
-                          </span>
-                        </label>
-                      {% endfor %}
+                    <div class="heading"><label>Accounts</label></div>
+                    <div class="instructions"><p>All accounts are shown first. As you define content needs and boundaries, Agents narrows the list to compatible accounts.</p></div>
+                    <div
+                      id="workflowAccountPicker"
+                      data-job-account-picker-container
+                      data-match-url="{{ actionUrl('agents/dashboard/workflow-account-matches') }}"
+                    >
+                      {% include 'agents/_partials/job-account-picker' with {
+                        accountSelection: createAccountSelection,
+                        pickerLayout: 'flat',
+                        showIntro: false,
+                      } only %}
                     </div>
                   </div>
-                </div>
+                </section>
 
-                {{ forms.textareaField({
-                  label: 'Prompt / policy context',
-                  id: 'workflowPromptContext',
-                  name: 'workflowPromptContext',
-                  rows: 4,
-                  instructions: 'Optional review policy, rubric, or context the worker/agent should keep in mind.',
-                }) }}
+                <div class="agents-job-create-divider" aria-hidden="true"></div>
+
+                <section class="agents-job-create-section">
+                  <div class="agents-workflows-schedule-panel">
+                    <div class="agents-workflows-schedule-panel__title">Schedule</div>
+                    <div class="agents-workflows-schedule-grid">
+                      <div class="field">
+                        <div class="heading"><label for="workflowWeekday">Day</label></div>
+                        <div class="select">
+                          <select id="workflowWeekday" name="workflowWeekday" required>
+                            {% for option in workflowWeekdayOptions %}
+                              <option value="{{ option.value }}"{% if option.value == (createJobState.weekday ?? 4) %} selected{% endif %}>{{ option.label }}</option>
+                            {% endfor %}
+                          </select>
+                        </div>
+                      </div>
+
+                      {{ forms.timeField({
+                        label: 'Time',
+                        id: 'workflowTimeOfDay',
+                        name: 'workflowTimeOfDay',
+                        value: createJobState.timeOfDay ?? '08:00',
+                        required: true,
+                        minuteIncrement: 15,
+                      }) }}
+                    </div>
+                  </div>
+                </section>
+
+                <div class="agents-job-create-divider" aria-hidden="true"></div>
 
                 {{ forms.textareaField({
                   label: 'Operator notes',
                   id: 'workflowOperatorNotes',
                   name: 'workflowOperatorNotes',
                   rows: 3,
+                  value: createJobState.operatorNotes ?? '',
                   instructions: 'Internal reminder shown only in Craft.',
                 }) }}
 
                 <div class="agents-form-actions">
-                  <button class="btn submit" type="submit"{% if not canCreateWorkflowFromEligibleAccount %} disabled{% endif %}>{{ canCreateWorkflowFromEligibleAccount ? 'Create Workflow' : 'Create matching account first' }}</button>
+                  <button class="btn submit" type="submit">Create Job</button>
                   <a class="btn" href="{{ workflowsIndexUrl }}">Cancel</a>
                 </div>
               </form>
@@ -534,13 +522,13 @@
           <section class="agents-workflows-edit-shell border rounded p-3">
             <div class="agents-create-header">
               <div>
-                <h2 class="h4">Workflow configuration</h2>
-                <p class="agents-subtle agents-workflows-note">Edit workflow intent, read-only coverage, and schedule. Execution still happens outside Craft.</p>
+                <h2 class="h4">Job configuration</h2>
+                <p class="agents-subtle agents-workflows-note">Edit job intent, boundary, and schedule. Execution still happens outside Craft.</p>
               </div>
             </div>
 
             {% if canManageWorkflows %}
-              <form method="post" accept-charset="UTF-8">
+              <form method="post" accept-charset="UTF-8" data-job-form>
                 {{ csrfInput() }}
                 {{ actionInput('agents/dashboard/update-workflow') }}
                 {{ redirectInput('agents/workflows/' ~ currentWorkflow.id) }}
@@ -549,11 +537,11 @@
                 <input type="hidden" name="workflowCadence" value="weekly">
 
                 {{ forms.textField({
-                  label: 'Workflow name',
+                  label: 'Job name',
                   id: 'workflowName',
                   name: 'workflowName',
                   required: true,
-                  value: currentWorkflow.name,
+                  value: editJobState.name ?? currentWorkflow.name,
                 }) }}
 
                 {{ forms.textField({
@@ -561,18 +549,49 @@
                   id: 'workflowDescription',
                   name: 'workflowDescription',
                   maxlength: 255,
-                  value: currentWorkflow.description,
+                  value: editJobState.description ?? currentWorkflow.description,
+                }) }}
+
+                {{ forms.textareaField({
+                  label: 'Prompt / policy context',
+                  id: 'workflowPromptContext',
+                  name: 'workflowPromptContext',
+                  rows: 4,
+                  value: editJobState.promptContext ?? currentConfig.promptContext ?? '',
                 }) }}
 
                 <div class="field">
-                  <div class="heading"><label for="workflowAccountId">Managed account</label></div>
-                  <div class="instructions"><p>Choose a managed account with the read scopes this workflow type needs.</p></div>
-                  <div class="select">
-                    <select id="workflowAccountId" name="workflowAccountId" required>
-                      {% for account in availableWorkflowAccounts %}
-                        <option value="{{ account.id }}"{% if account.id == currentWorkflow.accountId %} selected{% endif %}>{{ account.displayName }}{% if account.handle %} ({{ account.handle }}){% endif %}{% if account.missingScopes is not empty %} — missing: {{ account.missingScopes|join(', ') }}{% endif %}</option>
+                  <div class="heading"><label>What should the agent read?</label></div>
+                  <div class="instructions"><p>Click the content needs for this Job. Agents uses these picks to reduce the account list asynchronously.</p></div>
+                  <div class="agents-job-source-groups">
+                    {% for sourceGroupKey, sourceGroup in workflowSourceGroups %}
+                      {% set hasGroupSources = false %}
+                      {% for sourceKey, source in workflowSourceCatalog %}
+                        {% if source.group == sourceGroupKey %}
+                          {% set hasGroupSources = true %}
+                        {% endif %}
                       {% endfor %}
-                    </select>
+                      {% if hasGroupSources %}
+                        <section class="agents-job-source-group">
+                          <div class="agents-job-source-group__header">
+                            <div class="agents-job-source-group__title">{{ sourceGroup.label }}</div>
+                          <div class="agents-job-source-group__description">{{ sourceGroup.description }}</div>
+                        </div>
+                        <div class="agents-capability-group-pills agents-job-source-pill-row">
+                          {% for sourceKey, source in workflowSourceCatalog %}
+                            {% if source.group == sourceGroupKey %}
+                              <label class="agents-capability-pill agents-capability-pill--job" title="{{ source.description }}">
+                                <input type="checkbox" name="workflowSourceKeys[]" value="{{ source.key }}"{% if source.key in (editJobState.sourceKeys ?? []) %} checked{% endif %}>
+                                <span class="agents-capability-pill-copy">
+                                  <span class="agents-capability-pill-title">{{ source.label }}</span>
+                                </span>
+                              </label>
+                            {% endif %}
+                          {% endfor %}
+                        </div>
+                        </section>
+                      {% endif %}
+                    {% endfor %}
                   </div>
                 </div>
 
@@ -584,33 +603,27 @@
                       <div class="select">
                         <select id="workflowWeekday" name="workflowWeekday" required>
                           {% for option in workflowWeekdayOptions %}
-                            <option value="{{ option.value }}"{% if option.value == currentWorkflow.weekday %} selected{% endif %}>{{ option.label }}</option>
+                            <option value="{{ option.value }}"{% if option.value == (editJobState.weekday ?? currentWorkflow.weekday ?? 4) %} selected{% endif %}>{{ option.label }}</option>
                           {% endfor %}
                         </select>
                       </div>
                     </div>
 
-                    <div class="field agents-workflows-time-field">
-                      <div class="heading"><label for="workflowTimeOfDay">Time</label></div>
-                      <div class="input ltr">
-                        <input
-                          class="text agents-workflows-time-input"
-                          type="time"
-                          id="workflowTimeOfDay"
-                          name="workflowTimeOfDay"
-                          value="{{ currentWorkflow.timeOfDay }}"
-                          step="900"
-                          required>
-                      </div>
-                    </div>
-
+                    {{ forms.timeField({
+                      label: 'Time',
+                      id: 'workflowTimeOfDay',
+                      name: 'workflowTimeOfDay',
+                      value: editJobState.timeOfDay ?? currentWorkflow.timeOfDay ?? '08:00',
+                      required: true,
+                      minuteIncrement: 15,
+                    }) }}
                   </div>
                 </div>
 
                 <div class="agents-workflows-form-grid">
                   {{ forms.elementSelectField({
                     label: 'Entries',
-                    instructions: 'Optional entry boundary for a tighter read scope.',
+                    instructions: 'Optional boundary for a tighter entry review scope.',
                     id: 'workflowEntryIds',
                     name: 'workflowEntryIds',
                     elementType: 'craft\\elements\\Entry',
@@ -627,7 +640,7 @@
                   {% if workflowProductElementType %}
                     {{ forms.elementSelectField({
                       label: 'Products',
-                      instructions: 'Optional product boundary for commerce-facing workflows.',
+                      instructions: 'Optional boundary for commerce-facing jobs.',
                       id: 'workflowProductIds',
                       name: 'workflowProductIds',
                       elementType: workflowProductElementType,
@@ -659,7 +672,7 @@
 
                   <div class="field">
                     <div class="heading"><label>Sites</label></div>
-                    <div class="instructions"><p>Optional site boundary. Leave blank when the workflow may review all configured sites.</p></div>
+                    <div class="instructions"><p>Optional site boundary. Leave blank when the job may review all configured sites.</p></div>
                     <div class="agents-inline-checkboxes agents-inline-checkboxes--stacked">
                       {% for site in availableSites %}
                         <label class="agents-workflow-checkbox">
@@ -674,28 +687,35 @@
                   </div>
                 </div>
 
-                {{ forms.textareaField({
-                  label: 'Prompt / policy context',
-                  id: 'workflowPromptContext',
-                  name: 'workflowPromptContext',
-                  rows: 4,
-                  value: currentConfig.promptContext ?? '',
-                }) }}
+                <div class="field">
+                  <div class="heading"><label>Managed account</label></div>
+                  <div class="instructions"><p>All accounts are shown first. As you define content needs and boundaries, Agents narrows the list to compatible accounts.</p></div>
+                  <div
+                    id="workflowAccountPicker"
+                    data-job-account-picker-container
+                    data-match-url="{{ actionUrl('agents/dashboard/workflow-account-matches') }}"
+                  >
+                    {% include 'agents/_partials/job-account-picker' with {
+                      accountSelection: editAccountSelection,
+                      showIntro: false,
+                    } only %}
+                  </div>
+                </div>
 
                 {{ forms.textareaField({
                   label: 'Operator notes',
                   id: 'workflowOperatorNotes',
                   name: 'workflowOperatorNotes',
                   rows: 3,
-                  value: currentConfig.operatorNotes ?? '',
+                  value: editJobState.operatorNotes ?? currentConfig.operatorNotes ?? '',
                 }) }}
 
                 <div class="agents-form-actions">
-                  <button class="btn submit" type="submit">Save Workflow</button>
+                  <button class="btn submit" type="submit">Save Job</button>
                   <a class="btn" href="{{ workflowsIndexUrl }}">Back</a>
                 </div>
               </form>
-              <form method="post" accept-charset="UTF-8" onsubmit="return confirm('Delete this workflow?');" class="agents-workflows-delete-form">
+              <form method="post" accept-charset="UTF-8" onsubmit="return confirm('Delete this job?');" class="agents-workflows-delete-form">
                 {{ csrfInput() }}
                 {{ actionInput('agents/dashboard/delete-workflow') }}
                 <input type="hidden" name="workflowId" value="{{ currentWorkflow.id }}">
@@ -704,12 +724,12 @@
             {% else %}
               <div class="agents-workflows-readonly">
                 <div><strong>Description:</strong> {{ currentWorkflow.description ?: 'No description yet.' }}</div>
-                <div><strong>Workflow type:</strong> {{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</div>
+                <div><strong>Job type:</strong> {{ currentTemplate.displayName ?? currentWorkflow.templateHandle }}</div>
                 <div><strong>Managed account:</strong> {{ include('agents/_partials/managed-account-ref', {
                   label: currentWorkflow.accountDisplayName,
                   url: accountsUrl,
                 }, with_context = false) }}</div>
-                <div><strong>Read boundary:</strong> {{ currentWorkflow.readBoundary.summary ?: (currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope')) }}</div>
+                <div><strong>Boundary:</strong> {{ currentWorkflow.readBoundary.summary ?: (currentWorkflow.configSummary ?: (currentTemplate.focusLabel ?? 'Configured review scope')) }}</div>
                 <div><strong>Entry IDs:</strong> {{ currentEntryIds|length ? currentEntryIds|join(', ') : 'Unbounded' }}</div>
                 <div><strong>Product IDs:</strong> {{ currentProductIds|length ? currentProductIds|join(', ') : 'Unbounded' }}</div>
                 <div><strong>Sections:</strong> {{ currentSectionHandles|length ? currentSectionHandles|join(', ') : 'Unbounded' }}</div>
@@ -720,22 +740,22 @@
 
           <div class="agents-workflows-sidebar">
             <section class="border rounded p-3 agents-workflows-side-card">
-              <h2 class="h4">Workflow type</h2>
-              <p class="agents-subtle">{{ currentTemplate.description ?? 'Workflow type.' }}</p>
-              <p><a href="{{ currentTemplate.docsUrl ?? workflowLibraryUrl }}" target="_blank" rel="noopener">Workflow library &rarr;</a> &middot; <a href="{{ firstWorkerGuideUrl }}" target="_blank" rel="noopener">First worker &rarr;</a></p>
+              <h2 class="h4">Job type</h2>
+              <p class="agents-subtle">{{ currentTemplate.description ?? 'Job type.' }}</p>
+              <p><a href="{{ currentTemplate.docsUrl ?? workflowLibraryUrl }}" target="_blank" rel="noopener">Job library &rarr;</a> &middot; <a href="{{ firstWorkerGuideUrl }}" target="_blank" rel="noopener">First agent &rarr;</a></p>
             </section>
 
             <section class="border rounded p-3 agents-workflows-side-card">
-              <h2 class="h4">External execution</h2>
+              <h2 class="h4">Agent execution</h2>
               <div class="agents-workflows-side-stack">
-                <div><strong>Mode:</strong> Poll-first external worker</div>
-                <div><strong>Workflow mode:</strong> {{ currentTemplate.mode == 'read-only' ? 'Read-only review' : currentTemplate.mode|title }}</div>
-                <div><strong>Read boundary:</strong> {{ currentWorkflow.readBoundary.summary ?: 'Unbounded read review' }}</div>
-                <div><strong>Account fit:</strong> {{ currentWorkflow.accountScopeCoverage.isBroader ? 'Broader than this workflow' : 'Aligned with this workflow' }}</div>
+                <div><strong>Mode:</strong> Poll-first agent</div>
+                <div><strong>Job mode:</strong> {{ currentTemplate.mode == 'read-only' ? 'Read-only review' : currentTemplate.mode|title }}</div>
+                <div><strong>Boundary:</strong> {{ currentWorkflow.readBoundary.summary ?: 'Unbounded read review' }}</div>
+                <div><strong>Account fit:</strong> {{ currentWorkflow.accountScopeCoverage.isBroader ? 'Broader than this job' : 'Aligned with this job' }}</div>
                 {% if currentWorkflow.accountScopeCoverage.isBroader and currentWorkflow.accountScopeCoverage.meta %}
                   <div><strong>Extra scopes:</strong> {{ currentWorkflow.accountScopeCoverage.meta }}</div>
                 {% endif %}
-                <div><strong>Last worker:</strong> {{ currentWorkflow.lastWorkerId ?: 'None yet' }}</div>
+                <div><strong>Last agent:</strong> {{ currentWorkflow.lastWorkerId ?: 'None yet' }}</div>
                 <div><strong>Last claim:</strong> {{ currentWorkflow.lastClaimedAt ? include('agents/_partials/relative-short-date', { value: currentWorkflow.lastClaimedAt }, with_context = false) : 'Never' }}</div>
                 <div><strong>Last heartbeat:</strong> {{ currentWorkflow.lastHeartbeatAt ? include('agents/_partials/relative-short-date', { value: currentWorkflow.lastHeartbeatAt }, with_context = false) : 'Never' }}</div>
               </div>
@@ -757,7 +777,7 @@
                     <tbody>
                       {% for run in selectedWorkflowRuns %}
                         <tr>
-                          <td>#{{ run.id }}</td>
+                          <td>{{ run.id }}</td>
                           <td>{{ run.status|title }}</td>
                           <td>{{ include('agents/_partials/relative-short-date', { value: run.completedAt ?: run.startedAt ?: run.scheduledFor }, with_context = false) }}</td>
                           <td>{{ run.summary ?: 'No summary yet.' }}</td>
@@ -767,13 +787,13 @@
                   </table>
                 </div>
               {% else %}
-                <p class="agents-subtle">No runs yet. This workflow stores run history after an external runtime discovers due work and reports run lifecycle events through the workflow API.</p>
+                <p class="agents-subtle">No runs yet. This job stores run history after an agent discovers due work and reports run lifecycle events through the job API contract.</p>
               {% endif %}
             </section>
 
             <section class="border rounded p-3 agents-workflows-side-card">
-              <h2 class="h4">Worker / Agent Handoff</h2>
-              <p class="agents-subtle">Download a handoff bundle with `README.md`, `.env.example`, `worker.mjs`, `run-worker.sh`, a cron example, explicit read-boundary guidance, and the workflow polling/reporting contract. Live tokens stay on the account surface.</p>
+              <h2 class="h4">Agent Handoff</h2>
+              <p class="agents-subtle">Download a handoff bundle with `README.md`, `.env.example`, example script files, a cron example, explicit boundary guidance, and the job polling/reporting contract. Live tokens stay on the account surface.</p>
               <form method="post" accept-charset="UTF-8">
                 {{ csrfInput() }}
                 {{ actionInput('agents/dashboard/download-workflow-bundle') }}
@@ -804,10 +824,6 @@
       overflow: hidden;
       background: #fff;
       box-shadow: none;
-    }
-
-    .agents-workflows-registry__row--attention {
-      background: #fcf6f4;
     }
 
     .agents-workflows-registry__title {
@@ -943,15 +959,15 @@
 
     .agents-workflows-create-shell,
     .agents-workflows-edit-shell {
-      border: 1px solid #bbc7d5;
-      border-radius: 3px;
-      background: #f1f5f9;
-      padding: 12px;
-      box-shadow: none;
+      border: 1px solid #c0ccdc;
+      border-radius: 5px;
+      background: #eff5fa;
+      padding: 24px;
+      box-shadow: 0 4px 4px rgba(0, 0, 0, 0.06);
     }
 
     .agents-workflows-create-shell {
-      margin-top: 12px;
+      margin-top: 16px;
     }
 
     .agents-workflows-form-grid {
@@ -975,18 +991,17 @@
     }
 
     .agents-workflows-schedule-panel__title {
-      margin: 0 0 10px;
-      color: #25313b;
+      margin: 0 0 12px;
+      color: #596673;
       font-size: 12px;
       font-weight: 700;
       line-height: 1.4;
-      text-transform: uppercase;
     }
 
     .agents-workflows-schedule-grid {
       display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(3, minmax(0, max-content));
+      gap: 24px;
+      grid-template-columns: repeat(2, minmax(220px, 280px));
       justify-content: start;
       align-items: start;
     }
@@ -996,12 +1011,10 @@
       min-width: 0;
     }
 
-    .agents-workflows-time-field .input {
-      min-width: 110px;
-    }
-
-    .agents-workflows-time-input {
-      width: 110px;
+    .agents-workflows-schedule-grid .datetimewrapper,
+    .agents-workflows-schedule-grid .datewrapper,
+    .agents-workflows-schedule-grid .timewrapper {
+      width: 100%;
     }
 
     .agents-workflow-types-panel {
@@ -1120,42 +1133,6 @@
       line-height: 1.45;
     }
 
-    .agents-workflow-account-guidance {
-      display: grid;
-      gap: 10px;
-      margin-bottom: 16px;
-      padding: 12px;
-      border: 1px solid #d7dde3;
-      border-radius: 3px;
-      background: #fff;
-      color: #596673;
-    }
-
-    .agents-workflow-account-guidance__title {
-      color: #25313b;
-      font-size: 14px;
-      font-weight: 600;
-      line-height: 1.4;
-    }
-
-    .agents-workflow-account-guidance__copy,
-    .agents-workflow-account-guidance__action {
-      margin: 0;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .agents-workflow-account-guidance__meta,
-    .agents-workflow-account-guidance__item {
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .agents-workflow-account-guidance__list {
-      display: grid;
-      gap: 6px;
-    }
-
     .agents-workflow-type-summary {
       border: 1px solid #bbc7d5;
       border-radius: 3px;
@@ -1207,7 +1184,19 @@
     }
 
     .agents-create-header {
-      margin-bottom: 12px;
+      margin-bottom: 24px;
+    }
+
+    .agents-create-header .h4 {
+      margin: 0;
+      color: #596673;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .agents-create-header .agents-workflows-note {
+      margin: 6px 0 0;
     }
 
     .agents-workflows-summary .agents-metric-strip-wrap {
@@ -1235,6 +1224,385 @@
       font-weight: 700;
       line-height: 1.4;
       text-transform: uppercase;
+    }
+
+    .agents-job-source-groups {
+      display: grid;
+      gap: 24px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .agents-job-source-group {
+      display: grid;
+      gap: 12px;
+    }
+
+    .agents-job-source-group__header {
+      display: grid;
+      gap: 6px;
+    }
+
+    .agents-job-source-group__title {
+      color: #596673;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 18px;
+      text-transform: uppercase;
+    }
+
+    .agents-job-source-group__description {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .agents-job-source-pill-row {
+      padding-inline-end: 18px;
+    }
+
+    .agents-job-account-picker {
+      display: grid;
+      gap: 24px;
+    }
+
+    .agents-job-account-picker__intro {
+      display: grid;
+      gap: 6px;
+    }
+
+    .agents-job-account-picker__title {
+      color: #25313b;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .agents-job-account-picker__empty,
+    .agents-job-account-picker__action {
+      margin: 0;
+      color: #596673;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .agents-job-account-picker__groups {
+      display: grid;
+      gap: 16px;
+    }
+
+    .agents-job-account-group {
+      display: grid;
+      gap: 8px;
+    }
+
+    .agents-job-account-group__header {
+      display: grid;
+      gap: 2px;
+    }
+
+    .agents-job-account-group__title {
+      color: #25313b;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .agents-job-account-group__description {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-job-account-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+    }
+
+    .agents-job-account-card {
+      display: block;
+      cursor: pointer;
+    }
+
+    .agents-job-account-card__shell {
+      display: grid;
+      gap: 8px;
+      min-height: 100%;
+      padding: 12px;
+      border: 1px solid #d7dde3;
+      border-radius: 3px;
+      background: #fff;
+      transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .agents-job-account-card:hover .agents-job-account-card__shell,
+    .agents-job-account-card input:focus + .agents-job-account-card__shell {
+      border-color: #aebdcd;
+    }
+
+    .agents-job-account-card input:checked + .agents-job-account-card__shell {
+      border-color: #1274c2;
+      background: #f3f8fd;
+      box-shadow: 0 0 0 1px rgba(18, 116, 194, 0.1);
+    }
+
+    .agents-job-account-card__head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 13px;
+      align-items: start;
+    }
+
+    .agents-job-account-card__icon {
+      width: 24px;
+      height: 24px;
+      color: #596673;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .agents-job-account-card__icon svg {
+      display: block;
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .agents-job-account-card__name-wrap {
+      display: grid;
+      gap: 0;
+      min-width: 0;
+    }
+
+    .agents-job-account-card__name {
+      color: #25313b;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .agents-job-account-card__description,
+    .agents-job-account-card__headline {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .agents-job-account-card__description {
+      display: grid;
+      gap: 6px;
+    }
+
+    .agents-job-account-card__description-copy {
+      display: block;
+    }
+
+    .agents-job-account-card__details {
+      display: grid;
+      gap: 0;
+      padding-top: 0;
+    }
+
+    .agents-job-account-card__detail-title {
+      color: #25313b;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .agents-job-account-card__detail-line {
+      color: #596673;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .agents-job-create-form-shell {
+      display: grid;
+      gap: 0;
+    }
+
+    .agents-job-create-form {
+      display: grid;
+      gap: 0;
+    }
+
+    .agents-job-create-form > .field,
+    .agents-job-create-section > .field {
+      margin: 0;
+    }
+
+    .agents-job-create-divider {
+      height: 0;
+      margin: 24px 0;
+      border-top: 1px solid #c8d3df;
+    }
+
+    .agents-job-create-section {
+      display: grid;
+      gap: 24px;
+    }
+
+    .agents-job-create-section--intro {
+      gap: 24px;
+    }
+
+    .agents-job-create-section--sources {
+      margin-bottom: 24px;
+    }
+
+    .agents-job-boundary-grid {
+      display: grid;
+      gap: 24px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .agents-job-boundary-grid > .field {
+      margin: 0;
+      min-width: 0;
+    }
+
+    .agents-job-boundary-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .agents-job-boundary-pill {
+      display: block;
+      cursor: pointer;
+    }
+
+    .agents-job-boundary-pill input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .agents-job-boundary-pill__copy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--secondary-pane-bg);
+      color: #25313b;
+      font-family: var(--code-font);
+      font-size: 10px;
+      line-height: 1.4;
+      transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .agents-job-boundary-pill:hover .agents-job-boundary-pill__copy,
+    .agents-job-boundary-pill input:focus + .agents-job-boundary-pill__copy {
+      box-shadow: 0 0 0 1px rgba(89, 102, 115, 0.16);
+    }
+
+    .agents-job-boundary-pill input:checked + .agents-job-boundary-pill__copy {
+      background: #596673;
+      color: #fff;
+      box-shadow: none;
+    }
+
+    .agents-job-account-picker--flat {
+      gap: 24px;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__shell {
+      gap: 6px;
+      padding: 10px;
+      border: 1px dashed #596673;
+      border-radius: 3px;
+      background: transparent;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card:hover .agents-job-account-card__shell,
+    .agents-job-account-picker--flat .agents-job-account-card input:focus + .agents-job-account-card__shell {
+      border-color: #596673;
+      box-shadow: 0 0 0 1px rgba(89, 102, 115, 0.12);
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card input:checked + .agents-job-account-card__shell {
+      border-color: #596673;
+      background: #d4dbe4;
+      box-shadow: none;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__head {
+      gap: 13px;
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__icon {
+      width: 24px;
+      height: 24px;
+      color: #d72222;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__icon svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__detail-title {
+      display: none;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__name {
+      color: var(--text-color);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__description,
+    .agents-job-account-picker--flat .agents-job-account-card__detail-line {
+      color: var(--text-color);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-card__description {
+      margin-top: 0;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-picker__action {
+      margin-top: 0;
+    }
+
+    .agents-job-account-picker--flat .agents-job-account-picker__action a {
+      font-size: 12px;
+      line-height: 1.5;
+      text-decoration: underline;
+    }
+
+    .agents-job-create-form .agents-form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 24px;
+    }
+
+    [data-job-account-picker-container].is-loading {
+      opacity: 0.68;
+      transition: opacity 120ms ease;
+    }
+
+    @media (max-width: 1100px) {
+      .agents-job-account-picker--flat .agents-job-account-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     .agents-workflow-checkbox {
@@ -1324,13 +1692,23 @@
       }
 
       .agents-workflows-schedule-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .agents-job-source-groups,
+      .agents-job-boundary-grid,
+      .agents-job-account-picker--flat .agents-job-account-grid {
+        grid-template-columns: 1fr;
       }
     }
 
     @media (max-width: 720px) {
       .agents-workflows-schedule-grid {
         grid-template-columns: 1fr;
+      }
+
+      .agents-job-source-groups {
+        gap: 16px;
       }
 
       .agents-workflows-registry {
@@ -1359,4 +1737,116 @@
       }
     }
   </style>
+  <script>
+    (() => {
+      const forms = Array.from(document.querySelectorAll('[data-job-form]'));
+      if (!forms.length) {
+        return;
+      }
+
+      const debounce = (fn, wait = 180) => {
+        let timeoutId = null;
+        return (...args) => {
+          window.clearTimeout(timeoutId);
+          timeoutId = window.setTimeout(() => fn(...args), wait);
+        };
+      };
+
+      const refreshAccountPicker = async (form) => {
+        const container = form.querySelector('[data-job-account-picker-container]');
+        if (!container || !container.dataset.matchUrl) {
+          return;
+        }
+
+        const formData = new FormData(form);
+        const selectedAccount = form.querySelector('input[name="workflowAccountId"]:checked');
+        if (selectedAccount && !formData.get('workflowAccountId')) {
+          formData.set('workflowAccountId', selectedAccount.value);
+        }
+
+        container.classList.add('is-loading');
+        container.setAttribute('aria-busy', 'true');
+
+        try {
+          const response = await fetch(container.dataset.matchUrl, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: formData,
+          });
+
+          const payload = await response.json();
+          if (!response.ok || !payload || payload.ok !== true || typeof payload.html !== 'string') {
+            throw new Error('Unable to refresh account matches.');
+          }
+
+          container.innerHTML = payload.html;
+        } catch (error) {
+          if (window.Craft && typeof window.Craft.cp !== 'undefined' && typeof window.Craft.cp.displayError === 'function') {
+            window.Craft.cp.displayError('Unable to refresh account matches right now.');
+          }
+        } finally {
+          container.classList.remove('is-loading');
+          container.removeAttribute('aria-busy');
+        }
+      };
+
+      const bindJobForm = (form) => {
+        const queueRefresh = debounce(() => refreshAccountPicker(form));
+
+        form.addEventListener('change', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) {
+            return;
+          }
+
+          const name = target.getAttribute('name') || '';
+          if (name === 'workflowAccountId') {
+            return;
+          }
+
+          if (
+            name === 'workflowSourceKeys[]'
+            || name === 'workflowSectionHandles[]'
+            || name === 'workflowSiteIds[]'
+            || name === 'workflowEntryIds[]'
+            || name === 'workflowProductIds[]'
+          ) {
+            queueRefresh();
+          }
+        });
+
+        form.addEventListener('input', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) {
+            return;
+          }
+
+          const name = target.getAttribute('name') || '';
+          if (name === 'workflowName' || name === 'workflowDescription') {
+            queueRefresh();
+          }
+        });
+
+        ['workflowEntryIds', 'workflowProductIds'].forEach((id) => {
+          const elementField = form.querySelector(`#${id}`);
+          if (!elementField || typeof MutationObserver === 'undefined') {
+            return;
+          }
+
+          const observer = new MutationObserver(() => queueRefresh());
+          observer.observe(elementField, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+          });
+        });
+      };
+
+      forms.forEach(bindJobForm);
+    })();
+  </script>
 {% endblock %}

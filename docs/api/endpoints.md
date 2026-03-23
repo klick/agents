@@ -46,6 +46,9 @@ Base path: `/agents/v1`
 - Deprecated aliases (still supported during transition):
   - `GET /consumers/lag`
   - `POST /consumers/checkpoint`
+- `GET /workflows`
+- `GET /workflows/show`
+- `POST /workflows/run-report`
 - `GET /templates`
 - `GET /starter-packs`
 - `GET /schema`
@@ -219,6 +222,12 @@ Notes:
 
 - `GET /webhooks/dlq`: `status=failed|queued`, `limit`
 - `POST /webhooks/dlq/replay`: either `id` or `mode=all` (+ optional `limit` for all-mode)
+
+### Job runtime query/body params
+
+- `GET /workflows`: `dueOnly`, `status`, `templateKey`, `limit`
+- `GET /workflows/show`: requires `id`
+- `POST /workflows/run-report`: requires `workflowId` and `status`; accepts optional `runId`, `workerId`, `summary`, `approvalIds`, `outcomeRefs`, and `metadata`
 
 ### Approvals request body requirements
 

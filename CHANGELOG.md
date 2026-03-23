@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.29.0 - 2026-03-23
+
+### Added
+
+- Added bounded read boundaries and explicit run reporting for managed Jobs, including job-scoped entry/product/site/section selectors plus `jobs:read` / `jobs:report` support for external agents.
+- Added a migration that renames workflow runtime scopes to job runtime scopes so existing managed accounts can follow the Jobs model without manual repair.
+
+### Changed
+
+- Reframed the operator-facing model around `Jobs` and `Boundaries`, including flatter CP navigation, job-first wording, and calmer status/account signals around broader-than-needed access.
+- Reworked account scope assignment around safer defaults, standard-versus-advanced capability grouping, centralized capability-pill styling, and human-readable capability summaries instead of raw scope-heavy setup.
+- Rebuilt the Create Job flow around prompt-first setup, clickable content-need pills, filtered account cards, tighter Figma-aligned spacing, and redirect-back behavior that keeps operators in the Jobs registry after creation.
+
 ## 0.28.1 - 2026-03-22
 
 ### Changed

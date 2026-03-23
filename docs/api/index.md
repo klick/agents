@@ -34,6 +34,7 @@ Agent-focused Markdown handbook:
 ## Endpoint classes
 
 - read endpoints (health/readiness/auth/adoption/metrics/incidents/diagnostics/products/variants/subscriptions/transfers/donations/orders/entries/assets/categories/tags/global-sets/addresses/content-blocks/users/changes/sections)
+- job runtime endpoints (`/workflows`, `/workflows/show`, `/workflows/run-report`)
 - integration state endpoints (`/sync-state/*`, `/templates`, `/starter-packs`, `/schema`, `/lifecycle`, `/incidents`)
 - webhook operations (`/webhooks/dlq`, `/webhooks/dlq/replay`)
 - control endpoints (`/control/*`) when experimental flag is enabled

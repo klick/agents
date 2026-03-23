@@ -1,7 +1,7 @@
 # Roadmap
 
-Last updated: 2026-03-22
-Current release: `v0.28.1`
+Last updated: 2026-03-23
+Current release: `v0.29.0`
 
 ## Direction
 
@@ -295,20 +295,15 @@ Release outcome:
 
 - Agencies can turn a reusable starter workflow into a managed, repeatable operating surface inside Craft without turning Agents into a generic orchestration platform or pretending Agents is the runtime itself.
 
-## Planned (`v0.28.x`) Bounded Read Workflow Boundaries
+## Released (`v0.29.0`) Read-Only Jobs, Bounded Reads, and Safer Account Matching
 
-- Add a follow-on bounded read-boundary slice for read-only workflow instances, but do not overload the current write-only `Target Sets` model:
-  - start with optional workflow-scoped `Read Sets` or equivalent resource-boundary bindings for focused entry/product review workflows
-  - support operators saying "this workflow reads only these entries/products/sites/sections" without turning broad audit workflows into a high-friction setup path
-  - keep write `Target Sets` strict and separate until a single generalized boundary model proves simpler instead of more confusing
-- Add the first explicit external run-reporting contract so recent-run visibility does not rely on ad hoc row writes.
-- Defer account-wide or API-wide read filtering until bounded workflow bindings prove useful enough to justify a broader contract change.
-- Dependency graph for the bounded read-boundary slice:
-  - `T1 depends_on: []` Define the boundary model and naming for read-only workflow scoping, including whether the first version is `Read Sets` or a broader `Resource Sets` concept.
-  - `T2 depends_on: [T1]` Add template and workflow-instance support for optional read-boundary bindings, eligibility checks, and operator-visible summaries.
-  - `T3 depends_on: [T1, T2]` Apply the first bounded-read selectors to entries/products/sites/sections and carry them through worker bundle/export surfaces.
-  - `T4 depends_on: [T2, T3]` Add docs, starter-worker examples, and regression coverage so bounded-read workflows are explicit, testable, and non-breaking.
-  - `T5 depends_on: [T2, T3]` Define and implement the first worker-to-Agents run-reporting contract so `Latest Run` and `Recent runs` are backed by an intentional integration path.
+- Added bounded read selectors for read-only Jobs so operators can define focused entry/product/site/section surfaces without broadening the governed-write boundary model.
+- Added explicit job runtime reporting and job-support scopes so recent-run visibility now follows an intentional contract instead of placeholder state.
+- Reworked operator-facing workflow language into `Jobs`, tightened account capability defaults, and made account selection more readable through prompt-first job setup and filtered account cards.
+
+Release outcome:
+
+- Operators can define clearer read-only jobs, hand them to external agents with a smaller access surface, and review recent job activity without reasoning from raw workflow scaffolding.
 
 ## Planned (`v0.29.x`) Workflow Runtime API and Agent Bootstrap Discovery
 

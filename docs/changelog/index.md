@@ -2,6 +2,12 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.29.0 (2026-03-23)
+
+- Added bounded read boundaries and explicit run reporting for managed Jobs, including job-scoped selectors and `jobs:read` / `jobs:report` runtime support.
+- Renamed the operator-facing workflow model to `Jobs`, kept governed-write `Boundaries` separate, and tightened account/job fit signals around broader-than-needed access.
+- Reworked account capability selection and Create Job setup around safer defaults, shared capability pills, prompt-first job authoring, and filtered account-card matching.
+
 ## 0.28.1 (2026-03-22)
 
 - Polished the `Accounts` and `Workflows` registries around calmer shared table treatment, leading type icons, cleaner account references, and removal of the legacy Accounts lifecycle panel.

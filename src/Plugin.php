@@ -58,7 +58,7 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
-    public string $schemaVersion = '0.28.1';
+    public string $schemaVersion = '0.29.0';
 
     public static ?self $plugin = null;
 
@@ -122,14 +122,14 @@ class Plugin extends BasePlugin
                 'label' => 'Accounts',
                 'url' => 'agents/accounts',
             ],
-            'workflows' => [
-                'label' => 'Workflows',
+            'jobs' => [
+                'label' => 'Jobs',
                 'url' => 'agents/workflows',
             ],
         ];
         if ($this->isControlCpEnabled()) {
-            $subnav['targetSets'] = [
-                'label' => 'Target Sets',
+            $subnav['boundaries'] = [
+                'label' => 'Boundaries',
                 'url' => 'agents/target-sets',
             ];
             $subnav['approvals'] = [
@@ -654,13 +654,13 @@ JS, View::POS_END);
                     ],
                 ];
                 $event->permissions[] = [
-                    'heading' => 'Agents Workflows',
+                    'heading' => 'Agents Jobs',
                     'permissions' => [
                         self::PERMISSION_WORKFLOWS_VIEW => [
-                            'label' => 'View workflows tab',
+                            'label' => 'View jobs tab',
                         ],
                         self::PERMISSION_WORKFLOWS_MANAGE => [
-                            'label' => 'Create and edit workflows',
+                            'label' => 'Create and edit jobs',
                         ],
                     ],
                 ];

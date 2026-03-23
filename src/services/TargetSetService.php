@@ -89,12 +89,12 @@ class TargetSetService extends Component
         array $allowedActionTypes = self::DEFAULT_ALLOWED_ACTION_TYPES
     ): array {
         if (!$this->targetSetsTableExists()) {
-            throw new \RuntimeException('Target set storage table is unavailable. Run plugin migrations.');
+            throw new \RuntimeException('Boundary storage table is unavailable. Run plugin migrations.');
         }
 
         $normalizedHandle = $this->normalizeHandle($handle);
         if ($normalizedHandle === '') {
-            throw new \InvalidArgumentException('Target set handle is required and may only contain letters, digits, dashes, underscores, colons, and periods.');
+            throw new \InvalidArgumentException('Boundary handle is required and may only contain letters, digits, dashes, underscores, colons, and periods.');
         }
 
         $normalizedName = $this->normalizeName($name, $normalizedHandle);
@@ -108,7 +108,7 @@ class TargetSetService extends Component
             ->where(['handle' => $normalizedHandle])
             ->exists();
         if ($exists) {
-            throw new \InvalidArgumentException(sprintf('Target set `%s` already exists.', $normalizedHandle));
+            throw new \InvalidArgumentException(sprintf('Boundary `%s` already exists.', $normalizedHandle));
         }
 
         $now = gmdate('Y-m-d H:i:s');
@@ -127,7 +127,7 @@ class TargetSetService extends Component
         $id = (int)Craft::$app->getDb()->getLastInsertID();
         $targetSet = $this->getTargetSetById($id);
         if ($targetSet === null) {
-            throw new \RuntimeException('Unable to load newly created target set.');
+            throw new \RuntimeException('Unable to load newly created boundary.');
         }
 
         return $targetSet;
@@ -197,7 +197,7 @@ class TargetSetService extends Component
             if ($knownTargetSetIds !== $normalizedTargetSetIds) {
                 $missing = array_values(array_diff($normalizedTargetSetIds, $knownTargetSetIds));
                 throw new \InvalidArgumentException(sprintf(
-                    'Unknown target set IDs: %s.',
+                    'Unknown boundary IDs: %s.',
                     implode(', ', $missing)
                 ));
             }
@@ -509,7 +509,7 @@ class TargetSetService extends Component
     {
         $normalizedAllowedEntryIds = $this->normalizeIntegerIds($allowedEntryIds);
         if (empty($normalizedAllowedEntryIds)) {
-            throw new \InvalidArgumentException('Target sets require at least one allowed entry.');
+            throw new \InvalidArgumentException('Boundaries require at least one allowed entry.');
         }
 
         $knownEntryIds = array_keys($this->loadEntrySummariesByIds($normalizedAllowedEntryIds));
@@ -529,7 +529,7 @@ class TargetSetService extends Component
     {
         $normalizedAllowedSiteIds = $this->normalizeIntegerIds($allowedSiteIds);
         if (empty($normalizedAllowedSiteIds)) {
-            throw new \InvalidArgumentException('Target sets require at least one allowed site.');
+            throw new \InvalidArgumentException('Boundaries require at least one allowed site.');
         }
 
         $knownSiteIds = array_keys($this->loadSiteSummariesById());

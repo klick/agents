@@ -1,0 +1,60 @@
+{% set selection = accountSelection ?? {} %}
+{% set showIntro = showIntro is defined ? showIntro : true %}
+{% set accounts = selection.accounts ?? [] %}
+{% set hasManagedAccounts = selection.hasManagedAccounts ?? false %}
+{% set hasAnyAccounts = selection.hasAnyAccounts ?? false %}
+{% set matchingAccountCreateUrl = selection.matchingAccountCreateUrl ?? '' %}
+
+<div class="agents-job-account-picker agents-job-account-picker--flat" data-job-account-picker-state>
+  {% if showIntro %}
+    <div class="agents-job-account-picker__intro">
+      <div class="agents-job-account-picker__title">Choose an account</div>
+    </div>
+  {% endif %}
+
+  {% if hasAnyAccounts %}
+    <div class="agents-job-account-grid agents-job-account-grid--flat">
+      {% for account in accounts %}
+        <label class="agents-job-account-card{% if account.selected %} is-selected{% endif %}{% if account.hasWriteAccess %} agents-job-account-card--write{% endif %}" data-job-account-card>
+          <input class="visually-hidden" type="radio" name="workflowAccountId" value="{{ account.id }}"{% if hasAnyAccounts %} required{% endif %}{% if account.selected %} checked{% endif %}>
+          <span class="agents-job-account-card__shell">
+            <span class="agents-job-account-card__head">
+              <span class="agents-job-account-card__icon" aria-hidden="true">
+                <svg focusable="false" preserveAspectRatio="xMidYMid meet" fill="currentColor" width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M18 10H20V12H18z"></path><path d="M12 10H14V12H12z"></path><path d="M26,20H21V18h1a2.0023,2.0023,0,0,0,2-2V12h2V10H24V8a2.0023,2.0023,0,0,0-2-2H20V2H18V6H14V2H12V6H10A2.0023,2.0023,0,0,0,8,8v2H6v2H8v4a2.0023,2.0023,0,0,0,2,2h1v2H6a2.0023,2.0023,0,0,0-2,2v8H6V22H26v8h2V22A2.0023,2.0023,0,0,0,26,20ZM10,8H22v8H10Zm3,10h6v2H13Z"></path>
+                </svg>
+              </span>
+              <span class="agents-job-account-card__name-wrap">
+                <span class="agents-job-account-card__name">{{ account.displayName }}</span>
+                <span class="agents-job-account-card__description">
+                  {% if account.description %}
+                    <span class="agents-job-account-card__description-copy">{{ account.description }}</span>
+                  {% endif %}
+
+                  <span class="agents-job-account-card__details">
+                    <span class="agents-job-account-card__detail-line">
+                      <strong>Can Read:</strong><br>
+                      {{ account.capabilitySummary.readLabels|length ? account.capabilitySummary.readLabels|join(', ') : 'No explicit read access.' }}
+                    </span>
+                    {% if account.capabilitySummary.writeLabels|length %}
+                      <span class="agents-job-account-card__detail-line">
+                        <strong>Can Write:</strong><br>
+                        {{ account.capabilitySummary.writeLabels|join(', ') }}
+                      </span>
+                    {% endif %}
+                  </span>
+                </span>
+              </span>
+            </span>
+          </span>
+        </label>
+      {% endfor %}
+    </div>
+  {% elseif not hasManagedAccounts %}
+    <p class="agents-job-account-picker__empty">No managed accounts yet. Create one, then come back to attach it to this Job.</p>
+  {% endif %}
+
+  {% if matchingAccountCreateUrl %}
+    <p class="agents-job-account-picker__action"><a href="{{ matchingAccountCreateUrl }}">Create matching account in Accounts &rarr;</a></p>
+  {% endif %}
+</div>

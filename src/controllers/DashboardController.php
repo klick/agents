@@ -8,10 +8,13 @@ use Klick\Agents\models\Settings;
 use craft\elements\Entry;
 use craft\elements\User;
 use craft\db\Query;
+use craft\helpers\DateTimeHelper;
 use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use craft\web\View;
+use DateTimeImmutable;
+use DateTimeZone;
 use RuntimeException;
 use Throwable;
 use yii\web\NotFoundHttpException;
@@ -114,14 +117,6 @@ class DashboardController extends Controller
                 $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
             } catch (Throwable $e) {
                 Craft::warning('Unable to load managed credentials for Status CP: ' . $e->getMessage(), __METHOD__);
-            }
-        }
-        $targetSets = [];
-        if ($canViewCredentials && $controlCpEnabled) {
-            try {
-                $targetSets = $plugin->getTargetSetService()->getTargetSets();
-            } catch (Throwable $e) {
-                Craft::warning('Unable to load target sets for Status CP: ' . $e->getMessage(), __METHOD__);
             }
         }
         $workflowSummary = [
@@ -283,7 +278,6 @@ class DashboardController extends Controller
             'managedCredentials' => $managedCredentials,
             'dashboardWorkflows' => $workflows,
             'dashboardWorkflowSummary' => $workflowSummary,
-            'targetSets' => $targetSets,
             'controlSnapshot' => $controlSnapshot,
             'securityWarningCounts' => (array)($securityPosture['warningCounts'] ?? []),
             'apiEndpoints' => $this->getApiEndpoints(),
@@ -540,8 +534,12 @@ class DashboardController extends Controller
 
         $plugin = Plugin::getInstance();
         $enabledState = $plugin->getAgentsEnabledState();
+        $scopeSecurity = $plugin->getSecurityPolicyService();
         $posture = $plugin->getSecurityPolicyService()->getCpPosture();
-        $defaultScopes = (array)($posture['authentication']['tokenScopes'] ?? []);
+        $defaultScopes = $scopeSecurity->getManagedAccountDefaultScopes();
+        $jobRuntimeAddonScopes = $scopeSecurity->getJobRuntimeAddonScopes();
+        $scopeCatalog = $scopeSecurity->getAccountScopeCatalog();
+        $scopeBundles = $scopeSecurity->getAccountScopeBundles();
         $externalResourceProviders = $plugin->getExternalResourceRegistryService()->getCapabilitiesResources();
         $managedCredentials = $plugin->getCredentialService()->getManagedCredentials($defaultScopes);
         $lifecycleSnapshot = [
@@ -618,6 +616,9 @@ class DashboardController extends Controller
             'targetSets' => $targetSets,
             'workflowScopeCoverageByCredentialId' => $workflowScopeCoverageByCredentialId,
             'defaultScopes' => $defaultScopes,
+            'jobRuntimeAddonScopes' => $jobRuntimeAddonScopes,
+            'scopeCatalog' => $scopeCatalog,
+            'scopeBundles' => $scopeBundles,
             'externalResourceProviders' => $externalResourceProviders,
             'revealedCredential' => $this->pullRevealedCredential(),
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
@@ -665,6 +666,7 @@ class DashboardController extends Controller
             'editingTargetSet' => $editingTargetSet,
             'showTargetSetForm' => $showTargetSetForm,
             'canManageCredentials' => $this->canCredentialPermission(Plugin::PERMISSION_CREDENTIALS_MANAGE),
+            'accountsUrl' => UrlHelper::cpUrl('agents/accounts'),
         ]);
     }
 
@@ -729,7 +731,7 @@ class DashboardController extends Controller
         if ($workflowId > 0) {
             $selectedWorkflow = $workflowService->getWorkflowById($workflowId);
             if ($selectedWorkflow === null) {
-                throw new NotFoundHttpException('Workflow not found.');
+                throw new NotFoundHttpException('Job not found.');
             }
         }
 
@@ -742,15 +744,27 @@ class DashboardController extends Controller
             $selectedCreateTemplate = $workflowService->getWorkflowTemplateByHandle($selectedTemplateHandle)
                 ?? ($workflowTemplates[0] ?? null);
         }
-        $workflowAccountTemplate = $selectedWorkflow['template'] ?? $selectedCreateTemplate;
-        $availableWorkflowAccounts = $this->buildAvailableWorkflowAccounts($workflowAccountTemplate);
-        $eligibleWorkflowAccounts = array_values(array_filter(
-            $availableWorkflowAccounts,
-            static fn(array $account): bool => (bool)($account['eligible'] ?? false)
-        ));
+        $createJobState = $this->buildWorkflowCreateState($selectedCreateTemplate);
+        $editJobState = $selectedWorkflow !== null
+            ? $this->buildWorkflowEditState($selectedWorkflow)
+            : null;
+        $createAccountSelection = $this->buildWorkflowAccountSelectionState(
+            $selectedCreateTemplate,
+            $createJobState,
+            isset($createJobState['accountId']) ? (int)$createJobState['accountId'] : null
+        );
+        $editAccountSelection = $selectedWorkflow !== null
+            ? $this->buildWorkflowAccountSelectionState(
+                $selectedWorkflow['template'] ?? null,
+                $editJobState ?? [],
+                (int)($selectedWorkflow['accountId'] ?? 0)
+            )
+            : null;
 
         return $this->renderCpTemplate('agents/workflows', [
             'workflowTemplates' => $workflowTemplates,
+            'workflowSourceCatalog' => $workflowService->getJobSourceCatalog(),
+            'workflowSourceGroups' => $workflowService->getJobSourceGroups(),
             'workflows' => $workflowService->getWorkflows(),
             'workflowSummary' => $workflowService->getWorkflowStatusSummary(),
             'selectedWorkflow' => $selectedWorkflow,
@@ -765,18 +779,43 @@ class DashboardController extends Controller
                 : [],
             'showCreateWorkflow' => $showCreateWorkflow,
             'selectedCreateTemplate' => $selectedCreateTemplate,
+            'createJobState' => $createJobState,
+            'editJobState' => $editJobState,
+            'createAccountSelection' => $createAccountSelection,
+            'editAccountSelection' => $editAccountSelection,
             'availableSections' => $this->buildAvailableSectionsForCp(),
             'availableSites' => $this->buildAvailableSitesForCp(),
-            'availableWorkflowAccounts' => $availableWorkflowAccounts,
-            'eligibleWorkflowAccounts' => $eligibleWorkflowAccounts,
-            'workflowAccountGuidance' => $this->buildWorkflowAccountGuidance($workflowAccountTemplate, $availableWorkflowAccounts),
             'workflowWeekdayOptions' => $this->buildWorkflowWeekdayOptions(),
             'workflowLibraryUrl' => 'https://marcusscheller.com/docs/agents/workflows',
             'firstWorkerGuideUrl' => 'https://marcusscheller.com/docs/agents/get-started/first-worker',
             'accountsUrl' => UrlHelper::cpUrl('agents/accounts'),
-            'matchingAccountCreateUrl' => $this->buildWorkflowMatchingAccountCreateUrl($workflowAccountTemplate),
             'workflowProductElementType' => $this->resolveWorkflowProductElementType(),
             'canManageWorkflows' => $this->canWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE),
+        ]);
+    }
+
+    public function actionWorkflowAccountMatches(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
+        $this->requireAcceptsJson();
+
+        $workflowService = Plugin::getInstance()->getWorkflowService();
+        $templateHandle = strtolower(trim((string)$this->request->getBodyParam('workflowTemplateHandle', '')));
+        $template = $workflowService->getWorkflowTemplateByHandle($templateHandle)
+            ?? ($workflowService->getWorkflowTemplates()[0] ?? null);
+        $formState = $this->buildWorkflowFormStateFromRequest();
+        $selectedAccountId = isset($formState['accountId']) ? (int)$formState['accountId'] : null;
+        $selectionState = $this->buildWorkflowAccountSelectionState($template, $formState, $selectedAccountId);
+
+        $html = Craft::$app->getView()->renderTemplate('agents/_partials/job-account-picker', [
+            'accountSelection' => $selectionState,
+        ], View::TEMPLATE_MODE_CP);
+
+        return $this->asJson([
+            'ok' => true,
+            'html' => $html,
+            'hasSelectedAccount' => (bool)($selectionState['selectedAccountId'] ?? 0),
         ]);
     }
 
@@ -786,11 +825,11 @@ class DashboardController extends Controller
         $this->requireWorkflowPermission(Plugin::PERMISSION_WORKFLOWS_MANAGE);
 
         try {
-            $workflow = Plugin::getInstance()->getWorkflowService()->createWorkflow($this->buildWorkflowPayloadFromRequest());
-            $this->setSuccessFlash('Workflow created.');
-            return $this->redirect('agents/workflows/' . (int)($workflow['id'] ?? 0));
+            Plugin::getInstance()->getWorkflowService()->createWorkflow($this->buildWorkflowPayloadFromRequest());
+            $this->setSuccessFlash('Job created.');
+            return $this->redirectToPostedUrl(null, 'agents/workflows');
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to create workflow: ' . $e->getMessage());
+            $this->setFailFlash('Unable to create job: ' . $e->getMessage());
         }
 
         $selectedTemplateHandle = strtolower(trim((string)$this->request->getBodyParam('workflowTemplateHandle', '')));
@@ -808,20 +847,20 @@ class DashboardController extends Controller
 
         $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
         if ($workflowId === null || $workflowId <= 0) {
-            $this->setFailFlash('Missing workflow ID.');
+            $this->setFailFlash('Missing job ID.');
             return $this->redirectToPostedUrl(null, 'agents/workflows');
         }
 
         try {
             $workflow = Plugin::getInstance()->getWorkflowService()->updateWorkflow($workflowId, $this->buildWorkflowPayloadFromRequest());
             if (!is_array($workflow)) {
-                $this->setFailFlash('Workflow not found.');
+                $this->setFailFlash('Job not found.');
                 return $this->redirectToPostedUrl(null, 'agents/workflows');
             }
 
-            $this->setSuccessFlash('Workflow saved.');
+            $this->setSuccessFlash('Job saved.');
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to save workflow: ' . $e->getMessage());
+            $this->setFailFlash('Unable to save job: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/workflows/' . $workflowId);
@@ -834,9 +873,9 @@ class DashboardController extends Controller
 
         $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
         if ($workflowId !== null && Plugin::getInstance()->getWorkflowService()->pauseWorkflow($workflowId)) {
-            $this->setSuccessFlash('Workflow paused.');
+            $this->setSuccessFlash('Job paused.');
         } else {
-            $this->setFailFlash('Unable to pause workflow.');
+            $this->setFailFlash('Unable to pause job.');
         }
 
         return $this->redirectToPostedUrl(null, 'agents/workflows');
@@ -849,9 +888,9 @@ class DashboardController extends Controller
 
         $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
         if ($workflowId !== null && Plugin::getInstance()->getWorkflowService()->resumeWorkflow($workflowId)) {
-            $this->setSuccessFlash('Workflow resumed.');
+            $this->setSuccessFlash('Job resumed.');
         } else {
-            $this->setFailFlash('Unable to resume workflow.');
+            $this->setFailFlash('Unable to resume job.');
         }
 
         return $this->redirectToPostedUrl(null, 'agents/workflows');
@@ -864,21 +903,21 @@ class DashboardController extends Controller
 
         $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
         if ($workflowId === null || $workflowId <= 0) {
-            $this->setFailFlash('Missing workflow ID.');
+            $this->setFailFlash('Missing job ID.');
             return $this->redirectToPostedUrl(null, 'agents/workflows');
         }
 
         try {
             $workflow = Plugin::getInstance()->getWorkflowService()->duplicateWorkflow($workflowId);
             if (!is_array($workflow)) {
-                $this->setFailFlash('Unable to duplicate workflow.');
+                $this->setFailFlash('Unable to duplicate job.');
                 return $this->redirectToPostedUrl(null, 'agents/workflows');
             }
 
-            $this->setSuccessFlash('Workflow duplicated.');
+            $this->setSuccessFlash('Job duplicated.');
             return $this->redirect('agents/workflows/' . (int)($workflow['id'] ?? 0));
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to duplicate workflow: ' . $e->getMessage());
+            $this->setFailFlash('Unable to duplicate job: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/workflows');
@@ -891,9 +930,9 @@ class DashboardController extends Controller
 
         $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
         if ($workflowId !== null && Plugin::getInstance()->getWorkflowService()->deleteWorkflow($workflowId)) {
-            $this->setSuccessFlash('Workflow deleted.');
+            $this->setSuccessFlash('Job deleted.');
         } else {
-            $this->setFailFlash('Unable to delete workflow.');
+            $this->setFailFlash('Unable to delete job.');
         }
 
         return $this->redirectToPostedUrl(null, 'agents/workflows');
@@ -906,13 +945,13 @@ class DashboardController extends Controller
 
         $workflowId = $this->parseSingleIntegerIdBodyParam('workflowId');
         if ($workflowId === null || $workflowId <= 0) {
-            $this->setFailFlash('Missing workflow ID.');
+            $this->setFailFlash('Missing job ID.');
             return $this->redirectToPostedUrl(null, 'agents/workflows');
         }
 
         $workflow = Plugin::getInstance()->getWorkflowService()->getWorkflowById($workflowId);
         if (!is_array($workflow)) {
-            $this->setFailFlash('Workflow not found.');
+            $this->setFailFlash('Job not found.');
             return $this->redirectToPostedUrl(null, 'agents/workflows');
         }
 
@@ -926,7 +965,7 @@ class DashboardController extends Controller
                 )
             );
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to download workflow bundle: ' . $e->getMessage());
+            $this->setFailFlash('Unable to download job handoff: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/workflows/' . $workflowId);
@@ -1570,11 +1609,11 @@ class DashboardController extends Controller
                 $this->parseIntegerIdsInput($this->request->getBodyParam('targetSetAllowedEntryIds', [])),
                 $this->parseIntegerIdsInput($this->request->getBodyParam('targetSetAllowedSiteIds', []))
             );
-            $this->setSuccessFlash('Target set created.');
+            $this->setSuccessFlash('Boundary created.');
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to create target set: ' . $e->getMessage());
+            $this->setFailFlash('Unable to create boundary: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
@@ -1588,7 +1627,7 @@ class DashboardController extends Controller
 
         $targetSetId = (int)$this->request->getBodyParam('targetSetId', 0);
         if ($targetSetId <= 0) {
-            $this->setFailFlash('Missing target set ID.');
+            $this->setFailFlash('Missing boundary ID.');
             return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
         }
 
@@ -1601,15 +1640,15 @@ class DashboardController extends Controller
                 $this->parseIntegerIdsInput($this->request->getBodyParam('targetSetAllowedSiteIds', []))
             );
             if (!is_array($targetSet)) {
-                $this->setFailFlash('Target set not found.');
+                $this->setFailFlash('Boundary not found.');
                 return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
             }
 
-            $this->setSuccessFlash(sprintf('Target set `%s` updated.', (string)($targetSet['handle'] ?? 'target-set')));
+            $this->setSuccessFlash(sprintf('Boundary `%s` updated.', (string)($targetSet['handle'] ?? 'boundary')));
         } catch (\InvalidArgumentException $e) {
             $this->setFailFlash($e->getMessage());
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to update target set: ' . $e->getMessage());
+            $this->setFailFlash('Unable to update boundary: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/target-sets#targetSetFormSection');
@@ -1623,15 +1662,15 @@ class DashboardController extends Controller
 
         $targetSetId = (int)$this->request->getBodyParam('targetSetId', 0);
         if ($targetSetId <= 0) {
-            $this->setFailFlash('Missing target set ID.');
+            $this->setFailFlash('Missing boundary ID.');
             return $this->redirectToPostedUrl(null, 'agents/target-sets');
         }
 
         try {
             $deleted = Plugin::getInstance()->getTargetSetService()->deleteTargetSet($targetSetId);
-            $this->setSuccessFlash($deleted ? 'Target set deleted.' : 'Target set not found.');
+            $this->setSuccessFlash($deleted ? 'Boundary deleted.' : 'Boundary not found.');
         } catch (Throwable $e) {
-            $this->setFailFlash('Unable to delete target set: ' . $e->getMessage());
+            $this->setFailFlash('Unable to delete boundary: ' . $e->getMessage());
         }
 
         return $this->redirectToPostedUrl(null, 'agents/target-sets');
@@ -2557,21 +2596,7 @@ class DashboardController extends Controller
 
     private function getDefaultScopes(): array
     {
-        $posture = Plugin::getInstance()->getSecurityPolicyService()->getCpPosture();
-        $scopes = (array)($posture['authentication']['tokenScopes'] ?? []);
-        $normalized = [];
-        foreach ($scopes as $scope) {
-            if (!is_string($scope) && !is_numeric($scope)) {
-                continue;
-            }
-            $value = trim((string)$scope);
-            if ($value === '') {
-                continue;
-            }
-            $normalized[] = $value;
-        }
-
-        return array_values(array_unique($normalized));
+        return Plugin::getInstance()->getSecurityPolicyService()->getManagedAccountDefaultScopes();
     }
 
     private function parseScopesInput(mixed $rawInput): array
@@ -2980,15 +3005,19 @@ class DashboardController extends Controller
 
     private function buildWorkflowPayloadFromRequest(): array
     {
+        $schedule = $this->parseWorkflowScheduleBodyParam('workflowSchedule');
+
         $payload = [
             'templateHandle' => $this->parseStringBodyParam('workflowTemplateHandle'),
             'name' => $this->parseStringBodyParam('workflowName'),
             'description' => $this->parseStringBodyParam('workflowDescription'),
             'cadence' => $this->parseStringBodyParam('workflowCadence', 'weekly'),
-            'weekday' => $this->parseNullableIntegerBodyParam('workflowWeekday'),
-            'timeOfDay' => $this->parseWorkflowTimeBodyParam('workflowTimeOfDay', '08:00'),
+            'weekday' => $schedule['weekday'] ?? $this->parseNullableIntegerBodyParam('workflowWeekday'),
+            'timeOfDay' => $schedule['timeOfDay'] ?? $this->parseWorkflowTimeBodyParam('workflowTimeOfDay', '08:00'),
+            'timezone' => $schedule['timezone'] ?? null,
             'accountId' => $this->parseNullableIntegerBodyParam('workflowAccountId'),
             'ownerUserId' => $this->parseNullableIntegerBodyParam('workflowOwnerUserId') ?? $this->resolveCurrentCpUserId(),
+            'sourceKeys' => $this->parseStringListInput($this->request->getBodyParam('workflowSourceKeys', [])),
             'entryIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowEntryIds', [])),
             'productIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowProductIds', [])),
             'sectionHandles' => $this->parseStringListInput($this->request->getBodyParam('workflowSectionHandles', [])),
@@ -3003,6 +3032,26 @@ class DashboardController extends Controller
         }
 
         return $payload;
+    }
+
+    private function parseWorkflowScheduleBodyParam(string $name): ?array
+    {
+        $raw = $this->request->getBodyParam($name, null);
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        $dateTime = DateTimeHelper::toDateTime($raw, true, false);
+        if ($dateTime === false) {
+            return null;
+        }
+
+        return [
+            'dateTime' => DateTimeImmutable::createFromMutable($dateTime),
+            'weekday' => (int)$dateTime->format('N'),
+            'timeOfDay' => $dateTime->format('H:i'),
+            'timezone' => $dateTime->getTimezone()->getName(),
+        ];
     }
 
     private function parseWorkflowTimeBodyParam(string $name, string $default = ''): string
@@ -5412,13 +5461,7 @@ class DashboardController extends Controller
 
     private function defaultOnboardingScopes(): array
     {
-        return [
-            'auth:read',
-            'health:read',
-            'readiness:read',
-            'capabilities:read',
-            'openapi:read',
-        ];
+        return $this->getDefaultScopes();
     }
 
     private function buildOnboardingCredentialHandle(string $displayName): string
@@ -5486,15 +5529,122 @@ class DashboardController extends Controller
         }, Craft::$app->getEntries()->getAllSections());
     }
 
-    private function buildAvailableWorkflowAccounts(?array $template = null): array
+    private function buildWorkflowCreateState(?array $template): array
     {
-        $requiredScopes = array_map(
-            static fn($scope): string => strtolower(trim((string)$scope)),
-            (array)($template['requiredScopes'] ?? [])
-        );
-        $requiresTargetSet = (bool)($template['supportsTargetSet'] ?? false);
+        $weekday = (int)($template['defaultWeekday'] ?? 4);
+        $timeOfDay = (string)($template['defaultTimeOfDay'] ?? '08:00');
+        $timezone = (string)($template['defaultTimezone'] ?? 'Europe/Berlin');
 
-        $accounts = [];
+        return [
+            'name' => (string)($template['displayName'] ?? 'Job'),
+            'description' => (string)($template['description'] ?? ''),
+            'promptContext' => '',
+            'operatorNotes' => '',
+            'sourceKeys' => [],
+            'entryIds' => [],
+            'productIds' => [],
+            'sectionHandles' => [],
+            'siteIds' => [],
+            'accountId' => null,
+            'weekday' => $weekday,
+            'timeOfDay' => $timeOfDay,
+            'scheduleAt' => $this->buildWorkflowScheduleAnchor($weekday, $timeOfDay, $timezone),
+        ];
+    }
+
+    private function buildWorkflowEditState(array $workflow): array
+    {
+        $config = (array)($workflow['config'] ?? []);
+        $workflowService = Plugin::getInstance()->getWorkflowService();
+        $scopeExpectation = $workflowService->buildWorkflowScopeExpectation(
+            is_array($workflow['template'] ?? null) ? (array)$workflow['template'] : null,
+            $config
+        );
+
+        return [
+            'name' => (string)($workflow['name'] ?? ''),
+            'description' => (string)($workflow['description'] ?? ''),
+            'promptContext' => (string)($config['promptContext'] ?? ''),
+            'operatorNotes' => (string)($config['operatorNotes'] ?? ''),
+            'sourceKeys' => array_values(array_map('strval', (array)($scopeExpectation['sourceKeys'] ?? []))),
+            'entryIds' => array_values(array_map('intval', (array)($config['entryIds'] ?? []))),
+            'productIds' => array_values(array_map('intval', (array)($config['productIds'] ?? []))),
+            'sectionHandles' => array_values(array_map('strval', (array)($config['sectionHandles'] ?? []))),
+            'siteIds' => array_values(array_map('intval', (array)($config['siteIds'] ?? []))),
+            'accountId' => isset($workflow['accountId']) ? (int)$workflow['accountId'] : null,
+            'weekday' => (int)($workflow['weekday'] ?? 4),
+            'timeOfDay' => (string)($workflow['timeOfDay'] ?? '08:00'),
+            'scheduleAt' => $this->buildWorkflowScheduleAnchor(
+                (int)($workflow['weekday'] ?? 4),
+                (string)($workflow['timeOfDay'] ?? '08:00'),
+                (string)($workflow['timezone'] ?? 'Europe/Berlin')
+            ),
+        ];
+    }
+
+    private function buildWorkflowScheduleAnchor(int $weekday, string $timeOfDay, string $timezone): ?DateTimeImmutable
+    {
+        if ($weekday < 1 || $weekday > 7 || preg_match('/^(?<hour>\d{2}):(?<minute>\d{2})$/', $timeOfDay, $matches) !== 1) {
+            return null;
+        }
+
+        try {
+            $zone = new DateTimeZone($timezone !== '' ? $timezone : 'Europe/Berlin');
+            $now = new DateTimeImmutable('now', $zone);
+            $hour = (int)($matches['hour'] ?? 0);
+            $minute = (int)($matches['minute'] ?? 0);
+            $candidate = $now->setTime($hour, $minute);
+            $daysAhead = ($weekday - (int)$now->format('N') + 7) % 7;
+
+            if ($daysAhead > 0) {
+                $candidate = $candidate->modify('+' . $daysAhead . ' days');
+            } elseif ($candidate <= $now) {
+                $candidate = $candidate->modify('+7 days');
+            }
+
+            return $candidate;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function buildWorkflowFormStateFromRequest(): array
+    {
+        $schedule = $this->parseWorkflowScheduleBodyParam('workflowSchedule');
+        $weekday = $schedule['weekday'] ?? $this->parseNullableIntegerBodyParam('workflowWeekday');
+        $timeOfDay = $schedule['timeOfDay'] ?? $this->parseWorkflowTimeBodyParam('workflowTimeOfDay', '08:00');
+
+        return [
+            'name' => $this->parseStringBodyParam('workflowName'),
+            'description' => $this->parseStringBodyParam('workflowDescription'),
+            'promptContext' => $this->parseStringBodyParam('workflowPromptContext'),
+            'operatorNotes' => $this->parseStringBodyParam('workflowOperatorNotes'),
+            'sourceKeys' => $this->parseStringListInput($this->request->getBodyParam('workflowSourceKeys', [])),
+            'entryIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowEntryIds', [])),
+            'productIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowProductIds', [])),
+            'sectionHandles' => $this->parseStringListInput($this->request->getBodyParam('workflowSectionHandles', [])),
+            'siteIds' => $this->parseIntegerIdsInput($this->request->getBodyParam('workflowSiteIds', [])),
+            'accountId' => $this->parseNullableIntegerBodyParam('workflowAccountId'),
+            'weekday' => $weekday,
+            'timeOfDay' => $timeOfDay,
+            'scheduleAt' => $schedule['dateTime'] ?? $this->buildWorkflowScheduleAnchor(
+                (int)($weekday ?? 4),
+                (string)($timeOfDay ?: '08:00'),
+                (string)($schedule['timezone'] ?? 'Europe/Berlin')
+            ),
+        ];
+    }
+
+    private function buildWorkflowAccountSelectionState(?array $template, array $formState, ?int $selectedAccountId = null): array
+    {
+        $workflowService = Plugin::getInstance()->getWorkflowService();
+        $scopeExpectation = $workflowService->buildWorkflowScopeExpectation($template, $formState);
+        $contentFilterScopes = $this->buildWorkflowAccountContentFilterScopes($formState);
+        $contentFilterLabels = $this->buildScopeLabelsForCp($contentFilterScopes);
+        $hasExplicitNeeds = !empty($contentFilterScopes);
+        $allAccounts = [];
+        $visibleAccounts = [];
+
         foreach (Plugin::getInstance()->getCredentialService()->getManagedCredentials($this->getDefaultScopes()) as $credential) {
             if (!is_array($credential)) {
                 continue;
@@ -5507,84 +5657,107 @@ class DashboardController extends Controller
 
             $scopes = array_map(static fn($scope): string => strtolower(trim((string)$scope)), (array)($credential['scopes'] ?? []));
             $missingScopes = [];
-            foreach ($requiredScopes as $requiredScope) {
+            foreach ($contentFilterScopes as $requiredScope) {
                 if (!$this->workflowAccountSatisfiesRequiredScope($requiredScope, $scopes)) {
                     $missingScopes[] = $requiredScope;
                 }
             }
 
-            $targetSets = $requiresTargetSet
-                ? Plugin::getInstance()->getTargetSetService()->getTargetSetsForCredentialId($credentialId)
-                : [];
-            $accounts[] = [
+            $coverage = $workflowService->buildWorkflowAccountScopeCoverageForConfig($credential, $template, $formState);
+            $capabilitySummary = $workflowService->buildManagedAccountCapabilitySummary($credential);
+            $account = [
                 'id' => $credentialId,
                 'displayName' => (string)($credential['displayName'] ?? $credential['handle'] ?? ('Account #' . $credentialId)),
                 'handle' => (string)($credential['handle'] ?? ''),
                 'description' => (string)($credential['description'] ?? ''),
-                'eligible' => empty($missingScopes) && (!$requiresTargetSet || !empty($targetSets)),
-                'missingScopes' => $missingScopes,
-                'hasTargetSets' => !empty($targetSets),
-                'targetSetIds' => array_values(array_map(
-                    static fn(array $targetSet): int => (int)($targetSet['id'] ?? 0),
-                    array_filter($targetSets, static fn($targetSet): bool => is_array($targetSet))
-                )),
+                'scopes' => array_values(array_map('strval', (array)($credential['scopes'] ?? []))),
+                'selected' => $selectedAccountId !== null && $selectedAccountId === $credentialId,
+                'coverage' => $coverage,
+                'capabilitySummary' => $capabilitySummary,
+                'hasWriteAccess' => !empty((array)($capabilitySummary['writeLabels'] ?? [])),
             ];
+
+            $allAccounts[] = $account;
+
+            if (!$hasExplicitNeeds || empty($missingScopes)) {
+                $visibleAccounts[] = $account;
+            }
         }
 
-        usort($accounts, static function(array $a, array $b): int {
-            $eligibilityCompare = ((int)!($a['eligible'] ?? false)) <=> ((int)!($b['eligible'] ?? false));
-            if ($eligibilityCompare !== 0) {
-                return $eligibilityCompare;
-            }
-
+        usort($allAccounts, static function(array $a, array $b): int {
             return strcasecmp((string)($a['displayName'] ?? ''), (string)($b['displayName'] ?? ''));
         });
 
-        return $accounts;
-    }
-
-    private function buildWorkflowAccountGuidance(?array $template, array $accounts): array
-    {
-        $requiredScopes = array_values(array_filter(array_map(
-            static fn($scope): string => trim((string)$scope),
-            (array)($template['requiredScopes'] ?? [])
-        )));
-        $eligibleCount = 0;
-        $ineligibleAccounts = [];
-
-        foreach ($accounts as $account) {
-            if ((bool)($account['eligible'] ?? false)) {
-                $eligibleCount++;
-                continue;
-            }
-
-            $ineligibleAccounts[] = [
-                'displayName' => (string)($account['displayName'] ?? $account['handle'] ?? 'Managed account'),
-                'handle' => (string)($account['handle'] ?? ''),
-                'missingScopes' => array_values(array_filter(array_map(
-                    static fn($scope): string => trim((string)$scope),
-                    (array)($account['missingScopes'] ?? [])
-                ))),
-            ];
-        }
+        usort($visibleAccounts, static function(array $a, array $b): int {
+            return strcasecmp((string)($a['displayName'] ?? ''), (string)($b['displayName'] ?? ''));
+        });
 
         return [
-            'templateDisplayName' => (string)($template['displayName'] ?? 'This workflow'),
-            'requiredScopes' => $requiredScopes,
-            'hasAnyAccounts' => !empty($accounts),
-            'eligibleCount' => $eligibleCount,
-            'hasEligibleAccounts' => $eligibleCount > 0,
-            'ineligibleAccounts' => $ineligibleAccounts,
+            'summary' => (string)($scopeExpectation['summary'] ?? ''),
+            'sourceLabels' => array_values(array_map('strval', (array)($scopeExpectation['sourceLabels'] ?? []))),
+            'requiredScopes' => $contentFilterScopes,
+            'requiredScopeLabels' => $contentFilterLabels,
+            'requiredSupportLabels' => [],
+            'hasManagedAccounts' => !empty($allAccounts),
+            'hasAnyAccounts' => !empty($hasExplicitNeeds ? $visibleAccounts : $allAccounts),
+            'hasEligibleAccounts' => !empty($visibleAccounts),
+            'selectedAccountId' => $selectedAccountId,
+            'accounts' => $hasExplicitNeeds ? $visibleAccounts : $allAccounts,
+            'matchingAccountCreateUrl' => $hasExplicitNeeds && empty($visibleAccounts)
+                ? $this->buildWorkflowMatchingAccountCreateUrl($template, $formState, $scopeExpectation)
+                : '',
         ];
     }
 
-    private function buildWorkflowMatchingAccountCreateUrl(?array $template): string
+    private function buildWorkflowAccountContentFilterScopes(array $formState): array
     {
-        $displayName = trim((string)($template['displayName'] ?? ''));
-        $description = trim((string)($template['description'] ?? ''));
-        $handleSource = trim((string)($template['handle'] ?? ''));
+        $catalog = Plugin::getInstance()->getWorkflowService()->getJobSourceCatalog();
+        $scopes = [];
+
+        foreach ((array)($formState['sourceKeys'] ?? []) as $sourceKeyRaw) {
+            $sourceKey = strtolower(trim((string)$sourceKeyRaw));
+            if ($sourceKey === '' || !isset($catalog[$sourceKey])) {
+                continue;
+            }
+
+            foreach ((array)($catalog[$sourceKey]['requiredScopes'] ?? []) as $scope) {
+                $normalizedScope = strtolower(trim((string)$scope));
+                if ($normalizedScope !== '') {
+                    $scopes[] = $normalizedScope;
+                }
+            }
+        }
+
+        if (!empty((array)($formState['sectionHandles'] ?? []))) {
+            $scopes[] = 'sections:read';
+        }
+        if (!empty((array)($formState['entryIds'] ?? []))) {
+            $scopes[] = 'entries:read';
+        }
+        if (!empty((array)($formState['productIds'] ?? [])) && Plugin::getInstance()->isCommercePluginEnabled()) {
+            $scopes[] = 'products:read';
+        }
+
+        return array_values(array_unique(array_filter($scopes)));
+    }
+
+    private function buildWorkflowMatchingAccountCreateUrl(?array $template, array $formState, array $scopeExpectation): string
+    {
+        $displayName = trim((string)($formState['name'] ?? ''));
+        if ($displayName !== '') {
+            $displayName .= ' Agent';
+        } else {
+            $displayName = trim((string)($template['displayName'] ?? 'Job Agent'));
+        }
+
+        $description = trim((string)($formState['description'] ?? ''));
+        if ($description === '') {
+            $description = trim((string)($template['description'] ?? 'Managed account for this Job.'));
+        }
+
+        $handleSource = trim((string)($formState['name'] ?? ''));
         if ($handleSource === '') {
-            $handleSource = $displayName;
+            $handleSource = trim((string)($template['handle'] ?? 'job-agent'));
         }
 
         $params = [
@@ -5604,7 +5777,9 @@ class DashboardController extends Controller
             $params['accountPrefillHandle'] = $suggestedHandle;
         }
 
-        $prefillScopes = $this->buildWorkflowAccountPrefillScopes($template);
+        $params['accountPrefillContext'] = 'job-runtime';
+
+        $prefillScopes = $this->buildWorkflowAccountPrefillScopes($scopeExpectation);
         if ($prefillScopes !== []) {
             $params['accountPrefillScopes'] = implode(',', $prefillScopes);
         }
@@ -5612,21 +5787,28 @@ class DashboardController extends Controller
         return UrlHelper::cpUrl('agents/accounts', $params) . '#createAgentFormHome';
     }
 
-    private function buildWorkflowAccountPrefillScopes(?array $template): array
+    private function buildWorkflowAccountPrefillScopes(array $scopeExpectation): array
     {
-        $scopes = [];
-        foreach (['requiredScopes', 'recommendedOptionalScopes'] as $scopeKey) {
-            foreach ((array)($template[$scopeKey] ?? []) as $scope) {
-                $normalizedScope = strtolower(trim((string)$scope));
-                if ($normalizedScope === '' || in_array($normalizedScope, $scopes, true)) {
-                    continue;
-                }
+        return array_values(array_unique(array_filter(array_map(
+            static fn($scope): string => strtolower(trim((string)$scope)),
+            (array)($scopeExpectation['requiredScopes'] ?? [])
+        ))));
+    }
 
-                $scopes[] = $normalizedScope;
+    private function buildScopeLabelsForCp(array $scopes): array
+    {
+        $scopeCatalog = Plugin::getInstance()->getSecurityPolicyService()->getAccountScopeCatalog();
+        $labels = [];
+        foreach ($scopes as $scope) {
+            $normalizedScope = strtolower(trim((string)$scope));
+            if ($normalizedScope === '') {
+                continue;
             }
+
+            $labels[] = (string)($scopeCatalog[$normalizedScope]['label'] ?? $normalizedScope);
         }
 
-        return $scopes;
+        return array_values(array_unique(array_filter($labels)));
     }
 
     private function workflowAccountSatisfiesRequiredScope(string $requiredScope, array $scopes): bool

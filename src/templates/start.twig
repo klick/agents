@@ -64,7 +64,7 @@
         <section class="agents-onboarding-panel agents-onboarding-panel--create">
           <header class="agents-onboarding-copy">
             <h1>Create your first <em>managed account</em></h1>
-            <p>A managed account is the machine identity your agent or other external runtime will use to connect to this site.<br>You set the boundary. It works inside the access and approval rules you define.</p>
+            <p>A managed account is the machine identity your agent will use to connect to this site.<br>You set the boundary. It works inside the access and approval rules you define.</p>
           </header>
 
           {% if canManageCredentials %}
@@ -106,24 +106,24 @@
         <section class="agents-onboarding-panel agents-onboarding-panel--ready">
           <header class="agents-onboarding-copy">
             <h1>Your first managed account is ready</h1>
-            <p>Use this token to connect your first agent or other external runtime to this site.<br>It only works inside the boundary you define here, and you can reveal it only once.</p>
+            <p>Use this token to connect your first agent to this site.<br>It only works inside the boundary you define here, and you can reveal it only once.</p>
           </header>
 
           <div class="agents-onboarding-token-card">
             <div class="agents-onboarding-token-card__copy">
               <h2>Connect your first agent</h2>
               {% if revealedCredentialToken %}
-                <p>Use this one-time reveal to export worker-style config or copy the token into another external runtime.</p>
+                <p>Use this one-time reveal to export agent config or copy the token into another agent.</p>
                 <p class="agents-onboarding-token-card__token" id="onboardingRevealedTokenPreview">{{ revealedCredentialToken }}</p>
                 <textarea id="onboardingRevealedToken" hidden readonly>{{ revealedCredentialToken }}</textarea>
                 <textarea id="onboardingRevealedWorkerEnv" hidden readonly>{{ revealedCredentialWorkerEnv }}</textarea>
-                <p>Copy the token or download a ready-to-run <code>.env</code> file, then follow the first worker guide or connect another external runtime.</p>
+                <p>Copy the token or download a ready-to-run <code>.env</code> file, then follow the first agent guide or connect another agent.</p>
                 <div class="agents-onboarding-token-card__actions">
                   <button class="btn" type="button" data-onboarding-copy-token>Copy token</button>
                   <button class="btn" type="button" data-onboarding-download-env data-filename="{{ revealedCredentialEnvFilename }}">Download .env</button>
                   <a class="btn" href="{{ firstWorkerGuideUrl }}" target="_blank" rel="noopener">Open Guide</a>
                 </div>
-                <p class="agents-onboarding-token-card__note">This token is only shown once. Download the worker-style config now if you need a ready-to-run bootstrap artifact.</p>
+                <p class="agents-onboarding-token-card__note">This token is only shown once. Download the agent config now if you need a ready-to-run bootstrap artifact.</p>
                 <p class="agents-onboarding-token-card__feedback" id="onboardingTokenFeedback" aria-live="polite"></p>
               {% else %}
                 <p>Your first managed account exists{% if firstCredential and (firstCredential.displayName ?? '') %}: <strong>{{ firstCredential.displayName }}</strong>{% endif %}. Open Accounts to inspect connection details or rotate a fresh token reveal.</p>
@@ -143,7 +143,7 @@
         <section class="agents-onboarding-panel agents-onboarding-panel--welcome">
           <header class="agents-onboarding-copy">
             <h1>Create your first <em>managed account</em></h1>
-            <p>Give your first agent a controlled way to access this site.<br>You set the boundary first. The external runtime works inside it.</p>
+            <p>Give your first agent a controlled way to access this site.<br>You set the boundary first. Your agent works inside it.</p>
           </header>
 
           <div class="agents-onboarding-panel__cta">
