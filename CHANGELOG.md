@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.29.1 - 2026-03-30
+
+### Fixed
+
+- Fixed the `m260317_160000_add_target_sets_tables` upgrade path so drifted installs can recover when `agents_credentials` is missing even though older credential migrations are already marked as applied.
+- Fixed retry behavior for the same migration so partially created `agents_credential_target_sets` tables get their missing foreign keys restored instead of being skipped forever on the next run.
+
 ## 0.29.0 - 2026-03-23
 
 ### Added

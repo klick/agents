@@ -16,10 +16,12 @@ pass() {
 COMPOSER_FILE="$PLUGIN_ROOT/composer.json"
 PLUGIN_FILE="$PLUGIN_ROOT/src/Plugin.php"
 MIGRATIONS_DIR="$PLUGIN_ROOT/src/migrations"
+TARGET_SETS_MIGRATION="$PLUGIN_ROOT/src/migrations/m260317_160000_add_target_sets_tables.php"
 
 [[ -f "$COMPOSER_FILE" ]] || fail "Missing composer.json"
 [[ -f "$PLUGIN_FILE" ]] || fail "Missing src/Plugin.php"
 [[ -d "$MIGRATIONS_DIR" ]] || fail "Missing src/migrations directory"
+[[ -f "$TARGET_SETS_MIGRATION" ]] || fail "Missing target-sets migration"
 
 composer_version="$(php -r '$j=json_decode(file_get_contents($argv[1]), true); echo $j["version"] ?? "";' "$COMPOSER_FILE")"
 schema_version="$(sed -n "s/^[[:space:]]*public string \$schemaVersion = '\([^']*\)';$/\1/p" "$PLUGIN_FILE" | head -n1)"
@@ -34,6 +36,10 @@ if [[ "$composer_version" != "$schema_version" ]]; then
   fail "Version mismatch (composer.json=$composer_version, Plugin::schemaVersion=$schema_version)"
 fi
 pass "Plugin schemaVersion matches composer version ($composer_version)"
+
+grep -Fq "ensureCredentialsTableExists" "$TARGET_SETS_MIGRATION" || fail "Target-sets migration must self-heal a missing credentials table on drifted installs"
+grep -Fq "ensureForeignKeyIfMissing" "$TARGET_SETS_MIGRATION" || fail "Target-sets migration must restore missing foreign keys on retry"
+pass "Target-sets migration includes drift-recovery guards"
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

@@ -2,6 +2,11 @@
 
 See full source changelog in repository root: `CHANGELOG.md`.
 
+## 0.29.1 (2026-03-30)
+
+- Fixed the `m260317_160000_add_target_sets_tables` upgrade path for drifted installs where `agents_credentials` is missing even though older credential migrations are already marked as applied.
+- Fixed migration retry behavior so partially created `agents_credential_target_sets` tables get their missing foreign keys restored on the next run.
+
 ## 0.29.0 (2026-03-23)
 
 - Added bounded read boundaries and explicit run reporting for managed Jobs, including job-scoped selectors and `jobs:read` / `jobs:report` runtime support.

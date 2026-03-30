@@ -1,7 +1,7 @@
 # Roadmap
 
 Last updated: 2026-03-23
-Current release: `v0.29.0`
+Current release: `v0.29.1`
 
 ## Direction
 
@@ -294,6 +294,15 @@ Release outcome:
 Release outcome:
 
 - Agencies can turn a reusable starter workflow into a managed, repeatable operating surface inside Craft without turning Agents into a generic orchestration platform or pretending Agents is the runtime itself.
+
+## Released (`v0.29.1`) Hotfix for Drifted Upgrade Recovery
+
+- Repaired the `v0.29.0` upgrade path for sites where the base managed-accounts table is missing even though older credential migrations are already recorded as applied.
+- Made the target-set migration recreate the full credentials table shape when needed and restore missing join-table foreign keys on retry.
+
+Release outcome:
+
+- Drifted installs can reach the `v0.29.x` control-plane schema without getting stuck on the first target-set foreign-key migration.
 
 ## Released (`v0.29.0`) Read-Only Jobs, Bounded Reads, and Safer Account Matching
 
